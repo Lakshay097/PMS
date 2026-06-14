@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Remix: TrustGrid TaskFlow",
+  "description": "A production-ready role-based task management and reporting dashboard backed by GS/Apps Script architecture.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

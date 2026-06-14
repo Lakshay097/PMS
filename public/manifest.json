@@ -1,0 +1,36 @@
+{
+  "name": "TrustGrid TaskFlow",
+  "short_name": "TrustGrid",
+  "description": "Professional project management system with role-based views and automated workflows",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/pw-logo.jpg",
+      "sizes": "any",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "business"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Tasks",
+      "short_name": "Tasks",
+      "description": "View and manage tasks",
+      "url": "/tasks",
+      "icons": [{ "src": "/pw-logo.jpg", "sizes": "any" }]
+    },
+    {
+      "name": "Overview",
+      "short_name": "Overview",
+      "description": "View dashboard overview",
+      "url": "/overview",
+      "icons": [{ "src": "/pw-logo.jpg", "sizes": "any" }]
+    }
+  ]
+}

@@ -1,0 +1,173 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "System user profiles managing access permissions and role hierarchies.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Unique key matching auth.uid" },
+        "fullName": { "type": "string", "description": "Human displays name of user" },
+        "email": { "type": "string", "format": "email", "description": "Contact email" },
+        "role": { "type": "string", "enum": ["Admin", "Stakeholder", "Sub-stakeholder"] },
+        "managerEmail": { "type": "string", "description": "Email address of manager or supervisor" },
+        "teamId": { "type": "string", "description": "The assigned team or operational unit ID" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "fullName", "email", "role", "active"]
+    },
+    "Team": {
+      "title": "Team Metadata",
+      "description": "Collaborative boundary enclosing stakeholders and sub-stakeholders.",
+      "type": "object",
+      "properties": {
+        "teamId": { "type": "string" },
+        "name": { "type": "string" },
+        "managerEmail": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["teamId", "name", "active"]
+    },
+    "TaskTemplate": {
+      "title": "Recurring Blueprint",
+      "description": "Blueprints used to automatically deploy task allocations at specific intervals.",
+      "type": "object",
+      "properties": {
+        "templateId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "priority": { "type": "string", "enum": ["Low", "Medium", "High"] },
+        "recurrenceType": { "type": "string", "enum": ["Daily", "Weekly", "Monthly", "Quarterly", "Half-yearly"] },
+        "startDate": { "type": "string" },
+        "nextGenerationDate": { "type": "string" },
+        "lastGeneratedDate": { "type": "string" },
+        "assignedBy": { "type": "string", "description": "Email details of creator" },
+        "assignedTo": { "type": "string", "description": "Email of the Stakeholder / Sub-stakeholder" },
+        "assignedToRole": { "type": "string" },
+        "teamId": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["templateId", "title", "category", "priority", "recurrenceType", "assignedBy", "assignedTo", "teamId", "active"]
+    },
+    "Task": {
+      "title": "Live Task Allocation",
+      "description": "A transactional target item representing one-time or recurring assigned work items.",
+      "type": "object",
+      "properties": {
+        "taskId": { "type": "string" },
+        "templateId": { "type": "string" },
+        "parentTaskId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "priority": { "type": "string", "enum": ["Low", "Medium", "High"] },
+        "taskType": { "type": "string", "enum": ["One-time", "Recurring"] },
+        "recurrenceType": { "type": "string", "enum": ["Daily", "Weekly", "Monthly", "Quarterly", "Half-yearly", "One-time"] },
+        "cycleKey": { "type": "string", "description": "Key protecting against duplicate generates per schedule" },
+        "startDate": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "assignedBy": { "type": "string" },
+        "assignedTo": { "type": "string" },
+        "assignedToRole": { "type": "string" },
+        "teamId": { "type": "string" },
+        "status": { "type": "string", "enum": ["Not Started", "In Progress", "Submitted", "Reviewed", "Closed", "Reopened", "Overdue"] },
+        "percentComplete": { "type": "number" },
+        "lastReportSummary": { "type": "string" },
+        "requiresFollowUp": { "type": "boolean" },
+        "followUpCount": { "type": "number" },
+        "completionDate": { "type": "string" },
+        "closeRemark": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["taskId", "title", "priority", "taskType", "assignedBy", "assignedTo", "teamId", "status", "percentComplete", "active"]
+    },
+    "TaskReport": {
+      "title": "Task Status Report",
+      "description": "Append-only work log update linked to a specific live task.",
+      "type": "object",
+      "properties": {
+        "reportId": { "type": "string" },
+        "taskId": { "type": "string" },
+        "submittedBy": { "type": "string" },
+        "reportDate": { "type": "string" },
+        "statusUpdate": { "type": "string" },
+        "workSummary": { "type": "string" },
+        "blockers": { "type": "string" },
+        "nextAction": { "type": "string" },
+        "percentComplete": { "type": "number" },
+        "attachmentUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["reportId", "taskId", "submittedBy", "reportDate", "statusUpdate", "workSummary", "percentComplete"]
+    },
+    "FollowUp": {
+      "title": "Task FollowUp Tracking",
+      "description": "Relation mapping representing generated follow-up links.",
+      "type": "object",
+      "properties": {
+        "followUpId": { "type": "string" },
+        "parentTaskId": { "type": "string" },
+        "newTaskId": { "type": "string" },
+        "followUpNumber": { "type": "number" },
+        "createdBy": { "type": "string" },
+        "reason": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string" }
+      },
+      "required": ["followUpId", "parentTaskId", "newTaskId", "followUpNumber", "createdBy", "reason"]
+    },
+    "AuditLog": {
+      "title": "System Audit TrailLog",
+      "description": "Chronological history of all write operations mapped across entries.",
+      "type": "object",
+      "properties": {
+        "logId": { "type": "string" },
+        "entityType": { "type": "string" },
+        "entityId": { "type": "string" },
+        "action": { "type": "string" },
+        "oldValue": { "type": "string" },
+        "newValue": { "type": "string" },
+        "actionBy": { "type": "string" },
+        "actionDateTime": { "type": "string", "format": "date-time" }
+      },
+      "required": ["logId", "entityType", "entityId", "action", "actionBy", "actionDateTime"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Individual member and manager context"
+    },
+    "/teams/{teamId}": {
+      "schema": "Team",
+      "description": "Boundary constraints for hierarchical and sibling tasks visibility"
+    },
+    "/taskTemplates/{templateId}": {
+      "schema": "TaskTemplate",
+      "description": "Cron-driven blueprint setups details"
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Live individual tasks in general tracking flow"
+    },
+    "/taskReports/{reportId}": {
+      "schema": "TaskReport",
+      "description": "Append-only work log entries tracking tasks towards closure"
+    },
+    "/followUps/{followUpId}": {
+      "schema": "FollowUp",
+      "description": "Linked task mapping history logs"
+    },
+    "/auditLogs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Security tracking list for corporate admins and compliance"
+    }
+  }
+}
