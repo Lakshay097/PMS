@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ClipboardList, Lock, Mail, ChevronRight, AlertOctagon, HelpCircle, UserPlus, CheckCircle2, User as UserIcon } from 'lucide-react';
+import { ClipboardList, Lock, Mail, ChevronRight, AlertOctagon, HelpCircle, UserPlus, CheckCircle2, User as UserIcon, Eye, EyeOff } from 'lucide-react';
 import { User } from '../types';
 
 interface LoginScreenProps {
@@ -12,6 +12,7 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -30,8 +31,9 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
     }
   }, [isRegistering, regPassword]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('handleLogin called', { email, password });
     setError(null);
 
     const trimmedEmail = email.trim().toLowerCase();
@@ -40,40 +42,43 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
       return;
     }
 
+    if (!password) {
+      setError('Please enter your password.');
+      return;
+    }
+
     setIsLoading(true);
+    console.log('Starting login request', { email: trimmedEmail });
 
-    // Simulate database lookup delay
-    setTimeout(() => {
-      const foundUser = usersList.find(u => u.Email.toLowerCase() === trimmedEmail);
-      if (!foundUser) {
-        setError('No active user profile matches this email address. Please make sure you are registered in the system.');
+    try {
+      // Call the JWT authentication endpoint
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: trimmedEmail, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Authentication failed. Please check your credentials.');
         setIsLoading(false);
         return;
       }
 
-      // Enforce password security code check if user has a password set
-      const expectedPassword = foundUser.Password;
-      if (password && password !== expectedPassword) {
-        setError('Incorrect Security Code/Password. Please check your credentials.');
-        setIsLoading(false);
-        return;
-      }
+      // Store JWT token in httpOnly cookie would be better, but for now we'll use localStorage
+      // In production, the server should set an httpOnly cookie
+      localStorage.setItem('trustgrid_auth_token', data.token);
+      localStorage.setItem('trustgrid_user', JSON.stringify(data.user));
 
-      if (!foundUser.Active) {
-        const mgrUser = usersList.find(u => u.Email.toLowerCase() === foundUser.ManagerEmail.toLowerCase());
-        if (mgrUser && mgrUser.Role === 'Stakeholder') {
-          setError(`Your registration request is pending. It must be accepted by your designated Stakeholder manager (${mgrUser.FullName} - ${mgrUser.Email}) before you can log in.`);
-        } else {
-          setError('Your account is pending registration approval. An admin must accept your account before you can log in.');
-        }
-        setIsLoading(false);
-        return;
-      }
-
-      // If user typed a password, we validate it or allow any input as simple password simulation.
-      onLoginSuccess(foundUser.Email);
+      onLoginSuccess(data.user.email);
       setIsLoading(false);
-    }, 600);
+    } catch (err: any) {
+      setError('Failed to connect to authentication server. Please try again.');
+      setIsLoading(false);
+    }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -85,7 +90,7 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
     const trimmedEmail = regEmail.trim().toLowerCase();
     const trimmedMgrEmail = regManagerEmail.trim().toLowerCase();
 
-    if (!trimmedName || !trimmedEmail) {
+    if (!trimmedName || !trimmedEmail || !regPassword) {
       setError('Please complete all the required fields.');
       return;
     }
@@ -100,6 +105,20 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
     setIsLoading(true);
 
     try {
+      // Hash the password using the backend endpoint
+      const hashResponse = await fetch('/api/hash-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password: regPassword }),
+      });
+
+      const hashData = await hashResponse.json();
+      if (!hashResponse.ok || !hashData.hashedPassword) {
+        throw new Error('Failed to secure password.');
+      }
+
       // Find selected manager details to determine Role and Team
       const selectedManager = trimmedMgrEmail ? usersList.find(u => u.Email.toLowerCase() === trimmedMgrEmail) : undefined;
       
@@ -126,14 +145,14 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
         CanCloseTask: calculatedRole === 'Admin',
         CreatedAt: new Date().toISOString(),
         UpdatedAt: new Date().toISOString(),
-        Password: regPassword
+        Password: hashData.hashedPassword // Store hashed password
       };
 
       if (onRegisterUser) {
         await onRegisterUser(newUser);
       }
 
-      setSuccessMsg('Account created here only for 2 second only');
+      setSuccessMsg('Account created successfully. Please wait for administrator approval.');
 
       // Reset registration form
       setRegFullName('');
@@ -232,13 +251,21 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
                       <Lock size={14} />
                     </div>
                     <input
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       disabled={isLoading}
-                      className="w-full bg-[#0F172A]/90 border border-[#334155] text-slate-100 placeholder-slate-500 rounded-xl py-2.5 pl-9 pr-4 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
+                      className="w-full bg-[#0F172A]/90 border border-[#334155] text-slate-100 placeholder-slate-500 rounded-xl py-2.5 pl-9 pr-10 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-white transition-colors z-10"
+                      disabled={isLoading}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
                   </div>
                 </div>
 
@@ -252,8 +279,9 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
 
                 {/* Sign In Button */}
                 <button
-                  type="submit"
+                  type="button"
                   disabled={isLoading}
+                  onClick={handleLogin}
                   className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl py-2.5 text-xs font-bold uppercase tracking-wider shadow transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer border-none"
                 >
                   <span>{isLoading ? 'Verifying...' : 'Authenticate'}</span>

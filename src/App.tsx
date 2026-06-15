@@ -11,8 +11,8 @@ import {
   INITIAL_SETTINGS
 } from './initialData';
 import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AuditLog, AppSetting, TaskStatus, SystemAlert, Subtask, Comment } from './types';
-import { dbService, seedFirestoreCollections, testConnection, syncFromGoogleSheets } from './lib/dbService';
-import { googleSignIn, logout as googleLogout, initAuth, getAccessToken, sheetsApi } from './lib/sheetsService';
+import { dbService, initializeDatabase } from './lib/dbService';
+import { initAuth, getAccessToken, sheetsApi } from './lib/sheetsService';
 import { checkAndGenerateRecurringTasks, evaluateOverdueTasks } from './lib/taskEngine';
 
 // Icons
@@ -229,11 +229,9 @@ export default function App() {
   // Consolidated Database Sync and Reloader Function
   const loadDatabase = async () => {
     try {
-      const connected = await testConnection();
-      setIsBackendConnected(connected);
-      if (connected) {
-        await seedFirestoreCollections();
-      }
+      // Initialize Google Sheets database (seeds if empty)
+      await initializeDatabase();
+      setIsBackendConnected(true);
 
       const [u, t, tm, tk, rp, fl, ad, st, sb, cm] = await Promise.all([
         dbService.getUsers(),
@@ -248,7 +246,7 @@ export default function App() {
         dbService.getComments()
       ]);
 
-      const evaluatedTasks = evaluateOverdueTasks(tk, activeUserEmail);
+      const evaluatedTasks = await evaluateOverdueTasks(tk, activeUserEmail);
 
       // Analyze and raise delay and ETA alerts for email simulation logging
       const overdueTasks = evaluatedTasks.filter(tsk => tsk.Status === 'Overdue' && tsk.Active);
@@ -300,7 +298,19 @@ export default function App() {
 
   // 1. Initial Storage bootstrap
   useEffect(() => {
-    loadDatabase();
+    // Initialize Google Sheets authentication first
+    const cleanup = initAuth(
+      () => {
+        // On success, load the database
+        loadDatabase();
+      },
+      (error) => {
+        console.error("Google Sheets authentication failed:", error);
+        setIsLoading(false);
+      }
+    );
+
+    return cleanup;
   }, []);
 
   // 2. Track Active User Session adaptation
@@ -624,13 +634,45 @@ export default function App() {
     const propId = `RP-${Math.floor(1000 + Math.random() * 8999)}`;
     const nowStr = new Date().toISOString();
 
-    // Handle file uploads - In a real implementation, these would be uploaded to Google Drive
-    // For now, we'll store the file metadata
+    // Handle file uploads to Google Drive
     const uploadedFiles = data.UploadedFiles || [];
-    console.log('Uploaded files:', uploadedFiles);
-    // TODO: Implement Google Drive upload for these files
-    // Files would be saved to: /BE/TaskReports/{TaskID}/{ReportID}/
-    // Example: /BE/TaskReports/TSK-001/RP-1234/document.pdf
+    const uploadedFileUrls: string[] = [];
+
+    for (const file of uploadedFiles) {
+      try {
+        const uploadRes = await fetch('/api/upload-file', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            fileName: file.name,
+            fileData: file.data, // Base64 encoded file data
+            mimeType: file.type,
+            taskId: data.TaskID,
+            reportId: propId
+          }),
+        });
+
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          uploadedFileUrls.push(uploadData.webViewLink);
+          console.log('File uploaded successfully:', uploadData);
+        } else {
+          console.error('File upload failed:', await uploadRes.text());
+          // Continue with other files even if one fails
+        }
+      } catch (error) {
+        console.error('Error uploading file:', error);
+        // Continue with other files even if one fails
+      }
+    }
+
+    // Combine uploaded file URLs with any existing attachment link
+    const attachmentLinks = [...uploadedFileUrls];
+    if (data.AttachmentLink) {
+      attachmentLinks.push(data.AttachmentLink);
+    }
 
     const newReport: TaskReport = {
       ReportID: propId,
@@ -642,7 +684,7 @@ export default function App() {
       PercentComplete: data.PercentComplete,
       Blockers: data.Blockers,
       NextAction: data.NextAction,
-      AttachmentLink: data.AttachmentLink,
+      AttachmentLink: attachmentLinks.length > 0 ? attachmentLinks.join(', ') : '',
       CreatedAt: nowStr
     };
 

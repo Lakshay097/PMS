@@ -1,5 +1,5 @@
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from './firebase';
+// Google Sheets integration - Primary database layer
+// Uses service account token for authentication with retry logic and proper error handling
 
 export const SHEETS_SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
@@ -7,7 +7,7 @@ export const SHEETS_SCOPES = [
 ];
 
 export const HEADERS = {
-  users: ['UserID', 'FullName', 'Email', 'Role', 'ManagerEmail', 'TeamID', 'TeamName', 'Active', 'CanCreateFollowUp', 'CanCloseTask', 'CreatedAt', 'UpdatedAt'],
+  users: ['UserID', 'FullName', 'Email', 'Role', 'ManagerEmail', 'TeamID', 'TeamName', 'Active', 'CanCreateFollowUp', 'CanCloseTask', 'CreatedAt', 'UpdatedAt', 'Password'],
   teams: ['TeamID', 'TeamName', 'StakeholderEmail', 'Active'],
   templates: ['TemplateID', 'Title', 'Description', 'Category', 'Priority', 'RecurrenceType', 'StartDate', 'NextGenerationDate', 'LastGeneratedDate', 'AssignedByEmail', 'AssignedToEmail', 'AssignedToRole', 'TeamID', 'Active', 'CreatedAt', 'UpdatedAt'],
   tasks: ['TaskID', 'TemplateID', 'ParentTaskID', 'Title', 'Description', 'Category', 'Priority', 'TaskType', 'RecurrenceType', 'CycleKey', 'StartDate', 'DueDate', 'AssignedByEmail', 'AssignedToEmail', 'AssignedToRole', 'TeamID', 'Status', 'PercentComplete', 'LastReportSummary', 'RequiresFollowUp', 'FollowUpCount', 'CompletionDate', 'CloseRemark', 'AttachmentLink', 'CreatedAt', 'UpdatedAt', 'Active'],
@@ -20,124 +20,97 @@ export const HEADERS = {
 };
 
 let cachedAccessToken: string | null = null;
-let isSigningIn = false;
+let cachedSpreadsheetId: string | null = null;
 
-// Initialize auth state and check cached token / service account API
+// Retry configuration
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY = 1000; // 1 second
+
+// Exponential backoff with jitter
+function getRetryDelay(attempt: number): number {
+  const baseDelay = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
+  const jitter = Math.random() * 200; // Add up to 200ms jitter
+  return baseDelay + jitter;
+}
+
+// Generic fetch with retry logic
+async function fetchWithRetry(url: string, options: RequestInit, attempt: number = 0): Promise<Response> {
+  try {
+    const response = await fetch(url, options);
+    
+    // Retry on 5xx errors or 429 (rate limit)
+    if (!response.ok && (response.status >= 500 || response.status === 429) && attempt < MAX_RETRIES) {
+      const delay = getRetryDelay(attempt);
+      console.warn(`Request failed with status ${response.status}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return fetchWithRetry(url, options, attempt + 1);
+    }
+    
+    return response;
+  } catch (error) {
+    // Retry on network errors
+    if (attempt < MAX_RETRIES) {
+      const delay = getRetryDelay(attempt);
+      console.warn(`Network error, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`, error);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return fetchWithRetry(url, options, attempt + 1);
+    }
+    throw error;
+  }
+}
+
+// Initialize auth state and check service account API
 export const initAuth = (
-  onAuthSuccess?: (user: User, token: string) => void,
-  onAuthFailure?: () => void
+  onAuthSuccess?: (token: string) => void,
+  onAuthFailure?: (error: Error) => void
 ) => {
   let active = true;
 
-  // Let's call /api/token to determine if a Service Account is provided on the backend host
+  // Check for service account token from backend
   fetch('/api/token')
     .then(res => {
       if (res.ok) return res.json();
-      return null;
+      throw new Error('Failed to get service account token');
     })
     .then(data => {
       if (!active) return;
       if (data && data.accessToken) {
         cachedAccessToken = data.accessToken;
-        sessionStorage.setItem('google_sheets_access_token', data.accessToken);
         if (data.spreadsheetId) {
-          localStorage.setItem('trustgrid_spreadsheet_id', data.spreadsheetId);
+          cachedSpreadsheetId = data.spreadsheetId;
         }
         
-        // Construct a mock user representing the backend Service Account
-        const saMockUser = {
-          uid: 'service-account-session',
-          email: 'service-account@trustgrid.com',
-          displayName: 'Service Account (Master Dynamic Sync)',
-          emailVerified: true
-        } as unknown as User;
-
         if (onAuthSuccess) {
-          onAuthSuccess(saMockUser, data.accessToken);
+          onAuthSuccess(data.accessToken);
         }
       } else {
-        // Safe fallback to Firebase Auth listener if Service Account is absent
-        setupFirebaseListener();
+        const error = new Error('Service account token not available. Google Sheets integration is required.');
+        if (onAuthFailure) onAuthFailure(error);
       }
     })
     .catch(err => {
-      console.warn("Service Account API check bypassed/failed, falling back to Firebase login:", err);
-      if (active) {
-        setupFirebaseListener();
+      console.error("Service Account API check failed:", err);
+      if (active && onAuthFailure) {
+        onAuthFailure(err instanceof Error ? err : new Error('Failed to initialize Google Sheets authentication'));
       }
     });
-
-  let unsubFirebase = () => {};
-
-  function setupFirebaseListener() {
-    unsubFirebase = onAuthStateChanged(auth, async (user: User | null) => {
-      if (!active) return;
-      if (user) {
-        if (cachedAccessToken) {
-          if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
-        } else {
-          const storedToken = sessionStorage.getItem('google_sheets_access_token');
-          if (storedToken) {
-            cachedAccessToken = storedToken;
-            if (onAuthSuccess) onAuthSuccess(user, storedToken);
-          } else if (!isSigningIn) {
-            cachedAccessToken = null;
-            if (onAuthFailure) onAuthFailure();
-          }
-        }
-      } else {
-        cachedAccessToken = null;
-        sessionStorage.removeItem('google_sheets_access_token');
-        if (onAuthFailure) onAuthFailure();
-      }
-    });
-  }
 
   return () => {
     active = false;
-    unsubFirebase();
   };
 };
 
-// Google sign-in requesting Google Sheets/Drive scopes
-export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
-  try {
-    isSigningIn = true;
-    const provider = new GoogleAuthProvider();
-    SHEETS_SCOPES.forEach(scope => provider.addScope(scope));
-    
-    // Suggest custom parameters to avoid consent loop issues
-    provider.setCustomParameters({
-      prompt: 'consent',
-      access_type: 'offline'
-    });
-
-    const result = await signInWithPopup(auth, provider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (!credential?.accessToken) {
-      throw new Error('Failed to retrieve Google OAuth access token from Firebase Authentication.');
-    }
-
-    cachedAccessToken = credential.accessToken;
-    sessionStorage.setItem('google_sheets_access_token', cachedAccessToken);
-    return { user: result.user, accessToken: cachedAccessToken };
-  } catch (error: any) {
-    console.error('OAuth Authentication failed:', error);
-    throw error;
-  } finally {
-    isSigningIn = false;
-  }
+export const getAccessToken = (): string | null => {
+  return cachedAccessToken;
 };
 
-export const getAccessToken = (): string | null => {
-  return cachedAccessToken || sessionStorage.getItem('google_sheets_access_token');
+export const getSpreadsheetId = (): string | null => {
+  return cachedSpreadsheetId;
 };
 
 export const logout = async () => {
-  await auth.signOut();
   cachedAccessToken = null;
-  sessionStorage.removeItem('google_sheets_access_token');
-  localStorage.removeItem('trustgrid_spreadsheet_id');
+  cachedSpreadsheetId = null;
 };
 
 // HELPER: Convert array of objects to sheet rows
@@ -195,19 +168,21 @@ export const sheetsApi = {
   // Check if a spreadsheet exists, create it if it doesn't
   async getOrCreateSpreadsheet(): Promise<string> {
     const token = getAccessToken();
-    if (!token) throw new Error('Unauthenticated. Please sign in to Google first.');
+    if (!token) {
+      throw new Error('Google Sheets authentication failed. Service account token not available. Please configure GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY in your environment variables.');
+    }
 
-    // 1. Try finding existing spreadsheet ID in localStorage
-    const savedId = localStorage.getItem('trustgrid_spreadsheet_id');
-    if (savedId) {
+    // 1. Try using cached spreadsheet ID
+    if (cachedSpreadsheetId) {
       try {
-        const metadata = await this.getSpreadsheetMetadata(savedId);
+        const metadata = await this.getSpreadsheetMetadata(cachedSpreadsheetId);
         if (metadata) {
-          console.log('Using established Google Spreadsheet:', savedId);
-          return savedId;
+          console.log('Using cached Google Spreadsheet:', cachedSpreadsheetId);
+          return cachedSpreadsheetId;
         }
       } catch (e) {
-        console.warn('Previously stored spreadsheet could not be loaded, re-searching...', e);
+        console.warn('Cached spreadsheet could not be accessed, re-searching...', e);
+        cachedSpreadsheetId = null;
       }
     }
 
@@ -217,18 +192,18 @@ export const sheetsApi = {
       "name='TrustGrid Systems Database' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false"
     )}`;
 
-    const searchRes = await fetch(searchUrl, {
+    const searchRes = await fetchWithRetry(searchUrl, {
       headers: { Authorization: `Bearer ${token}` }
     });
 
     if (!searchRes.ok) {
-      throw new Error(`Failed to query Google Drive. Status: ${searchRes.statusText}`);
+      throw new Error(`Failed to query Google Drive. Status: ${searchRes.statusText}. Please verify your service account has Drive API permissions.`);
     }
 
     const searchData = await searchRes.json();
     if (searchData.files && searchData.files.length > 0) {
       const spreadId = searchData.files[0].id;
-      localStorage.setItem('trustgrid_spreadsheet_id', spreadId);
+      cachedSpreadsheetId = spreadId;
       console.log('Found existing database spreadsheet on Google Drive:', spreadId);
       return spreadId;
     }
@@ -241,7 +216,7 @@ export const sheetsApi = {
       properties: { title: name }
     }));
 
-    const createRes = await fetch(createUrl, {
+    const createRes = await fetchWithRetry(createUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -258,12 +233,12 @@ export const sheetsApi = {
     if (!createRes.ok) {
       const errPayload = await createRes.json().catch(() => ({}));
       console.error('Failed to create spreadsheet', errPayload);
-      throw new Error(`Failed to create Google Spreadsheet database. Status: ${createRes.statusText}`);
+      throw new Error(`Failed to create Google Spreadsheet database. Status: ${createRes.statusText}. Please verify your service account has Sheets API permissions.`);
     }
 
     const createdSpreadsheet = await createRes.json();
     const newSpreadId = createdSpreadsheet.spreadsheetId;
-    localStorage.setItem('trustgrid_spreadsheet_id', newSpreadId);
+    cachedSpreadsheetId = newSpreadId;
     console.log('Successfully created database spreadsheet on Google Drive with ID:', newSpreadId);
     return newSpreadId;
   },
@@ -272,7 +247,7 @@ export const sheetsApi = {
     const token = getAccessToken();
     if (!token) throw new Error('Unauthenticated.');
 
-    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
+    const res = await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     if (!res.ok) throw new Error('Could not retrieve spreadsheet metadata.');
@@ -282,7 +257,9 @@ export const sheetsApi = {
   // Save full collection to Google Sheets with atomic clear-then-write
   async saveCollection(sheetName: keyof typeof HEADERS, data: any[]): Promise<void> {
     const token = getAccessToken();
-    if (!token) throw new Error('Unauthenticated.');
+    if (!token) {
+      throw new Error('Google Sheets authentication failed. Cannot save data.');
+    }
 
     const spreadsheetId = await this.getOrCreateSpreadsheet();
     const headers = HEADERS[sheetName];
@@ -292,7 +269,7 @@ export const sheetsApi = {
 
     // First Clear the existing sheet content to prevent dangling old rows
     const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1:Z9999:clear`;
-    await fetch(clearUrl, {
+    const clearRes = await fetchWithRetry(clearUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -300,9 +277,15 @@ export const sheetsApi = {
       }
     });
 
+    if (!clearRes.ok) {
+      const err = await clearRes.json().catch(() => ({}));
+      console.error(`Failed to clear ${sheetName} sheet`, err);
+      throw new Error(`Failed to clear sheet ${sheetName}. Status: ${clearRes.statusText}`);
+    }
+
     // Write new content
     const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1?valueInputOption=USER_ENTERED`;
-    const res = await fetch(writeUrl, {
+    const res = await fetchWithRetry(writeUrl, {
       method: 'PUT',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -316,7 +299,7 @@ export const sheetsApi = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       console.error(`Failed to update ${sheetName} sheet`, err);
-      throw new Error(`Failed to save table ${sheetName} to Google Sheets database.`);
+      throw new Error(`Failed to save table ${sheetName} to Google Sheets. Status: ${res.statusText}`);
     }
     console.log(`Successfully saved collection [${sheetName}] to Google Sheets.`);
   },
@@ -324,21 +307,23 @@ export const sheetsApi = {
   // Fetch concrete sheet collection of records
   async getCollection<T>(sheetName: keyof typeof HEADERS): Promise<T[]> {
     const token = getAccessToken();
-    if (!token) throw new Error('Unauthenticated.');
+    if (!token) {
+      throw new Error('Google Sheets authentication failed. Cannot load data.');
+    }
 
     const spreadsheetId = await this.getOrCreateSpreadsheet();
     const headers = HEADERS[sheetName];
     const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1:Z9999?valueRenderOption=FORMATTED_VALUE`;
 
     console.log(`Fetching collection [${sheetName}] from Google Sheets database...`);
-    const res = await fetch(readUrl, {
+    const res = await fetchWithRetry(readUrl, {
       headers: { Authorization: `Bearer ${token}` }
     });
 
     if (!res.ok) {
-      // If the sheet returns 404/400 (perhaps the tab is missing), try to update the spreadsheet structure or recover
-      console.warn(`Could not read sheet ${sheetName}, trying to recover or seed headers...`);
-      return [];
+      const err = await res.json().catch(() => ({}));
+      console.error(`Failed to read sheet ${sheetName}`, err);
+      throw new Error(`Failed to load ${sheetName} from Google Sheets. Status: ${res.statusText}`);
     }
 
     const payload = await res.json();

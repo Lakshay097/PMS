@@ -162,6 +162,7 @@ export async function checkAndGenerateRecurringTasks(
         TaskType: 'Recurring',
         RecurrenceType: template.RecurrenceType,
         CycleKey: cycleKey,
+        DeletedAt: null,
         StartDate: startDate,
         DueDate: dueDate,
         AssignedByEmail: template.AssignedByEmail,
@@ -215,11 +216,12 @@ export async function checkAndGenerateRecurringTasks(
 }
 
 // Function to automatically update tasks to 'Overdue' status if actual due date is passed and status is not closed/submitted
-export function evaluateOverdueTasks(tasks: Task[], currentEmail: string): Task[] {
+export async function evaluateOverdueTasks(tasks: Task[], currentEmail: string): Promise<Task[]> {
   const currentDateStr = new Date().toISOString().split('T')[0];
   let changed = false;
+  const updatedTasks: Task[] = [];
 
-  const evaluated = tasks.map(task => {
+  for (const task of tasks) {
     // If not closed, reviewed, or submitted, and dueDate is in the past
     if (
       task.Status !== 'Closed' && 
@@ -230,20 +232,23 @@ export function evaluateOverdueTasks(tasks: Task[], currentEmail: string): Task[
     ) {
       changed = true;
       const updated = { ...task, Status: 'Overdue' as const, UpdatedAt: new Date().toISOString() };
-      // Async trigger persist
-      dbService.saveTask(updated).catch(e => console.error(e));
-      dbService.logAction(
+      
+      // Await the async operations to prevent race conditions
+      await dbService.saveTask(updated);
+      await dbService.logAction(
         'Task',
         task.TaskID,
         'Auto-Marked Overdue (Passed due date)',
         'taskEngine@trustgrid.internal',
         { Status: task.Status },
         { Status: 'Overdue' }
-      ).catch(e => console.error(e));
-      return updated;
+      );
+      
+      updatedTasks.push(updated);
+    } else {
+      updatedTasks.push(task);
     }
-    return task;
-  });
+  }
 
-  return evaluated;
+  return updatedTasks;
 }
