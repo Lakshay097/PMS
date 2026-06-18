@@ -7,25 +7,14 @@ interface TopBarProps {
   onQuickCreate?: () => void;
   onSearch?: (query: string) => void;
   onLogout?: () => void;
+  isDarkMode?: boolean;
+  onToggleTheme?: () => void;
 }
 
-export default function TopBar({ title, breadcrumb, onQuickCreate, onSearch, onLogout }: TopBarProps) {
+export default function TopBar({ title, breadcrumb, onQuickCreate, onSearch, onLogout, isDarkMode = false, onToggleTheme }: TopBarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    const savedTheme = localStorage.getItem('trustgrid_theme');
-    return savedTheme === 'dark';
-  });
-
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-    }
-    localStorage.setItem('trustgrid_theme', isDarkMode ? 'dark' : 'light');
-  }, [isDarkMode]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
@@ -94,7 +83,7 @@ export default function TopBar({ title, breadcrumb, onQuickCreate, onSearch, onL
 
         {/* Theme toggle */}
         <button
-          onClick={() => setIsDarkMode(!isDarkMode)}
+          onClick={() => onToggleTheme && onToggleTheme()}
           className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
           title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
         >

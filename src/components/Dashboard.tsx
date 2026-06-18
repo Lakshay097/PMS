@@ -38,29 +38,17 @@ interface DashboardProps {
   onChangePassword?: () => void;
   onConfigureNotifications?: () => void;
   onToggleUserActive?: (userId: string, active: boolean) => void;
+  isDarkMode?: boolean;
+  onToggleTheme?: () => void;
 }
 
-export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, onLogout, templates = [], onViewChange, users = [], onAddUser, onEditProfile, onChangePassword, onConfigureNotifications, onToggleUserActive }: DashboardProps) {
+export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, onLogout, templates = [], onViewChange, users = [], onAddUser, onEditProfile, onChangePassword, onConfigureNotifications, onToggleUserActive, isDarkMode = false, onToggleTheme }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState<'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings'>('overview');
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
   const [filterAssignee, setFilterAssignee] = useState('All');
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    const savedTheme = localStorage.getItem('trustgrid_theme');
-    return savedTheme === 'dark';
-  });
   const [isSidebarVisible, setIsSidebarVisible] = useState(false);
-
-  // Apply theme to document
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-    }
-    localStorage.setItem('trustgrid_theme', isDarkMode ? 'dark' : 'light');
-  }, [isDarkMode]);
 
   // Calculate metrics
   const activeTasks = tasks.filter(t => t.Status !== 'Closed' && t.Status !== 'Reviewed').length;
@@ -95,6 +83,16 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
 
   // Get recent activity (from audit logs or task updates)
   const recentActivity: { date: string; action: string; type: string }[] = [];
+
+  // Get alerts based on actual task data
+  const alerts = tasks
+    .filter(t => {
+      if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
+      const isOverdue = t.DueDate < today;
+      const isHighPriority = t.Priority === 'High' || t.Priority === 'Critical';
+      return isOverdue || isHighPriority;
+    })
+    .slice(0, 5);
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -340,30 +338,43 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
             </div>
           </div>
           <div className="p-6 space-y-4">
-            <div 
-              onClick={() => handleViewChange('tasks', 'Overdue')}
-              className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 cursor-pointer hover:bg-red-500/20 transition-colors"
-            >
-              <div className="flex items-start space-x-3">
-                <AlertTriangle className="text-red-400 mt-0.5" size={18} />
-                <div>
-                  <p className={`font-medium text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Overdue compliance warning</p>
-                  <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>TSK-002 is overdue and requires immediate attention</p>
-                </div>
+            {alerts.length > 0 ? (
+              alerts.map((task) => {
+                const isOverdue = task.DueDate < today;
+                return (
+                  <div 
+                    key={task.TaskID}
+                    onClick={() => onTaskClick(task)}
+                    className={`${isOverdue ? 'bg-red-500/10 border-red-500/20 hover:bg-red-500/20' : 'bg-yellow-500/10 border-yellow-500/20 hover:bg-yellow-500/20'} border rounded-lg p-4 cursor-pointer transition-colors`}
+                  >
+                    <div className="flex items-start space-x-3">
+                      {isOverdue ? (
+                        <AlertTriangle className="text-red-400 mt-0.5" size={18} />
+                      ) : (
+                        <Bell className="text-yellow-400 mt-0.5" size={18} />
+                      )}
+                      <div className="flex-1">
+                        <p className={`font-medium text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                          {isOverdue ? 'Overdue task' : 'High priority task'}
+                        </p>
+                        <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                          {task.TaskID}: {task.Title.length > 50 ? task.Title.substring(0, 50) + '...' : task.Title}
+                        </p>
+                        <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                          Due: {task.DueDate} • Priority: {task.Priority}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                <CheckCircle className="mx-auto mb-2 text-green-400" size={24} />
+                <p className="text-sm">No alerts at this time</p>
+                <p className="text-xs mt-1">All tasks are on track</p>
               </div>
-            </div>
-            <div 
-              onClick={() => handleViewChange('tasks', 'In progress')}
-              className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 cursor-pointer hover:bg-yellow-500/20 transition-colors"
-            >
-              <div className="flex items-start space-x-3">
-                <Bell className="text-yellow-400 mt-0.5" size={18} />
-                <div>
-                  <p className={`font-medium text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Progress report pending</p>
-                  <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Please submit your weekly progress reports</p>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </motion.div>
 
@@ -1023,7 +1034,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
                 <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{isDarkMode ? 'Dark theme is currently active' : 'Light theme is currently active'}</p>
               </div>
               <button
-                onClick={() => setIsDarkMode(!isDarkMode)}
+                onClick={() => onToggleTheme && onToggleTheme()}
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-slate-200 hover:bg-slate-300 text-slate-900'}`}
               >
                 {isDarkMode ? 'Switch to Light' : 'Switch to Dark'}

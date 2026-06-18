@@ -4,9 +4,21 @@ import { Users, Calendar, Mail, FileText, Settings, Activity, ChevronRight, Chec
 
 interface AdminHomeProps {
   onNavigateToModule?: (module: string) => void;
+  users?: any[];
+  templates?: any[];
+  audits?: any[];
+  tasks?: any[];
 }
 
-export default function AdminHome({ onNavigateToModule }: AdminHomeProps) {
+export default function AdminHome({ onNavigateToModule, users = [], templates = [], audits = [], tasks = [] }: AdminHomeProps) {
+  const activeUsersCount = users.filter(u => u.Active).length;
+  const activeTemplatesCount = templates.filter(t => t.Active).length;
+  const today = new Date().toISOString().split('T')[0];
+  const overdueTasksCount = tasks.filter(t => {
+    if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
+    return t.DueDate < today;
+  }).length;
+
   const modules = [
     {
       id: 'identities',
@@ -14,15 +26,15 @@ export default function AdminHome({ onNavigateToModule }: AdminHomeProps) {
       description: 'Manage users, roles, and access permissions',
       icon: <Users size={24} />,
       health: 'healthy',
-      healthLabel: 'All systems operational',
+      healthLabel: `${activeUsersCount} active users`,
     },
     {
       id: 'blueprints',
       label: 'Recurrence blueprints',
       description: 'Configure automated task generation schedules',
       icon: <Calendar size={24} />,
-      health: 'healthy',
-      healthLabel: '12 active blueprints',
+      health: activeTemplatesCount > 0 ? 'healthy' : 'warning',
+      healthLabel: `${activeTemplatesCount} active blueprints`,
     },
     {
       id: 'templates',
@@ -30,7 +42,7 @@ export default function AdminHome({ onNavigateToModule }: AdminHomeProps) {
       description: 'Customize notification and alert templates',
       icon: <Mail size={24} />,
       health: 'healthy',
-      healthLabel: '5 templates configured',
+      healthLabel: 'Templates configured',
     },
     {
       id: 'audit',
@@ -38,7 +50,7 @@ export default function AdminHome({ onNavigateToModule }: AdminHomeProps) {
       description: 'View system events and change history',
       icon: <FileText size={24} />,
       health: 'healthy',
-      healthLabel: 'Logging active',
+      healthLabel: `${audits.length} records logged`,
     },
     {
       id: 'settings',
@@ -50,12 +62,12 @@ export default function AdminHome({ onNavigateToModule }: AdminHomeProps) {
     },
   ];
 
-  const recentSystemEvents = [
-    { id: 1, message: 'Scheduler cycle completed successfully', time: '10 minutes ago', type: 'success' },
-    { id: 2, message: 'User john@example.com logged in', time: '25 minutes ago', type: 'info' },
-    { id: 3, message: 'Task #12345 marked as overdue', time: '1 hour ago', type: 'warning' },
-    { id: 4, message: 'Email notification sent to team@example.com', time: '2 hours ago', type: 'info' },
-  ];
+  const recentSystemEvents = audits.slice(0, 4).map((audit, index) => ({
+    id: audit.AuditID || index,
+    message: audit.Action || 'System event recorded',
+    time: audit.Timestamp ? new Date(audit.Timestamp).toLocaleString() : 'Recently',
+    type: audit.Action?.toLowerCase().includes('error') ? 'warning' : 'info',
+  }));
 
   return (
     <div className="p-6 space-y-6">
@@ -69,23 +81,23 @@ export default function AdminHome({ onNavigateToModule }: AdminHomeProps) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
           label="Active identities"
-          value="24"
+          value={activeUsersCount.toString()}
           note="Users with active access"
         />
         <KPICard
           label="Active schedulers"
-          value="12"
+          value={activeTemplatesCount.toString()}
           note="Recurring task generators"
         />
         <KPICard
-          label="Alert dispatches today"
-          value="8"
-          note="Email notifications sent"
+          label="Overdue tasks"
+          value={overdueTasksCount.toString()}
+          note="Tasks requiring attention"
         />
         <KPICard
-          label="Audit exceptions"
-          value="0"
-          note="System anomalies detected"
+          label="Audit records"
+          value={audits.length.toString()}
+          note="System events logged"
         />
       </div>
 

@@ -11,6 +11,8 @@ interface AppShellProps {
   onQuickCreate?: () => void;
   onSearch?: (query: string) => void;
   onSignOut?: () => void;
+  isDarkMode?: boolean;
+  onToggleTheme?: () => void;
 }
 
 export default function AppShell({
@@ -22,6 +24,8 @@ export default function AppShell({
   onQuickCreate,
   onSearch,
   onSignOut,
+  isDarkMode = false,
+  onToggleTheme,
 }: AppShellProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
@@ -45,6 +49,8 @@ export default function AppShell({
           breadcrumb={breadcrumb}
           onQuickCreate={onQuickCreate}
           onSearch={onSearch}
+          isDarkMode={isDarkMode}
+          onToggleTheme={onToggleTheme}
         />
         
         <div className="flex-1 overflow-y-auto">

@@ -359,10 +359,14 @@ export default function App() {
       <LoginScreen
         usersList={users}
         onLoginSuccess={(email, user) => {
+          console.log('App.tsx onLoginSuccess called', { email, user });
           localStorage.setItem('trustgrid_active_user_email', email);
           localStorage.setItem('trustgrid_user', JSON.stringify(user));
+          console.log('localStorage set');
           setActiveUserEmail(email);
+          console.log('setActiveUserEmail called');
           setActiveUser(user);
+          console.log('setActiveUser called');
           // Add user to local users array if not present
           setUsers(prev => {
             if (!prev.find(u => u.Email === email)) {
@@ -370,11 +374,7 @@ export default function App() {
             }
             return prev;
           });
-        }}
-        onRegisterUser={async (newUser) => {
-          await dbService.saveUser(newUser);
-          await dbService.logAction('User', newUser.UserID, `Self-registered account (Pending approval)`, newUser.Email, null, newUser);
-          await loadDatabase();
+          console.log('onLoginSuccess completed');
         }}
       />
     );
@@ -664,11 +664,17 @@ export default function App() {
 
     for (const file of uploadedFiles) {
       try {
+        const token = localStorage.getItem('trustgrid_auth_token');
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
         const uploadRes = await fetch('/api/upload-file', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers,
           body: JSON.stringify({
             fileName: file.name,
             fileData: file.data, // Base64 encoded file data
@@ -1104,6 +1110,8 @@ export default function App() {
         onToggleUserActive={(userId, active) => {
           setUsers(prev => prev.map(u => u.UserID === userId ? { ...u, Active: active } : u));
         }}
+        isDarkMode={isDarkMode}
+        onToggleTheme={() => setIsDarkMode(!isDarkMode)}
       />
 
       <AnimatePresence>
