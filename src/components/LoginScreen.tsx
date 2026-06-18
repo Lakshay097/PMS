@@ -13,6 +13,7 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -30,6 +31,15 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
       setRegPassword('TG-' + Math.floor(1000 + Math.random() * 9000));
     }
   }, [isRegistering, regPassword]);
+
+  // Load remembered email on component mount
+  React.useEffect(() => {
+    const rememberedEmail = localStorage.getItem('trustgrid_remember_email');
+    if (rememberedEmail) {
+      setEmail(rememberedEmail);
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,9 +59,12 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
 
     setIsLoading(true);
     console.log('Starting login request', { email: trimmedEmail });
+    console.log('About to enter try block');
 
     try {
+      console.log('Inside try block, about to make fetch');
       // Call the JWT authentication endpoint
+      console.log('Making fetch request to /api/login');
       const response = await fetch('/api/login', {
         method: 'POST',
         headers: {
@@ -60,7 +73,9 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
         body: JSON.stringify({ email: trimmedEmail, password }),
       });
 
+      console.log('Response received:', response.status, response.statusText);
       const data = await response.json();
+      console.log('Response data:', data);
 
       if (!response.ok) {
         setError(data.error || 'Authentication failed. Please check your credentials.');
@@ -73,9 +88,17 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
       localStorage.setItem('trustgrid_auth_token', data.token);
       localStorage.setItem('trustgrid_user', JSON.stringify(data.user));
 
+      // Remember me functionality
+      if (rememberMe) {
+        localStorage.setItem('trustgrid_remember_email', trimmedEmail);
+      } else {
+        localStorage.removeItem('trustgrid_remember_email');
+      }
+
       onLoginSuccess(data.user.email);
       setIsLoading(false);
     } catch (err: any) {
+      console.error('Login error:', err);
       setError('Failed to connect to authentication server. Please try again.');
       setIsLoading(false);
     }
@@ -238,6 +261,7 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       disabled={isLoading}
+                      required
                       className="w-full bg-[#0F172A]/90 border border-[#334155] text-slate-100 placeholder-slate-500 rounded-xl py-2.5 pl-9 pr-4 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
                     />
                   </div>
@@ -256,6 +280,7 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       disabled={isLoading}
+                      required
                       className="w-full bg-[#0F172A]/90 border border-[#334155] text-slate-100 placeholder-slate-500 rounded-xl py-2.5 pl-9 pr-10 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all duration-150"
                     />
                     <button
@@ -269,6 +294,21 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
                   </div>
                 </div>
 
+                {/* Remember Me */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="rememberMe"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    disabled={isLoading}
+                    className="w-4 h-4 rounded border-[#334155] bg-[#0F172A]/90 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
+                  />
+                  <label htmlFor="rememberMe" className="text-xs text-slate-400 cursor-pointer select-none">
+                    Remember my email
+                  </label>
+                </div>
+
                 {/* Error Message */}
                 {error && (
                   <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl flex items-start gap-2 text-xs leading-relaxed">
@@ -279,9 +319,8 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
 
                 {/* Sign In Button */}
                 <button
-                  type="button"
+                  type="submit"
                   disabled={isLoading}
-                  onClick={handleLogin}
                   className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl py-2.5 text-xs font-bold uppercase tracking-wider shadow transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer border-none"
                 >
                   <span>{isLoading ? 'Verifying...' : 'Authenticate'}</span>

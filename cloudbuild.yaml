@@ -1,22 +1,22 @@
 steps:
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/trustgrid-repo/trustgrid-taskflow:latest', '.']
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/pms-repo/pms-taskflow:latest', '.']
 
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/trustgrid-repo/trustgrid-taskflow:latest']
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/pms-repo/pms-taskflow:latest']
 
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - 'run'
       - 'deploy'
-      - 'trustgrid-taskflow'
-      - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/trustgrid-repo/trustgrid-taskflow:latest'
+      - 'pms-taskflow'
+      - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/pms-repo/pms-taskflow:latest'
       - '--platform=managed'
       - '--region=us-central1'
       - '--allow-unauthenticated'
       - '--port=3000'
       - '--memory=512Mi'
-      - '--cpu=0.5'
+      - '--cpu=1'
       - '--max-instances=10'
       - '--min-instances=0'
       - '--timeout=300'
