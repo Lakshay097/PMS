@@ -16,6 +16,7 @@ import {
   Bell,
   Activity,
   ChevronRight,
+  ChevronLeft,
   User,
   Shield,
   Wrench,
@@ -52,6 +53,7 @@ interface DashboardProps {
 export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, onLogout, templates = [], onViewChange, users = [], onAddUser, onAddTemplate, onToggleTemplateStatus, onUpdateSetting, onEditProfile, onChangePassword, onConfigureNotifications, onToggleUserActive, isDarkMode = false, onToggleTheme, onSyncDatabase, isSyncing = false, lastSyncTime, dbConnectionStatus = 'connected' }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState<'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings'>('overview');
+  const [navigationHistory, setNavigationHistory] = useState<'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings'[]>([]);
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
   const [filterAssignee, setFilterAssignee] = useState('All');
@@ -130,12 +132,27 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
   };
 
   const handleViewChange = (view: 'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings', filterStatus?: string) => {
+    // Add current view to history before changing
+    if (activeView !== view) {
+      setNavigationHistory(prev => [...prev, activeView]);
+    }
     setActiveView(view);
     if (filterStatus) {
       setFilterStatus(filterStatus);
     }
     if (onViewChange) {
       onViewChange(view);
+    }
+  };
+
+  const handleBack = () => {
+    if (navigationHistory.length > 0) {
+      const previousView = navigationHistory[navigationHistory.length - 1];
+      setNavigationHistory(prev => prev.slice(0, -1));
+      setActiveView(previousView);
+      if (onViewChange) {
+        onViewChange(previousView);
+      }
     }
   };
 
@@ -1262,6 +1279,16 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
               >
                 <LayoutDashboard size={20} />
               </button>
+              {/* Back Button */}
+              {navigationHistory.length > 0 && (
+                <button
+                  onClick={handleBack}
+                  className={`p-2.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
+                  title="Go back"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+              )}
               <div>
                 <h2 className={`text-2xl font-bold capitalize ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{activeView}</h2>
                 <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Welcome back, {currentUser.FullName}</p>
