@@ -354,8 +354,15 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    // Serve index.html for all non-api SPA fallbacks
-    app.get("*", (req, res) => {
+    // Serve index.html for all non-API SPA fallbacks (but not for assets)
+    app.get("*", (req, res, next) => {
+      // Don't intercept requests for static assets
+      if (req.path.startsWith('/assets/') || 
+          req.path.startsWith('/sw.js') ||
+          req.path.includes('.')) {
+        next();
+        return;
+      }
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
