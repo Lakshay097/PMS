@@ -1119,7 +1119,44 @@ export default function App() {
         }}
         templates={templates}
         users={users}
-        onAddUser={() => setIsAddUserModalOpen(true)}
+        onAddUser={async (userData) => {
+          try {
+            await dbService.saveUser(userData);
+            await loadDatabase();
+          } catch (error) {
+            console.error('Failed to save user to database:', error);
+          }
+        }}
+        onAddTemplate={async (templateData) => {
+          try {
+            await dbService.saveTemplate(templateData);
+            await loadDatabase();
+          } catch (error) {
+            console.error('Failed to save template to database:', error);
+          }
+        }}
+        onToggleTemplateStatus={async (templateId) => {
+          try {
+            const template = templates.find(t => t.TemplateID === templateId);
+            if (template) {
+              await dbService.saveTemplate({ ...template, Active: !template.Active });
+              await loadDatabase();
+            }
+          } catch (error) {
+            console.error('Failed to toggle template status:', error);
+          }
+        }}
+        onUpdateSetting={async (key, value) => {
+          try {
+            const updatedSettings = settings.map(s => 
+              s.Key === key ? { ...s, Value: value } : s
+            );
+            await dbService.saveSettings(updatedSettings);
+            await loadDatabase();
+          } catch (error) {
+            console.error('Failed to update setting:', error);
+          }
+        }}
         onEditProfile={() => setIsEditProfileModalOpen(true)}
         onChangePassword={() => setIsChangePasswordModalOpen(true)}
         onConfigureNotifications={() => setIsConfigureNotificationsModalOpen(true)}

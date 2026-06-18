@@ -33,7 +33,10 @@ interface DashboardProps {
   templates?: TaskTemplate[];
   onViewChange?: (view: 'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings') => void;
   users?: UserType[];
-  onAddUser?: () => void;
+  onAddUser?: (userData: UserType) => void;
+  onAddTemplate?: (templateData: TaskTemplate) => void;
+  onToggleTemplateStatus?: (templateId: string) => void;
+  onUpdateSetting?: (key: string, value: string) => void;
   onEditProfile?: () => void;
   onChangePassword?: () => void;
   onConfigureNotifications?: () => void;
@@ -46,7 +49,7 @@ interface DashboardProps {
   dbConnectionStatus?: 'connected' | 'disconnected' | 'error';
 }
 
-export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, onLogout, templates = [], onViewChange, users = [], onAddUser, onEditProfile, onChangePassword, onConfigureNotifications, onToggleUserActive, isDarkMode = false, onToggleTheme, onSyncDatabase, isSyncing = false, lastSyncTime, dbConnectionStatus = 'connected' }: DashboardProps) {
+export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, onLogout, templates = [], onViewChange, users = [], onAddUser, onAddTemplate, onToggleTemplateStatus, onUpdateSetting, onEditProfile, onChangePassword, onConfigureNotifications, onToggleUserActive, isDarkMode = false, onToggleTheme, onSyncDatabase, isSyncing = false, lastSyncTime, dbConnectionStatus = 'connected' }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState<'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings'>('overview');
   const [filterStatus, setFilterStatus] = useState('All');
@@ -603,7 +606,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
             </div>
             {currentUser.Role === 'Admin' && (
               <button 
-                onClick={onAddUser}
+                onClick={() => handleViewChange('admin')}
                 className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
               >
                 <Plus size={16} />
