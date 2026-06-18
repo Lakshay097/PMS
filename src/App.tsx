@@ -239,8 +239,10 @@ export default function App() {
       setIsSyncingSheets(true);
       setDbConnectionStatus('connected');
       
+      console.log('Starting database load...');
       // Initialize Google Sheets database (seeds if empty)
       await initializeDatabase();
+      console.log('Database initialized');
       setIsBackendConnected(true);
 
       const [u, t, tm, tk, rp, fl, ad, st, sb, cm] = await Promise.all([
@@ -256,6 +258,7 @@ export default function App() {
         dbService.getComments()
       ]);
 
+      console.log('Database data loaded:', { users: u.length, teams: t.length, templates: tm.length, tasks: tk.length });
       const evaluatedTasks = await evaluateOverdueTasks(tk, activeUserEmail);
 
       // Analyze and raise delay and ETA alerts for email simulation logging
@@ -303,9 +306,11 @@ export default function App() {
       // Update sync time and status
       setLastSyncTime(new Date().toISOString());
       setDbConnectionStatus('connected');
+      console.log('Database load completed successfully');
     } catch (e) {
       console.error("Critical State Load Warning:", e);
       setDbConnectionStatus('error');
+      console.error('Database load failed:', e);
     } finally {
       setIsSyncingSheets(false);
       setIsLoading(false);
@@ -602,84 +607,95 @@ export default function App() {
     const isTemplate = data.TaskType === 'Recurring';
     const nowStr = new Date().toISOString();
 
-    if (isTemplate) {
-      // 1. Create schedule template row
-      const tempId = `TMP-${Math.floor(500 + Math.random() * 499)}`;
-      const firstEmail = data.AssignedToEmail.split(',')[0]?.trim() || '';
-      const recipient = users.find(u => u.Email === firstEmail);
-      const newTemplate: TaskTemplate = {
-        TemplateID: tempId,
-        Title: data.Title,
-        Description: data.Description,
-        Category: data.Category,
-        Priority: data.Priority,
-        RecurrenceType: data.RecurrenceType,
-        StartDate: data.StartDate,
-        NextGenerationDate: data.StartDate, // first cycle runs on StartDate
-        LastGeneratedDate: '',
-        AssignedByEmail: activeUser.Email,
-        AssignedToEmail: data.AssignedToEmail,
-        AssignedToRole: recipient?.Role || 'Stakeholder',
-        TeamID: activeUser.Role === 'Admin' ? 'T-ALL' : activeUser.TeamID,
-        Active: true,
-        CreatedAt: nowStr,
-        UpdatedAt: nowStr
-      };
+    try {
+      if (isTemplate) {
+        // 1. Create schedule template row
+        const tempId = `TMP-${Math.floor(500 + Math.random() * 499)}`;
+        const firstEmail = data.AssignedToEmail.split(',')[0]?.trim() || '';
+        const recipient = users.find(u => u.Email === firstEmail);
+        const newTemplate: TaskTemplate = {
+          TemplateID: tempId,
+          Title: data.Title,
+          Description: data.Description,
+          Category: data.Category,
+          Priority: data.Priority,
+          RecurrenceType: data.RecurrenceType,
+          StartDate: data.StartDate,
+          NextGenerationDate: data.StartDate, // first cycle runs on StartDate
+          LastGeneratedDate: '',
+          AssignedByEmail: activeUser.Email,
+          AssignedToEmail: data.AssignedToEmail,
+          AssignedToRole: recipient?.Role || 'Stakeholder',
+          TeamID: activeUser.Role === 'Admin' ? 'T-ALL' : activeUser.TeamID,
+          Active: true,
+          CreatedAt: nowStr,
+          UpdatedAt: nowStr
+        };
 
-      await dbService.saveTemplate(newTemplate);
-      await logAudit('Template', tempId, 'Created Schedule Template', '', JSON.stringify(data));
-      triggerNotification(
-        'Task Assignment',
-        `SCHEDULE ACTIVE: Recurring schedule ${tempId} ("${newTemplate.Title}") created for ${newTemplate.AssignedToEmail}.`,
-        `${newTemplate.AssignedToEmail}`
-      );
-    } else {
-      // 2. Create one-time task
-      const newId = `TSK-${Math.floor(1000 + Math.random() * 8999)}`;
-      const firstEmail = data.AssignedToEmail.split(',')[0]?.trim() || '';
-      const recipient = users.find(u => u.Email === firstEmail);
-      
-      const newTask: Task = {
-        TaskID: newId,
-        TemplateID: null,
-        ParentTaskID: null,
-        Title: data.Title,
-        Description: data.Description,
-        Category: data.Category,
-        Priority: data.Priority,
-        TaskType: 'One-time',
-        RecurrenceType: 'One-time',
-        CycleKey: null,
-        StartDate: data.StartDate,
-        DueDate: data.DueDate,
-        AssignedByEmail: activeUser.Email,
-        AssignedToEmail: data.AssignedToEmail,
-        AssignedToRole: recipient ? recipient.Role : 'Stakeholder',
-        TeamID: recipient ? recipient.TeamID : activeUser.TeamID,
-        Status: 'Not Started',
-        PercentComplete: 0,
-        LastReportSummary: '',
-        RequiresFollowUp: 'No',
-        FollowUpCount: 0,
-        CompletionDate: null,
-        CloseRemark: null,
-        AttachmentLink: data.AttachmentLink || '',
-        CreatedAt: nowStr,
-        UpdatedAt: nowStr,
-        Active: true,
-        DeletedAt: null
-      };
+        console.log('Saving template to database:', newTemplate);
+        await dbService.saveTemplate(newTemplate);
+        console.log('Template saved successfully');
+        await logAudit('Template', tempId, 'Created Schedule Template', '', JSON.stringify(data));
+        triggerNotification(
+          'Task Assignment',
+          `SCHEDULE ACTIVE: Recurring schedule ${tempId} ("${newTemplate.Title}") created for ${newTemplate.AssignedToEmail}.`,
+          `${newTemplate.AssignedToEmail}`
+        );
+      } else {
+        // 2. Create one-time task
+        const newId = `TSK-${Math.floor(1000 + Math.random() * 8999)}`;
+        const firstEmail = data.AssignedToEmail.split(',')[0]?.trim() || '';
+        const recipient = users.find(u => u.Email === firstEmail);
+        
+        const newTask: Task = {
+          TaskID: newId,
+          TemplateID: null,
+          ParentTaskID: null,
+          Title: data.Title,
+          Description: data.Description,
+          Category: data.Category,
+          Priority: data.Priority,
+          TaskType: 'One-time',
+          RecurrenceType: 'One-time',
+          CycleKey: null,
+          StartDate: data.StartDate,
+          DueDate: data.DueDate,
+          AssignedByEmail: activeUser.Email,
+          AssignedToEmail: data.AssignedToEmail,
+          AssignedToRole: recipient ? recipient.Role : 'Stakeholder',
+          TeamID: recipient ? recipient.TeamID : activeUser.TeamID,
+          Status: 'Not Started',
+          PercentComplete: 0,
+          LastReportSummary: '',
+          RequiresFollowUp: 'No',
+          FollowUpCount: 0,
+          CompletionDate: null,
+          CloseRemark: null,
+          AttachmentLink: data.AttachmentLink || '',
+          CreatedAt: nowStr,
+          UpdatedAt: nowStr,
+          Active: true,
+          DeletedAt: null
+        };
 
-      await dbService.saveTask(newTask);
-      await logAudit('Task', newId, 'Created One-time Task Allocation', '', JSON.stringify(data));
-      const alertMsg = formatEmailTemplate('template_assigned_email', newTask);
-      triggerNotification(
-        'Task Assignment',
-        alertMsg,
-        `${newTask.AssignedToEmail}`
-      );
+        console.log('Saving task to database:', newTask);
+        await dbService.saveTask(newTask);
+        console.log('Task saved successfully');
+        await logAudit('Task', newId, 'Created One-time Task Allocation', '', JSON.stringify(data));
+        const alertMsg = formatEmailTemplate('template_assigned_email', newTask);
+        triggerNotification(
+          'Task Assignment',
+          alertMsg,
+          `${newTask.AssignedToEmail}`
+        );
+      }
+      console.log('Reloading database after save...');
+      await loadDatabase();
+      console.log('Database reloaded successfully');
+    } catch (error) {
+      console.error('Error creating task/template:', error);
+      throw error;
     }
-    await loadDatabase();
   };
 
   const handleSubmitProgressReport = async (data: any) => {
@@ -1133,40 +1149,53 @@ export default function App() {
         users={users}
         onAddUser={async (userData) => {
           try {
+            console.log('Saving user to database:', userData);
             await dbService.saveUser(userData);
+            console.log('User saved successfully');
             await loadDatabase();
+            console.log('Database reloaded after user save');
           } catch (error) {
             console.error('Failed to save user to database:', error);
+            throw error;
           }
         }}
         onAddTemplate={async (templateData) => {
           try {
+            console.log('Saving template to database:', templateData);
             await dbService.saveTemplate(templateData);
+            console.log('Template saved successfully');
             await loadDatabase();
           } catch (error) {
             console.error('Failed to save template to database:', error);
+            throw error;
           }
         }}
         onToggleTemplateStatus={async (templateId) => {
           try {
             const template = templates.find(t => t.TemplateID === templateId);
             if (template) {
+              console.log('Toggling template status:', templateId, !template.Active);
               await dbService.saveTemplate({ ...template, Active: !template.Active });
+              console.log('Template status toggled successfully');
               await loadDatabase();
             }
           } catch (error) {
             console.error('Failed to toggle template status:', error);
+            throw error;
           }
         }}
         onUpdateSetting={async (key, value) => {
           try {
+            console.log('Updating setting:', key, value);
             const updatedSettings = settings.map(s => 
               s.Key === key ? { ...s, Value: value } : s
             );
             await dbService.saveSettings(updatedSettings);
+            console.log('Setting updated successfully');
             await loadDatabase();
           } catch (error) {
             console.error('Failed to update setting:', error);
+            throw error;
           }
         }}
         onEditProfile={() => setIsEditProfileModalOpen(true)}
