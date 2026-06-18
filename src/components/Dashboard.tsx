@@ -809,6 +809,12 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
                 }`} />
                 {dbConnectionStatus === 'connected' ? 'Connected' : dbConnectionStatus === 'error' ? 'Error' : 'Disconnected'}
               </div>
+              <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium ${
+                isDarkMode ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-cyan-50 text-cyan-600 border border-cyan-200'
+              }`}>
+                <Clock size={12} />
+                <span>Auto-sync (5m)</span>
+              </div>
               {lastSyncTime && (
                 <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                   Last sync: {new Date(lastSyncTime).toLocaleTimeString()}

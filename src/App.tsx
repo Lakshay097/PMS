@@ -329,6 +329,18 @@ export default function App() {
     return cleanup;
   }, []);
 
+  // Auto-sync functionality - sync every 5 minutes
+  useEffect(() => {
+    const syncInterval = setInterval(() => {
+      if (!isSyncingSheets) {
+        console.log('Auto-syncing database...');
+        loadDatabase();
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(syncInterval);
+  }, [isSyncingSheets]);
+
   // 2. Track Active User Session adaptation
   useEffect(() => {
     if (users.length > 0) {
