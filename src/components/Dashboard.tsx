@@ -40,9 +40,13 @@ interface DashboardProps {
   onToggleUserActive?: (userId: string, active: boolean) => void;
   isDarkMode?: boolean;
   onToggleTheme?: () => void;
+  onSyncDatabase?: () => void;
+  isSyncing?: boolean;
+  lastSyncTime?: string;
+  dbConnectionStatus?: 'connected' | 'disconnected' | 'error';
 }
 
-export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, onLogout, templates = [], onViewChange, users = [], onAddUser, onEditProfile, onChangePassword, onConfigureNotifications, onToggleUserActive, isDarkMode = false, onToggleTheme }: DashboardProps) {
+export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, onLogout, templates = [], onViewChange, users = [], onAddUser, onEditProfile, onChangePassword, onConfigureNotifications, onToggleUserActive, isDarkMode = false, onToggleTheme, onSyncDatabase, isSyncing = false, lastSyncTime, dbConnectionStatus = 'connected' }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState<'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings'>('overview');
   const [filterStatus, setFilterStatus] = useState('All');
@@ -788,7 +792,37 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
     return (
       <div className="space-y-6">
         <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
-          <h3 className={`font-semibold text-lg mb-6 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>System Workbench</h3>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>System Workbench</h3>
+            <div className="flex items-center gap-3">
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${
+                dbConnectionStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                dbConnectionStatus === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                'bg-slate-500/10 text-slate-400 border border-slate-500/20'
+              }`}>
+                <div className={`w-2 h-2 rounded-full ${
+                  dbConnectionStatus === 'connected' ? 'bg-emerald-400' :
+                  dbConnectionStatus === 'error' ? 'bg-red-400' : 'bg-slate-400'
+                }`} />
+                {dbConnectionStatus === 'connected' ? 'Connected' : dbConnectionStatus === 'error' ? 'Error' : 'Disconnected'}
+              </div>
+              {lastSyncTime && (
+                <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Last sync: {new Date(lastSyncTime).toLocaleTimeString()}
+                </span>
+              )}
+              {onSyncDatabase && (
+                <button
+                  onClick={onSyncDatabase}
+                  disabled={isSyncing}
+                  className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Force database synchronization"
+                >
+                  <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
+                </button>
+              )}
+            </div>
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div 

@@ -225,10 +225,20 @@ export default function App() {
   const [isSheetsConnected, setIsSheetsConnected] = useState(false);
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
   const [sheetsSpreadsheetId, setSheetsSpreadsheetId] = useState<string | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [dbConnectionStatus, setDbConnectionStatus] = useState<'connected' | 'disconnected' | 'error'>('connected');
+
+  // Manual sync function for AdminPanel
+  const handleManualSync = async () => {
+    await loadDatabase();
+  };
 
   // Consolidated Database Sync and Reloader Function
   const loadDatabase = async () => {
     try {
+      setIsSyncingSheets(true);
+      setDbConnectionStatus('connected');
+      
       // Initialize Google Sheets database (seeds if empty)
       await initializeDatabase();
       setIsBackendConnected(true);
@@ -289,9 +299,15 @@ export default function App() {
       setSettings(st);
       setSubtasks(sb);
       setComments(cm);
+      
+      // Update sync time and status
+      setLastSyncTime(new Date().toISOString());
+      setDbConnectionStatus('connected');
     } catch (e) {
       console.error("Critical State Load Warning:", e);
+      setDbConnectionStatus('error');
     } finally {
+      setIsSyncingSheets(false);
       setIsLoading(false);
     }
   };
@@ -1112,6 +1128,10 @@ export default function App() {
         }}
         isDarkMode={isDarkMode}
         onToggleTheme={() => setIsDarkMode(!isDarkMode)}
+        onSyncDatabase={handleManualSync}
+        isSyncing={isSyncingSheets}
+        lastSyncTime={lastSyncTime}
+        dbConnectionStatus={dbConnectionStatus}
       />
 
       <AnimatePresence>

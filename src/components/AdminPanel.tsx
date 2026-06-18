@@ -33,6 +33,10 @@ interface AdminPanelProps {
   onUpdateSetting: (key: string, value: string) => void;
   onUpdateUserRole: (email: string, role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder') => void;
   onApproveUser: (email: string) => void;
+  onSyncDatabase?: () => void;
+  isSyncing?: boolean;
+  lastSyncTime?: string;
+  dbConnectionStatus?: 'connected' | 'disconnected' | 'error';
 }
 
 export default function AdminPanel({
@@ -48,6 +52,10 @@ export default function AdminPanel({
   onUpdateSetting,
   onUpdateUserRole,
   onApproveUser,
+  onSyncDatabase,
+  isSyncing = false,
+  lastSyncTime,
+  dbConnectionStatus = 'connected',
 }: AdminPanelProps) {
   // Master administrative tabs
   const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'templates' | 'email_templates' | 'audits' | 'settings'>('users');
@@ -285,7 +293,7 @@ export default function AdminPanel({
         </div>
 
         {/* Dynamic statistics analytics strip */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-5 border-t border-[#1E293B]/60 text-slate-300 font-mono text-xs">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6 pt-5 border-t border-[#1E293B]/60 text-slate-300 font-mono text-xs">
           <div className="bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B]">
             <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Authorizations</span>
             <span className="text-xl font-bold font-sans text-white block mt-1">{users.filter(u => u.Active).length} <span className="text-xs text-slate-500 font-normal">Active</span></span>
@@ -301,6 +309,30 @@ export default function AdminPanel({
           <div className="bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B]">
             <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Config Parms</span>
             <span className="text-xl font-bold font-sans text-purple-400 block mt-1">{settings.length} Handles</span>
+          </div>
+          <div className="bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B]">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Database Sync</span>
+              <div className={`w-2 h-2 rounded-full ${
+                dbConnectionStatus === 'connected' ? 'bg-emerald-400' : 
+                dbConnectionStatus === 'error' ? 'bg-red-400' : 'bg-slate-400'
+              }`} />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400 font-normal">
+                {lastSyncTime ? `Synced ${new Date(lastSyncTime).toLocaleTimeString()}` : 'Not synced'}
+              </span>
+              {onSyncDatabase && (
+                <button
+                  onClick={onSyncDatabase}
+                  disabled={isSyncing}
+                  className="text-cyan-400 hover:text-cyan-300 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
+                  title="Force database synchronization"
+                >
+                  <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
