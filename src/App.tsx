@@ -323,6 +323,21 @@ export default function App() {
         if (found.Role === 'Sub-stakeholder' && activeView === 'admin') {
           setActiveView('dashboard');
         }
+      } else if (activeUserEmail) {
+        // If user not found in local array but email is set, try to load from localStorage
+        const storedUser = localStorage.getItem('trustgrid_user');
+        if (storedUser) {
+          try {
+            const parsedUser = JSON.parse(storedUser);
+            if (parsedUser.Email === activeUserEmail) {
+              setActiveUser(parsedUser);
+              // Add user to local users array if not present
+              setUsers(prev => [...prev, parsedUser]);
+            }
+          } catch (e) {
+            console.error('Failed to parse stored user:', e);
+          }
+        }
       }
     }
   }, [activeUserEmail, users, activeView]);
@@ -343,9 +358,18 @@ export default function App() {
     return (
       <LoginScreen
         usersList={users}
-        onLoginSuccess={(email) => {
+        onLoginSuccess={(email, user) => {
           localStorage.setItem('trustgrid_active_user_email', email);
+          localStorage.setItem('trustgrid_user', JSON.stringify(user));
           setActiveUserEmail(email);
+          setActiveUser(user);
+          // Add user to local users array if not present
+          setUsers(prev => {
+            if (!prev.find(u => u.Email === email)) {
+              return [...prev, user];
+            }
+            return prev;
+          });
         }}
         onRegisterUser={async (newUser) => {
           await dbService.saveUser(newUser);

@@ -4,7 +4,7 @@ import { User } from '../types';
 
 interface LoginScreenProps {
   usersList: User[];
-  onLoginSuccess: (email: string) => void;
+  onLoginSuccess: (email: string, user: User) => void;
   onRegisterUser?: (newUser: User) => Promise<void>;
 }
 
@@ -95,7 +95,7 @@ export default function LoginScreen({ usersList, onLoginSuccess, onRegisterUser 
         localStorage.removeItem('trustgrid_remember_email');
       }
 
-      onLoginSuccess(data.user.email);
+      onLoginSuccess(data.user.email, data.user);
       setIsLoading(false);
     } catch (err: any) {
       console.error('Login error:', err);
