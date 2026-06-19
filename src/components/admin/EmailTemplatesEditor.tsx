@@ -18,7 +18,7 @@ export default function EmailTemplatesEditor({ onBack }: EmailTemplatesEditorPro
     id: '1',
     name: 'Task Assignment',
     subject: 'New task assigned: {{task_title}}',
-    body: 'Hello {{assignee_name}},\n\nYou have been assigned a new task:\n\nTask: {{task_title}}\nDue Date: {{due_date}}\nPriority: {{priority}}\n\nPlease review and start working on this task.\n\nBest regards,\nTrustGrid Team',
+    body: 'Hello {{assignee_name}},\n\nYou have been assigned a new task:\n\nTask: {{task_title}}\nDue Date: {{due_date}}\nPriority: {{priority}}\n\nPlease review and start working on this task.\n\nBest regards,\nPMS Team',
     category: 'task-assignment',
   });
 
@@ -32,28 +32,28 @@ export default function EmailTemplatesEditor({ onBack }: EmailTemplatesEditorPro
       id: '1',
       name: 'Task Assignment',
       subject: 'New task assigned: {{task_title}}',
-      body: 'Hello {{assignee_name}},\n\nYou have been assigned a new task:\n\nTask: {{task_title}}\nDue Date: {{due_date}}\nPriority: {{priority}}\n\nPlease review and start working on this task.\n\nBest regards,\nTrustGrid Team',
+      body: 'Hello {{assignee_name}},\n\nYou have been assigned a new task:\n\nTask: {{task_title}}\nDue Date: {{due_date}}\nPriority: {{priority}}\n\nPlease review and start working on this task.\n\nBest regards,\nPMS Team',
       category: 'task-assignment',
     },
     {
       id: '2',
       name: 'Progress Update',
       subject: 'Progress update on {{task_title}}',
-      body: 'Hello,\n\nA progress update has been submitted for task: {{task_title}}\n\nStatus: {{status}}\nProgress: {{percent_complete}}%\n\nView the task for more details.\n\nBest regards,\nTrustGrid Team',
+      body: 'Hello,\n\nA progress update has been submitted for task: {{task_title}}\n\nStatus: {{status}}\nProgress: {{percent_complete}}%\n\nView the task for more details.\n\nBest regards,\nPMS Team',
       category: 'progress-update',
     },
     {
       id: '3',
       name: 'Overdue Alert',
       subject: 'OVERDUE: {{task_title}}',
-      body: 'Hello {{assignee_name}},\n\nThe following task is now overdue:\n\nTask: {{task_title}}\nDue Date: {{due_date}}\n\nPlease address this immediately.\n\nBest regards,\nTrustGrid Team',
+      body: 'Hello {{assignee_name}},\n\nThe following task is now overdue:\n\nTask: {{task_title}}\nDue Date: {{due_date}}\n\nPlease address this immediately.\n\nBest regards,\nPMS Team',
       category: 'overdue-alert',
     },
     {
       id: '4',
       name: 'System Notification',
       subject: 'System Notification: {{notification_type}}',
-      body: 'Hello,\n\n{{notification_message}}\n\nThis is an automated notification from TrustGrid.\n\nBest regards,\nTrustGrid Team',
+      body: 'Hello,\n\n{{notification_message}}\n\nThis is an automated notification from PMS.\n\nBest regards,\nPMS Team',
       category: 'system-notification',
     },
   ];

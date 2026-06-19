@@ -12,6 +12,11 @@ export interface User {
   CreatedAt: string;
   UpdatedAt: string;
   Password?: string;
+  ApprovalStatus?: 'pending' | 'approved' | 'rejected';
+  RequestedBy?: string; // Email of the person who requested the account
+  RequestedAt?: string;
+  ApprovedBy?: string; // Email of the admin who approved
+  ApprovedAt?: string;
 }
 
 export interface Team {

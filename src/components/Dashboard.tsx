@@ -23,7 +23,8 @@ import {
   Filter,
   RefreshCw
 } from 'lucide-react';
-import { Task, User as UserType, TaskTemplate } from '../types';
+import { Task, User as UserType, TaskTemplate, AuditLog, AppSetting, Team } from '../types';
+import AdminPanel from './AdminPanel';
 
 interface DashboardProps {
   tasks: Task[];
@@ -48,9 +49,15 @@ interface DashboardProps {
   isSyncing?: boolean;
   lastSyncTime?: string;
   dbConnectionStatus?: 'connected' | 'disconnected' | 'error';
+  audits?: AuditLog[];
+  settings?: AppSetting[];
+  teams?: Team[];
+  onToggleUserStatus?: (email: string) => void;
+  onUpdateUserRole?: (email: string, role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder') => void;
+  onApproveUser?: (email: string) => void;
 }
 
-export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, onLogout, templates = [], onViewChange, users = [], onAddUser, onAddTemplate, onToggleTemplateStatus, onUpdateSetting, onEditProfile, onChangePassword, onConfigureNotifications, onToggleUserActive, isDarkMode = false, onToggleTheme, onSyncDatabase, isSyncing = false, lastSyncTime, dbConnectionStatus = 'connected' }: DashboardProps) {
+export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, onLogout, templates = [], onViewChange, users = [], onAddUser, onAddTemplate, onToggleTemplateStatus, onUpdateSetting, onEditProfile, onChangePassword, onConfigureNotifications, onToggleUserActive, isDarkMode = false, onToggleTheme, onSyncDatabase, isSyncing = false, lastSyncTime, dbConnectionStatus = 'connected', audits = [], settings = [], teams = [], onToggleUserStatus, onUpdateUserRole, onApproveUser }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState<'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings'>('overview');
   const [navigationHistory, setNavigationHistory] = useState<'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings'[]>([]);
@@ -597,8 +604,8 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
   const renderTeam = () => {
     const teamMembers = getTeamMembers();
 
-    // Group users by team for Admin view
-    const teams = users.reduce((acc, user) => {
+    // Group users by team for Admin view (use filtered users)
+    const teams = teamMembers.reduce((acc, user) => {
       const teamName = user.TeamName || 'Unassigned';
       if (!acc[teamName]) {
         acc[teamName] = [];
@@ -795,241 +802,25 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
   );
 
   const renderAdmin = () => {
-    // Group users by team
-    const teams = users.reduce((acc, user) => {
-      const teamName = user.TeamName || 'Unassigned';
-      if (!acc[teamName]) {
-        acc[teamName] = { stakeholders: [], subStakeholders: [] };
-      }
-      if (user.Role === 'Stakeholder') {
-        acc[teamName].stakeholders.push(user);
-      } else if (user.Role === 'Sub-stakeholder') {
-        acc[teamName].subStakeholders.push(user);
-      }
-      return acc;
-    }, {} as Record<string, { stakeholders: UserType[], subStakeholders: UserType[] }>);
-
     return (
-      <div className="space-y-6">
-        <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
-          <div className="flex items-center justify-between mb-6">
-            <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>System Workbench</h3>
-            <div className="flex items-center gap-3">
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${
-                dbConnectionStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                dbConnectionStatus === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                'bg-slate-500/10 text-slate-400 border border-slate-500/20'
-              }`}>
-                <div className={`w-2 h-2 rounded-full ${
-                  dbConnectionStatus === 'connected' ? 'bg-emerald-400' :
-                  dbConnectionStatus === 'error' ? 'bg-red-400' : 'bg-slate-400'
-                }`} />
-                {dbConnectionStatus === 'connected' ? 'Connected' : dbConnectionStatus === 'error' ? 'Error' : 'Disconnected'}
-              </div>
-              <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium ${
-                isDarkMode ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' : 'bg-cyan-50 text-cyan-600 border border-cyan-200'
-              }`}>
-                <Clock size={12} />
-                <span>Auto-sync (5m)</span>
-              </div>
-              {lastSyncTime && (
-                <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Last sync: {new Date(lastSyncTime).toLocaleTimeString()}
-                </span>
-              )}
-              {onSyncDatabase && (
-                <button
-                  onClick={onSyncDatabase}
-                  disabled={isSyncing}
-                  className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  title="Force database synchronization"
-                >
-                  <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
-                </button>
-              )}
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div 
-              onClick={() => handleViewChange('team')}
-              className={`border rounded-lg p-4 hover:border-[#475569] transition-colors cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}
-            >
-              <div className="flex items-center space-x-3 mb-3">
-                <div className="w-10 h-10 bg-blue-500/10 rounded-lg flex items-center justify-center">
-                  <Users className="text-blue-400" size={20} />
-                </div>
-                <div>
-                  <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>User Management</h4>
-                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Manage users and roles</p>
-                </div>
-              </div>
-              <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{users.length} total users</p>
-            </div>
-
-            <div 
-              onClick={() => handleViewChange('schedules')}
-              className={`border rounded-lg p-4 hover:border-[#475569] transition-colors cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}
-            >
-              <div className="flex items-center space-x-3 mb-3">
-                <div className="w-10 h-10 bg-purple-500/10 rounded-lg flex items-center justify-center">
-                  <Calendar className="text-purple-400" size={20} />
-                </div>
-                <div>
-                  <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Schedule Templates</h4>
-                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Recurring task schedules</p>
-                </div>
-              </div>
-              <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{templates.filter(t => t.Active).length} active templates</p>
-            </div>
-
-            <div 
-              onClick={() => handleViewChange('tasks')}
-              className={`border rounded-lg p-4 hover:border-[#475569] transition-colors cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}
-            >
-              <div className="flex items-center space-x-3 mb-3">
-                <div className="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center">
-                  <Activity className="text-green-400" size={20} />
-                </div>
-                <div>
-                  <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Task Management</h4>
-                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>View and manage tasks</p>
-                </div>
-              </div>
-              <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{tasks.length} total tasks</p>
-            </div>
-
-            <div 
-              onClick={() => handleViewChange('settings')}
-              className={`border rounded-lg p-4 hover:border-[#475569] transition-colors cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}
-            >
-              <div className="flex items-center space-x-3 mb-3">
-                <div className="w-10 h-10 bg-orange-500/10 rounded-lg flex items-center justify-center">
-                  <AlertTriangle className="text-orange-400" size={20} />
-                </div>
-                <div>
-                  <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Alert Configuration</h4>
-                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Notification settings</p>
-                </div>
-              </div>
-              <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Configure alerts</p>
-            </div>
-
-            <div 
-              onClick={() => handleViewChange('settings')}
-              className={`border rounded-lg p-4 hover:border-[#475569] transition-colors cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}
-            >
-              <div className="flex items-center space-x-3 mb-3">
-                <div className="w-10 h-10 bg-cyan-500/10 rounded-lg flex items-center justify-center">
-                  <RefreshCw className="text-cyan-400" size={20} />
-                </div>
-                <div>
-                  <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Data Sync</h4>
-                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Database synchronization</p>
-                </div>
-              </div>
-              <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Sync status</p>
-            </div>
-
-            <div 
-              onClick={() => handleViewChange('reports')}
-              className={`border rounded-lg p-4 hover:border-[#475569] transition-colors cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}
-            >
-              <div className="flex items-center space-x-3 mb-3">
-                <div className="w-10 h-10 bg-yellow-500/10 rounded-lg flex items-center justify-center">
-                  <FileText className="text-yellow-400" size={20} />
-                </div>
-                <div>
-                  <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Reports</h4>
-                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>View progress reports</p>
-                </div>
-              </div>
-              <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Report management</p>
-            </div>
-          </div>
-        </div>
-
-        <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
-          <h3 className={`font-semibold text-lg mb-4 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Teams Overview</h3>
-          <div className="space-y-4">
-            {Object.entries(teams).map(([teamName, teamData]) => (
-              <div key={teamName} className={`border rounded-lg p-4 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{teamName}</h4>
-                  <span className={`text-xs font-bold px-2 py-1 rounded border ${isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
-                    {teamData.stakeholders.length} Stakeholders, {teamData.subStakeholders.length} Sub-stakeholders
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {teamData.stakeholders.map((stakeholder) => (
-                    <div key={stakeholder.UserID} className={`p-3 rounded border ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
-                            <User className="text-white" size={14} />
-                          </div>
-                          <div>
-                            <p className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{stakeholder.FullName}</p>
-                            <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{stakeholder.Email}</p>
-                          </div>
-                        </div>
-                        <span className={`text-xs font-bold px-2 py-1 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20`}>
-                          Stakeholder
-                        </span>
-                      </div>
-                      {teamData.subStakeholders.filter(sub => sub.ManagerEmail === stakeholder.Email).length > 0 && (
-                        <div className="ml-4 mt-2 space-y-1">
-                          <p className={`text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Sub-stakeholders:</p>
-                          {teamData.subStakeholders.filter(sub => sub.ManagerEmail === stakeholder.Email).map((sub) => (
-                            <div key={sub.UserID} className={`flex items-center space-x-2 p-2 rounded ${isDarkMode ? 'bg-[#0F141F]' : 'bg-slate-100'}`}>
-                              <div className="w-6 h-6 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full flex items-center justify-center">
-                                <User className="text-white" size={10} />
-                              </div>
-                              <div className="flex-1">
-                                <p className={`text-xs font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{sub.FullName}</p>
-                                <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{sub.Email}</p>
-                              </div>
-                              <span className={`text-xs font-bold px-1 py-0.5 rounded border bg-slate-500/10 text-slate-400 border-slate-500/20`}>
-                                Sub-stakeholder
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {Object.keys(teams).length === 0 && (
-              <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No teams found</div>
-            )}
-          </div>
-        </div>
-
-        <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
-          <h3 className={`font-semibold text-lg mb-4 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Recent System Activity</h3>
-          <div className="space-y-3">
-            {[
-              { action: `User ${currentUser.Email} logged in`, time: 'Just now', type: 'auth' },
-              { action: 'Dashboard view accessed', time: 'Just now', type: 'system' },
-            ].map((activity, index) => (
-              <div key={index} className="flex items-start space-x-3">
-                <div className={`w-2 h-2 rounded-full mt-2 ${
-                  activity.type === 'auth' ? 'bg-blue-400' :
-                  activity.type === 'task' ? 'bg-green-400' :
-                  activity.type === 'schedule' ? 'bg-purple-400' :
-                  'bg-orange-400'
-                }`} />
-                <div className="flex-1">
-                  <p className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{activity.action}</p>
-                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{activity.time}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <AdminPanel
+        users={users}
+        templates={templates}
+        audits={audits}
+        settings={settings}
+        teams={teams}
+        onAddUser={onAddUser || (() => {})}
+        onToggleUserStatus={onToggleUserStatus || (() => {})}
+        onAddTemplate={onAddTemplate || (() => {})}
+        onToggleTemplateStatus={onToggleTemplateStatus || (() => {})}
+        onUpdateSetting={onUpdateSetting || (() => {})}
+        onUpdateUserRole={onUpdateUserRole || (() => {})}
+        onApproveUser={onApproveUser || (() => {})}
+        onSyncDatabase={onSyncDatabase}
+        isSyncing={isSyncing}
+        lastSyncTime={lastSyncTime}
+        dbConnectionStatus={dbConnectionStatus}
+      />
     );
   };
 

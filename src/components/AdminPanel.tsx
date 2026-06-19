@@ -66,6 +66,7 @@ export default function AdminPanel({
   const [role, setRole] = useState<'Admin' | 'Stakeholder'>('Stakeholder');
   const [managerEmail, setManagerEmail] = useState('');
   const [teamSelection, setTeamSelection] = useState('T-01');
+  const [password, setPassword] = useState('');
   const [userSuccessMessage, setUserSuccessMessage] = useState<string | null>(null);
 
   // Search filter inputs
@@ -104,7 +105,13 @@ export default function AdminPanel({
 
   const handleUserCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim() || !email.trim()) return;
+    if (!fullName.trim() || !email.trim() || !password.trim()) return;
+
+    if (password.length < 6) {
+      setUserSuccessMessage('Password must be at least 6 characters');
+      setTimeout(() => setUserSuccessMessage(null), 3000);
+      return;
+    }
 
     const matchedTeam = teams.find(t => t.TeamID === teamSelection);
     const newId = `USR-${Math.floor(100 + Math.random() * 899)}`;
@@ -120,6 +127,7 @@ export default function AdminPanel({
       Active: true,
       CanCreateFollowUp: true,
       CanCloseTask: true,
+      Password: password,
       CreatedAt: new Date().toISOString(),
       UpdatedAt: new Date().toISOString()
     });
@@ -130,6 +138,7 @@ export default function AdminPanel({
     setFullName('');
     setEmail('');
     setManagerEmail('');
+    setPassword('');
   };
 
   const handleTemplateCreateSubmit = (e: React.FormEvent) => {
@@ -345,7 +354,7 @@ export default function AdminPanel({
             
             {/* Pending approvals row if any */}
             {(() => {
-              const pendingApprovals = users.filter(u => !u.Active && u.Role !== 'Sub-stakeholder');
+              const pendingApprovals = users.filter(u => u.ApprovalStatus === 'pending' && !u.Active);
               if (pendingApprovals.length === 0) return null;
               return (
                 <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-5 space-y-3.5 shadow-xs animate-fade-in">
@@ -462,6 +471,18 @@ export default function AdminPanel({
                       />
                     </div>
                   )}
+
+                  <div>
+                    <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1.5">Password (Min 6 characters)</label>
+                    <input
+                      type="password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••"
+                      className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    />
+                  </div>
 
                   <button
                     type="submit"

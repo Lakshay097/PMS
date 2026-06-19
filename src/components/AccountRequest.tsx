@@ -1,0 +1,285 @@
+import React, { useState } from 'react';
+import { Mail, Lock, User, Building2, ArrowLeft, CheckCircle, Clock, X } from 'lucide-react';
+
+interface AccountRequestProps {
+  onBackToLogin: () => void;
+  onRequestSubmitted: () => void;
+}
+
+export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: AccountRequestProps) {
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    role: 'Stakeholder' as 'Admin' | 'Stakeholder' | 'Sub-stakeholder',
+    team: 'T-01',
+    managerEmail: '',
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    // Validation
+    if (!formData.fullName.trim() || !formData.email.trim() || !formData.password) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (formData.role === 'Stakeholder' && !formData.managerEmail.trim()) {
+      setError('Manager email is required for Stakeholder role');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/account-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fullName: formData.fullName.trim(),
+          email: formData.email.trim().toLowerCase(),
+          password: formData.password,
+          role: formData.role,
+          teamId: formData.team,
+          managerEmail: formData.role === 'Stakeholder' ? formData.managerEmail.trim().toLowerCase() : '',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to submit account request');
+        setIsLoading(false);
+        return;
+      }
+
+      setSuccess(true);
+      setTimeout(() => {
+        onRequestSubmitted();
+      }, 2000);
+    } catch (err: any) {
+      setError('Failed to connect to server');
+      setIsLoading(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center font-sans px-4 relative overflow-hidden">
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl"></div>
+          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl"></div>
+        </div>
+
+        <div className="w-full max-w-md relative z-10">
+          <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-8 space-y-6 shadow-2xl text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-500/20 rounded-full">
+              <CheckCircle className="text-green-400" size={32} />
+            </div>
+            <div>
+              <h2 className="text-2xl font-semibold text-white">Request Submitted</h2>
+              <p className="text-slate-400 text-sm mt-2">
+                Your account request has been submitted for approval. An administrator will review your request and activate your account.
+              </p>
+            </div>
+            <button
+              onClick={onBackToLogin}
+              className="w-full bg-slate-700 hover:bg-slate-600 text-white rounded-xl py-3 font-medium transition-colors"
+            >
+              Back to Login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center font-sans px-4 relative overflow-hidden">
+      {/* Background decorative elements */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl"></div>
+      </div>
+
+      <div className="w-full max-w-md space-y-8 relative z-10">
+        {/* Back Button */}
+        <button
+          onClick={onBackToLogin}
+          className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft size={20} />
+          Back to Login
+        </button>
+
+        {/* Logo/Brand Section */}
+        <div className="text-center space-y-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg shadow-blue-500/25">
+            <User className="text-white" size={32} />
+          </div>
+          <div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
+              Request Account
+            </h1>
+            <p className="text-slate-400 text-sm mt-1">Submit your account request for admin approval</p>
+          </div>
+        </div>
+
+        {/* Account Request Card */}
+        <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-8 space-y-6 shadow-2xl">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-300">Full Name</label>
+              <div className="relative group">
+                <User className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
+                <input
+                  type="text"
+                  placeholder="John Doe"
+                  value={formData.fullName}
+                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                  disabled={isLoading}
+                  required
+                  className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-slate-500"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-300">Email Address</label>
+              <div className="relative group">
+                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
+                <input
+                  type="email"
+                  placeholder="name@company.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  disabled={isLoading}
+                  required
+                  className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-slate-500"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-300">Password</label>
+              <div className="relative group">
+                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  disabled={isLoading}
+                  required
+                  minLength={6}
+                  className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-slate-500"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-300">Confirm Password</label>
+              <div className="relative group">
+                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={formData.confirmPassword}
+                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  disabled={isLoading}
+                  required
+                  minLength={6}
+                  className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-slate-500"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-300">Requested Role</label>
+              <div className="relative group">
+                <Building2 className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
+                <select
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                  disabled={isLoading}
+                  className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all appearance-none cursor-pointer"
+                >
+                  <option value="Stakeholder">Stakeholder</option>
+                  <option value="Sub-stakeholder">Sub-stakeholder</option>
+                </select>
+              </div>
+            </div>
+
+            {formData.role === 'Stakeholder' && (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-300">Manager Email</label>
+                <div className="relative group">
+                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
+                  <input
+                    type="email"
+                    placeholder="manager@company.com"
+                    value={formData.managerEmail}
+                    onChange={(e) => setFormData({ ...formData, managerEmail: e.target.value })}
+                    disabled={isLoading}
+                    className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-slate-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-sm flex items-center gap-2">
+                <X size={16} />
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl py-3.5 font-semibold flex items-center justify-center gap-2 transition-all duration-200 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <Clock size={20} />
+                  Submit Request
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Info Section */}
+          <div className="pt-4 border-t border-slate-700/50">
+            <p className="text-center text-slate-500 text-xs">
+              Your request will be reviewed by administrators. You'll be notified once your account is approved.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

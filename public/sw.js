@@ -1,8 +1,9 @@
-const CACHE_NAME = 'trustgrid-v3';
+const CACHE_NAME = 'trustgrid-v4';
 const urlsToCache = [
   '/',
   '/index.html',
-  '/pw-logo.jpg',
+  '/icon-192x192.png',
+  '/icon-512x512.png',
   '/manifest.json',
 ];
 

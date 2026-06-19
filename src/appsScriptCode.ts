@@ -11,14 +11,14 @@ export const APPS_SCRIPT_FILES: AppsScriptFile[] = [
     type: "gs",
     description: "Web App entry point, request routing, and central API dispatcher wrapped in gas LockService.",
     code: `/**
- * TrustGrid TaskFlow - Core Controller
+ * PMS TaskFlow - Core Controller
  * Handles HTTP GET requests, boots the SPA, and dispatches AJAX RPC requests safely.
  */
 
 function doGet(e) {
   const template = HtmlService.createTemplateFromFile('Index');
   return template.evaluate()
-    .setTitle("TrustGrid TaskFlow")
+    .setTitle("PMS TaskFlow")
     .setSandboxMode(HtmlService.SandboxMode.IFRAME)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
@@ -106,7 +106,7 @@ function triggerScheduledRecurrenceEngine() {
     type: "gs",
     description: "Authentication validation, spreadsheet mapping of role credentials, and team scoping helpers.",
     code: `/**
- * TrustGrid TaskFlow - Identity & Authorization Manager
+ * PMS TaskFlow - Identity & Authorization Manager
  * Resolves permissions and strictly filters database lookups based on roles.
  */
 
@@ -194,7 +194,7 @@ function checkAssignmentAuthority_(user, targetUserEmail) {
     type: "gs",
     description: "Task fetching, creation parsing, status reporting, follow-up links, and status transition checkers.",
     code: `/**
- * TrustGrid TaskFlow - Task Operations Service
+ * PMS TaskFlow - Task Operations Service
  */
 
 /**
@@ -435,7 +435,7 @@ function closeTask_(user, taskId, closeRemark) {
     type: "gs",
     description: "Recurrence template processor, period calculations, and scheduled run safety loops.",
     code: `/**
- * TrustGrid TaskFlow - Scheduled Recurrence Engine
+ * PMS TaskFlow - Scheduled Recurrence Engine
  */
 
 /**
@@ -645,7 +645,7 @@ function updateTemplateDates_(sheet, rowNum, lastVal, nextVal) {
     type: "gs",
     description: "Follow-up creator validating permissions, link indexing, and parent count updating.",
     code: `/**
- * TrustGrid TaskFlow - Link follow-up instances
+ * PMS TaskFlow - Link follow-up instances
  */
 
 function createFollowUp_(user, followUpData) {
@@ -761,7 +761,7 @@ function createFollowUp_(user, followUpData) {
     type: "gs",
     description: "Database lookup utilities, logging triggers, and RFC-4122 random UUID generator.",
     code: `/**
- * TrustGrid TaskFlow - Global System Utilities
+ * PMS TaskFlow - Global System Utilities
  */
 
 /**
@@ -957,7 +957,7 @@ function getDashboardData_(user) {
     <!-- Sidebar -->
     <aside class="w-full md:w-64 bg-slate-900 text-white flex-shrink-0">
       <div class="p-6 border-b border-slate-800 flex items-center justify-between">
-        <h1 class="font-bold text-lg tracking-tight">TrustGrid <span class="text-blue-400">TaskFlow</span></h1>
+        <h1 class="font-bold text-lg tracking-tight">PMS <span class="text-blue-400">TaskFlow</span></h1>
       </div>
       <nav id="nav-container" class="p-4 space-y-1">
         <!-- Javascript renders active routes mapping -->

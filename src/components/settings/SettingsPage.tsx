@@ -343,13 +343,13 @@ export default function SettingsPage({ user, onLogout }: SettingsPageProps) {
             <div className="space-y-6">
               <div>
                 <h2 className="text-lg font-semibold text-[#0f172a] mb-1">Help & Documentation</h2>
-                <p className="text-sm text-muted">Get help and learn more about TrustGrid</p>
+                <p className="text-sm text-muted">Get help and learn more about PMS</p>
               </div>
 
               <div className="space-y-3">
                 <a href="#" className="block p-4 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors">
                   <div className="text-sm font-medium text-[#0f172a] mb-1">Getting Started Guide</div>
-                  <div className="text-xs text-muted">Learn the basics of TrustGrid</div>
+                  <div className="text-xs text-muted">Learn the basics of PMS</div>
                 </a>
                 <a href="#" className="block p-4 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors">
                   <div className="text-sm font-medium text-[#0f172a] mb-1">Task Management</div>

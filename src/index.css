@@ -72,6 +72,10 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.3s, color 0.3s;
+  /* Mobile-friendly improvements */
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
+  min-height: 100vh;
 }
 
 /* Light Theme */
@@ -132,4 +136,68 @@ body {
 @keyframes slideInRight {
   from { transform: translateX(100%); }
   to { transform: translateX(0); }
+}
+
+/* Mobile-specific improvements */
+@media (max-width: 768px) {
+  /* Larger touch targets for mobile */
+  button, a, input, select, textarea {
+    min-height: 48px;
+    min-width: 48px;
+  }
+
+  /* Better spacing for mobile */
+  .space-y-4 > * + * {
+    margin-top: 1rem;
+  }
+
+  /* Responsive padding */
+  .p-6 {
+    padding: 1rem;
+  }
+
+  /* Mobile-friendly text sizes */
+  h1, h2, h3, h4 {
+    font-size: clamp(1rem, 4vw, 1.5rem);
+  }
+
+  /* Prevent horizontal scroll on mobile */
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Better form inputs for mobile */
+  input, select, textarea {
+    font-size: 16px; /* Prevent iOS zoom */
+  }
+
+  /* Mobile-friendly buttons */
+  button {
+    padding: 12px 16px;
+  }
+}
+
+/* PWA-specific styles */
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Smooth scrolling for better mobile experience */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Prevent text selection on mobile for better app-like feel */
+@media (max-width: 768px) {
+  .no-select {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
 }

@@ -39,7 +39,7 @@ export enum OperationType {
 // In-memory cache for performance (not persistence)
 // This cache is cleared on page refresh and is only for performance optimization
 const memoryCache = new Map<string, any[]>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 1 * 60 * 1000; // 1 minute (reduced from 5 minutes for better sync)
 
 function getFromCache<T>(key: string): T[] | null {
   const cached = memoryCache.get(key);
@@ -51,6 +51,11 @@ function setCache<T>(key: string, data: T[]): void {
   memoryCache.set(key, data);
   // Auto-expire after TTL
   setTimeout(() => memoryCache.delete(key), CACHE_TTL);
+}
+
+// Force clear all caches to ensure fresh data from Google Sheets
+export function forceClearAllCaches(): void {
+  memoryCache.clear();
 }
 
 function clearCache(key?: string): void {
@@ -133,15 +138,16 @@ export const dbService = {
       const users = await this.getUsers();
       const idx = users.findIndex(u => u.UserID === user.UserID || u.Email === user.Email);
       const now = new Date().toISOString();
-      
+
       if (idx >= 0) {
         users[idx] = { ...users[idx], ...user, UpdatedAt: now };
       } else {
         users.push({ ...user, CreatedAt: now, UpdatedAt: now });
       }
-      
+
       await sheetsApi.saveCollection('users', users);
       clearCache('users'); // Invalidate cache after write
+      clearCache('teams'); // Also clear teams cache since team names might be referenced
     } catch (error) {
       throw new Error(`Failed to save user to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }

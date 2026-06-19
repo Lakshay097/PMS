@@ -186,10 +186,10 @@ export const sheetsApi = {
       }
     }
 
-    // 2. Query Drive to locate "TrustGrid Systems Database"
+    // 2. Query Drive to locate "PMS Systems Database"
     console.log('Searching for database file in Google Drive...');
     const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
-      "name='TrustGrid Systems Database' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false"
+      "name='PMS Systems Database' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false"
     )}`;
 
     const searchRes = await fetchWithRetry(searchUrl, {
@@ -209,7 +209,7 @@ export const sheetsApi = {
     }
 
     // 3. Not found, create a brand new Google Spreadsheet with all required tabs
-    console.log('No database spreadsheet found. Creating a new "TrustGrid Systems Database" with all tabs...');
+    console.log('No database spreadsheet found. Creating a new "PMS Systems Database" with all tabs...');
     const createUrl = 'https://sheets.googleapis.com/v4/spreadsheets';
     
     const requiredSheets = Object.keys(HEADERS).map(name => ({
@@ -224,7 +224,7 @@ export const sheetsApi = {
       },
       body: JSON.stringify({
         properties: {
-          title: 'TrustGrid Systems Database'
+          title: 'PMS Systems Database'
         },
         sheets: requiredSheets
       })

@@ -48,6 +48,15 @@ interface LoginRequestBody {
   password: string;
 }
 
+interface AccountRequestRequestBody {
+  fullName: string;
+  email: string;
+  password: string;
+  role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder';
+  teamId: string;
+  managerEmail: string;
+}
+
 interface UploadFileRequestBody {
   fileName: string;
   fileData: string;
@@ -272,6 +281,205 @@ async function startServer() {
       });
     } catch (err: unknown) {
       console.error("Crash inside Express /api/login:", err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      return res.status(500).json({ error: "Internal Server Error", details: errorMessage });
+    }
+  });
+
+  // API Route: Account request (public)
+  app.post("/api/account-request", async (req: express.Request, res: express.Response) => {
+    try {
+      const { fullName, email, password, role, teamId, managerEmail } = req.body as AccountRequestRequestBody;
+
+      if (!fullName || !email || !password || !role || !teamId) {
+        return res.status(400).json({ error: "All required fields must be provided" });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters" });
+      }
+
+      // Get Google Sheets access token
+      const tokenData = await generateGoogleSheetsToken();
+      if (!tokenData) {
+        return res.status(500).json({ error: "Failed to authenticate with Google Sheets" });
+      }
+
+      // Check if user already exists
+      const spreadsheetId = tokenData.spreadsheetId;
+      if (!spreadsheetId) {
+        return res.status(500).json({ error: "Spreadsheet ID not found" });
+      }
+
+      // Fetch existing users to check for duplicate email
+      const usersRange = 'users!A:R';
+      const usersRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${usersRange}`,
+        {
+          headers: { 'Authorization': `Bearer ${tokenData.accessToken}` }
+        }
+      );
+
+      if (!usersRes.ok) {
+        return res.status(500).json({ error: "Failed to check existing users" });
+      }
+
+      const usersData = await usersRes.json();
+      const existingUsers = usersData.values || [];
+      const normalizedEmail = email.toLowerCase();
+
+      // Check if email already exists
+      for (const row of existingUsers) {
+        if (row[3] === normalizedEmail) { // Email is in column 4 (index 3)
+          return res.status(400).json({ error: "An account with this email already exists" });
+        }
+      }
+
+      // Create new user with pending approval status
+      const newUserId = generateUserId();
+      const now = new Date().toISOString();
+      const teamName = teamId === 'T-01' ? 'Enterprise Sales' : 'Default Team';
+
+      const newUserRow = [
+        newUserId,                    // UserID (A)
+        fullName,                     // FullName (B)
+        normalizedEmail,              // Email (C)
+        role,                         // Role (D)
+        managerEmail || '',           // ManagerEmail (E)
+        teamId,                       // TeamID (F)
+        teamName,                     // TeamName (G)
+        'false',                      // Active (H) - inactive until approved
+        'true',                       // CanCreateFollowUp (I)
+        'true',                       // CanCloseTask (J)
+        now,                          // CreatedAt (K)
+        now,                          // UpdatedAt (L)
+        password,                     // Password (M)
+        'pending',                    // ApprovalStatus (N)
+        normalizedEmail,              // RequestedBy (O)
+        now,                          // RequestedAt (P)
+        '',                           // ApprovedBy (Q)
+        ''                            // ApprovedAt (R)
+      ];
+
+      // Append new user to Google Sheets
+      const appendRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/users:append`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${tokenData.accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            values: [newUserRow],
+            valueInputOption: 'RAW'
+          })
+        }
+      );
+
+      if (!appendRes.ok) {
+        return res.status(500).json({ error: "Failed to submit account request" });
+      }
+
+      return res.json({
+        success: true,
+        message: "Account request submitted successfully. Please wait for admin approval."
+      });
+    } catch (err: unknown) {
+      console.error("Crash inside Express /api/account-request:", err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      return res.status(500).json({ error: "Internal Server Error", details: errorMessage });
+    }
+  });
+
+  // API Route: Approve user account (protected)
+  app.post("/api/approve-user", authenticateToken, async (req: AuthRequest, res: express.Response) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      // Get Google Sheets access token
+      const tokenData = await generateGoogleSheetsToken();
+      if (!tokenData) {
+        return res.status(500).json({ error: "Failed to authenticate with Google Sheets" });
+      }
+
+      const spreadsheetId = tokenData.spreadsheetId;
+      if (!spreadsheetId) {
+        return res.status(500).json({ error: "Spreadsheet ID not found" });
+      }
+
+      // Fetch all users
+      const usersRange = 'users!A:R';
+      const usersRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${usersRange}`,
+        {
+          headers: { 'Authorization': `Bearer ${tokenData.accessToken}` }
+        }
+      );
+
+      if (!usersRes.ok) {
+        return res.status(500).json({ error: "Failed to fetch users" });
+      }
+
+      const usersData = await usersRes.json();
+      const users = usersData.values || [];
+      const normalizedEmail = email.toLowerCase();
+      const adminEmail = req.user?.email || 'admin';
+
+      // Find the user to approve
+      let userRowIndex = -1;
+      let userRow: any[] | null = null;
+
+      for (let i = 0; i < users.length; i++) {
+        const row = users[i];
+        if (row[3] === normalizedEmail) { // Email is in column 4 (index 3)
+          userRowIndex = i;
+          userRow = row;
+          break;
+        }
+      }
+
+      if (!userRow) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Update user row: set Active to true, ApprovalStatus to approved, add approver info
+      const now = new Date().toISOString();
+      userRow[7] = 'true'; // Active (H)
+      userRow[13] = 'approved'; // ApprovalStatus (N)
+      userRow[16] = adminEmail; // ApprovedBy (Q)
+      userRow[17] = now; // ApprovedAt (R)
+
+      // Update the user row in Google Sheets
+      const updateRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/users!A${userRowIndex + 1}:R${userRowIndex + 1}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${tokenData.accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            values: [userRow],
+            valueInputOption: 'RAW'
+          })
+        }
+      );
+
+      if (!updateRes.ok) {
+        return res.status(500).json({ error: "Failed to approve user" });
+      }
+
+      return res.json({
+        success: true,
+        message: "User approved successfully"
+      });
+    } catch (err: unknown) {
+      console.error("Crash inside Express /api/approve-user:", err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       return res.status(500).json({ error: "Internal Server Error", details: errorMessage });
     }

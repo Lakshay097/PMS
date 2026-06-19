@@ -238,8 +238,12 @@ export default function App() {
     try {
       setIsSyncingSheets(true);
       setDbConnectionStatus('connected');
-      
+
       console.log('Starting database load...');
+      // Force clear cache to ensure fresh data from Google Sheets
+      const { forceClearAllCaches } = await import('./lib/dbService');
+      forceClearAllCaches();
+
       // Initialize Google Sheets database (seeds if empty)
       await initializeDatabase();
       console.log('Database initialized');
@@ -259,6 +263,17 @@ export default function App() {
       ]);
 
       console.log('Database data loaded:', { users: u.length, teams: t.length, templates: tm.length, tasks: tk.length });
+
+      // Sync team names from teams collection to user records
+      const syncedUsers = u.map(user => {
+        const team = t.find(t => t.TeamID === user.TeamID);
+        if (team && team.TeamName !== user.TeamName) {
+          console.log(`Syncing team name for user ${user.Email}: ${user.TeamName} -> ${team.TeamName}`);
+          return { ...user, TeamName: team.TeamName };
+        }
+        return user;
+      });
+
       const evaluatedTasks = await evaluateOverdueTasks(tk, activeUserEmail);
 
       // Analyze and raise delay and ETA alerts for email simulation logging
@@ -292,7 +307,7 @@ export default function App() {
         });
       }
 
-      setUsers(u);
+      setUsers(syncedUsers);
       setTeams(t);
       setTemplates(tm);
       setTasks(evaluatedTasks);
@@ -346,6 +361,40 @@ export default function App() {
     return () => clearInterval(syncInterval);
   }, [isSyncingSheets]);
 
+  // Handle mobile back button and keyboard shortcuts
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      event.preventDefault();
+      // Handle browser back button
+      if (activeView !== 'dashboard') {
+        setActiveView('dashboard');
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Alt + Left Arrow - Go back
+      if (event.altKey && event.key === 'ArrowLeft') {
+        event.preventDefault();
+        if (activeView !== 'dashboard') {
+          setActiveView('dashboard');
+        }
+      }
+      // Alt + Right Arrow - Go forward (could be implemented if needed)
+      if (event.altKey && event.key === 'ArrowRight') {
+        event.preventDefault();
+        // Could implement forward navigation if needed
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeView]);
+
   // 2. Track Active User Session adaptation
   useEffect(() => {
     if (users.length > 0) {
@@ -380,7 +429,7 @@ export default function App() {
       <div className="min-h-screen bg-[#0F172A] flex items-center justify-center font-sans px-4">
         <div className="text-center space-y-4 text-white">
           <RefreshCw className="animate-spin text-blue-500 mx-auto" size={40} />
-          <p className="text-sm font-semibold text-slate-300">Syncing TrustGrid Platform State...</p>
+          <p className="text-sm font-semibold text-slate-300">Syncing PMS Platform State...</p>
           <div className="text-[10px] text-slate-500 font-mono">Verifying Cloud Database Connections &amp; Security Roles</div>
         </div>
       </div>
@@ -942,13 +991,28 @@ export default function App() {
     }
   };
 
-  const handleAcceptUserRegistration = async (email: string) => {
-    const foundUser = users.find(u => u.Email === email);
-    if (foundUser) {
-      const updatedUser = { ...foundUser, Active: true, UpdatedAt: new Date().toISOString() };
-      await dbService.saveUser(updatedUser);
-      await dbService.logAction('User', foundUser.UserID, 'Registration Accepted & Activated', foundUser.Email, null, updatedUser);
+  const handleApproveUser = async (email: string) => {
+    try {
+      const token = localStorage.getItem('trustgrid_auth_token');
+      const response = await fetch('/api/approve-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('Failed to approve user:', data.error);
+        return;
+      }
+
       await loadDatabase();
+    } catch (error) {
+      console.error('Error approving user:', error);
     }
   };
 
@@ -1147,6 +1211,9 @@ export default function App() {
         }}
         templates={templates}
         users={users}
+        audits={audits}
+        settings={settings}
+        teams={teams}
         onAddUser={async (userData) => {
           try {
             console.log('Saving user to database:', userData);
@@ -1204,6 +1271,9 @@ export default function App() {
         onToggleUserActive={(userId, active) => {
           setUsers(prev => prev.map(u => u.UserID === userId ? { ...u, Active: active } : u));
         }}
+        onToggleUserStatus={handleToggleUserStatus}
+        onUpdateUserRole={handleUpdateUserRole}
+        onApproveUser={handleApproveUser}
         isDarkMode={isDarkMode}
         onToggleTheme={() => setIsDarkMode(!isDarkMode)}
         onSyncDatabase={handleManualSync}
