@@ -21,9 +21,15 @@ export default async function handler(req: any, res: any) {
     const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
 
     if (!email || !privateKey) {
-      return res.status(200).json({ 
+      console.error("Missing Google Service Account credentials:", { 
+        hasEmail: !!email, 
+        hasPrivateKey: !!privateKey,
+        hasSpreadsheetId: !!spreadsheetId 
+      });
+      return res.status(400).json({ 
         active: false,
-        error: "Google Service Account credentials not provided in environment." 
+        error: "Google Service Account credentials not provided in environment. Please set GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY in your .env file.",
+        details: "See .env.example for required environment variables"
       });
     }
 

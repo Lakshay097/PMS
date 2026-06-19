@@ -197,7 +197,7 @@ export default function TeamDirectory({ users, onInviteUser, onUserClick }: Team
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2 text-sm text-[#0f172a]">
                         <Users size={14} className="text-muted" />
-                        <span>{user.TeamNames.join(', ')}</span>
+                        <span>{(user.TeamNames || []).join(', ')}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">

@@ -582,16 +582,14 @@ async function startServer() {
         }
       }
     }));
-    // Serve index.html for all non-API SPA fallbacks (but not for assets)
+    // Serve index.html for all non-API SPA fallbacks
     app.get("*", (req, res) => {
-      // Don't intercept requests for static assets or API routes
-      if (req.path.startsWith('/api/') ||
-          req.path.startsWith('/assets/') ||
-          req.path.startsWith('/sw.js') ||
-          req.path.includes('.')) {
+      // Don't intercept API routes
+      if (req.path.startsWith('/api/')) {
         res.status(404).send('Not Found');
         return;
       }
+      // For all other routes, serve index.html (let static middleware handle actual files first)
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
