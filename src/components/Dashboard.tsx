@@ -1086,7 +1086,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
               )}
               <div>
                 <h2 className={`text-2xl font-bold capitalize ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{activeView}</h2>
-                <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Welcome back, {currentUser.FullName}</p>
+                <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Welcome back, {currentUser.FullName || currentUser.Email}</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
