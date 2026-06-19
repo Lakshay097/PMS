@@ -12,8 +12,6 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'Stakeholder' as 'Admin' | 'Stakeholder' | 'Sub-stakeholder',
-    team: 'T-01',
     managerEmail: '',
   });
   const [error, setError] = useState<string | null>(null);
@@ -40,8 +38,8 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
       return;
     }
 
-    if (formData.role === 'Stakeholder' && !formData.managerEmail.trim()) {
-      setError('Manager email is required for Stakeholder role');
+    if (!formData.managerEmail.trim()) {
+      setError('Manager email is required');
       return;
     }
 
@@ -57,9 +55,7 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
           fullName: formData.fullName.trim(),
           email: formData.email.trim().toLowerCase(),
           password: formData.password,
-          role: formData.role,
-          teamId: formData.team,
-          managerEmail: formData.role === 'Stakeholder' ? formData.managerEmail.trim().toLowerCase() : '',
+          managerEmail: formData.managerEmail.trim().toLowerCase(),
         }),
       });
 
@@ -214,37 +210,23 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
             </div>
 
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-300">Requested Role</label>
+              <label className="block text-sm font-medium text-slate-300">Manager Email</label>
               <div className="relative group">
-                <Building2 className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
-                <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
+                <input
+                  type="email"
+                  placeholder="manager@company.com"
+                  value={formData.managerEmail}
+                  onChange={(e) => setFormData({ ...formData, managerEmail: e.target.value })}
                   disabled={isLoading}
-                  className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all appearance-none cursor-pointer"
-                >
-                  <option value="Stakeholder">Stakeholder</option>
-                  <option value="Sub-stakeholder">Sub-stakeholder</option>
-                </select>
+                  required
+                  className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-slate-500"
+                />
               </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Your role will be determined based on your manager (Admin = Stakeholder, others = Sub-stakeholder)
+              </p>
             </div>
-
-            {formData.role === 'Stakeholder' && (
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-slate-300">Manager Email</label>
-                <div className="relative group">
-                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
-                  <input
-                    type="email"
-                    placeholder="manager@company.com"
-                    value={formData.managerEmail}
-                    onChange={(e) => setFormData({ ...formData, managerEmail: e.target.value })}
-                    disabled={isLoading}
-                    className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-slate-500"
-                  />
-                </div>
-              </div>
-            )}
 
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-sm flex items-center gap-2">

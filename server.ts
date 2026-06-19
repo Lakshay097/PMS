@@ -52,8 +52,6 @@ interface AccountRequestRequestBody {
   fullName: string;
   email: string;
   password: string;
-  role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder';
-  teamId: string;
   managerEmail: string;
 }
 
@@ -289,9 +287,9 @@ async function startServer() {
   // API Route: Account request (public)
   app.post("/api/account-request", async (req: express.Request, res: express.Response) => {
     try {
-      const { fullName, email, password, role, teamId, managerEmail } = req.body as AccountRequestRequestBody;
+      const { fullName, email, password, managerEmail } = req.body as AccountRequestRequestBody;
 
-      if (!fullName || !email || !password || !role || !teamId) {
+      if (!fullName || !email || !password || !managerEmail) {
         return res.status(400).json({ error: "All required fields must be provided" });
       }
 
@@ -311,7 +309,7 @@ async function startServer() {
         return res.status(500).json({ error: "Spreadsheet ID not found" });
       }
 
-      // Fetch existing users to check for duplicate email
+      // Fetch existing users to check for duplicate email and determine manager role
       const usersRange = 'users!A:R';
       const usersRes = await fetch(
         `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${usersRange}`,
@@ -327,6 +325,7 @@ async function startServer() {
       const usersData = await usersRes.json();
       const existingUsers = usersData.values || [];
       const normalizedEmail = email.toLowerCase();
+      const normalizedManagerEmail = managerEmail.toLowerCase();
 
       // Check if email already exists
       for (const row of existingUsers) {
@@ -335,17 +334,28 @@ async function startServer() {
         }
       }
 
+      // Determine role based on manager email
+      // If manager is Admin, role is Stakeholder, otherwise Sub-stakeholder
+      let role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder' = 'Sub-stakeholder';
+      for (const row of existingUsers) {
+        if (row[3] === normalizedManagerEmail && row[4] === 'Admin') { // Email (index 3) and Role (index 4)
+          role = 'Stakeholder';
+          break;
+        }
+      }
+
       // Create new user with pending approval status
       const newUserId = generateUserId();
       const now = new Date().toISOString();
-      const teamName = teamId === 'T-01' ? 'Enterprise Sales' : 'Default Team';
+      const teamId = 'T-01';
+      const teamName = 'Enterprise Sales';
 
       const newUserRow = [
         newUserId,                    // UserID (A)
         fullName,                     // FullName (B)
         normalizedEmail,              // Email (C)
         role,                         // Role (D)
-        managerEmail || '',           // ManagerEmail (E)
+        normalizedManagerEmail,       // ManagerEmail (E)
         teamId,                       // TeamID (F)
         teamName,                     // TeamName (G)
         'false',                      // Active (H) - inactive until approved
