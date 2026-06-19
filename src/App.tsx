@@ -266,10 +266,13 @@ export default function App() {
 
       // Sync team names from teams collection to user records
       const syncedUsers = u.map(user => {
-        const team = t.find(t => t.TeamID === user.TeamID);
-        if (team && team.TeamName !== user.TeamName) {
-          console.log(`Syncing team name for user ${user.Email}: ${user.TeamName} -> ${team.TeamName}`);
-          return { ...user, TeamName: team.TeamName };
+        const teamNames = user.TeamIDs.map(teamId => {
+          const team = t.find(t => t.TeamID === teamId);
+          return team ? team.TeamName : teamId;
+        });
+        if (teamNames.join(', ') !== user.TeamNames.join(', ')) {
+          console.log(`Syncing team names for user ${user.Email}: ${user.TeamNames.join(', ')} -> ${teamNames.join(', ')}`);
+          return { ...user, TeamNames: teamNames };
         }
         return user;
       });
@@ -712,7 +715,7 @@ export default function App() {
           AssignedByEmail: activeUser.Email,
           AssignedToEmail: data.AssignedToEmail,
           AssignedToRole: recipient ? recipient.Role : 'Stakeholder',
-          TeamID: recipient ? recipient.TeamID : activeUser.TeamID,
+          AssignedToTeamIDs: recipient ? recipient.TeamIDs : activeUser.TeamIDs,
           Status: 'Not Started',
           PercentComplete: 0,
           LastReportSummary: '',
@@ -934,7 +937,7 @@ export default function App() {
       AssignedByEmail: activeUser.Email,
       AssignedToEmail: parent.AssignedToEmail,
       AssignedToRole: recipient ? recipient.Role : 'Stakeholder',
-      TeamID: parent.TeamID,
+      AssignedToTeamIDs: parent.AssignedToTeamIDs,
       Status: 'Not Started',
       PercentComplete: 0,
       LastReportSummary: '',
@@ -1251,6 +1254,29 @@ export default function App() {
             throw error;
           }
         }}
+        onAddTeam={async (teamData) => {
+          try {
+            console.log('Saving team to database:', teamData);
+            await dbService.saveTeam(teamData);
+            console.log('Team saved successfully');
+            await logAudit('Team', teamData.TeamID, 'Created Team', '', JSON.stringify(teamData));
+            await loadDatabase();
+          } catch (error) {
+            console.error('Failed to save team to database:', error);
+            throw error;
+          }
+        }}
+        onToggleTeamStatus={async (teamId) => {
+          try {
+            console.log('Toggling team status:', teamId);
+            await dbService.toggleTeamStatus(teamId);
+            console.log('Team status toggled successfully');
+            await loadDatabase();
+          } catch (error) {
+            console.error('Failed to toggle team status:', error);
+            throw error;
+          }
+        }}
         onUpdateSetting={async (key, value) => {
           try {
             console.log('Updating setting:', key, value);
@@ -1390,8 +1416,8 @@ export default function App() {
                 Email: userData.Email,
                 Role: userData.Role,
                 ManagerEmail: userData.ManagerEmail,
-                TeamID: `TM-${Date.now()}`,
-                TeamName: userData.TeamName,
+                TeamIDs: [`TM-${Date.now()}`],
+                TeamNames: [userData.TeamName || 'Default Team'],
                 Active: true,
                 CanCreateFollowUp: userData.Role === 'Admin' || userData.Role === 'Stakeholder',
                 CanCloseTask: userData.Role === 'Admin' || userData.Role === 'Stakeholder',

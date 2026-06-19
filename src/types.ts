@@ -4,8 +4,8 @@ export interface User {
   Email: string;
   Role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder';
   ManagerEmail: string; // empty if Admin or Stakeholder (unless Stakeholder is mapped to someone)
-  TeamID: string;
-  TeamName: string;
+  TeamIDs: string[]; // Multiple teams support
+  TeamNames: string[]; // Multiple team names for display
   Active: boolean;
   CanCreateFollowUp: boolean;
   CanCloseTask: boolean;
@@ -22,8 +22,10 @@ export interface User {
 export interface Team {
   TeamID: string;
   TeamName: string;
-  StakeholderEmail: string;
+  Description?: string;
   Active: boolean;
+  CreatedAt: string;
+  UpdatedAt: string;
 }
 
 export interface TaskTemplate {
@@ -62,8 +64,8 @@ export interface Task {
   DueDate: string;
   AssignedByEmail: string;
   AssignedToEmail: string;
-  AssignedToRole: 'Admin' | 'Stakeholder';
-  TeamID: string;
+  AssignedToRole: 'Admin' | 'Stakeholder' | 'Sub-stakeholder';
+  AssignedToTeamIDs: string[]; // Can be assigned to multiple teams
   Status: TaskStatus;
   PercentComplete: number;
   LastReportSummary: string;

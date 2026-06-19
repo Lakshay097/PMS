@@ -7,8 +7,8 @@ export const INITIAL_USERS: User[] = [
     Email: "admin@trustgrid.com",
     Role: "Admin",
     ManagerEmail: "",
-    TeamID: "T-ALL",
-    TeamName: "Global Management",
+    TeamIDs: ["T-ALL"],
+    TeamNames: ["Global Management"],
     Active: true,
     CanCreateFollowUp: true,
     CanCloseTask: true,
@@ -17,7 +17,16 @@ export const INITIAL_USERS: User[] = [
   }
 ];
 
-export const INITIAL_TEAMS: Team[] = [];
+export const INITIAL_TEAMS: Team[] = [
+  {
+    TeamID: "T-ALL",
+    TeamName: "Global Management",
+    Description: "Administrative team with full system access",
+    Active: true,
+    CreatedAt: "2026-01-10T08:00:00Z",
+    UpdatedAt: "2026-01-10T08:00:00Z"
+  }
+];
 
 export const INITIAL_TEMPLATES: TaskTemplate[] = [];
 

@@ -55,9 +55,11 @@ interface DashboardProps {
   onToggleUserStatus?: (email: string) => void;
   onUpdateUserRole?: (email: string, role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder') => void;
   onApproveUser?: (email: string) => void;
+  onAddTeam?: (team: Team) => void;
+  onToggleTeamStatus?: (teamId: string) => void;
 }
 
-export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, onLogout, templates = [], onViewChange, users = [], onAddUser, onAddTemplate, onToggleTemplateStatus, onUpdateSetting, onEditProfile, onChangePassword, onConfigureNotifications, onToggleUserActive, isDarkMode = false, onToggleTheme, onSyncDatabase, isSyncing = false, lastSyncTime, dbConnectionStatus = 'connected', audits = [], settings = [], teams = [], onToggleUserStatus, onUpdateUserRole, onApproveUser }: DashboardProps) {
+export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, onLogout, templates = [], onViewChange, users = [], onAddUser, onAddTemplate, onToggleTemplateStatus, onUpdateSetting, onEditProfile, onChangePassword, onConfigureNotifications, onToggleUserActive, isDarkMode = false, onToggleTheme, onSyncDatabase, isSyncing = false, lastSyncTime, dbConnectionStatus = 'connected', audits = [], settings = [], teams = [], onToggleUserStatus, onUpdateUserRole, onApproveUser, onAddTeam, onToggleTeamStatus }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState<'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings'>('overview');
   const [navigationHistory, setNavigationHistory] = useState<'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings'[]>([]);
@@ -606,7 +608,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
 
     // Group users by team for Admin view (use filtered users)
     const teams = teamMembers.reduce((acc, user) => {
-      const teamName = user.TeamName || 'Unassigned';
+      const teamName = user.TeamNames.length > 0 ? user.TeamNames[0] : 'Unassigned';
       if (!acc[teamName]) {
         acc[teamName] = [];
       }
@@ -816,6 +818,8 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
         onUpdateSetting={onUpdateSetting || (() => {})}
         onUpdateUserRole={onUpdateUserRole || (() => {})}
         onApproveUser={onApproveUser || (() => {})}
+        onAddTeam={onAddTeam || (() => {})}
+        onToggleTeamStatus={onToggleTeamStatus || (() => {})}
         onSyncDatabase={onSyncDatabase}
         isSyncing={isSyncing}
         lastSyncTime={lastSyncTime}

@@ -33,6 +33,8 @@ interface AdminPanelProps {
   onUpdateSetting: (key: string, value: string) => void;
   onUpdateUserRole: (email: string, role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder') => void;
   onApproveUser: (email: string) => void;
+  onAddTeam: (team: Team) => void;
+  onToggleTeamStatus: (teamId: string) => void;
   onSyncDatabase?: () => void;
   isSyncing?: boolean;
   lastSyncTime?: string;
@@ -52,22 +54,29 @@ export default function AdminPanel({
   onUpdateSetting,
   onUpdateUserRole,
   onApproveUser,
+  onAddTeam,
+  onToggleTeamStatus,
   onSyncDatabase,
   isSyncing = false,
   lastSyncTime,
   dbConnectionStatus = 'connected',
 }: AdminPanelProps) {
   // Master administrative tabs
-  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'templates' | 'email_templates' | 'audits' | 'settings'>('users');
+  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'teams' | 'templates' | 'email_templates' | 'audits' | 'settings'>('users');
   
   // Create User state
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'Admin' | 'Stakeholder'>('Stakeholder');
   const [managerEmail, setManagerEmail] = useState('');
-  const [teamSelection, setTeamSelection] = useState('T-01');
+  const [teamSelections, setTeamSelections] = useState<string[]>([]);
   const [password, setPassword] = useState('');
   const [userSuccessMessage, setUserSuccessMessage] = useState<string | null>(null);
+
+  // Create Team state
+  const [teamName, setTeamName] = useState('');
+  const [teamDescription, setTeamDescription] = useState('');
+  const [teamSuccessMessage, setTeamSuccessMessage] = useState<string | null>(null);
 
   // Search filter inputs
   const [userSearchText, setUserSearchText] = useState('');
@@ -113,7 +122,7 @@ export default function AdminPanel({
       return;
     }
 
-    const matchedTeam = teams.find(t => t.TeamID === teamSelection);
+    const matchedTeams = teams.filter(t => teamSelections.includes(t.TeamID));
     const newId = `USR-${Math.floor(100 + Math.random() * 899)}`;
 
     onAddUser({
@@ -122,8 +131,8 @@ export default function AdminPanel({
       Email: email.trim().toLowerCase(),
       Role: role,
       ManagerEmail: role === 'Stakeholder' ? managerEmail.trim().toLowerCase() : '',
-      TeamID: teamSelection,
-      TeamName: matchedTeam ? matchedTeam.TeamName : 'Enterprise Sales',
+      TeamIDs: teamSelections,
+      TeamNames: matchedTeams.map(t => t.TeamName),
       Active: true,
       CanCreateFollowUp: true,
       CanCloseTask: true,
@@ -138,7 +147,30 @@ export default function AdminPanel({
     setFullName('');
     setEmail('');
     setManagerEmail('');
+    setTeamSelections([]);
     setPassword('');
+  };
+
+  const handleTeamCreateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!teamName.trim()) return;
+
+    const newId = `T-${Math.floor(100 + Math.random() * 899)}`;
+
+    onAddTeam({
+      TeamID: newId,
+      TeamName: teamName.trim(),
+      Description: teamDescription.trim(),
+      Active: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString()
+    });
+
+    setTeamSuccessMessage(`Team ${newId} created successfully.`);
+    setTimeout(() => setTeamSuccessMessage(null), 3000);
+
+    setTeamName('');
+    setTeamDescription('');
   };
 
   const handleTemplateCreateSubmit = (e: React.FormEvent) => {
@@ -165,7 +197,7 @@ export default function AdminPanel({
       AssignedByEmail: 'admin@trustgrid.com',
       AssignedToEmail: tempAssignToEmail,
       AssignedToRole: (matchedUser ? matchedUser.Role : 'Stakeholder') as any,
-      TeamID: matchedUser ? matchedUser.TeamID : 'T-01',
+      TeamID: matchedUser && matchedUser.TeamIDs.length > 0 ? matchedUser.TeamIDs[0] : 'T-01',
       Active: true,
       CreatedAt: new Date().toISOString(),
       UpdatedAt: new Date().toISOString()
@@ -252,7 +284,18 @@ export default function AdminPanel({
               }`}
             >
               <Users size={14} />
-              <span>Identity Directory</span>
+              <span>Users</span>
+            </button>
+            <button
+              onClick={() => setActiveAdminSubTab('teams')}
+              className={`flex items-center space-x-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all select-none cursor-pointer w-full sm:w-auto text-center justify-center ${
+                activeAdminSubTab === 'teams'
+                  ? 'bg-[#2563EB] text-white shadow-sm'
+                  : 'text-slate-400 hover:text-[#F8FAFC]'
+              }`}
+            >
+              <Users size={14} />
+              <span>Teams</span>
             </button>
             <button
               onClick={() => setActiveAdminSubTab('templates')}
@@ -263,18 +306,7 @@ export default function AdminPanel({
               }`}
             >
               <Repeat size={14} />
-              <span>Recurrence Blueprints</span>
-            </button>
-            <button
-              onClick={() => setActiveAdminSubTab('email_templates')}
-              className={`flex items-center space-x-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all select-none cursor-pointer w-full sm:w-auto text-center justify-center ${
-                activeAdminSubTab === 'email_templates'
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm font-extrabold'
-                  : 'text-slate-400 hover:text-emerald-400'
-              }`}
-            >
-              <Mail size={14} />
-              <span>Email Templates</span>
+              <span>Templates</span>
             </button>
             <button
               onClick={() => setActiveAdminSubTab('audits')}
@@ -285,39 +317,24 @@ export default function AdminPanel({
               }`}
             >
               <History size={14} />
-              <span>Audit Ledger</span>
-            </button>
-            <button
-              onClick={() => setActiveAdminSubTab('settings')}
-              className={`flex items-center space-x-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all select-none cursor-pointer w-full sm:w-auto text-center justify-center ${
-                activeAdminSubTab === 'settings'
-                  ? 'bg-[#2563EB] text-white shadow-sm'
-                  : 'text-slate-400 hover:text-[#F8FAFC]'
-              }`}
-            >
-              <Settings size={14} />
-              <span>Globals</span>
+              <span>Audit Log</span>
             </button>
           </div>
         </div>
 
         {/* Dynamic statistics analytics strip */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6 pt-5 border-t border-[#1E293B]/60 text-slate-300 font-mono text-xs">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-5 border-t border-[#1E293B]/60 text-slate-300 font-mono text-xs">
           <div className="bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B]">
-            <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Authorizations</span>
+            <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Users</span>
             <span className="text-xl font-bold font-sans text-white block mt-1">{users.filter(u => u.Active).length} <span className="text-xs text-slate-500 font-normal">Active</span></span>
           </div>
           <div className="bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B]">
-            <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Cycle Schedulers</span>
-            <span className="text-xl font-bold font-sans text-emerald-400 block mt-1">{templates.filter(t => t.Active).length} <span className="text-xs text-slate-500 font-normal font-mono">Running</span></span>
+            <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Teams</span>
+            <span className="text-xl font-bold font-sans text-emerald-400 block mt-1">{teams.filter(t => t.Active).length} <span className="text-xs text-slate-500 font-normal font-mono">Active</span></span>
           </div>
           <div className="bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B]">
-            <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Audit Row Length</span>
-            <span className="text-xl font-bold font-sans text-blue-400 block mt-1">{audits.length} Records</span>
-          </div>
-          <div className="bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B]">
-            <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Config Parms</span>
-            <span className="text-xl font-bold font-sans text-purple-400 block mt-1">{settings.length} Handles</span>
+            <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Templates</span>
+            <span className="text-xl font-bold font-sans text-blue-400 block mt-1">{templates.filter(t => t.Active).length} <span className="text-xs text-slate-500 font-normal font-mono">Running</span></span>
           </div>
           <div className="bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B]">
             <div className="flex items-center justify-between mb-1">
@@ -443,16 +460,27 @@ export default function AdminPanel({
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1.5">Primary Team</label>
-                      <select
-                        value={teamSelection}
-                        onChange={(e) => setTeamSelection(e.target.value)}
-                        className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-2 py-2.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB] cursor-pointer"
-                      >
+                      <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1.5">Teams (Multiple Selection)</label>
+                      <div className="space-y-2 max-h-32 overflow-y-auto border border-[#E2E8F0] rounded-lg p-2 bg-white">
                         {teams.map(t => (
-                          <option key={t.TeamID} value={t.TeamID}>{t.TeamName}</option>
+                          <label key={t.TeamID} className="flex items-center space-x-2 text-xs cursor-pointer">
+                            <input
+                              type="checkbox"
+                              value={t.TeamID}
+                              checked={teamSelections.includes(t.TeamID)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setTeamSelections([...teamSelections, t.TeamID]);
+                                } else {
+                                  setTeamSelections(teamSelections.filter(id => id !== t.TeamID));
+                                }
+                              }}
+                              className="rounded border-[#E2E8F0] text-[#2563EB] focus:ring-1 focus:ring-[#2563EB]"
+                            />
+                            <span className="text-slate-800">{t.TeamName}</span>
+                          </label>
                         ))}
-                      </select>
+                      </div>
                     </div>
                   </div>
 
@@ -534,7 +562,7 @@ export default function AdminPanel({
                             <td className="px-4 py-3.5">
                               <div className="font-extrabold text-slate-900 text-xs sm:text-sm">{user.FullName}</div>
                               <div className="text-[10px] text-[#475569] font-mono mt-0.5">{user.Email}</div>
-                              <div className="text-[9.5px] text-slate-400 mt-1 uppercase font-semibold font-mono tracking-wider">TEAM: {user.TeamName}</div>
+                              <div className="text-[9.5px] text-slate-400 mt-1 uppercase font-semibold font-mono tracking-wider">TEAM: {user.TeamNames.join(', ')}</div>
                             </td>
                             <td className="px-4 py-3.5">
                               <select
@@ -576,7 +604,120 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* SUBTAB 2: Recurrence Blueprints Scheduler */}
+        {/* SUBTAB 2: Teams Management */}
+        {activeAdminSubTab === 'teams' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Add Team Form */}
+              <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 space-y-4 shadow-sm h-fit">
+                <div className="flex items-center space-x-1.5 border-b border-[#E2E8F0] pb-2 text-[#0F172A]">
+                  <Plus size={16} className="text-[#2563EB] stroke-[2.5]" />
+                  <h4 className="font-extrabold text-[#010915] text-xs uppercase tracking-wider font-mono">Create New Team</h4>
+                </div>
+
+                {teamSuccessMessage && (
+                  <div className="p-3 text-xs text-emerald-800 bg-emerald-50 border border-emerald-150 rounded-lg font-semibold flex items-center gap-1 animate-pulse">
+                    <CheckCircle size={14} className="text-emerald-600" />
+                    <span>{teamSuccessMessage}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleTeamCreateSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1.5">Team Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={teamName}
+                      onChange={(e) => setTeamName(e.target.value)}
+                      placeholder="e.g. Engineering Team"
+                      className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1.5">Description (Optional)</label>
+                    <textarea
+                      value={teamDescription}
+                      onChange={(e) => setTeamDescription(e.target.value)}
+                      placeholder="Team description and purpose..."
+                      rows={3}
+                      className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB] font-sans resize-none"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg py-2.5 text-xs font-extrabold uppercase tracking-widest transition-all duration-150 shadow-md cursor-pointer border-none flex items-center justify-center space-x-1"
+                  >
+                    <Plus size={14} />
+                    <span>Create Team</span>
+                  </button>
+                </form>
+              </div>
+
+              {/* Teams List */}
+              <div className="lg:col-span-2 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-extrabold text-[#0F172A] text-sm uppercase tracking-wider font-mono">All Teams ({teams.length})</h4>
+                </div>
+
+                <div className="border border-[#E2E8F0] bg-white rounded-xl overflow-hidden shadow-sm">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B] font-extrabold uppercase tracking-widest text-[9px] font-mono">
+                        <th className="px-4 py-3.5">Team Details</th>
+                        <th className="px-4 py-3.5">Members</th>
+                        <th className="px-4 py-3.5">Status</th>
+                        <th className="px-4 py-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F1F5F9] text-slate-700">
+                      {teams.map(team => (
+                        <tr key={team.TeamID} className="hover:bg-slate-50/40 transition-colors">
+                          <td className="px-4 py-3.5">
+                            <div className="font-extrabold text-slate-900 text-xs sm:text-sm">{team.TeamName}</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">{team.Description || 'No description'}</div>
+                            <div className="text-[9.5px] text-slate-400 mt-1 font-mono">{team.TeamID}</div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className="text-xs font-bold text-slate-800">
+                              {users.filter(u => u.TeamIDs.includes(team.TeamID)).length} members
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <button
+                              onClick={() => onToggleTeamStatus(team.TeamID)}
+                              className={`w-full text-[10px] font-extrabold uppercase tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer text-center ${
+                                team.Active
+                                  ? 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
+                                  : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
+                              }`}
+                            >
+                              {team.Active ? '● Active' : '■ Inactive'}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            <span className="text-[9.5px] text-slate-400 font-mono">{new Date(team.CreatedAt).toLocaleDateString()}</span>
+                          </td>
+                        </tr>
+                      ))}
+                      {teams.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-8 text-center text-slate-500 text-xs">
+                            No teams created yet. Create your first team to get started.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SUBTAB 3: Recurrence Blueprints Scheduler */}
         {activeAdminSubTab === 'templates' && (
           <div className="space-y-6">
             

@@ -171,17 +171,34 @@ export const dbService = {
     try {
       const teams = await this.getTeams();
       const idx = teams.findIndex(t => t.TeamID === team.TeamID);
-      
+      const now = new Date().toISOString();
+
       if (idx >= 0) {
-        teams[idx] = { ...teams[idx], ...team };
+        teams[idx] = { ...teams[idx], ...team, UpdatedAt: now };
       } else {
-        teams.push(team);
+        teams.push({ ...team, CreatedAt: now, UpdatedAt: now });
       }
-      
+
       await sheetsApi.saveCollection('teams', teams);
       clearCache('teams');
+      clearCache('users'); // Also clear users cache since team relationships might change
     } catch (error) {
       throw new Error(`Failed to save team to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  },
+
+  async toggleTeamStatus(teamId: string): Promise<void> {
+    try {
+      const teams = await this.getTeams();
+      const team = teams.find(t => t.TeamID === teamId);
+      if (team) {
+        team.Active = !team.Active;
+        team.UpdatedAt = new Date().toISOString();
+        await sheetsApi.saveCollection('teams', teams);
+        clearCache('teams');
+      }
+    } catch (error) {
+      throw new Error(`Failed to toggle team status: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
