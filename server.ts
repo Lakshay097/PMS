@@ -561,7 +561,17 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    // Serve static files from dist directory
+    app.use(express.static(distPath, {
+      index: false,
+      setHeaders: (res, path) => {
+        if (path.endsWith('.css')) {
+          res.setHeader('Content-Type', 'text/css');
+        } else if (path.endsWith('.js')) {
+          res.setHeader('Content-Type', 'application/javascript');
+        }
+      }
+    }));
     // Serve index.html for all non-API SPA fallbacks (but not for assets)
     app.get("*", (req, res, next) => {
       // Don't intercept requests for static assets
