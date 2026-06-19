@@ -24,7 +24,7 @@ export interface TaskFormData {
   priority: 'Low' | 'Medium' | 'High' | 'Critical';
   assigneeEmail: string;
   assignedByEmail: string;
-  teamId: string;
+  teamIds: string[];
   attachmentLink: string;
 }
 
@@ -47,7 +47,7 @@ export default function TaskCreationForm({
     priority: task?.Priority || 'Medium',
     assigneeEmail: task?.AssignedToEmail || '',
     assignedByEmail: task?.AssignedByEmail || '',
-    teamId: task?.TeamID || '',
+    teamIds: task?.AssignedToTeamIDs || [],
     attachmentLink: task?.AttachmentLink || '',
   });
 
@@ -72,8 +72,8 @@ export default function TaskCreationForm({
       newErrors.assigneeEmail = 'Assignee is required';
     }
 
-    if (!formData.teamId) {
-      newErrors.teamId = 'Team is required';
+    if (!formData.teamIds || formData.teamIds.length === 0) {
+      newErrors.teamIds = 'Team is required';
     }
 
     if (formData.startDate && formData.dueDate && new Date(formData.dueDate) < new Date(formData.startDate)) {
@@ -253,19 +253,27 @@ export default function TaskCreationForm({
               </select>
             </FormField>
 
-            <FormField label="Team" required error={errors.teamId}>
-              <select
-                value={formData.teamId}
-                onChange={(e) => setFormData({ ...formData, teamId: e.target.value })}
-                className="w-full px-3 py-2 bg-gray-50 border border-[var(--color-border)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
-              >
-                <option value="">Select team</option>
+            <FormField label="Team" required error={errors.teamIds}>
+              <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-300 rounded-md p-2 bg-gray-50">
                 {teams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
+                  <label key={team.id} className="flex items-center space-x-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      value={team.id}
+                      checked={formData.teamIds.includes(team.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setFormData({ ...formData, teamIds: [...formData.teamIds, team.id] });
+                        } else {
+                          setFormData({ ...formData, teamIds: formData.teamIds.filter(id => id !== team.id) });
+                        }
+                      }}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-gray-700">{team.name}</span>
+                  </label>
                 ))}
-              </select>
+              </div>
             </FormField>
 
             {/* Notification Preview */}

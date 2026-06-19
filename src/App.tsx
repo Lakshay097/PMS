@@ -678,7 +678,7 @@ export default function App() {
           AssignedByEmail: activeUser.Email,
           AssignedToEmail: data.AssignedToEmail,
           AssignedToRole: recipient?.Role || 'Stakeholder',
-          TeamID: activeUser.Role === 'Admin' ? 'T-ALL' : activeUser.TeamID,
+          TeamID: activeUser.Role === 'Admin' ? 'T-ALL' : (activeUser.TeamIDs.length > 0 ? activeUser.TeamIDs[0] : 'T-01'),
           Active: true,
           CreatedAt: nowStr,
           UpdatedAt: nowStr

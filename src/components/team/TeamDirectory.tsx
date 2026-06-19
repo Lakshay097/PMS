@@ -18,13 +18,13 @@ export default function TeamDirectory({ users, onInviteUser, onUserClick }: Team
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   // Get unique teams
-  const teams = Array.from(new Set(users.map(u => u.TeamName)));
+  const teams = Array.from(new Set(users.flatMap(u => u.TeamNames)));
 
   // Filter users
   const filteredUsers = users.filter(user => {
     if (searchQuery && !user.FullName.toLowerCase().includes(searchQuery.toLowerCase()) && !user.Email.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (roleFilter !== 'all' && user.Role !== roleFilter) return false;
-    if (teamFilter !== 'all' && user.TeamID !== teamFilter) return false;
+    if (teamFilter !== 'all' && !user.TeamIDs.includes(teamFilter)) return false;
     if (activeFilter === 'active' && !user.Active) return false;
     if (activeFilter === 'inactive' && user.Active) return false;
     return true;
@@ -197,7 +197,7 @@ export default function TeamDirectory({ users, onInviteUser, onUserClick }: Team
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2 text-sm text-[#0f172a]">
                         <Users size={14} className="text-muted" />
-                        <span>{user.TeamName}</span>
+                        <span>{user.TeamNames.join(', ')}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">

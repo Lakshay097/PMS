@@ -122,7 +122,7 @@ export default function TaskDrawer({
 
   // Determine close credentials
   const canCloseTask = currentUser.Role === 'Admin' ||
-    (currentUser.Role === 'Stakeholder' && task.TeamID === currentUser.TeamID) ||
+    (currentUser.Role === 'Stakeholder' && task.AssignedToTeamIDs.some(id => currentUser.TeamIDs.includes(id))) ||
     (isCurrentUserAssignee && currentUser.CanCloseTask);
 
   // Determine report submittal credentials
