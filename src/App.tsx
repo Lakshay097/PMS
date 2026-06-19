@@ -60,6 +60,7 @@ import EditProfileModal from './components/EditProfileModal';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import ConfigureNotificationsModal from './components/ConfigureNotificationsModal';
 import AddUserModal from './components/AddUserModal';
+import AddTeamModal from './components/AddTeamModal';
 
 type ActiveView = 'dashboard' | 'tasks' | 'templates' | 'admin';
 
@@ -147,6 +148,7 @@ export default function App() {
   const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
   const [isConfigureNotificationsModalOpen, setIsConfigureNotificationsModalOpen] = useState(false);
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [isAddTeamModalOpen, setIsAddTeamModalOpen] = useState(false);
   const [preSelectedAssignee, setPreSelectedAssignee] = useState<string | undefined>(undefined);
 
   // Tasks Board Filters
@@ -266,12 +268,13 @@ export default function App() {
 
       // Sync team names from teams collection to user records
       const syncedUsers = u.map(user => {
-        const teamNames = user.TeamIDs.map(teamId => {
+        const teamNames = (user.TeamIDs || []).map(teamId => {
           const team = t.find(t => t.TeamID === teamId);
           return team ? team.TeamName : teamId;
         });
-        if (teamNames.join(', ') !== user.TeamNames.join(', ')) {
-          console.log(`Syncing team names for user ${user.Email}: ${user.TeamNames.join(', ')} -> ${teamNames.join(', ')}`);
+        const currentTeamNames = user.TeamNames || [];
+        if (teamNames.join(', ') !== currentTeamNames.join(', ')) {
+          console.log(`Syncing team names for user ${user.Email}: ${currentTeamNames.join(', ')} -> ${teamNames.join(', ')}`);
           return { ...user, TeamNames: teamNames };
         }
         return user;
@@ -1428,6 +1431,26 @@ export default function App() {
               setUsers(prev => [...prev, newUser]);
             }}
             existingUsers={users}
+          />
+        )}
+
+        {/* Add Team Modal */}
+        {isAddTeamModalOpen && (
+          <AddTeamModal
+            isOpen={isAddTeamModalOpen}
+            onClose={() => setIsAddTeamModalOpen(false)}
+            onSave={async (teamData) => {
+              const newTeam: Team = {
+                TeamID: `T-${Date.now()}`,
+                TeamName: teamData.TeamName,
+                Description: teamData.Description,
+                Active: true,
+                CreatedAt: new Date().toISOString(),
+                UpdatedAt: new Date().toISOString(),
+              };
+              await dbService.saveTeam(newTeam);
+              await loadDatabase();
+            }}
           />
         )}
 
