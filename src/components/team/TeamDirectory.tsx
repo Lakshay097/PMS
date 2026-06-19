@@ -18,7 +18,7 @@ export default function TeamDirectory({ users, onInviteUser, onUserClick }: Team
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   // Get unique teams
-  const teams = Array.from(new Set(users.flatMap(u => u.TeamNames)));
+  const teams = Array.from(new Set(users.flatMap(u => u.TeamNames || [])));
 
   // Filter users
   const filteredUsers = users.filter(user => {

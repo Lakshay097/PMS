@@ -608,7 +608,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
 
     // Group users by team for Admin view (use filtered users)
     const teams = teamMembers.reduce((acc, user) => {
-      const teamName = user.TeamNames.length > 0 ? user.TeamNames[0] : 'Unassigned';
+      const teamName = (user.TeamNames && user.TeamNames.length > 0) ? user.TeamNames[0] : 'Unassigned';
       if (!acc[teamName]) {
         acc[teamName] = [];
       }
@@ -631,13 +631,22 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
               </p>
             </div>
             {currentUser.Role === 'Admin' && (
-              <button 
-                onClick={() => handleViewChange('admin')}
-                className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-              >
-                <Plus size={16} />
-                <span>Add Member</span>
-              </button>
+              <div className="flex items-center space-x-2">
+                <button 
+                  onClick={() => handleViewChange('admin')}
+                  className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  <Plus size={16} />
+                  <span>Add Member</span>
+                </button>
+                <button 
+                  onClick={onAddTeam}
+                  className="flex items-center space-x-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  <Plus size={16} />
+                  <span>Add Team</span>
+                </button>
+              </div>
             )}
           </div>
 
