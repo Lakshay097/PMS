@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from
 import { useAppModals } from './hooks/useAppModals';
 import { useAppEvents } from './hooks/useAppEvents';
 import { useDatabase } from './hooks/useDatabase';
+import { useTaskOperations } from './hooks/useTaskOperations';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   INITIAL_USERS,
@@ -684,100 +685,34 @@ export default function App() {
     return f.CreatedByEmail === activeUser.Email;
   }).length;
 
+  // Task operations hook
+  const {
+    handleCreateTaskOrTemplate,
+    handleCloseTask,
+    handleUpdateTask,
+    handleCreateFollowUp,
+    handleAddSubtask,
+    handleToggleSubtask,
+    handleDeleteSubtask,
+    handleAddComment,
+    runSimulatedRecurrenceEngine,
+  } = useTaskOperations({
+    tasks,
+    users,
+    currentUser: activeUser,
+    syncDatabase: loadDatabase,
+    selectedTask,
+    setSelectedTask,
+    triggerNotification,
+    formatEmailTemplate,
+    logAudit,
+    setIsSimulatingRecurrence,
+    setSimulationMessage,
+    setSubtasks,
+    subtasks,
+  });
+
   // Actions implementation
-  const handleCreateTaskOrTemplate = async (data: any) => {
-    const isTemplate = data.TaskType === 'Recurring';
-    const nowStr = new Date().toISOString();
-
-    try {
-      if (isTemplate) {
-        // 1. Create schedule template row
-        const tempId = `TMP-${Math.floor(500 + Math.random() * 499)}`;
-        const firstEmail = data.AssignedToEmail.split(',')[0]?.trim() || '';
-        const recipient = users.find(u => u.Email === firstEmail);
-        const newTemplate: TaskTemplate = {
-          TemplateID: tempId,
-          Title: data.Title,
-          Description: data.Description,
-          Category: data.Category,
-          Priority: data.Priority,
-          RecurrenceType: data.RecurrenceType,
-          StartDate: data.StartDate,
-          NextGenerationDate: data.StartDate, // first cycle runs on StartDate
-          LastGeneratedDate: '',
-          AssignedByEmail: activeUser.Email,
-          AssignedToEmail: data.AssignedToEmail,
-          AssignedToRole: recipient?.Role || 'Stakeholder',
-          TeamID: activeUser.Role === 'Admin' ? 'T-ALL' : (activeUser.TeamIDs.length > 0 ? activeUser.TeamIDs[0] : 'T-01'),
-          Active: true,
-          CreatedAt: nowStr,
-          UpdatedAt: nowStr
-        };
-
-        console.log('Saving template to database:', newTemplate);
-        await dbService.saveTemplate(newTemplate);
-        console.log('Template saved successfully');
-        await logAudit('Template', tempId, 'Created Schedule Template', '', JSON.stringify(data));
-        triggerNotification(
-          'Task Assignment',
-          `SCHEDULE ACTIVE: Recurring schedule ${tempId} ("${newTemplate.Title}") created for ${newTemplate.AssignedToEmail}.`,
-          `${newTemplate.AssignedToEmail}`
-        );
-      } else {
-        // 2. Create one-time task
-        const newId = `TSK-${Math.floor(1000 + Math.random() * 8999)}`;
-        const firstEmail = data.AssignedToEmail.split(',')[0]?.trim() || '';
-        const recipient = users.find(u => u.Email === firstEmail);
-        
-        const newTask: Task = {
-          TaskID: newId,
-          TemplateID: null,
-          ParentTaskID: null,
-          Title: data.Title,
-          Description: data.Description,
-          Category: data.Category,
-          Priority: data.Priority,
-          TaskType: 'One-time',
-          RecurrenceType: 'One-time',
-          CycleKey: null,
-          StartDate: data.StartDate,
-          DueDate: data.DueDate,
-          AssignedByEmail: activeUser.Email,
-          AssignedToEmail: data.AssignedToEmail,
-          AssignedToRole: recipient ? recipient.Role : 'Stakeholder',
-          AssignedToTeamIDs: recipient ? recipient.TeamIDs : activeUser.TeamIDs,
-          Status: 'Not Started',
-          PercentComplete: 0,
-          LastReportSummary: '',
-          RequiresFollowUp: 'No',
-          FollowUpCount: 0,
-          CompletionDate: null,
-          CloseRemark: null,
-          AttachmentLink: data.AttachmentLink || '',
-          CreatedAt: nowStr,
-          UpdatedAt: nowStr,
-          Active: true,
-          DeletedAt: null
-        };
-
-        console.log('Saving task to database:', newTask);
-        await dbService.saveTask(newTask);
-        console.log('Task saved successfully');
-        await logAudit('Task', newId, 'Created One-time Task Allocation', '', JSON.stringify(data));
-        const alertMsg = formatEmailTemplate('template_assigned_email', newTask);
-        triggerNotification(
-          'Task Assignment',
-          alertMsg,
-          `${newTask.AssignedToEmail}`
-        );
-      }
-      // SSE will handle sync automatically - no need to reload database
-    } catch (error) {
-      console.error('Error creating task/template:', error);
-      throw error;
-    }
-  };
-
   const handleSubmitProgressReport = async (data: any) => {
     const propId = `RP-${Math.floor(1000 + Math.random() * 8999)}`;
     const nowStr = new Date().toISOString();
@@ -858,139 +793,6 @@ export default function App() {
     }
 
     await logAudit('Report', propId, 'Published Progress Report', '', JSON.stringify({ TaskID: data.TaskID, Status: data.StatusUpdate }));
-    // SSE will handle sync automatically - no need to reload database
-  };
-
-  const handleCloseTask = async (taskId: string, remark: string) => {
-    const nowStr = new Date().toISOString();
-    const targetTask = tasks.find(t => t.TaskID === taskId);
-
-    if (targetTask) {
-      const updatedTask: Task = {
-        ...targetTask,
-        Status: 'Closed' as TaskStatus,
-        PercentComplete: 100,
-        CompletionDate: nowStr.split('T')[0],
-        CloseRemark: remark,
-        UpdatedAt: nowStr
-      };
-
-      await dbService.saveTask(updatedTask);
-
-      if (selectedTask && selectedTask.TaskID === taskId) {
-        setSelectedTask(updatedTask);
-      }
-    }
-
-    await logAudit('Task', taskId, 'Task Cleared & Closed', '', JSON.stringify({ Remark: remark }));
-    // SSE will handle sync automatically - no need to reload database
-  };
-
-  const handleUpdateTask = async (taskId: string, fields: Partial<Task>) => {
-    const nowStr = new Date().toISOString();
-    const targetTask = tasks.find(t => t.TaskID === taskId);
-
-    if (targetTask) {
-      const updatedTask: Task = {
-        ...targetTask,
-        ...fields,
-        UpdatedAt: nowStr
-      };
-
-      if (fields.DueDate && fields.DueDate !== targetTask.DueDate) {
-        triggerNotification(
-          'ETA Breach',
-          `ETA EXTENSION: Task ${targetTask.TaskID} ("${targetTask.Title}") ETA shifted to ${fields.DueDate} (Total requests: ${fields.EtaRequestCount || 1}/3).`,
-          `${targetTask.AssignedToEmail || 'stakeholder@be.com'}, ${targetTask.AssignedByEmail}`
-        );
-      }
-
-      await dbService.saveTask(updatedTask);
-
-      if (selectedTask && selectedTask.TaskID === taskId) {
-        setSelectedTask(updatedTask);
-      }
-      
-      await logAudit('Task', taskId, 'Updated Task Properties', '', JSON.stringify(fields));
-      // SSE will handle sync automatically - no need to reload database
-    }
-  };
-
-  const handleCreateFollowUp = async (parentTaskId: string, reason: string) => {
-    const nowStr = new Date().toISOString();
-    const parent = tasks.find(t => t.TaskID === parentTaskId);
-    if (!parent) return;
-
-    // Increment parent follow up count
-    const nextFCount = parent.FollowUpCount + 1;
-    const updatedParent: Task = {
-      ...parent,
-      RequiresFollowUp: 'Yes',
-      FollowUpCount: nextFCount,
-      UpdatedAt: nowStr
-    };
-
-    // Create new Task matching parent's details
-    const newTaskId = `TSK-${Math.floor(1000 + Math.random() * 8999)}`;
-    const firstEmail = parent.AssignedToEmail.split(',')[0]?.trim() || '';
-    const recipient = users.find(u => u.Email === firstEmail);
-    const today = new Date();
-    const due = new Date();
-    due.setDate(today.getDate() + 7); // 7 days offset default
-    
-    const newFollowUpTask: Task = {
-      TaskID: newTaskId,
-      TemplateID: null,
-      ParentTaskID: parentTaskId,
-      Title: `Follow-up #${nextFCount}: ${parent.Title.replace(/\s-\s\[Cycle.*\]/g, "")}`,
-      Description: `REASON FOR FOLLOW-UP: ${reason}\n\nORIGINAL PARENT WORK SCOPE: ${parent.Description}`,
-      Category: parent.Category,
-      Priority: 'Medium',
-      TaskType: 'One-time',
-      RecurrenceType: 'One-time',
-      CycleKey: null,
-      StartDate: today.toISOString().split('T')[0],
-      DueDate: due.toISOString().split('T')[0],
-      AssignedByEmail: activeUser.Email,
-      AssignedToEmail: parent.AssignedToEmail,
-      AssignedToRole: recipient ? recipient.Role : 'Stakeholder',
-      AssignedToTeamIDs: parent.AssignedToTeamIDs,
-      Status: 'Not Started',
-      PercentComplete: 0,
-      LastReportSummary: '',
-      RequiresFollowUp: 'No',
-      FollowUpCount: 0,
-      CompletionDate: null,
-      CloseRemark: null,
-      AttachmentLink: '',
-      CreatedAt: nowStr,
-      UpdatedAt: nowStr,
-      Active: true,
-      DeletedAt: null
-    };
-
-    // Insert follow up record
-    const followId = `FLW-${Math.floor(100 + Math.random() * 899)}`;
-    const newFollowUpRecord: FollowUp = {
-      FollowUpID: followId,
-      ParentTaskID: parentTaskId,
-      NewTaskID: newTaskId,
-      FollowUpNumber: nextFCount,
-      CreatedByEmail: activeUser.Email,
-      Reason: reason,
-      CreatedAt: nowStr,
-      Status: 'Active'
-    };
-
-    await dbService.saveTask(updatedParent);
-    await dbService.saveTask(newFollowUpTask);
-    await dbService.saveFollowup(newFollowUpRecord);
-
-    if (selectedTask && selectedTask.TaskID === parentTaskId) {
-      setSelectedTask(updatedParent);
-    }
-
-    await logAudit('FollowUp', followId, 'Follow-Up Sparked & Linked', '', JSON.stringify({ ParentID: parentTaskId, ChildID: newTaskId }));
     // SSE will handle sync automatically - no need to reload database
   };
 
@@ -1096,95 +898,6 @@ export default function App() {
     await dbService.saveSettings(updated);
     await logAudit('Settings', key, `Update Config Parameter`, '', value);
     // SSE will handle sync automatically - no need to reload database
-  };
-
-  // Subtask handlers
-  const handleAddSubtask = async (taskId: string, title: string) => {
-    const newSubtask: Subtask = {
-      SubtaskID: `SUB-${Math.floor(1000 + Math.random() * 8999)}`,
-      TaskID: taskId,
-      Title: title,
-      IsDone: false,
-      CreatedAt: new Date().toISOString(),
-      CreatedBy: activeUser.Email,
-      UpdatedAt: new Date().toISOString()
-    };
-    await dbService.saveSubtask(newSubtask);
-    // SSE will handle sync automatically - no need to reload database
-  };
-
-  const handleToggleSubtask = async (subtaskId: string, isDone: boolean) => {
-    const subtask = subtasks.find(s => s.SubtaskID === subtaskId);
-    if (subtask) {
-      await dbService.saveSubtask({ ...subtask, IsDone: isDone });
-      // SSE will handle sync automatically - no need to reload database
-    }
-  };
-
-  const handleDeleteSubtask = async (subtaskId: string) => {
-    const updated = subtasks.filter(s => s.SubtaskID !== subtaskId);
-    setSubtasks(updated);
-    const token = getAccessToken();
-    if (token) {
-      try {
-        await sheetsApi.saveCollection('subtasks', updated);
-      } catch (error) {
-        console.error("Failed to delete subtask from Google Sheets:", error);
-      }
-    }
-  };
-
-  // Comment handlers
-  const handleAddComment = async (taskId: string, comment: string) => {
-    const newComment: Comment = {
-      CommentID: `CMT-${Math.floor(1000 + Math.random() * 8999)}`,
-      TaskID: taskId,
-      Comment: comment,
-      CreatedAt: new Date().toISOString(),
-      CreatedBy: activeUser.Email
-    };
-    await dbService.saveComment(newComment);
-    // SSE will handle sync automatically - no need to reload database
-  };
-
-
-  // Simulated Recurrence engine running from thread trigger
-  const runSimulatedRecurrenceEngine = async () => {
-    setIsSimulatingRecurrence(true);
-    try {
-      const result = await checkAndGenerateRecurringTasks(templates, tasks);
-      if (result.generatedCount > 0) {
-        // SSE will handle sync automatically - no need to reload database
-        
-        // Fire custom template based emails for every generated task card
-        for (const t of result.newTasks) {
-          const alertMsg = formatEmailTemplate('template_assigned_email', t);
-          triggerNotification(
-            'Task Assignment',
-            alertMsg,
-            t.AssignedToEmail
-          );
-        }
-
-        setSimulationMessage({
-          type: 'success',
-          text: `Recurrence Scheduler simulation completed! Generated ${result.generatedCount} new due task instances successfully.`
-        });
-      } else {
-        setSimulationMessage({
-          type: 'info',
-          text: "Recurrence Scheduler simulation completed. All recurring profiles are already synthesized and up-to-date for their active cycle."
-        });
-      }
-    } catch (e) {
-      console.error(e);
-      setSimulationMessage({
-        type: 'error',
-        text: "Error executing recurrence checks: " + (e instanceof Error ? e.message : String(e))
-      });
-    } finally {
-      setIsSimulatingRecurrence(false);
-    }
   };
 
   const getStatusBadgeStyle = (status: string) => {
