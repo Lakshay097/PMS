@@ -683,18 +683,7 @@ export default function App() {
     logAudit,
   });
 
-  // Report operations hook
-  const { handleSubmitProgressReport } = useReportOperations({
-    tasks,
-    currentUser: activeUser,
-    syncDatabase: loadDatabase,
-    logAudit,
-    triggerNotification,
-    selectedTask,
-    setSelectedTask,
-  });
-
-  // Actions implementation
+  const handleSubmitProgressReport = async (data: any) => {
     const propId = `RP-${Math.floor(1000 + Math.random() * 8999)}`;
     const nowStr = new Date().toISOString();
 
@@ -714,20 +703,17 @@ export default function App() {
 
         const uploadData = await uploadFile({
           fileName: file.name,
-          fileData: file.data, // Base64 encoded file data
+          fileData: file.data,
           mimeType: file.type,
           taskId: data.TaskID,
           reportId: propId
         });
         uploadedFileUrls.push(uploadData.webViewLink);
-        console.log('File uploaded successfully:', uploadData);
       } catch (error) {
         console.error('Error uploading file:', error);
-        // Continue with other files even if one fails
       }
     }
 
-    // Combine uploaded file URLs with any existing attachment link
     const attachmentLinks = [...uploadedFileUrls];
     if (data.AttachmentLink) {
       attachmentLinks.push(data.AttachmentLink);
@@ -747,7 +733,6 @@ export default function App() {
       CreatedAt: nowStr
     };
 
-    // Sync state onto task row
     const targetTask = tasks.find(t => t.TaskID === data.TaskID);
     if (targetTask) {
       const updatedTask: Task = {
@@ -774,7 +759,6 @@ export default function App() {
     }
 
     await logAudit('Report', propId, 'Published Progress Report', '', JSON.stringify({ TaskID: data.TaskID, Status: data.StatusUpdate }));
-    // SSE will handle sync automatically - no need to reload database
   };
 
   const handleUpdateSetting = async (key: string, value: string) => {
