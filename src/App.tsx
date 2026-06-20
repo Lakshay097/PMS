@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useAppModals } from './hooks/useAppModals';
 import { useAppEvents } from './hooks/useAppEvents';
+import { useDatabase } from './hooks/useDatabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   INITIAL_USERS,
@@ -77,16 +78,34 @@ type ActiveView = 'dashboard' | 'tasks' | 'templates' | 'admin';
 
 export default function App() {
   // Database States loaded from LocalStorage
-  const [users, setUsers] = useState<User[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [templates, setTemplates] = useState<TaskTemplate[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [reports, setReports] = useState<TaskReport[]>([]);
-  const [followUps, setFollowUps] = useState<FollowUp[]>([]);
-  const [audits, setAudits] = useState<AuditLog[]>([]);
-  const [settings, setSettings] = useState<AppSetting[]>([]);
-  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
-  const [comments, setComments] = useState<Comment[]>([]);
+  const {
+    users,
+    setUsers,
+    tasks,
+    setTasks,
+    teams,
+    setTeams,
+    templates,
+    setTemplates,
+    audits,
+    setAudits,
+    settings,
+    setSettings,
+    reports,
+    setReports,
+    followUps,
+    setFollowUps,
+    subtasks,
+    setSubtasks,
+    comments,
+    setComments,
+    isLoading: dbIsLoading,
+    dbConnectionStatus,
+    isSyncing: dbIsSyncing,
+    lastSyncTime,
+    loadDatabase,
+    syncDatabase,
+  } = useDatabase();
 
   // Active Simulated Session email state
   const [activeUserEmail, setActiveUserEmail] = useState<string>(() => {
@@ -252,8 +271,6 @@ export default function App() {
   const [isSheetsConnected, setIsSheetsConnected] = useState(false);
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
   const [sheetsSpreadsheetId, setSheetsSpreadsheetId] = useState<string | null>(null);
-  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
-  const [dbConnectionStatus, setDbConnectionStatus] = useState<'connected' | 'disconnected' | 'error'>('connected');
   
   // SSE connection status
   const [sseConnectionStatus, setSseConnectionStatus] = useState<ConnectionStatus>('disconnected');
@@ -274,7 +291,7 @@ export default function App() {
   // Debounced version of loadDatabase for post-action syncs
   const debouncedLoadDatabase = useMemo(
     () => debounce(() => loadDatabase(), 2000),
-    []
+    [loadDatabase]
   );
 
   // Manual sync function for AdminPanel
@@ -282,145 +299,9 @@ export default function App() {
     await loadDatabase();
   };
 
-  // Consolidated Database Sync and Reloader Function
-  const loadDatabase = async () => {
-    try {
-      setIsSyncingSheets(true);
-      setDbConnectionStatus('connected');
-
-      console.log('Starting database load...');
-      // Force clear cache to ensure fresh data from Google Sheets
-      const { forceClearAllCaches } = await import('./lib/dbService');
-      forceClearAllCaches();
-
-      // Initialize Google Sheets database (seeds if empty)
-      await initializeDatabase();
-      console.log('Database initialized');
-      setIsBackendConnected(true);
-
-      // Fetch collections sequentially to avoid Google Sheets API rate limiting
-      const collections: any[] = [];
-      const fetchFunctions = [
-        () => dbService.getUsers(),
-        () => dbService.getTeams(),
-        () => dbService.getTemplates(),
-        () => dbService.getTasks(),
-        () => dbService.getReports(),
-        () => dbService.getFollowups(),
-        () => dbService.getAuditLogs(),
-        () => dbService.getSettings(),
-        () => dbService.getSubtasks(),
-        () => dbService.getComments()
-      ];
-
-      for (const fetchFn of fetchFunctions) {
-        try {
-          const result = await fetchFn();
-          collections.push(result);
-          // Add 200ms delay between collections to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 200));
-        } catch (err) {
-          console.error('Error fetching collection:', err);
-          collections.push([]);
-        }
-      }
-
-      const [u, t, tm, tk, rp, fl, ad, st, sb, cm] = collections;
-
-      console.log('Database data loaded:', { users: u.length, teams: t.length, templates: tm.length, tasks: tk.length });
-
-      // Sync team names from teams collection to user records
-      const syncedUsers = (u || []).map(user => {
-        const teamNames = (user.TeamIDs || []).map(teamId => {
-          const team = (t || []).find(team => team.TeamID === teamId);
-          return team ? team.TeamName : teamId;
-        });
-        const currentTeamNames = user.TeamNames || [];
-        if (teamNames.join(', ') !== currentTeamNames.join(', ')) {
-          console.log(`Syncing team names for user ${user.Email}: ${currentTeamNames.join(', ')} -> ${teamNames.join(', ')}`);
-          return { ...user, TeamNames: teamNames };
-        }
-        return user;
-      });
-
-      const evaluatedTasks = await evaluateOverdueTasks(tk || [], activeUserEmail);
-
-      // Analyze and raise delay and ETA alerts for email simulation logging
-      const overdueTasks = (evaluatedTasks || []).filter(tsk => tsk.Status === 'Overdue' && tsk.Active);
-      const bootstrappedAlerts: SystemAlert[] = overdueTasks.map(tsk => {
-        const rawTemplate = (st || []).find(s => s.Key === 'template_delayed_email')?.Value || "";
-        const finalMessage = rawTemplate
-          ? rawTemplate
-              .replace(/{TaskID}/g, tsk.TaskID || '')
-              .replace(/{Title}/g, tsk.Title || '')
-              .replace(/{Category}/g, tsk.Category || '')
-              .replace(/{Priority}/g, tsk.Priority || '')
-              .replace(/{DueDate}/g, tsk.DueDate || '')
-              .replace(/{AssignedToEmail}/g, tsk.AssignedToEmail || '')
-              .replace(/{AssignedByEmail}/g, tsk.AssignedByEmail || '')
-          : `DELAY ALERT: Task ${tsk.TaskID} ("${tsk.Title && tsk.Title.length > 25 ? tsk.Title.substring(0, 25) + '...' : (tsk.Title || '')}") is Overdue! Due date was ${tsk.DueDate}.`;
-
-        return {
-          ID: `NT-DL-${tsk.TaskID}`,
-          Type: 'Delay Alert',
-          Message: finalMessage,
-          EmailSentTo: `${tsk.AssignedToEmail}, ${tsk.AssignedByEmail}`,
-          Timestamp: new Date().toISOString()
-        };
-      });
-
-      if (bootstrappedAlerts.length > 0) {
-        setNotifications(prev => {
-          const filtered = prev.filter(p => !p.ID.startsWith('NT-DL-'));
-          return [...bootstrappedAlerts, ...filtered];
-        });
-      }
-
-      setUsers(syncedUsers || []);
-      setTeams(t || []);
-      setTemplates(tm || []);
-      setTasks(evaluatedTasks || []);
-      setReports(rp || []);
-      setFollowUps(fl || []);
-      setAudits(ad || []);
-      setSettings(st || []);
-      setSubtasks(sb || []);
-      setComments(cm || []);
-      
-      // Update sync time and status
-      setLastSyncTime(new Date().toISOString());
-      setDbConnectionStatus('connected');
-      console.log('Database load completed successfully');
-    } catch (e) {
-      console.error("Critical State Load Warning:", e);
-      setDbConnectionStatus('error');
-      console.error('Database load failed:', e);
-    } finally {
-      setIsSyncingSheets(false);
-      setIsLoading(false);
-    }
-  };
-
-  // 1. Initial Storage bootstrap
-  useEffect(() => {
-    // Initialize Google Sheets authentication first
-    const cleanup = initAuth(
-      () => {
-        // On success, load the database
-        loadDatabase();
-      },
-      (error) => {
-        console.error("Google Sheets authentication failed:", error);
-        setIsLoading(false);
-      }
-    );
-
-    return cleanup;
-  }, []);
-
   // SSE connection for real-time sync
   useEffect(() => {
-    if (!isBackendConnected) return;
+    setIsBackendConnected(true);
 
     const sseClient = initSSEClient({
       onConnected: (lastModified) => {
@@ -505,8 +386,6 @@ export default function App() {
           }
         }
       });
-
-      setLastSyncTime(new Date().toISOString());
     } catch (error) {
       console.error('Error handling SSE change:', error);
     } finally {

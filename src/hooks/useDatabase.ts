@@ -14,10 +14,22 @@ export function useDatabase() {
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [dbConnectionStatus, setDbConnectionStatus] = useState<'connected' | 'disconnected' | 'error'>('connected');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
 
   const loadDatabase = async () => {
     try {
       setIsLoading(true);
+      setIsSyncing(true);
+      setDbConnectionStatus('connected');
+
+      const { forceClearAllCaches } = await import('../lib/dbService');
+      forceClearAllCaches();
+
+      const { initializeDatabase } = await import('../lib/dbService');
+      await initializeDatabase();
+
       const [loadedUsers, loadedTasks, loadedTeams, loadedTemplates, loadedAudits, loadedSettings, loadedReports, loadedFollowUps, loadedSubtasks, loadedComments] = await Promise.all([
         dbService.getUsers(),
         dbService.getTasks(),
@@ -41,11 +53,18 @@ export function useDatabase() {
       setFollowUps(loadedFollowUps);
       setSubtasks(loadedSubtasks);
       setComments(loadedComments);
+      setLastSyncTime(new Date().toISOString());
     } catch (error) {
       console.error('Error loading database:', error);
+      setDbConnectionStatus('error');
     } finally {
       setIsLoading(false);
+      setIsSyncing(false);
     }
+  };
+
+  const syncDatabase = async () => {
+    await loadDatabase();
   };
 
   useEffect(() => {
@@ -74,6 +93,10 @@ export function useDatabase() {
     comments,
     setComments,
     isLoading,
+    dbConnectionStatus,
+    isSyncing,
+    lastSyncTime,
     loadDatabase,
+    syncDatabase,
   };
 }
