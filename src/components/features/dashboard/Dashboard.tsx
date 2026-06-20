@@ -25,6 +25,8 @@ import {
 } from 'lucide-react';
 import { Task, User as UserType, TaskTemplate, AuditLog, AppSetting, Team } from '../../../types';
 import AdminPanel from '../../AdminPanel';
+import TaskList from '../tasks/TaskList';
+import TaskFilters from '../tasks/TaskFilters';
 
 interface DashboardProps {
   tasks: Task[];
@@ -450,97 +452,24 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
 
   const renderTasks = () => (
     <div className="space-y-6">
-      {/* Filters */}
-      <div className={`border rounded-xl p-4 flex flex-wrap gap-4 items-center ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
-        <div className={`flex items-center space-x-2 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-          <Filter size={16} />
-          <span>Filters:</span>
-        </div>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className={`border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            isDarkMode 
-              ? 'bg-[#1E293B] border-[#334155] text-white' 
-              : 'bg-slate-50 border-slate-200 text-slate-900'
-          }`}
-        >
-          <option value="All">All Status</option>
-          <option value="Not Started">Not Started</option>
-          <option value="In progress">In Progress</option>
-          <option value="Submitted">Submitted</option>
-          <option value="Closed">Closed</option>
-          <option value="Overdue">Overdue</option>
-        </select>
-        <select
-          value={filterPriority}
-          onChange={(e) => setFilterPriority(e.target.value)}
-          className={`border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            isDarkMode 
-              ? 'bg-[#1E293B] border-[#334155] text-white' 
-              : 'bg-slate-50 border-slate-200 text-slate-900'
-          }`}
-        >
-          <option value="All">All Priority</option>
-          <option value="Critical">Critical</option>
-          <option value="High">High</option>
-          <option value="Medium">Medium</option>
-          <option value="Low">Low</option>
-        </select>
-        {currentUser.Role === 'Admin' && (
-          <select
-            value={filterAssignee}
-            onChange={(e) => setFilterAssignee(e.target.value)}
-            className={`border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isDarkMode 
-                ? 'bg-[#1E293B] border-[#334155] text-white' 
-                : 'bg-slate-50 border-slate-200 text-slate-900'
-            }`}
-          >
-            <option value="All">All Assignees</option>
-            {users.filter(u => u.Active).map(user => (
-              <option key={user.UserID} value={user.Email}>{user.FullName}</option>
-            ))}
-          </select>
-        )}
-      </div>
-
-      {/* Tasks List */}
-      <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
-        <div className={`divide-y ${isDarkMode ? 'divide-[#1E293B]' : 'divide-slate-200'}`}>
-          {getFilteredTasks().map((task) => (
-            <div
-              key={task.TaskID}
-              onClick={() => onTaskClick(task)}
-              className={`p-6 transition-colors cursor-pointer ${isDarkMode ? 'hover:bg-[#1E293B]/30' : 'hover:bg-slate-50'}`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <span className={`text-xs font-bold px-2 py-1 rounded border ${getPriorityColor(task.Priority)}`}>
-                      {task.Priority}
-                    </span>
-                    <span className={`text-xs font-bold px-2 py-1 rounded border ${getStatusColor(task.Status)}`}>
-                      {task.Status}
-                    </span>
-                  </div>
-                  <h4 className={`font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{task.Title}</h4>
-                  <div className={`flex items-center space-x-4 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                    <span>Due: {task.DueDate}</span>
-                    <span>Assigned to: {task.AssignedToEmail.split('@')[0]}</span>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className={`text-xs font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{task.TaskID}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-          {getFilteredTasks().length === 0 && (
-            <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No tasks found</div>
-          )}
-        </div>
-      </div>
+      <TaskFilters
+        filterStatus={filterStatus}
+        filterPriority={filterPriority}
+        filterAssignee={filterAssignee}
+        currentUser={currentUser}
+        users={users}
+        isDarkMode={isDarkMode}
+        onFilterStatusChange={setFilterStatus}
+        onFilterPriorityChange={setFilterPriority}
+        onFilterAssigneeChange={setFilterAssignee}
+      />
+      <TaskList
+        tasks={getFilteredTasks()}
+        onTaskClick={onTaskClick}
+        isDarkMode={isDarkMode}
+        getPriorityColor={getPriorityColor}
+        getStatusColor={getStatusColor}
+      />
     </div>
   );
 
