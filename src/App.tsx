@@ -18,6 +18,8 @@ import { initSSEClient, disconnectSSEClient, ConnectionStatus } from './lib/sseC
 import InstallBanner from './components/InstallBanner';
 import OfflineBanner from './components/OfflineBanner';
 import UpdateBanner from './components/UpdateBanner';
+import { approveUser } from './api/auth';
+import { uploadFile } from './api/upload';
 
 // Icons
 import {
@@ -927,26 +929,15 @@ export default function App() {
           headers['Authorization'] = `Bearer ${token}`;
         }
 
-        const uploadRes = await fetch('/api/upload-file', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            fileName: file.name,
-            fileData: file.data, // Base64 encoded file data
-            mimeType: file.type,
-            taskId: data.TaskID,
-            reportId: propId
-          }),
+        const uploadData = await uploadFile({
+          fileName: file.name,
+          fileData: file.data, // Base64 encoded file data
+          mimeType: file.type,
+          taskId: data.TaskID,
+          reportId: propId
         });
-
-        if (uploadRes.ok) {
-          const uploadData = await uploadRes.json();
-          uploadedFileUrls.push(uploadData.webViewLink);
-          console.log('File uploaded successfully:', uploadData);
-        } else {
-          console.error('File upload failed:', await uploadRes.text());
-          // Continue with other files even if one fails
-        }
+        uploadedFileUrls.push(uploadData.webViewLink);
+        console.log('File uploaded successfully:', uploadData);
       } catch (error) {
         console.error('Error uploading file:', error);
         // Continue with other files even if one fails
@@ -1194,23 +1185,7 @@ export default function App() {
 
   const handleApproveUser = async (email: string) => {
     try {
-      const token = localStorage.getItem('PMS_auth_token');
-      const response = await fetch('/api/approve-user', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        console.error('Failed to approve user:', data.error);
-        return;
-      }
-
+      await approveUser({ email });
       // SSE will handle sync automatically - no need to reload database
     } catch (error) {
       console.error('Error approving user:', error);

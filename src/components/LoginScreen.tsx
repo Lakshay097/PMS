@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Mail, Lock, LogIn, Shield, Zap, UserPlus } from 'lucide-react';
 import { User } from '../types';
 import AccountRequest from './AccountRequest';
+import { login, mapUserResponseToUser } from '../api/auth';
 
 interface LoginScreenProps {
   usersList: User[];
@@ -28,28 +29,16 @@ export default function LoginScreen({ usersList, onLoginSuccess }: LoginScreenPr
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email: trimmedEmail, password }),
-      });
+      const data = await login({ email: trimmedEmail, password });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || 'Login failed');
-        setIsLoading(false);
-        return;
-      }
-
+      const user = mapUserResponseToUser(data.user);
       localStorage.setItem('PMS_auth_token', data.token);
-      localStorage.setItem('PMS_user', JSON.stringify(data.user));
-      onLoginSuccess(data.user.email, data.user);
+      localStorage.setItem('auth_token', data.token);
+      localStorage.setItem('PMS_user', JSON.stringify(user));
+      onLoginSuccess(user.Email, user);
       setIsLoading(false);
     } catch (err: any) {
-      setError('Failed to connect to server');
+      setError(err.message || 'Login failed');
       setIsLoading(false);
     }
   };

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Lock, User, Building2, ArrowLeft, CheckCircle, Clock, X } from 'lucide-react';
+import { requestAccount } from '../api/auth';
 
 interface AccountRequestProps {
   onBackToLogin: () => void;
@@ -46,33 +47,19 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/account-request', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          fullName: formData.fullName.trim(),
-          email: formData.email.trim().toLowerCase(),
-          password: formData.password,
-          managerEmail: formData.managerEmail.trim().toLowerCase(),
-        }),
+      await requestAccount({
+        fullName: formData.fullName.trim(),
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
+        managerEmail: formData.managerEmail.trim().toLowerCase(),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || 'Failed to submit account request');
-        setIsLoading(false);
-        return;
-      }
 
       setSuccess(true);
       setTimeout(() => {
         onRequestSubmitted();
       }, 2000);
     } catch (err: any) {
-      setError('Failed to connect to server');
+      setError(err.message || 'Failed to submit account request');
       setIsLoading(false);
     }
   };
