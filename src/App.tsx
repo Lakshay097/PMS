@@ -3,6 +3,7 @@ import { useAppModals } from './hooks/useAppModals';
 import { useAppEvents } from './hooks/useAppEvents';
 import { useDatabase } from './hooks/useDatabase';
 import { useTaskOperations } from './hooks/useTaskOperations';
+import { useUserOperations } from './hooks/useUserOperations';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   INITIAL_USERS,
@@ -712,6 +713,20 @@ export default function App() {
     subtasks,
   });
 
+  // User operations hook
+  const {
+    handleUpdateUserTeams,
+    handleAddUser,
+    handleToggleUserStatus,
+    handleApproveUser,
+    handleUpdateUserRole,
+  } = useUserOperations({
+    users,
+    teams,
+    syncDatabase: loadDatabase,
+    logAudit,
+  });
+
   // Actions implementation
   const handleSubmitProgressReport = async (data: any) => {
     const propId = `RP-${Math.floor(1000 + Math.random() * 8999)}`;
@@ -797,21 +812,6 @@ export default function App() {
   };
 
   // Administration interactions
-  const handleUpdateUserTeams = async (email: string, teamIDs: string[], teamNames: string[]) => {
-    const foundUser = users.find(u => u.Email === email);
-    if (foundUser) {
-      const updatedUser = { 
-        ...foundUser, 
-        TeamIDs: teamIDs, 
-        TeamNames: teamNames, 
-        UpdatedAt: new Date().toISOString() 
-      };
-      await dbService.saveUser(updatedUser);
-      await logAudit('User', foundUser.UserID, `Updated Team memberships to: ${teamNames.join(', ')}`, JSON.stringify(foundUser.TeamIDs), JSON.stringify(teamIDs));
-      // SSE will handle sync automatically - no need to reload database
-    }
-  };
-
   const handleDeleteTeam = async (teamId: string) => {
     const targetTeam = teams.find(t => t.TeamID === teamId);
     if (!targetTeam) return;
@@ -834,41 +834,6 @@ export default function App() {
 
     await logAudit('Team', teamId, `Deleted Team: ${targetTeam.TeamName}`, JSON.stringify(targetTeam), '');
     // SSE will handle sync automatically - no need to reload database
-  };
-
-  const handleAddUser = async (newUser: User) => {
-    await dbService.saveUser(newUser);
-    await logAudit('User', newUser.UserID, 'Account Authorized', '', JSON.stringify(newUser));
-    // SSE will handle sync automatically - no need to reload database
-  };
-
-  const handleToggleUserStatus = async (email: string) => {
-    const foundUser = users.find(u => u.Email === email);
-    if (foundUser) {
-      const updatedUser = { ...foundUser, Active: !foundUser.Active, UpdatedAt: new Date().toISOString() };
-      await dbService.saveUser(updatedUser);
-      await logAudit('User', foundUser.UserID, `Toggle Active State : ${updatedUser.Active}`, JSON.stringify({ Active: foundUser.Active }), JSON.stringify({ Active: updatedUser.Active }));
-      // SSE will handle sync automatically - no need to reload database
-    }
-  };
-
-  const handleApproveUser = async (email: string) => {
-    try {
-      await approveUser({ email });
-      // SSE will handle sync automatically - no need to reload database
-    } catch (error) {
-      console.error('Error approving user:', error);
-    }
-  };
-
-  const handleUpdateUserRole = async (email: string, newRole: 'Admin' | 'Stakeholder' | 'Sub-stakeholder') => {
-    const foundUser = users.find(u => u.Email === email);
-    if (foundUser) {
-      const updatedUser = { ...foundUser, Role: newRole, UpdatedAt: new Date().toISOString() };
-      await dbService.saveUser(updatedUser);
-      await dbService.logAction('User', foundUser.UserID, `Role updated to ${newRole}`, foundUser.Email, null, updatedUser);
-      // SSE will handle sync automatically - no need to reload database
-    }
   };
 
   const handleAddTemplate = async (newTemplate: TaskTemplate) => {
