@@ -59,7 +59,7 @@ import CreateTaskModal from './components/CreateTaskModal';
 import CreateReportModal from './components/CreateReportModal';
 import FollowUpModal from './components/FollowUpModal';
 import TaskDrawer from './components/features/tasks/TaskDrawer';
-import AdminPanel from './components/AdminPanel';
+import AdminPage from './pages/AdminPage';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import EditProfileModal from './components/EditProfileModal';
