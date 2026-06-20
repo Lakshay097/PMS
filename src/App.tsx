@@ -5,6 +5,7 @@ import { useDatabase } from './hooks/useDatabase';
 import { useTaskOperations } from './hooks/useTaskOperations';
 import { useUserOperations } from './hooks/useUserOperations';
 import { useTeamOperations } from './hooks/useTeamOperations';
+import { useTemplateOperations } from './hooks/useTemplateOperations';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   INITIAL_USERS,
@@ -736,6 +737,16 @@ export default function App() {
     logAudit,
   });
 
+  // Template operations hook
+  const {
+    handleAddTemplate,
+    handleToggleTemplateStatus,
+  } = useTemplateOperations({
+    templates,
+    syncDatabase: loadDatabase,
+    logAudit,
+  });
+
   // Actions implementation
   const handleSubmitProgressReport = async (data: any) => {
     const propId = `RP-${Math.floor(1000 + Math.random() * 8999)}`;
@@ -818,22 +829,6 @@ export default function App() {
 
     await logAudit('Report', propId, 'Published Progress Report', '', JSON.stringify({ TaskID: data.TaskID, Status: data.StatusUpdate }));
     // SSE will handle sync automatically - no need to reload database
-  };
-
-  const handleAddTemplate = async (newTemplate: TaskTemplate) => {
-    await dbService.saveTemplate(newTemplate);
-    await logAudit('Template', newTemplate.TemplateID, 'Template Structured', '', JSON.stringify(newTemplate));
-    // SSE will handle sync automatically - no need to reload database
-  };
-
-  const handleToggleTemplateStatus = async (tempId: string) => {
-    const found = templates.find(t => t.TemplateID === tempId);
-    if (found) {
-      const updated = { ...found, Active: !found.Active, UpdatedAt: new Date().toISOString() };
-      await dbService.saveTemplate(updated);
-      await logAudit('Template', found.TemplateID, `Toggle Schedule Active State : ${updated.Active}`, `Active: ${found.Active}`, `Active: ${updated.Active}`);
-      // SSE will handle sync automatically - no need to reload database
-    }
   };
 
   const handleUpdateSetting = async (key: string, value: string) => {
