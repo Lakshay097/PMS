@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   INITIAL_USERS,
@@ -59,9 +59,12 @@ import CreateTaskModal from './components/CreateTaskModal';
 import CreateReportModal from './components/CreateReportModal';
 import FollowUpModal from './components/FollowUpModal';
 import TaskDrawer from './components/features/tasks/TaskDrawer';
-import AdminPage from './pages/AdminPage';
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
+import Spinner from './components/ui/Spinner';
+
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const TasksPage = lazy(() => import('./pages/TasksPage'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
 import EditProfileModal from './components/EditProfileModal';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import ConfigureNotificationsModal from './components/ConfigureNotificationsModal';
@@ -1388,7 +1391,8 @@ export default function App() {
       </AnimatePresence>
 
       {/* NEW UI - Dashboard handles all views */}
-      <DashboardPage
+      <Suspense fallback={<Spinner size="lg" />}>
+        <DashboardPage
         tasks={getVisibleTasks()}
         currentUser={activeUser}
         onNewTask={(assigneeEmail) => {
@@ -1500,6 +1504,7 @@ export default function App() {
         lastSyncTime={lastSyncTime}
         dbConnectionStatus={dbConnectionStatus}
       />
+      </Suspense>
 
       <AnimatePresence>
         
