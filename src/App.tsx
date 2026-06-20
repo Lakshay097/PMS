@@ -6,6 +6,7 @@ import { useTaskOperations } from './hooks/useTaskOperations';
 import { useUserOperations } from './hooks/useUserOperations';
 import { useTeamOperations } from './hooks/useTeamOperations';
 import { useTemplateOperations } from './hooks/useTemplateOperations';
+import { useTaskMetrics } from './hooks/useTaskMetrics';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   INITIAL_USERS,
@@ -513,6 +514,21 @@ export default function App() {
 
   // Rule 1: Task visibility filters depending on Role
   const getVisibleTasks = () => {
+    return visibleTasks;
+  };
+
+  const getOverdueAndSoonTasks = () => {
+    return { overdue, soon };
+  };
+
+  const getVisibleReports = () => {
+    const visibleTaskIds = new Set(visibleTasks.map(t => t.TaskID));
+    return reports
+      .filter(r => visibleTaskIds.has(r.TaskID))
+      .sort((a, b) => new Date(b.CreatedAt || b.ReportDate).getTime() - new Date(a.CreatedAt || a.ReportDate).getTime());
+  };
+
+  const getFilteredTasks = () => {
     const today = new Date();
     today.setHours(0,0,0,0);
 
@@ -554,74 +570,6 @@ export default function App() {
     return visible;
   };
 
-  const getOverdueAndSoonTasks = () => {
-    const visible = getVisibleTasks();
-    const today = new Date();
-    today.setHours(0,0,0,0);
-
-    return visible.filter(t => {
-      if (t.Status === 'Closed') return false;
-      if (t.Status === 'Overdue' || t.Priority === 'Critical') return true;
-      
-      try {
-        const dDate = new Date(t.DueDate);
-        dDate.setHours(0,0,0,0);
-        const diffTime = dDate.getTime() - today.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 3600 * 24));
-        return diffDays >= 0 && diffDays <= 3; // within 3 days is indeed "soon to overdue"
-      } catch (e) {
-        return false;
-      }
-    });
-  };
-
-  const getVisibleReports = () => {
-    const visibleTaskIds = new Set(getVisibleTasks().map(t => t.TaskID));
-    return reports
-      .filter(r => visibleTaskIds.has(r.TaskID))
-      .sort((a, b) => new Date(b.CreatedAt || b.ReportDate).getTime() - new Date(a.CreatedAt || a.ReportDate).getTime());
-  };
-
-  // Filter & Search pipeline for the tasks board
-  const getFilteredTasks = () => {
-    let tasks = getVisibleTasks();
-    
-    // Filter by tab (Active vs History)
-    if (taskViewTab === 'active') {
-      tasks = tasks.filter(t => t.Status !== 'Closed' && t.Status !== 'Reviewed');
-    } else {
-      tasks = tasks.filter(t => t.Status === 'Closed' || t.Status === 'Reviewed');
-    }
-    
-    // Sort by urgency
-    tasks = tasks.sort((a, b) => {
-      const today = getCurrentLocalDate();
-      
-      // Overdue tasks first
-      const aOverdue = a.Status !== 'Closed' && a.Status !== 'Reviewed' && a.DueDate < today;
-      const bOverdue = b.Status !== 'Closed' && b.Status !== 'Reviewed' && b.DueDate < today;
-      
-      if (aOverdue && !bOverdue) return -1;
-      if (!aOverdue && bOverdue) return 1;
-      
-      // Due today next
-      const aDueToday = a.Status !== 'Closed' && a.Status !== 'Reviewed' && a.DueDate === today;
-      const bDueToday = b.Status !== 'Closed' && b.Status !== 'Reviewed' && b.DueDate === today;
-      
-      if (aDueToday && !bDueToday) return -1;
-      if (!aDueToday && bDueToday) return 1;
-      
-      // Then by closest deadline
-      if (a.DueDate !== b.DueDate) {
-        return a.DueDate.localeCompare(b.DueDate);
-      }
-      
-      return 0;
-    });
-    
-    return tasks;
-  };
-  
   const filteredTasks = getFilteredTasks().filter(task => {
     const assignees = (task.AssignedToEmail || '').split(',').map(e => e.trim());
     const assigneeNames = assignees.map(email => {
@@ -652,41 +600,6 @@ export default function App() {
 
     return matchesSearch && matchesScope && matchesStatus && matchesPriority && matchesType && matchesAssigneeSearch;
   });
-
-  // Calculate Dashboard Home Metrics
-  const visibleTasksForMetrics = getVisibleTasks();
-  const today = getCurrentLocalDate();
-
-  // Active Tasks: Count of tasks with status other than Closed/Reviewed
-  const metricActiveTasks = (visibleTasksForMetrics || []).filter(t => t.Status !== 'Closed' && t.Status !== 'Reviewed').length;
-
-  // Overdue: Active tasks whose due date is less than today's date
-  const metricOverdue = (visibleTasksForMetrics || []).filter(t => {
-    if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
-    return t.DueDate < today;
-  }).length;
-
-  // Due Today: Active tasks whose due date is today's date
-  const metricDueToday = (visibleTasksForMetrics || []).filter(t => {
-    if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
-    return t.DueDate === today;
-  }).length;
-
-  // Completed This Week: Closed/Reviewed tasks with a CompletionDate within the last 7 days
-  const oneWeekAgo = new Date();
-  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-  const metricCompletedThisWeek = (visibleTasksForMetrics || []).filter(t => {
-    if (t.Status !== 'Closed' && t.Status !== 'Reviewed') return false;
-    if (!t.CompletionDate) return false;
-    const completionDate = new Date(t.CompletionDate);
-    return completionDate >= oneWeekAgo;
-  }).length;
-
-  const metricFollowUps = (followUps || []).filter(f => {
-    if (f.Status !== 'Active' && f.Status !== 'Pending') return false;
-    if (activeUser.Role === 'Admin') return true;
-    return f.CreatedByEmail === activeUser.Email;
-  }).length;
 
   // Task operations hook
   const {
@@ -737,6 +650,29 @@ export default function App() {
     logAudit,
   });
 
+  // Task metrics hook
+  const {
+    visibleTasks,
+    overdue,
+    soon,
+    metricActiveTasks,
+    metricOverdue,
+    metricDueToday,
+    metricCompletedThisWeek,
+    metricFollowUps,
+  } = useTaskMetrics({
+    tasks,
+    followUps,
+    filters: {
+      search: searchQuery,
+      category: filterCategory,
+      status: filterStatus,
+      priority: filterPriority,
+    },
+    currentView: filterScope === 'assigned_to_me' ? 'my-tasks' : filterScope === 'created_by_me' ? 'assigned-by-me' : 'all',
+    activeUser,
+  });
+
   // Template operations hook
   const {
     handleAddTemplate,
@@ -747,8 +683,18 @@ export default function App() {
     logAudit,
   });
 
+  // Report operations hook
+  const { handleSubmitProgressReport } = useReportOperations({
+    tasks,
+    currentUser: activeUser,
+    syncDatabase: loadDatabase,
+    logAudit,
+    triggerNotification,
+    selectedTask,
+    setSelectedTask,
+  });
+
   // Actions implementation
-  const handleSubmitProgressReport = async (data: any) => {
     const propId = `RP-${Math.floor(1000 + Math.random() * 8999)}`;
     const nowStr = new Date().toISOString();
 
