@@ -44,8 +44,8 @@ export default function LoginScreen({ usersList, onLoginSuccess }: LoginScreenPr
         return;
       }
 
-      localStorage.setItem('trustgrid_auth_token', data.token);
-      localStorage.setItem('trustgrid_user', JSON.stringify(data.user));
+      localStorage.setItem('PMS_auth_token', data.token);
+      localStorage.setItem('PMS_user', JSON.stringify(data.user));
       onLoginSuccess(data.user.email, data.user);
       setIsLoading(false);
     } catch (err: any) {

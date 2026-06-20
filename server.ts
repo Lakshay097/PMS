@@ -496,6 +496,99 @@ async function startServer() {
   });
 
 
+  // SSE endpoint for real-time change sync
+  const sseConnections = new Set<express.Response>();
+  let lastModified: string = new Date().toISOString();
+  let lastAuditLogs: any[] = [];
+
+  app.get("/api/changes/stream", async (req: express.Request, res: express.Response) => {
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    // Send initial connected event
+    const connectedData = JSON.stringify({ lastModified });
+    res.write(`event: connected\ndata: ${connectedData}\n\n`);
+
+    // Add to connections set
+    sseConnections.add(res);
+
+    // Remove connection on close
+    req.on('close', () => {
+      sseConnections.delete(res);
+    });
+
+    // Keep connection alive with ping every 25s
+    const pingInterval = setInterval(() => {
+      if (sseConnections.has(res)) {
+        res.write(': ping\n\n');
+      } else {
+        clearInterval(pingInterval);
+      }
+    }, 25000);
+  });
+
+  // Server-side audit loop to check for changes
+  setInterval(async () => {
+    try {
+      const tokenData = await generateGoogleSheetsToken();
+      if (!tokenData || !tokenData.spreadsheetId) return;
+
+      const spreadsheetId = tokenData.spreadsheetId;
+      const auditLogsRange = 'auditlogs!A:H';
+      const auditLogsRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${auditLogsRange}`,
+        {
+          headers: { 'Authorization': `Bearer ${tokenData.accessToken}` }
+        }
+      );
+
+      if (!auditLogsRes.ok) return;
+
+      const auditLogsData = await auditLogsRes.json();
+      const currentAuditLogs = auditLogsData.values || [];
+
+      // Check if there are new logs
+      if (currentAuditLogs.length > lastAuditLogs.length) {
+        // Extract changed entity types from new logs
+        const newLogs = currentAuditLogs.slice(lastAuditLogs.length);
+        const changedEntityTypes = new Set<string>();
+        
+        for (const row of newLogs) {
+          if (row[1]) { // EntityType is at index 1
+            changedEntityTypes.add(row[1]);
+          }
+        }
+
+        // Convert to lowercase collection names
+        const changedCollections = Array.from(changedEntityTypes).map(type => type.toLowerCase());
+        
+        // Update state
+        lastModified = new Date().toISOString();
+        lastAuditLogs = currentAuditLogs;
+
+        // Broadcast to all connected clients
+        const broadcastData = JSON.stringify({
+          changed: changedCollections,
+          lastModified
+        });
+
+        for (const connection of sseConnections) {
+          try {
+            connection.write(`data: ${broadcastData}\n\n`);
+          } catch (err) {
+            // Connection might be dead, remove it
+            sseConnections.delete(connection);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error in audit loop:', err);
+    }
+  }, 10000); // Check every 10 seconds
+
   // API Route: Upload file to Google Drive (protected)
   app.post("/api/upload-file", authenticateToken, async (req: AuthRequest, res: express.Response) => {
     try {
@@ -562,6 +655,13 @@ async function startServer() {
     }
   });
 
+  // Service Worker route with proper headers for PWA
+  app.get('/sw.js', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.sendFile(path.join(process.cwd(), 'public', 'sw.js'));
+  });
+
   // Vite development vs production compiler route configuration
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -596,6 +696,11 @@ async function startServer() {
     app.get("*", (req, res) => {
       // Don't intercept API routes
       if (req.path.startsWith('/api/')) {
+        res.status(404).send('Not Found');
+        return;
+      }
+      // Don't intercept static asset requests
+      if (req.path.startsWith('/assets/') || req.path.includes('.')) {
         res.status(404).send('Not Found');
         return;
       }

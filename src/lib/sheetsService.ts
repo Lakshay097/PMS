@@ -22,15 +22,24 @@ export const HEADERS = {
 let cachedAccessToken: string | null = null;
 let cachedSpreadsheetId: string | null = null;
 
+// Request queue to prevent rate limiting
+let requestQueue: Promise<unknown> = Promise.resolve();
+
 // Retry configuration
-const MAX_RETRIES = 3;
-const INITIAL_RETRY_DELAY = 1000; // 1 second
+const MAX_RETRIES = 5; // Increased from 3
+const INITIAL_RETRY_DELAY = 2000; // Increased from 1000ms
 
 // Exponential backoff with jitter
 function getRetryDelay(attempt: number): number {
   const baseDelay = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
-  const jitter = Math.random() * 200; // Add up to 200ms jitter
+  const jitter = Math.random() * 500; // Increased jitter to 500ms
   return baseDelay + jitter;
+}
+
+// Queue a request to prevent rate limiting
+async function queueRequest<T>(requestFn: () => Promise<T>): Promise<T> {
+  requestQueue = requestQueue.then(requestFn, requestFn);
+  return requestQueue as Promise<T>;
 }
 
 // Generic fetch with retry logic
@@ -167,166 +176,226 @@ export function rowsToObjects<T>(rows: any[][], headers: string[]): T[] {
 export const sheetsApi = {
   // Check if a spreadsheet exists, create it if it doesn't
   async getOrCreateSpreadsheet(): Promise<string> {
-    const token = getAccessToken();
-    if (!token) {
-      throw new Error('Google Sheets authentication failed. Service account token not available. Please configure GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY in your environment variables.');
-    }
-
-    // 1. Try using cached spreadsheet ID
-    if (cachedSpreadsheetId) {
-      try {
-        const metadata = await this.getSpreadsheetMetadata(cachedSpreadsheetId);
-        if (metadata) {
-          console.log('Using cached Google Spreadsheet:', cachedSpreadsheetId);
-          return cachedSpreadsheetId;
-        }
-      } catch (e) {
-        console.warn('Cached spreadsheet could not be accessed, re-searching...', e);
-        cachedSpreadsheetId = null;
+    return queueRequest(async () => {
+      const token = getAccessToken();
+      if (!token) {
+        throw new Error('Google Sheets authentication failed. Service account token not available. Please configure GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY in your environment variables.');
       }
-    }
 
-    // 2. Query Drive to locate "PMS Systems Database"
-    console.log('Searching for database file in Google Drive...');
-    const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
-      "name='PMS Systems Database' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false"
-    )}`;
+      // 1. Try using cached spreadsheet ID
+      if (cachedSpreadsheetId) {
+        try {
+          const metadata = await this.getSpreadsheetMetadata(cachedSpreadsheetId);
+          if (metadata) {
+            console.log('Using cached Google Spreadsheet:', cachedSpreadsheetId);
+            return cachedSpreadsheetId;
+          }
+        } catch (e) {
+          console.warn('Cached spreadsheet could not be accessed, re-searching...', e);
+          cachedSpreadsheetId = null;
+        }
+      }
 
-    const searchRes = await fetchWithRetry(searchUrl, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+      // 2. Query Drive to locate "PMS Systems Database"
+      console.log('Searching for database file in Google Drive...');
+      const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
+        "name='PMS Systems Database' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false"
+      )}`;
 
-    if (!searchRes.ok) {
-      throw new Error(`Failed to query Google Drive. Status: ${searchRes.statusText}. Please verify your service account has Drive API permissions.`);
-    }
+      const searchRes = await fetchWithRetry(searchUrl, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-    const searchData = await searchRes.json();
-    if (searchData.files && searchData.files.length > 0) {
-      const spreadId = searchData.files[0].id;
-      cachedSpreadsheetId = spreadId;
-      console.log('Found existing database spreadsheet on Google Drive:', spreadId);
-      return spreadId;
-    }
+      if (!searchRes.ok) {
+        // Explicitly throw rate limit and service unavailable errors to prevent fallback to create
+        if (searchRes.status === 429) {
+          throw new Error(`Rate limit exceeded (429) when searching Drive. Please retry later.`);
+        }
+        if (searchRes.status === 503) {
+          throw new Error(`Service unavailable (503) when searching Drive. Please retry later.`);
+        }
+        throw new Error(`Failed to query Google Drive. Status: ${searchRes.statusText}. Please verify your service account has Drive API permissions.`);
+      }
 
-    // 3. Not found, create a brand new Google Spreadsheet with all required tabs
-    console.log('No database spreadsheet found. Creating a new "PMS Systems Database" with all tabs...');
-    const createUrl = 'https://sheets.googleapis.com/v4/spreadsheets';
-    
-    const requiredSheets = Object.keys(HEADERS).map(name => ({
-      properties: { title: name }
-    }));
+      const searchData = await searchRes.json();
+      if (searchData.files && searchData.files.length > 0) {
+        const spreadId = searchData.files[0].id;
+        cachedSpreadsheetId = spreadId;
+        console.log('Found existing database spreadsheet on Google Drive:', spreadId);
+        return spreadId;
+      }
 
-    const createRes = await fetchWithRetry(createUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        properties: {
-          title: 'PMS Systems Database'
+      // 3. Not found, create a brand new Google Spreadsheet with all required tabs
+      console.log('No database spreadsheet found. Creating a new "PMS Systems Database" with all tabs...');
+      const createUrl = 'https://sheets.googleapis.com/v4/spreadsheets';
+      
+      const requiredSheets = Object.keys(HEADERS).map(name => ({
+        properties: { title: name }
+      }));
+
+      const createRes = await fetchWithRetry(createUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
-        sheets: requiredSheets
-      })
+        body: JSON.stringify({
+          properties: {
+            title: 'PMS Systems Database'
+          },
+          sheets: requiredSheets
+        })
+      });
+
+      if (!createRes.ok) {
+        const errPayload = await createRes.json().catch(() => ({}));
+        console.error('Failed to create spreadsheet', errPayload);
+        // Explicitly throw rate limit and service unavailable errors
+        if (createRes.status === 429) {
+          throw new Error(`Rate limit exceeded (429) when creating spreadsheet. Please retry later.`);
+        }
+        if (createRes.status === 503) {
+          throw new Error(`Service unavailable (503) when creating spreadsheet. Please retry later.`);
+        }
+        throw new Error(`Failed to create Google Spreadsheet database. Status: ${createRes.statusText}. Please verify your service account has Sheets API permissions.`);
+      }
+
+      const createdSpreadsheet = await createRes.json();
+      const newSpreadId = createdSpreadsheet.spreadsheetId;
+      cachedSpreadsheetId = newSpreadId;
+      console.log('Successfully created database spreadsheet on Google Drive with ID:', newSpreadId);
+      return newSpreadId;
     });
-
-    if (!createRes.ok) {
-      const errPayload = await createRes.json().catch(() => ({}));
-      console.error('Failed to create spreadsheet', errPayload);
-      throw new Error(`Failed to create Google Spreadsheet database. Status: ${createRes.statusText}. Please verify your service account has Sheets API permissions.`);
-    }
-
-    const createdSpreadsheet = await createRes.json();
-    const newSpreadId = createdSpreadsheet.spreadsheetId;
-    cachedSpreadsheetId = newSpreadId;
-    console.log('Successfully created database spreadsheet on Google Drive with ID:', newSpreadId);
-    return newSpreadId;
   },
 
   async getSpreadsheetMetadata(spreadsheetId: string): Promise<any> {
-    const token = getAccessToken();
-    if (!token) throw new Error('Unauthenticated.');
+    return queueRequest(async () => {
+      const token = getAccessToken();
+      if (!token) throw new Error('Unauthenticated.');
 
-    const res = await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
-      headers: { Authorization: `Bearer ${token}` }
+      const res = await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        // Explicitly throw rate limit and service unavailable errors to prevent fallback to create
+        if (res.status === 429) {
+          throw new Error(`Rate limit exceeded (429) when accessing spreadsheet. Please retry later.`);
+        }
+        if (res.status === 503) {
+          throw new Error(`Service unavailable (503) when accessing spreadsheet. Please retry later.`);
+        }
+        throw new Error(`Could not retrieve spreadsheet metadata. Status: ${res.status}`);
+      }
+      return res.json();
     });
-    if (!res.ok) throw new Error('Could not retrieve spreadsheet metadata.');
-    return res.json();
   },
 
   // Save full collection to Google Sheets with atomic clear-then-write
   async saveCollection(sheetName: keyof typeof HEADERS, data: any[]): Promise<void> {
-    const token = getAccessToken();
-    if (!token) {
-      throw new Error('Google Sheets authentication failed. Cannot save data.');
-    }
-
-    const spreadsheetId = await this.getOrCreateSpreadsheet();
-    const headers = HEADERS[sheetName];
-    const rows = objectsToRows(data, headers);
-
-    console.log(`Writing collection [${sheetName}] containing ${data.length} records to Google Sheets...`);
-
-    // First Clear the existing sheet content to prevent dangling old rows
-    const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1:Z9999:clear`;
-    const clearRes = await fetchWithRetry(clearUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
+    return queueRequest(async () => {
+      const token = getAccessToken();
+      if (!token) {
+        throw new Error('Google Sheets authentication failed. Cannot save data.');
       }
+
+      const spreadsheetId = await this.getOrCreateSpreadsheet();
+      if (!spreadsheetId) {
+        throw new Error('Failed to get spreadsheet ID.');
+      }
+
+      const headers = HEADERS[sheetName];
+      const rows = objectsToRows(data, headers);
+
+      console.log(`Writing collection [${sheetName}] containing ${data.length} records to Google Sheets...`);
+
+      // First Clear the existing sheet content to prevent dangling old rows
+      const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1:Z9999:clear`;
+      const clearRes = await fetchWithRetry(clearUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!clearRes.ok) {
+        const err = await clearRes.json().catch(() => ({}));
+        console.error(`Failed to clear ${sheetName} sheet`, err);
+        // Explicitly throw rate limit and service unavailable errors
+        if (clearRes.status === 429) {
+          throw new Error(`Rate limit exceeded (429) when clearing ${sheetName}. Please retry later.`);
+        }
+        if (clearRes.status === 503) {
+          throw new Error(`Service unavailable (503) when clearing ${sheetName}. Please retry later.`);
+        }
+        throw new Error(`Failed to clear sheet ${sheetName}. Status: ${clearRes.statusText}`);
+      }
+
+      // Write new content
+      const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1?valueInputOption=USER_ENTERED`;
+      const res = await fetchWithRetry(writeUrl, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          values: rows
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error(`Failed to update ${sheetName} sheet`, err);
+        // Explicitly throw rate limit and service unavailable errors
+        if (res.status === 429) {
+          throw new Error(`Rate limit exceeded (429) when saving ${sheetName}. Please retry later.`);
+        }
+        if (res.status === 503) {
+          throw new Error(`Service unavailable (503) when saving ${sheetName}. Please retry later.`);
+        }
+        throw new Error(`Failed to save table ${sheetName} to Google Sheets. Status: ${res.statusText}`);
+      }
+      console.log(`Successfully saved collection [${sheetName}] to Google Sheets.`);
     });
-
-    if (!clearRes.ok) {
-      const err = await clearRes.json().catch(() => ({}));
-      console.error(`Failed to clear ${sheetName} sheet`, err);
-      throw new Error(`Failed to clear sheet ${sheetName}. Status: ${clearRes.statusText}`);
-    }
-
-    // Write new content
-    const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1?valueInputOption=USER_ENTERED`;
-    const res = await fetchWithRetry(writeUrl, {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        values: rows
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.error(`Failed to update ${sheetName} sheet`, err);
-      throw new Error(`Failed to save table ${sheetName} to Google Sheets. Status: ${res.statusText}`);
-    }
-    console.log(`Successfully saved collection [${sheetName}] to Google Sheets.`);
   },
 
   // Fetch concrete sheet collection of records
   async getCollection<T>(sheetName: keyof typeof HEADERS): Promise<T[]> {
-    const token = getAccessToken();
-    if (!token) {
-      throw new Error('Google Sheets authentication failed. Cannot load data.');
-    }
+    return queueRequest(async () => {
+      const token = getAccessToken();
+      if (!token) {
+        throw new Error('Google Sheets authentication failed. Cannot load data.');
+      }
 
-    const spreadsheetId = await this.getOrCreateSpreadsheet();
-    const headers = HEADERS[sheetName];
-    const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1:Z9999?valueRenderOption=FORMATTED_VALUE`;
+      const spreadsheetId = await this.getOrCreateSpreadsheet();
+      if (!spreadsheetId) {
+        throw new Error('Failed to get spreadsheet ID.');
+      }
 
-    console.log(`Fetching collection [${sheetName}] from Google Sheets database...`);
-    const res = await fetchWithRetry(readUrl, {
-      headers: { Authorization: `Bearer ${token}` }
+      const headers = HEADERS[sheetName];
+      const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1:Z9999?valueRenderOption=FORMATTED_VALUE`;
+
+      console.log(`Fetching collection [${sheetName}] from Google Sheets database...`);
+      const res = await fetchWithRetry(readUrl, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error(`Failed to read sheet ${sheetName}`, err);
+        // Explicitly throw rate limit and service unavailable errors
+        if (res.status === 429) {
+          throw new Error(`Rate limit exceeded (429) when fetching ${sheetName}. Please retry later.`);
+        }
+        if (res.status === 503) {
+          throw new Error(`Service unavailable (503) when fetching ${sheetName}. Please retry later.`);
+        }
+        throw new Error(`Failed to load ${sheetName} from Google Sheets. Status: ${res.statusText}`);
+      }
+
+      const payload = await res.json();
+      return rowsToObjects<T>(payload.values, headers);
     });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.error(`Failed to read sheet ${sheetName}`, err);
-      throw new Error(`Failed to load ${sheetName} from Google Sheets. Status: ${res.statusText}`);
-    }
-
-    const payload = await res.json();
-    return rowsToObjects<T>(payload.values, headers);
   }
 };

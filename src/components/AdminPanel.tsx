@@ -17,7 +17,8 @@ import {
   Info,
   FileText,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  X
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -35,6 +36,8 @@ interface AdminPanelProps {
   onApproveUser: (email: string) => void;
   onAddTeam: (team: Team) => void;
   onToggleTeamStatus: (teamId: string) => void;
+  onUpdateUserTeams: (email: string, teamIDs: string[], teamNames: string[]) => void;
+  onDeleteTeam: (teamId: string) => void;
   onSyncDatabase?: () => void;
   isSyncing?: boolean;
   lastSyncTime?: string;
@@ -56,6 +59,8 @@ export default function AdminPanel({
   onApproveUser,
   onAddTeam,
   onToggleTeamStatus,
+  onUpdateUserTeams,
+  onDeleteTeam,
   onSyncDatabase,
   isSyncing = false,
   lastSyncTime,
@@ -77,6 +82,29 @@ export default function AdminPanel({
   const [teamName, setTeamName] = useState('');
   const [teamDescription, setTeamDescription] = useState('');
   const [teamSuccessMessage, setTeamSuccessMessage] = useState<string | null>(null);
+  const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+
+  const handleAddMember = (userEmail: string, teamId: string, teamName: string) => {
+    const user = users.find(u => u.Email === userEmail);
+    if (user) {
+      const newTeamIDs = [...(user.TeamIDs || [])];
+      const newTeamNames = [...(user.TeamNames || [])];
+      if (!newTeamIDs.includes(teamId)) {
+        newTeamIDs.push(teamId);
+        newTeamNames.push(teamName);
+        onUpdateUserTeams(userEmail, newTeamIDs, newTeamNames);
+      }
+    }
+  };
+
+  const handleRemoveMember = (userEmail: string, teamId: string, teamName: string) => {
+    const user = users.find(u => u.Email === userEmail);
+    if (user) {
+      const newTeamIDs = (user.TeamIDs || []).filter(id => id !== teamId);
+      const newTeamNames = (user.TeamNames || []).filter(name => name !== teamName);
+      onUpdateUserTeams(userEmail, newTeamIDs, newTeamNames);
+    }
+  };
 
   // Search filter inputs
   const [userSearchText, setUserSearchText] = useState('');
@@ -194,7 +222,7 @@ export default function AdminPanel({
       StartDate: tempStartDate || new Date().toISOString().split('T')[0],
       NextGenerationDate: tempStartDate || new Date().toISOString().split('T')[0],
       LastGeneratedDate: null,
-      AssignedByEmail: 'admin@trustgrid.com',
+      AssignedByEmail: 'admin@PMS.com',
       AssignedToEmail: tempAssignToEmail,
       AssignedToRole: (matchedUser ? matchedUser.Role : 'Stakeholder') as any,
       TeamID: matchedUser && matchedUser.TeamIDs.length > 0 ? matchedUser.TeamIDs[0] : 'T-01',
@@ -245,8 +273,8 @@ export default function AdminPanel({
       .replace(/{Category}/g, "Engineering")
       .replace(/{Priority}/g, "Critical")
       .replace(/{DueDate}/g, "2026-06-25")
-      .replace(/{AssignedToEmail}/g, "sales.lead@trustgrid.com")
-      .replace(/{AssignedByEmail}/g, "admin@trustgrid.com");
+      .replace(/{AssignedToEmail}/g, "sales.lead@PMS.com")
+      .replace(/{AssignedByEmail}/g, "admin@PMS.com");
   };
 
   const getRoleBadgeColor = (role: string) => {
@@ -269,8 +297,8 @@ export default function AdminPanel({
               <Shield className="text-red-400" size={24} />
             </div>
             <div>
-              <h3 className="text-white font-extrabold text-lg tracking-tight font-sans">System Master Workbench</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5 uppercase tracking-widest font-mono">Administrative Control Console &bull; Live Memory Session</p>
+              <h3 className="text-white font-extrabold text-lg tracking-tight font-sans">Admin Panel</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5 uppercase tracking-widest font-mono">Manage Users, Teams & Templates</p>
             </div>
           </div>
 
@@ -324,19 +352,38 @@ export default function AdminPanel({
 
         {/* Dynamic statistics analytics strip */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-5 border-t border-[#1E293B]/60 text-slate-300 font-mono text-xs">
-          <div className="bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B]">
+          <div 
+            onClick={() => setActiveAdminSubTab('users')}
+            className={`bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B] cursor-pointer hover:bg-slate-800/80 hover:border-blue-550/50 transition-all select-none duration-150 ${
+              activeAdminSubTab === 'users' ? 'ring-2 ring-[#2563EB] border-[#2563EB] bg-slate-900' : ''
+            }`}
+          >
             <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Users</span>
             <span className="text-xl font-bold font-sans text-white block mt-1">{users.filter(u => u.Active).length} <span className="text-xs text-slate-500 font-normal">Active</span></span>
           </div>
-          <div className="bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B]">
+          <div 
+            onClick={() => setActiveAdminSubTab('teams')}
+            className={`bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B] cursor-pointer hover:bg-slate-800/80 hover:border-emerald-550/50 transition-all select-none duration-150 ${
+              activeAdminSubTab === 'teams' ? 'ring-2 ring-emerald-500 border-emerald-500 bg-slate-900' : ''
+            }`}
+          >
             <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Teams</span>
             <span className="text-xl font-bold font-sans text-emerald-400 block mt-1">{teams.filter(t => t.Active).length} <span className="text-xs text-slate-500 font-normal font-mono">Active</span></span>
           </div>
-          <div className="bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B]">
+          <div 
+            onClick={() => setActiveAdminSubTab('templates')}
+            className={`bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B] cursor-pointer hover:bg-slate-800/80 hover:border-cyan-550/50 transition-all select-none duration-150 ${
+              activeAdminSubTab === 'templates' ? 'ring-2 ring-cyan-550 border-cyan-550 bg-slate-900' : ''
+            }`}
+          >
             <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Templates</span>
             <span className="text-xl font-bold font-sans text-blue-400 block mt-1">{templates.filter(t => t.Active).length} <span className="text-xs text-slate-500 font-normal font-mono">Running</span></span>
           </div>
-          <div className="bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B]">
+          <div 
+            onClick={onSyncDatabase}
+            className="bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B] cursor-pointer hover:bg-slate-800/80 hover:border-slate-700 transition-all select-none duration-150"
+            title="Click to force database synchronization"
+          >
             <div className="flex items-center justify-between mb-1">
               <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Database Sync</span>
               <div className={`w-2 h-2 rounded-full ${
@@ -350,10 +397,8 @@ export default function AdminPanel({
               </span>
               {onSyncDatabase && (
                 <button
-                  onClick={onSyncDatabase}
                   disabled={isSyncing}
-                  className="text-cyan-400 hover:text-cyan-300 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
-                  title="Force database synchronization"
+                  className="text-cyan-400 hover:text-cyan-300 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors cursor-pointer border-none bg-transparent"
                 >
                   <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
                 </button>
@@ -441,7 +486,7 @@ export default function AdminPanel({
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="e.g. rachel@trustgrid.com"
+                      placeholder="e.g. rachel@PMS.com"
                       className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                     />
                   </div>
@@ -460,26 +505,30 @@ export default function AdminPanel({
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1.5">Teams (Multiple Selection)</label>
+                      <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1.5">Teams (Optional)</label>
                       <div className="space-y-2 max-h-32 overflow-y-auto border border-[#E2E8F0] rounded-lg p-2 bg-white">
-                        {teams.map(t => (
-                          <label key={t.TeamID} className="flex items-center space-x-2 text-xs cursor-pointer">
-                            <input
-                              type="checkbox"
-                              value={t.TeamID}
-                              checked={teamSelections.includes(t.TeamID)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setTeamSelections([...teamSelections, t.TeamID]);
-                                } else {
-                                  setTeamSelections(teamSelections.filter(id => id !== t.TeamID));
-                                }
-                              }}
-                              className="rounded border-[#E2E8F0] text-[#2563EB] focus:ring-1 focus:ring-[#2563EB]"
-                            />
-                            <span className="text-slate-800">{t.TeamName}</span>
-                          </label>
-                        ))}
+                        {teams.length > 0 ? (
+                          teams.map(t => (
+                            <label key={t.TeamID} className="flex items-center space-x-2 text-xs cursor-pointer">
+                              <input
+                                type="checkbox"
+                                value={t.TeamID}
+                                checked={teamSelections.includes(t.TeamID)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setTeamSelections([...teamSelections, t.TeamID]);
+                                  } else {
+                                    setTeamSelections(teamSelections.filter(id => id !== t.TeamID));
+                                  }
+                                }}
+                                className="rounded border-[#E2E8F0] text-[#2563EB] focus:ring-1 focus:ring-[#2563EB]"
+                              />
+                              <span className="text-slate-800">{t.TeamName}</span>
+                            </label>
+                          ))
+                        ) : (
+                          <p className="text-xs text-slate-500 italic p-2">No teams available</p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -494,7 +543,7 @@ export default function AdminPanel({
                         type="email"
                         value={managerEmail}
                         onChange={(e) => setManagerEmail(e.target.value)}
-                        placeholder="sales.lead@trustgrid.com"
+                        placeholder="sales.lead@PMS.com"
                         className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                       />
                     </div>
@@ -540,64 +589,82 @@ export default function AdminPanel({
                   </span>
                 </div>
 
-                <div className="border border-[#E2E8F0] bg-white rounded-xl overflow-hidden shadow-sm">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B] font-extrabold uppercase tracking-widest text-[9px] font-mono">
-                        <th className="px-4 py-3.5">Details</th>
-                        <th className="px-4 py-3.5">Scopes Option</th>
-                        <th className="px-4 py-3.5">Reporting Line</th>
-                        <th className="px-4 py-3.5">Interactive Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#F1F5F9] text-slate-700">
-                      {users
-                        .filter(u =>
-                          u.FullName.toLowerCase().includes(userSearchText.toLowerCase()) ||
-                          u.Email.toLowerCase().includes(userSearchText.toLowerCase()) ||
-                          u.Role.toLowerCase().includes(userSearchText.toLowerCase())
-                        )
-                        .map(user => (
-                          <tr key={user.UserID} className={`hover:bg-slate-50/40 transition-colors ${!user.Active ? 'bg-red-50/10' : ''}`}>
-                            <td className="px-4 py-3.5">
-                              <div className="font-extrabold text-slate-900 text-xs sm:text-sm">{user.FullName}</div>
-                              <div className="text-[10px] text-[#475569] font-mono mt-0.5">{user.Email}</div>
-                              <div className="text-[9.5px] text-slate-400 mt-1 uppercase font-semibold font-mono tracking-wider">TEAM: {user.TeamNames.join(', ')}</div>
-                            </td>
-                            <td className="px-4 py-3.5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {users
+                    .filter(u =>
+                      u.FullName.toLowerCase().includes(userSearchText.toLowerCase()) ||
+                      u.Email.toLowerCase().includes(userSearchText.toLowerCase()) ||
+                      u.Role.toLowerCase().includes(userSearchText.toLowerCase())
+                    )
+                    .map(user => {
+                      const isBanned = !user.Active;
+                      return (
+                        <div 
+                          key={user.UserID}
+                          className={`bg-white border rounded-xl p-5 flex flex-col justify-between gap-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${
+                            isBanned ? 'border-red-200 bg-red-50/10' : 'border-slate-200'
+                          }`}
+                        >
+                          <div className="space-y-3">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h5 className="font-extrabold text-slate-900 text-sm sm:text-base">{user.FullName}</h5>
+                                <p className="text-xs text-[#2563EB] font-mono mt-0.5">{user.Email}</p>
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-mono">{user.UserID}</span>
+                            </div>
+
+                            <div className="flex flex-wrap gap-1">
+                              {(user.TeamNames || []).map((tName, i) => (
+                                <span key={i} className="inline-flex items-center bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                  {tName}
+                                </span>
+                              ))}
+                              {(user.TeamNames || []).length === 0 && (
+                                <span className="inline-flex items-center bg-slate-50 border border-slate-200 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-full italic">
+                                  No Teams
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-xs">
+                              <span className="text-slate-500 font-medium">Reporting Line:</span>
+                              {user.ManagerEmail ? (
+                                <span className="text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded font-mono text-[10px]">{user.ManagerEmail}</span>
+                              ) : (
+                                <span className="text-slate-400 italic">-- Direct Node --</span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                            <div className="flex items-center gap-1.5 flex-grow">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">Role:</span>
                               <select
                                 value={user.Role}
                                 onChange={(e) => onUpdateUserRole(user.Email, e.target.value as any)}
-                                className={`text-[9.5px] uppercase font-mono font-bold px-2 py-1 rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer bg-white ${getRoleBadgeColor(user.Role)}`}
+                                className={`text-[10px] uppercase font-mono font-bold px-2 py-1 rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer bg-white ${getRoleBadgeColor(user.Role)}`}
                               >
                                 <option value="Admin">Admin</option>
                                 <option value="Stakeholder">Stakeholder</option>
                                 <option value="Sub-stakeholder">Sub-stakeholder</option>
                               </select>
-                            </td>
-                            <td className="px-4 py-3.5 text-[10.5px] text-[#0F172A] font-mono font-semibold">
-                              {user.ManagerEmail ? (
-                                <span className="text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">{user.ManagerEmail}</span>
-                              ) : (
-                                <span className="text-slate-300 font-normal italic">-- Direct Node --</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3.5">
-                              <button
-                                onClick={() => onToggleUserStatus(user.Email)}
-                                className={`w-full text-[10px] font-extrabold uppercase tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer text-center ${
-                                  user.Active
-                                    ? 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
-                                    : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
-                                }`}
-                              >
-                                {user.Active ? '● Active' : '■ Banned'}
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
+                            </div>
+
+                            <button
+                              onClick={() => onToggleUserStatus(user.Email)}
+                              className={`text-[10px] font-extrabold uppercase tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer ${
+                                user.Active
+                                  ? 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
+                                  : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
+                              }`}
+                            >
+                              {user.Active ? '● Active' : '■ Banned'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             </div>
@@ -662,55 +729,132 @@ export default function AdminPanel({
                   <h4 className="font-extrabold text-[#0F172A] text-sm uppercase tracking-wider font-mono">All Teams ({teams.length})</h4>
                 </div>
 
-                <div className="border border-[#E2E8F0] bg-white rounded-xl overflow-hidden shadow-sm">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B] font-extrabold uppercase tracking-widest text-[9px] font-mono">
-                        <th className="px-4 py-3.5">Team Details</th>
-                        <th className="px-4 py-3.5">Members</th>
-                        <th className="px-4 py-3.5">Status</th>
-                        <th className="px-4 py-3.5 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#F1F5F9] text-slate-700">
-                      {teams.map(team => (
-                        <tr key={team.TeamID} className="hover:bg-slate-50/40 transition-colors">
-                          <td className="px-4 py-3.5">
-                            <div className="font-extrabold text-slate-900 text-xs sm:text-sm">{team.TeamName}</div>
-                            <div className="text-[10px] text-slate-500 mt-0.5">{team.Description || 'No description'}</div>
-                            <div className="text-[9.5px] text-slate-400 mt-1 font-mono">{team.TeamID}</div>
-                          </td>
-                          <td className="px-4 py-3.5">
-                            <span className="text-xs font-bold text-slate-800">
-                              {users.filter(u => u.TeamIDs.includes(team.TeamID)).length} members
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {teams.map(team => {
+                    const teamUsers = users.filter(u => u.TeamIDs.includes(team.TeamID));
+                    const isExpanded = expandedTeamId === team.TeamID;
+                    return (
+                      <div 
+                        key={team.TeamID}
+                        className={`bg-white border rounded-xl p-5 flex flex-col justify-between gap-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${
+                          isExpanded ? 'border-blue-300 ring-1 ring-blue-100' : 'border-slate-200'
+                        }`}
+                      >
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h5 className="font-extrabold text-slate-900 text-sm sm:text-base">{team.TeamName}</h5>
+                              <p className="text-[11px] text-slate-500 mt-1">{team.Description || 'No description provided'}</p>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono">{team.TeamID}</span>
+                          </div>
+
+                          <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-100">
+                            <span className="text-slate-500 font-medium">Active Members:</span>
+                            <span className="bg-[#2563EB]/10 text-[#2563EB] text-xs font-extrabold px-2.5 py-0.5 rounded-full">
+                              {teamUsers.length} members
                             </span>
-                          </td>
-                          <td className="px-4 py-3.5">
+                          </div>
+                        </div>
+
+                        {/* Inline Expandable Membership Editor */}
+                        {isExpanded && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3 shadow-inner">
+                            <div className="font-extrabold text-[9px] uppercase tracking-wider text-slate-500 font-mono">
+                              Manage {team.TeamName} Members
+                            </div>
+                            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                              {teamUsers.map(u => (
+                                <div key={u.UserID} className="flex justify-between items-center bg-white border border-[#E2E8F0] p-2 rounded-lg text-xs">
+                                  <div className="truncate pr-2">
+                                    <div className="font-bold text-slate-800 truncate">{u.FullName}</div>
+                                    <div className="text-[9.5px] text-slate-500 font-mono truncate">{u.Email}</div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveMember(u.Email, team.TeamID, team.TeamName)}
+                                    className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition-colors border-none cursor-pointer bg-transparent"
+                                    title="Remove from team"
+                                  >
+                                    <X size={13} />
+                                  </button>
+                                </div>
+                              ))}
+                              {teamUsers.length === 0 && (
+                                <div className="text-slate-400 text-xs italic py-1">No members assigned to this team.</div>
+                              )}
+                            </div>
+                            
+                            {/* Add member select dropdown inside card */}
+                            <div className="flex gap-1.5 pt-1.5 border-t border-slate-200">
+                              <select
+                                id={`add-member-select-${team.TeamID}`}
+                                className="bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 flex-grow"
+                                defaultValue=""
+                              >
+                                <option value="" disabled>-- Add member --</option>
+                                {users.filter(u => u.Active && !u.TeamIDs.includes(team.TeamID)).map(u => (
+                                  <option key={u.UserID} value={u.Email}>{u.FullName}</option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const select = document.getElementById(`add-member-select-${team.TeamID}`) as HTMLSelectElement;
+                                  if (select && select.value) {
+                                    handleAddMember(select.value, team.TeamID, team.TeamName);
+                                    select.value = ""; // reset select dropdown
+                                  }
+                                }}
+                                className="bg-blue-605 hover:bg-blue-500 text-white font-extrabold text-[10px] uppercase px-3.5 py-2 rounded-lg border-none cursor-pointer shadow-sm"
+                              >
+                                Add
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                          <button
+                            onClick={() => onToggleTeamStatus(team.TeamID)}
+                            className={`text-[10px] font-extrabold uppercase tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer ${
+                              team.Active
+                                ? 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
+                                : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
+                            }`}
+                          >
+                            {team.Active ? '● Active' : '■ Inactive'}
+                          </button>
+
+                          <div className="flex gap-1.5">
                             <button
-                              onClick={() => onToggleTeamStatus(team.TeamID)}
-                              className={`w-full text-[10px] font-extrabold uppercase tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer text-center ${
-                                team.Active
-                                  ? 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
-                                  : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
-                              }`}
+                              type="button"
+                              onClick={() => setExpandedTeamId(isExpanded ? null : team.TeamID)}
+                              className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors border-none cursor-pointer"
                             >
-                              {team.Active ? '● Active' : '■ Inactive'}
+                              {isExpanded ? 'Hide' : 'Members'}
                             </button>
-                          </td>
-                          <td className="px-4 py-3.5 text-right">
-                            <span className="text-[9.5px] text-slate-400 font-mono">{new Date(team.CreatedAt).toLocaleDateString()}</span>
-                          </td>
-                        </tr>
-                      ))}
-                      {teams.length === 0 && (
-                        <tr>
-                          <td colSpan={4} className="px-4 py-8 text-center text-slate-500 text-xs">
-                            No teams created yet. Create your first team to get started.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to delete the team "${team.TeamName}"? This will remove all member assignments to this team.`)) {
+                                  onDeleteTeam(team.TeamID);
+                                }
+                              }}
+                              className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors border-none cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {teams.length === 0 && (
+                    <div className="col-span-2 text-center text-slate-500 text-xs py-8">
+                      No teams created yet. Create your first team to get started.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -870,65 +1014,74 @@ export default function AdminPanel({
                   </span>
                 </div>
 
-                <div className="border border-[#E2E8F0] rounded-xl overflow-hidden bg-white shadow-sm">
-                  <table className="w-full text-left border-collapse text-xs animate-fade-in">
-                    <thead>
-                      <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B] font-extrabold uppercase tracking-widest text-[9px] font-mono">
-                        <th className="px-4 py-3.5 w-[40%]">Blueprints Details</th>
-                        <th className="px-4 py-3.5">Interval / Rate</th>
-                        <th className="px-4 py-3.5">Assigned Target</th>
-                        <th className="px-4 py-3.5 text-center">Next Run</th>
-                        <th className="px-4 py-3.5 text-center">Switch Toggle</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#F1F5F9] text-slate-700">
-                      {templates
-                        .filter(t => 
-                          t.Title.toLowerCase().includes(templateSearchText.toLowerCase()) ||
-                          t.AssignedToEmail.toLowerCase().includes(templateSearchText.toLowerCase()) ||
-                          t.Category.toLowerCase().includes(templateSearchText.toLowerCase())
-                        )
-                        .map(tmp => (
-                          <tr key={tmp.TemplateID} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="px-4 py-3.5">
-                              <div className="font-extrabold text-[#0F172A] text-xs sm:text-sm">{tmp.Title}</div>
-                              <div className="text-[10px] text-slate-500 mt-1 max-w-sm line-clamp-2 leading-relaxed">
-                                {tmp.Description}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {templates
+                    .filter(t => 
+                      t.Title.toLowerCase().includes(templateSearchText.toLowerCase()) ||
+                      t.AssignedToEmail.toLowerCase().includes(templateSearchText.toLowerCase()) ||
+                      t.Category.toLowerCase().includes(templateSearchText.toLowerCase())
+                    )
+                    .map(template => {
+                      const isActive = template.Active;
+                      return (
+                        <div 
+                          key={template.TemplateID}
+                          className={`bg-white border rounded-xl p-5 flex flex-col justify-between gap-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${
+                            !isActive ? 'border-red-200 bg-red-50/10' : 'border-slate-200'
+                          }`}
+                        >
+                          <div className="space-y-3">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h5 className="font-extrabold text-slate-900 text-sm sm:text-base">{template.Title}</h5>
+                                <p className="text-xs text-slate-500 font-medium mt-0.5">{template.Category} &bull; {template.RecurrenceType}</p>
                               </div>
-                              <div className="text-[9.5px] text-[#64748B] font-mono mt-1 w-fit bg-slate-100 rounded px-1.5 py-0.5">
-                                ID: {tmp.TemplateID} &bull; PRIORITY: {tmp.Priority}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3.5">
-                              <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-1 rounded-md border border-indigo-200 font-extrabold uppercase tracking-wider font-mono">
-                                {tmp.RecurrenceType}
+                              <span className="text-[10px] text-slate-400 font-mono">{template.TemplateID}</span>
+                            </div>
+
+                            <div className="flex gap-1.5">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                                template.Priority === 'Critical' ? 'bg-red-50 text-red-700 border-red-200' :
+                                template.Priority === 'High' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                template.Priority === 'Medium' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                'bg-slate-50 text-slate-700 border-slate-200'
+                              }`}>
+                                {template.Priority} Priority
                               </span>
-                            </td>
-                            <td className="px-4 py-3.5">
-                              <div className="font-bold text-slate-800 font-sans">{tmp.AssignedToEmail}</div>
-                              <div className="text-[9px] text-[#475569] uppercase font-mono mt-1 font-bold">
-                                SCOPE: {tmp.AssignedToRole}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3.5 text-center text-[#2563EB] font-mono font-extrabold text-[11px]">
-                              {tmp.NextGenerationDate}
-                            </td>
-                            <td className="px-4 py-3.5 text-center">
-                              <button
-                                onClick={() => onToggleTemplateStatus(tmp.TemplateID)}
-                                className={`w-full text-[10px] font-extrabold uppercase tracking-widest py-1.5 px-2.5 rounded-lg border transition-all cursor-pointer text-center ${
-                                  tmp.Active
-                                    ? 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100'
-                                    : 'bg-slate-100 border-slate-300 text-slate-500 hover:bg-slate-200'
-                                }`}
-                              >
-                                {tmp.Active ? 'Enabled' : 'Disabled'}
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
+                            </div>
+
+                            <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-xs">
+                              <span className="text-slate-500 font-medium">Assigned Target:</span>
+                              <span className="text-slate-800 font-semibold truncate max-w-[200px]">{template.AssignedToEmail}</span>
+                            </div>
+
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-500 font-medium">Next Run:</span>
+                              <span className="text-slate-800 font-mono font-semibold">{template.NextGenerationDate}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3 pt-3 border-t border-[#F1F5F9]">
+                            <span className="text-[10px] text-slate-400 font-mono">Created {new Date(template.CreatedAt).toLocaleDateString()}</span>
+                            <button
+                              onClick={() => onToggleTemplateStatus(template.TemplateID)}
+                              className={`text-[10px] font-extrabold uppercase tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer text-center ${
+                                template.Active
+                                  ? 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
+                                  : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
+                              }`}
+                            >
+                              {template.Active ? '● Running' : '■ Paused'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  {templates.length === 0 && (
+                    <div className="col-span-2 text-center text-slate-500 text-xs py-8">
+                      No recurrence templates found. Define a blueprint to get started.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1047,10 +1200,10 @@ export default function AdminPanel({
                   {/* Simulated Mail Header */}
                   <div className="bg-slate-900/80 p-4 rounded-xl border border-[#1E293B] space-y-2 text-slate-300 font-mono text-[10px] leading-relaxed mb-4">
                     <div>
-                      <span className="text-slate-500 uppercase">From:</span> auto_alert@trustgrid.live
+                      <span className="text-slate-500 uppercase">From:</span> auto_alert@PMS.live
                     </div>
                     <div>
-                      <span className="text-slate-500 uppercase">To:</span> {selectedEmailTemplateKey === 'template_assigned_email' ? 'eng.director@trustgrid.com' : 'sales.lead@trustgrid.com, admin@trustgrid.com'}
+                      <span className="text-slate-500 uppercase">To:</span> {selectedEmailTemplateKey === 'template_assigned_email' ? 'eng.director@PMS.com' : 'sales.lead@PMS.com, admin@PMS.com'}
                     </div>
                     <div>
                       <span className="text-slate-500 uppercase">Subject:</span> {selectedEmailTemplateKey === 'template_assigned_email' 

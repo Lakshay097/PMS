@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Calendar, User, FileText, Link as LinkIcon, History, AlertCircle, CheckCircle, TrendingUp, Edit2, Save, Trash, ShieldAlert } from 'lucide-react';
-import { Task, TaskReport, User as UserType } from '../types';
+import { Task, TaskReport, User as UserType, Team } from '../types';
 
 // Helper function to get tomorrow's date in YYYY-MM-DD format
 const getTomorrowDate = (): string => {
@@ -33,6 +33,7 @@ interface TaskDrawerProps {
   onCloseTask: (taskId: string, remark: string) => void;
   onUpdateTask?: (taskId: string, fields: Partial<Task>) => void;
   usersList?: UserType[];
+  teamsList?: Team[];
 }
 
 export default function TaskDrawer({
@@ -46,6 +47,7 @@ export default function TaskDrawer({
   onCloseTask,
   onUpdateTask,
   usersList = [],
+  teamsList = [],
 }: TaskDrawerProps) {
   const [activeTab, setActiveTab] = useState<'details' | 'history'>('details');
   const [closeRemarkInput, setCloseRemarkInput] = useState('');
@@ -57,6 +59,10 @@ export default function TaskDrawer({
   const [editCategory, setEditCategory] = useState('');
   const [editEmails, setEditEmails] = useState<string[]>([]);
   
+  // Reassignment states for Admin
+  const [reassignUser, setReassignUser] = useState('');
+  const [reassignTeam, setReassignTeam] = useState('');
+
   // Subordinate delegation state
   const [selectedSubordinate, setSelectedSubordinate] = useState('');
   const subordinates = usersList.filter(u => 
@@ -69,8 +75,10 @@ export default function TaskDrawer({
     if (task) {
       setEditDescription(task.Description);
       setEditCategory(task.Category);
-      setEditEmails(task.AssignedToEmail.split(',').map(e => e.trim()).filter(Boolean));
+      setEditEmails((task.AssignedToEmail || '').split(',').map(e => e.trim()).filter(Boolean));
       setIsEditing(false);
+      setReassignUser('');
+      setReassignTeam('');
       
       const subs = usersList.filter(u => 
         u.Active && 
@@ -115,29 +123,29 @@ export default function TaskDrawer({
   };
 
   // Parse multiple assignees if comma-separated
-  const isCurrentUserAssignee = task.AssignedToEmail
+  const isCurrentUserAssignee = (task.AssignedToEmail || '')
     .split(',')
     .map(e => e.trim().toLowerCase())
-    .includes(currentUser.Email.toLowerCase());
+    .includes(currentUser.Email?.toLowerCase() || '');
 
   // Determine close credentials
   const canCloseTask = currentUser.Role === 'Admin' ||
-    (currentUser.Role === 'Stakeholder' && task.AssignedToTeamIDs.some(id => currentUser.TeamIDs.includes(id))) ||
+    (currentUser.Role === 'Stakeholder' && (task.AssignedToTeamIDs || []).some(id => (currentUser.TeamIDs || []).includes(id))) ||
     (isCurrentUserAssignee && currentUser.CanCloseTask);
 
   // Determine report submittal credentials
-  const hasSubordinateAssignee = task.AssignedToEmail
+  const hasSubordinateAssignee = (task.AssignedToEmail || '')
     .split(',')
     .map(e => e.trim().toLowerCase())
     .some(email => {
-      const u = usersList.find(usr => usr.Email.toLowerCase() === email);
-      return u && u.ManagerEmail && u.ManagerEmail.toLowerCase() === currentUser.Email.toLowerCase();
+      const u = usersList.find(usr => usr.Email?.toLowerCase() === email);
+      return u && u.ManagerEmail && u.ManagerEmail.toLowerCase() === currentUser.Email?.toLowerCase();
     });
 
-  const canSubmitReport = currentUser.Role === 'Admin' || 
-    isCurrentUserAssignee || 
+  const canSubmitReport = currentUser.Role === 'Admin' ||
+    isCurrentUserAssignee ||
     (currentUser.Role === 'Stakeholder' && (
-      task.AssignedByEmail.toLowerCase() === currentUser.Email.toLowerCase() || 
+      (task.AssignedByEmail || '').toLowerCase() === currentUser.Email?.toLowerCase() ||
       hasSubordinateAssignee
     ));
 
@@ -152,11 +160,21 @@ export default function TaskDrawer({
     if (editEmails.length === 0) {
       return;
     }
+
+    const firstEmail = editEmails[0];
+    const firstUser = usersList.find(u => u.Email === firstEmail);
+    const assignedRole = firstUser ? firstUser.Role : 'Stakeholder';
+    const assignedTeamIDs = firstUser ? firstUser.TeamIDs : [];
+    const primaryTeamID = assignedTeamIDs.length > 0 ? assignedTeamIDs[0] : '';
+
     if (onUpdateTask) {
       onUpdateTask(task.TaskID, {
         Description: editDescription,
         Category: editCategory,
-        AssignedToEmail: editEmails.join(', ')
+        AssignedToEmail: editEmails.join(', '),
+        AssignedToRole: assignedRole as any,
+        AssignedToTeamIDs: assignedTeamIDs,
+        TeamID: primaryTeamID
       });
     }
     setIsEditing(false);
@@ -419,6 +437,110 @@ export default function TaskDrawer({
                     >
                       Assign Task
                     </button>
+                  </div>
+                </div>
+              )}
+              {/* Admin Reassign Task Section */}
+              {currentUser.Role === 'Admin' && task.Status !== 'Closed' && (
+                <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-lg p-4 space-y-3 shadow-3xs">
+                  <div className="flex items-center space-x-1.5 text-amber-950 font-bold text-xs uppercase tracking-wider">
+                    <User size={14} className="text-[#D97706]" />
+                    <span>Reassign Task (Admin)</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed font-semibold">
+                    Reassign this task to an active user or to an entire team (all team members will be assigned).
+                  </p>
+                  
+                  <div className="space-y-3">
+                    {/* User Reassignment */}
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-[#64748B] uppercase tracking-wider block">Reassign to User</label>
+                      <div className="flex gap-2">
+                        <select
+                          id="admin-reassign-user-select"
+                          value={reassignUser}
+                          onChange={(e) => {
+                            setReassignUser(e.target.value);
+                            setReassignTeam(''); // clear team select
+                          }}
+                          className="bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#D97706] flex-grow"
+                        >
+                          <option value="">-- Select active user --</option>
+                          {usersList.filter(u => u.Active).map(u => (
+                            <option key={u.UserID} value={u.Email}>
+                              {u.FullName} ({u.Email})
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (reassignUser && onUpdateTask) {
+                              const recipient = usersList.find(u => u.Email === reassignUser);
+                              if (recipient) {
+                                onUpdateTask(task.TaskID, {
+                                  AssignedToEmail: reassignUser,
+                                  AssignedToRole: recipient.Role,
+                                  AssignedToTeamIDs: recipient.TeamIDs,
+                                  TeamID: recipient.TeamIDs.length > 0 ? recipient.TeamIDs[0] : ''
+                                });
+                                setReassignUser('');
+                              }
+                            }
+                          }}
+                          disabled={!reassignUser}
+                          className="bg-[#D97706] hover:bg-[#B45309] disabled:opacity-50 text-white text-[10.5px] font-bold uppercase tracking-wider px-3.5 py-2 rounded-lg flex-shrink-0 cursor-pointer border-none shadow-3xs transition-transform transform active:scale-95"
+                        >
+                          Reassign
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Team Reassignment */}
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-[#64748B] uppercase tracking-wider block">Reassign to Team</label>
+                      <div className="flex gap-2">
+                        <select
+                          id="admin-reassign-team-select"
+                          value={reassignTeam}
+                          onChange={(e) => {
+                            setReassignTeam(e.target.value);
+                            setReassignUser(''); // clear user select
+                          }}
+                          className="bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#D97706] flex-grow"
+                        >
+                          <option value="">-- Select active team --</option>
+                          {(teamsList || []).filter(t => t.Active).map(t => (
+                            <option key={t.TeamID} value={t.TeamID}>
+                              {t.TeamName} ({t.TeamID})
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (reassignTeam && onUpdateTask) {
+                              const teamObj = (teamsList || []).find(t => t.TeamID === reassignTeam);
+                              const teamMembers = usersList.filter(u => u.Active && u.TeamIDs.includes(reassignTeam));
+                              if (teamObj) {
+                                const commaEmails = teamMembers.map(u => u.Email).join(', ');
+                                onUpdateTask(task.TaskID, {
+                                  AssignedToEmail: commaEmails || 'unassigned@PMS.com',
+                                  AssignedToRole: teamMembers.length > 0 ? teamMembers[0].Role : 'Stakeholder',
+                                  AssignedToTeamIDs: [reassignTeam],
+                                  TeamID: reassignTeam
+                                });
+                                setReassignTeam('');
+                              }
+                            }
+                          }}
+                          disabled={!reassignTeam}
+                          className="bg-[#D97706] hover:bg-[#B45309] disabled:opacity-50 text-white text-[10.5px] font-bold uppercase tracking-wider px-3.5 py-2 rounded-lg flex-shrink-0 cursor-pointer border-none shadow-3xs transition-transform transform active:scale-95"
+                        >
+                          Reassign Team
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

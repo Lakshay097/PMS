@@ -168,8 +168,8 @@ export async function checkAndGenerateRecurringTasks(
         AssignedByEmail: template.AssignedByEmail,
         AssignedToEmail: template.AssignedToEmail,
         AssignedToRole: template.AssignedToRole,
-        TeamID: template.TeamID,
-        Status: 'Not Started',
+        AssignedToTeamIDs: [template.TeamID],
+        Status: 'In Progress',
         PercentComplete: 0,
         LastReportSummary: '',
         RequiresFollowUp: 'No',
@@ -191,7 +191,7 @@ export async function checkAndGenerateRecurringTasks(
         'Task',
         newTaskID,
         `Auto-Generated Recurring Instance for cycle ${cycleKey}`,
-        'taskEngine@trustgrid.internal',
+        'taskEngine@PMS.internal',
         null,
         generatedTask
       );
@@ -221,7 +221,7 @@ export async function evaluateOverdueTasks(tasks: Task[], currentEmail: string):
   let changed = false;
   const updatedTasks: Task[] = [];
 
-  for (const task of tasks) {
+  for (const task of (tasks || [])) {
     // If not closed, reviewed, or submitted, and dueDate is in the past
     if (
       task.Status !== 'Closed' && 
@@ -239,7 +239,7 @@ export async function evaluateOverdueTasks(tasks: Task[], currentEmail: string):
         'Task',
         task.TaskID,
         'Auto-Marked Overdue (Passed due date)',
-        'taskEngine@trustgrid.internal',
+        'taskEngine@PMS.internal',
         { Status: task.Status },
         { Status: 'Overdue' }
       );

@@ -1,8 +1,8 @@
-# TrustGrid TaskFlow Architecture
+# PMS TaskFlow Architecture
 
 ## Overview
 
-TrustGrid TaskFlow is an enterprise task management system that uses Google Sheets as its primary database. The application follows a client-server architecture with React on the frontend and Express.js on the backend.
+PMS TaskFlow is an enterprise task management system that uses Google Sheets as its primary database. The application follows a client-server architecture with React on the frontend and Express.js on the backend.
 
 ## Architecture Diagram
 
@@ -41,7 +41,7 @@ TrustGrid TaskFlow is an enterprise task management system that uses Google Shee
 │                    Google Services                               │
 │  ┌─────────────────────────────────────────────────────────────┐│
 │  │  Google Sheets API (Primary Database)                      ││
-│  │  - Spreadsheet: "TrustGrid Systems Database"               ││
+│  │  - Spreadsheet: "PMS Systems Database"               ││
 │  │  - Tabs: Users, Teams, Tasks, Templates, Reports, etc.    ││
 │  └─────────────────────────────────────────────────────────────┘│
 │  ┌─────────────────────────────────────────────────────────────┐│

@@ -25,7 +25,7 @@ gcloud services enable artifactregistry.googleapis.com
 
 ```bash
 # Create a Docker repository
-gcloud artifacts repositories create trustgrid-repo \
+gcloud artifacts repositories create PMS-repo \
     --repository-format=docker \
     --location=us-central1 \
     --description="TrustGrid TaskFlow Docker repository"
@@ -38,18 +38,18 @@ gcloud auth configure-docker us-central1-docker.pkg.dev
 
 ```bash
 # Build the Docker image
-docker build -t us-central1-docker.pkg.dev/YOUR_PROJECT_ID/trustgrid-repo/trustgrid-taskflow:latest .
+docker build -t us-central1-docker.pkg.dev/YOUR_PROJECT_ID/PMS-repo/PMS-taskflow:latest .
 
 # Push the image to Artifact Registry
-docker push us-central1-docker.pkg.dev/YOUR_PROJECT_ID/trustgrid-repo/trustgrid-taskflow:latest
+docker push us-central1-docker.pkg.dev/YOUR_PROJECT_ID/PMS-repo/PMS-taskflow:latest
 ```
 
 ## Step 4: Deploy to Cloud Run (Free Tier Optimized)
 
 ```bash
 # Deploy the service with free tier optimized settings
-gcloud run deploy trustgrid-taskflow \
-    --image=us-central1-docker.pkg.dev/YOUR_PROJECT_ID/trustgrid-repo/trustgrid-taskflow:latest \
+gcloud run deploy PMS-taskflow \
+    --image=us-central1-docker.pkg.dev/YOUR_PROJECT_ID/PMS-repo/PMS-taskflow:latest \
     --platform=managed \
     --region=us-central1 \
     --allow-unauthenticated \
@@ -67,13 +67,13 @@ gcloud run deploy trustgrid-taskflow \
 
 ```bash
 # Get your service URL
-SERVICE_URL=$(gcloud run services describe trustgrid-taskflow \
+SERVICE_URL=$(gcloud run services describe PMS-taskflow \
     --platform=managed \
     --region=us-central1 \
     --format="value(status.url)")
 
 # Set environment variables
-gcloud run services update trustgrid-taskflow \
+gcloud run services update PMS-taskflow \
     --platform=managed \
     --region=us-central1 \
     --set-env-vars="NODE_ENV=production" \
@@ -91,12 +91,12 @@ gcloud run services update trustgrid-taskflow \
 
 ```bash
 # Check service status
-gcloud run services describe trustgrid-taskflow \
+gcloud run services describe PMS-taskflow \
     --platform=managed \
     --region=us-central1
 
 # Get the service URL
-gcloud run services describe trustgrid-taskflow \
+gcloud run services describe PMS-taskflow \
     --platform=managed \
     --region=us-central1 \
     --format="value(status.url)"
@@ -121,17 +121,17 @@ Create `cloudbuild.yaml` (free tier optimized):
 ```yaml
 steps:
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/trustgrid-repo/trustgrid-taskflow:latest', '.']
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/PMS-repo/PMS-taskflow:latest', '.']
 
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/trustgrid-repo/trustgrid-taskflow:latest']
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/PMS-repo/PMS-taskflow:latest']
 
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
       - 'run'
       - 'deploy'
-      - 'trustgrid-taskflow'
-      - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/trustgrid-repo/trustgrid-taskflow:latest'
+      - 'PMS-taskflow'
+      - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/PMS-repo/PMS-taskflow:latest'
       - '--platform=managed'
       - '--region=us-central1'
       - '--allow-unauthenticated'
@@ -188,7 +188,7 @@ gcloud builds log BUILD_ID
 **Deployment fails:**
 ```bash
 # Check service logs
-gcloud run services logs trustgrid-taskflow --platform=managed --region=us-central1
+gcloud run services logs PMS-taskflow --platform=managed --region=us-central1
 ```
 
 **Environment variables not working:**

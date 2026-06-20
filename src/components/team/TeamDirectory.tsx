@@ -18,13 +18,13 @@ export default function TeamDirectory({ users, onInviteUser, onUserClick }: Team
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   // Get unique teams
-  const teams = Array.from(new Set(users.flatMap(u => u.TeamNames || [])));
+  const teams = Array.from(new Set((users || []).flatMap(u => u.TeamNames || [])));
 
   // Filter users
-  const filteredUsers = users.filter(user => {
-    if (searchQuery && !user.FullName.toLowerCase().includes(searchQuery.toLowerCase()) && !user.Email.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+  const filteredUsers = (users || []).filter(user => {
+    if (searchQuery && !user.FullName?.toLowerCase().includes(searchQuery.toLowerCase()) && !user.Email?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (roleFilter !== 'all' && user.Role !== roleFilter) return false;
-    if (teamFilter !== 'all' && !user.TeamIDs.includes(teamFilter)) return false;
+    if (teamFilter !== 'all' && !user.TeamIDs?.includes(teamFilter)) return false;
     if (activeFilter === 'active' && !user.Active) return false;
     if (activeFilter === 'inactive' && user.Active) return false;
     return true;
@@ -174,7 +174,7 @@ export default function TeamDirectory({ users, onInviteUser, onUserClick }: Team
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
                           <span className="text-xs font-medium text-[#0f172a]">
-                            {user.FullName.split(' ').map(n => n[0]).join('').toUpperCase()}
+                            {(user.FullName || '').split(' ').map(n => n[0]).join('').toUpperCase()}
                           </span>
                         </div>
                         <div>
@@ -243,7 +243,7 @@ export default function TeamDirectory({ users, onInviteUser, onUserClick }: Team
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
                   <span className="text-xl font-medium text-[#0f172a]">
-                    {selectedUser.FullName.split(' ').map(n => n[0]).join('').toUpperCase()}
+                    {(selectedUser.FullName || '').split(' ').map(n => n[0]).join('').toUpperCase()}
                   </span>
                 </div>
                 <div>

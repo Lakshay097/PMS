@@ -24,7 +24,7 @@ import {
   INITIAL_SUBTASKS,
   INITIAL_COMMENTS
 } from '../initialData';
-import { sheetsApi, getAccessToken } from './sheetsService';
+import { sheetsApi, getAccessToken, HEADERS } from './sheetsService';
 
 // Operation Types for Audit & Error Hooks
 export enum OperationType {
@@ -91,19 +91,25 @@ export async function initializeDatabase(): Promise<void> {
     if (isNewSpreadsheet) {
       console.log("Google Sheets database is empty. Seeding initial data...");
       
-      // Seed initial data in parallel
-      await Promise.all([
-        sheetsApi.saveCollection('users', INITIAL_USERS),
-        sheetsApi.saveCollection('teams', INITIAL_TEAMS),
-        sheetsApi.saveCollection('templates', INITIAL_TEMPLATES),
-        sheetsApi.saveCollection('tasks', INITIAL_TASKS),
-        sheetsApi.saveCollection('reports', INITIAL_REPORTS),
-        sheetsApi.saveCollection('followups', INITIAL_FOLLOWUPS),
-        sheetsApi.saveCollection('auditlogs', INITIAL_AUDITS),
-        sheetsApi.saveCollection('settings', INITIAL_SETTINGS),
-        sheetsApi.saveCollection('subtasks', INITIAL_SUBTASKS),
-        sheetsApi.saveCollection('comments', INITIAL_COMMENTS)
-      ]);
+      // Seed initial data sequentially to avoid rate limiting
+      const collections = [
+        { name: 'users', data: INITIAL_USERS },
+        { name: 'teams', data: INITIAL_TEAMS },
+        { name: 'templates', data: INITIAL_TEMPLATES },
+        { name: 'tasks', data: INITIAL_TASKS },
+        { name: 'reports', data: INITIAL_REPORTS },
+        { name: 'followups', data: INITIAL_FOLLOWUPS },
+        { name: 'auditlogs', data: INITIAL_AUDITS },
+        { name: 'settings', data: INITIAL_SETTINGS },
+        { name: 'subtasks', data: INITIAL_SUBTASKS },
+        { name: 'comments', data: INITIAL_COMMENTS }
+      ];
+
+      for (const collection of collections) {
+        await sheetsApi.saveCollection(collection.name as 'users' | 'teams' | 'templates' | 'tasks' | 'reports' | 'followups' | 'auditlogs' | 'settings' | 'subtasks' | 'comments', collection.data);
+        // Add a small delay between saves to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
 
       console.log("Initial data seeded successfully.");
     } else {
@@ -125,7 +131,14 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const users = await sheetsApi.getCollection<User>('users');
+      const rawUsers = await sheetsApi.getCollection<any>('users');
+      const users: User[] = (rawUsers || []).map(u => ({
+        ...u,
+        TeamIDs: u.TeamIDs ? (Array.isArray(u.TeamIDs) ? u.TeamIDs : [u.TeamIDs]) : (u.TeamID ? [u.TeamID] : []),
+        TeamNames: u.TeamNames ? (Array.isArray(u.TeamNames) ? u.TeamNames : [u.TeamNames]) : (u.TeamName ? [u.TeamName] : []),
+        TeamID: u.TeamID || (u.TeamIDs && u.TeamIDs.length > 0 ? (Array.isArray(u.TeamIDs) ? u.TeamIDs[0] : u.TeamIDs) : ''),
+        TeamName: u.TeamName || (u.TeamNames && u.TeamNames.length > 0 ? (Array.isArray(u.TeamNames) ? u.TeamNames[0] : u.TeamNames) : '')
+      }));
       setCache('users', users);
       return users;
     } catch (error) {
@@ -139,10 +152,16 @@ export const dbService = {
       const idx = users.findIndex(u => u.UserID === user.UserID || u.Email === user.Email);
       const now = new Date().toISOString();
 
+      const userToSave = {
+        ...user,
+        TeamID: user.TeamID || (user.TeamIDs && user.TeamIDs.length > 0 ? user.TeamIDs[0] : ''),
+        TeamName: user.TeamName || (user.TeamNames && user.TeamNames.length > 0 ? user.TeamNames[0] : '')
+      };
+
       if (idx >= 0) {
-        users[idx] = { ...users[idx], ...user, UpdatedAt: now };
+        users[idx] = { ...users[idx], ...userToSave, UpdatedAt: now };
       } else {
-        users.push({ ...user, CreatedAt: now, UpdatedAt: now });
+        users.push({ ...userToSave, CreatedAt: now, UpdatedAt: now });
       }
 
       await sheetsApi.saveCollection('users', users);
@@ -202,6 +221,18 @@ export const dbService = {
     }
   },
 
+  async deleteTeam(teamId: string): Promise<void> {
+    try {
+      const teams = await this.getTeams();
+      const filtered = teams.filter(t => t.TeamID !== teamId);
+      await sheetsApi.saveCollection('teams', filtered);
+      clearCache('teams');
+      clearCache('users');
+    } catch (error) {
+      throw new Error(`Failed to delete team: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  },
+
   // Task Templates
   async getTemplates(): Promise<TaskTemplate[]> {
     const cached = getFromCache<TaskTemplate>('templates');
@@ -252,7 +283,12 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const tasks = await sheetsApi.getCollection<Task>('tasks');
+      const rawTasks = await sheetsApi.getCollection<any>('tasks');
+      const tasks: Task[] = (rawTasks || []).map(t => ({
+        ...t,
+        AssignedToTeamIDs: t.AssignedToTeamIDs ? (Array.isArray(t.AssignedToTeamIDs) ? t.AssignedToTeamIDs : [t.AssignedToTeamIDs]) : (t.TeamID ? [t.TeamID] : []),
+        TeamID: t.TeamID || (t.AssignedToTeamIDs && t.AssignedToTeamIDs.length > 0 ? (Array.isArray(t.AssignedToTeamIDs) ? t.AssignedToTeamIDs[0] : t.AssignedToTeamIDs) : '')
+      }));
       setCache('tasks', tasks);
       return tasks;
     } catch (error) {
@@ -266,10 +302,15 @@ export const dbService = {
       const idx = tasks.findIndex(t => t.TaskID === task.TaskID);
       const now = new Date().toISOString();
 
+      const taskToSave = {
+        ...task,
+        TeamID: task.TeamID || (task.AssignedToTeamIDs && task.AssignedToTeamIDs.length > 0 ? task.AssignedToTeamIDs[0] : '')
+      };
+
       if (idx >= 0) {
-        tasks[idx] = { ...tasks[idx], ...task, UpdatedAt: now };
+        tasks[idx] = { ...tasks[idx], ...taskToSave, UpdatedAt: now };
       } else {
-        tasks.push({ ...task, CreatedAt: now, UpdatedAt: now });
+        tasks.push({ ...taskToSave, CreatedAt: now, UpdatedAt: now });
       }
       
       await sheetsApi.saveCollection('tasks', tasks);
@@ -470,6 +511,80 @@ export const dbService = {
       clearCache('comments');
     } catch (error) {
       throw new Error(`Failed to save comment to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  },
+
+  // Targeted sync for specific collections (for SSE-based sync)
+  async syncCollections(collections: string[]): Promise<void> {
+    const syncInProgress = new Set<string>();
+    
+    // Guard against concurrent syncs for same collection
+    for (const collection of collections) {
+      if (syncInProgress.has(collection)) {
+        console.log(`Skipping ${collection} - sync already in progress`);
+        continue;
+      }
+      syncInProgress.add(collection);
+    }
+
+    try {
+      // Fetch collections sequentially to avoid rate limiting
+      const results = [];
+      for (const collection of collections) {
+        try {
+          // Clear cache for this collection
+          clearCache(collection);
+
+          // Fetch fresh data based on collection name
+          let result;
+          switch (collection) {
+            case 'users':
+              result = await this.getUsers();
+              break;
+            case 'teams':
+              result = await this.getTeams();
+              break;
+            case 'templates':
+              result = await this.getTemplates();
+              break;
+            case 'tasks':
+              result = await this.getTasks();
+              break;
+            case 'reports':
+              result = await this.getReports();
+              break;
+            case 'followups':
+              result = await this.getFollowups();
+              break;
+            case 'auditlogs':
+              result = await this.getAuditLogs();
+              break;
+            case 'settings':
+              result = await this.getSettings();
+              break;
+            case 'subtasks':
+              result = await this.getSubtasks();
+              break;
+            case 'comments':
+              result = await this.getComments();
+              break;
+            default:
+              console.warn(`Unknown collection: ${collection}`);
+              result = null;
+          }
+          results.push({ status: 'fulfilled', value: result });
+          
+          // Add a small delay between collections to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 200));
+        } catch (error) {
+          console.error(`Failed to sync ${collection}:`, error);
+          results.push({ status: 'rejected', reason: error });
+        }
+      }
+
+      console.log(`Synced collections: ${collections.join(', ')}`);
+    } finally {
+      collections.forEach(collection => syncInProgress.delete(collection));
     }
   }
 };

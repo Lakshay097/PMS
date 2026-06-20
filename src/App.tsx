@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   INITIAL_USERS,
@@ -14,6 +14,10 @@ import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AuditLog, AppSett
 import { dbService, initializeDatabase } from './lib/dbService';
 import { initAuth, getAccessToken, sheetsApi } from './lib/sheetsService';
 import { checkAndGenerateRecurringTasks, evaluateOverdueTasks } from './lib/taskEngine';
+import { initSSEClient, disconnectSSEClient, ConnectionStatus } from './lib/sseClient';
+import InstallBanner from './components/InstallBanner';
+import OfflineBanner from './components/OfflineBanner';
+import UpdateBanner from './components/UpdateBanner';
 
 // Icons
 import {
@@ -79,7 +83,7 @@ export default function App() {
 
   // Active Simulated Session email state
   const [activeUserEmail, setActiveUserEmail] = useState<string>(() => {
-    return localStorage.getItem('trustgrid_active_user_email') || '';
+    return localStorage.getItem('PMS_active_user_email') || '';
   });
   const [activeUser, setActiveUser] = useState<User | null>(null);
 
@@ -185,12 +189,12 @@ export default function App() {
   
   // Collapsible sidebar state using localStorage persistence
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
-    return localStorage.getItem('trustgrid_sidebar_collapsed') === 'true';
+    return localStorage.getItem('PMS_sidebar_collapsed') === 'true';
   });
 
   // Theme state with localStorage persistence
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    const savedTheme = localStorage.getItem('trustgrid_theme');
+    const savedTheme = localStorage.getItem('PMS_theme');
     return savedTheme === 'dark';
   });
 
@@ -200,7 +204,7 @@ export default function App() {
     } else {
       document.documentElement.setAttribute('data-theme', 'light');
     }
-    localStorage.setItem('trustgrid_theme', isDarkMode ? 'dark' : 'light');
+    localStorage.setItem('PMS_theme', isDarkMode ? 'dark' : 'light');
   }, [isDarkMode]);
 
   const [isEditingPassword, setIsEditingPassword] = useState(false);
@@ -217,7 +221,7 @@ export default function App() {
       setPasswordChangeSuccess(false);
       setIsEditingPassword(false);
     }, 2500);
-    await loadDatabase();
+    debouncedLoadDatabase();
   };
 
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
@@ -229,6 +233,28 @@ export default function App() {
   const [sheetsSpreadsheetId, setSheetsSpreadsheetId] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [dbConnectionStatus, setDbConnectionStatus] = useState<'connected' | 'disconnected' | 'error'>('connected');
+  
+  // SSE connection status
+  const [sseConnectionStatus, setSseConnectionStatus] = useState<ConnectionStatus>('disconnected');
+
+  // Simple debounce function
+  function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
+    let timeout: NodeJS.Timeout | null = null;
+    return function executedFunction(...args: Parameters<T>) {
+      const later = () => {
+        timeout = null;
+        func(...args);
+      };
+      if (timeout) clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  // Debounced version of loadDatabase for post-action syncs
+  const debouncedLoadDatabase = useMemo(
+    () => debounce(() => loadDatabase(), 2000),
+    []
+  );
 
   // Manual sync function for AdminPanel
   const handleManualSync = async () => {
@@ -251,25 +277,41 @@ export default function App() {
       console.log('Database initialized');
       setIsBackendConnected(true);
 
-      const [u, t, tm, tk, rp, fl, ad, st, sb, cm] = await Promise.all([
-        dbService.getUsers(),
-        dbService.getTeams(),
-        dbService.getTemplates(),
-        dbService.getTasks(),
-        dbService.getReports(),
-        dbService.getFollowups(),
-        dbService.getAuditLogs(),
-        dbService.getSettings(),
-        dbService.getSubtasks(),
-        dbService.getComments()
-      ]);
+      // Fetch collections sequentially to avoid Google Sheets API rate limiting
+      const collections: any[] = [];
+      const fetchFunctions = [
+        () => dbService.getUsers(),
+        () => dbService.getTeams(),
+        () => dbService.getTemplates(),
+        () => dbService.getTasks(),
+        () => dbService.getReports(),
+        () => dbService.getFollowups(),
+        () => dbService.getAuditLogs(),
+        () => dbService.getSettings(),
+        () => dbService.getSubtasks(),
+        () => dbService.getComments()
+      ];
+
+      for (const fetchFn of fetchFunctions) {
+        try {
+          const result = await fetchFn();
+          collections.push(result);
+          // Add 200ms delay between collections to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 200));
+        } catch (err) {
+          console.error('Error fetching collection:', err);
+          collections.push([]);
+        }
+      }
+
+      const [u, t, tm, tk, rp, fl, ad, st, sb, cm] = collections;
 
       console.log('Database data loaded:', { users: u.length, teams: t.length, templates: tm.length, tasks: tk.length });
 
       // Sync team names from teams collection to user records
-      const syncedUsers = u.map(user => {
+      const syncedUsers = (u || []).map(user => {
         const teamNames = (user.TeamIDs || []).map(teamId => {
-          const team = t.find(t => t.TeamID === teamId);
+          const team = (t || []).find(team => team.TeamID === teamId);
           return team ? team.TeamName : teamId;
         });
         const currentTeamNames = user.TeamNames || [];
@@ -280,12 +322,12 @@ export default function App() {
         return user;
       });
 
-      const evaluatedTasks = await evaluateOverdueTasks(tk, activeUserEmail);
+      const evaluatedTasks = await evaluateOverdueTasks(tk || [], activeUserEmail);
 
       // Analyze and raise delay and ETA alerts for email simulation logging
-      const overdueTasks = evaluatedTasks.filter(tsk => tsk.Status === 'Overdue' && tsk.Active);
+      const overdueTasks = (evaluatedTasks || []).filter(tsk => tsk.Status === 'Overdue' && tsk.Active);
       const bootstrappedAlerts: SystemAlert[] = overdueTasks.map(tsk => {
-        const rawTemplate = st.find(s => s.Key === 'template_delayed_email')?.Value || "";
+        const rawTemplate = (st || []).find(s => s.Key === 'template_delayed_email')?.Value || "";
         const finalMessage = rawTemplate
           ? rawTemplate
               .replace(/{TaskID}/g, tsk.TaskID || '')
@@ -295,7 +337,7 @@ export default function App() {
               .replace(/{DueDate}/g, tsk.DueDate || '')
               .replace(/{AssignedToEmail}/g, tsk.AssignedToEmail || '')
               .replace(/{AssignedByEmail}/g, tsk.AssignedByEmail || '')
-          : `DELAY ALERT: Task ${tsk.TaskID} ("${tsk.Title.length > 25 ? tsk.Title.substring(0, 25) + '...' : tsk.Title}") is Overdue! Due date was ${tsk.DueDate}.`;
+          : `DELAY ALERT: Task ${tsk.TaskID} ("${tsk.Title && tsk.Title.length > 25 ? tsk.Title.substring(0, 25) + '...' : (tsk.Title || '')}") is Overdue! Due date was ${tsk.DueDate}.`;
 
         return {
           ID: `NT-DL-${tsk.TaskID}`,
@@ -313,16 +355,16 @@ export default function App() {
         });
       }
 
-      setUsers(syncedUsers);
-      setTeams(t);
-      setTemplates(tm);
-      setTasks(evaluatedTasks);
-      setReports(rp);
-      setFollowUps(fl);
-      setAudits(ad);
-      setSettings(st);
-      setSubtasks(sb);
-      setComments(cm);
+      setUsers(syncedUsers || []);
+      setTeams(t || []);
+      setTemplates(tm || []);
+      setTasks(evaluatedTasks || []);
+      setReports(rp || []);
+      setFollowUps(fl || []);
+      setAudits(ad || []);
+      setSettings(st || []);
+      setSubtasks(sb || []);
+      setComments(cm || []);
       
       // Update sync time and status
       setLastSyncTime(new Date().toISOString());
@@ -355,17 +397,101 @@ export default function App() {
     return cleanup;
   }, []);
 
-  // Auto-sync functionality - sync every 5 minutes
+  // SSE connection for real-time sync
   useEffect(() => {
-    const syncInterval = setInterval(() => {
-      if (!isSyncingSheets) {
-        console.log('Auto-syncing database...');
-        loadDatabase();
-      }
-    }, 5 * 60 * 1000); // 5 minutes
+    if (!isBackendConnected) return;
 
-    return () => clearInterval(syncInterval);
-  }, [isSyncingSheets]);
+    const sseClient = initSSEClient({
+      onConnected: (lastModified) => {
+        console.log('SSE connected, lastModified:', lastModified);
+      },
+      onChange: async (changedCollections, lastModified) => {
+        console.log('SSE change detected:', changedCollections);
+        await handleSSEChange(changedCollections);
+      },
+      onStatusChange: (status) => {
+        setSseConnectionStatus(status);
+      }
+    });
+
+    sseClient.connect();
+
+    return () => {
+      disconnectSSEClient();
+    };
+  }, [isBackendConnected]);
+
+  // Handle SSE changes by syncing specific collections
+  const handleSSEChange = async (collections: string[]) => {
+    try {
+      setIsSyncingSheets(true);
+      
+      // Sync only the changed collections
+      await dbService.syncCollections(collections);
+      
+      // Reload the affected collections into state
+      const collectionMap: Record<string, () => Promise<any>> = {
+        users: () => dbService.getUsers(),
+        teams: () => dbService.getTeams(),
+        templates: () => dbService.getTemplates(),
+        tasks: () => dbService.getTasks(),
+        reports: () => dbService.getReports(),
+        followups: () => dbService.getFollowups(),
+        auditlogs: () => dbService.getAuditLogs(),
+        settings: () => dbService.getSettings(),
+        subtasks: () => dbService.getSubtasks(),
+        comments: () => dbService.getComments()
+      };
+
+      const updates = await Promise.allSettled(
+        collections.map(col => collectionMap[col]?.())
+      );
+
+      // Update state for successfully fetched collections
+      collections.forEach((col, idx) => {
+        if (updates[idx].status === 'fulfilled' && updates[idx].value) {
+          switch (col) {
+            case 'users':
+              setUsers(updates[idx].value);
+              break;
+            case 'teams':
+              setTeams(updates[idx].value);
+              break;
+            case 'templates':
+              setTemplates(updates[idx].value);
+              break;
+            case 'tasks':
+              setTasks(updates[idx].value);
+              break;
+            case 'reports':
+              setReports(updates[idx].value);
+              break;
+            case 'followups':
+              setFollowUps(updates[idx].value);
+              break;
+            case 'auditlogs':
+              setAudits(updates[idx].value);
+              break;
+            case 'settings':
+              setSettings(updates[idx].value);
+              break;
+            case 'subtasks':
+              setSubtasks(updates[idx].value);
+              break;
+            case 'comments':
+              setComments(updates[idx].value);
+              break;
+          }
+        }
+      });
+
+      setLastSyncTime(new Date().toISOString());
+    } catch (error) {
+      console.error('Error handling SSE change:', error);
+    } finally {
+      setIsSyncingSheets(false);
+    }
+  };
 
   // Handle mobile back button and keyboard shortcuts
   useEffect(() => {
@@ -413,14 +539,22 @@ export default function App() {
         }
       } else if (activeUserEmail) {
         // If user not found in local array but email is set, try to load from localStorage
-        const storedUser = localStorage.getItem('trustgrid_user');
+        const storedUser = localStorage.getItem('PMS_user');
         if (storedUser) {
           try {
             const parsedUser = JSON.parse(storedUser);
-            if (parsedUser.Email === activeUserEmail) {
-              setActiveUser(parsedUser);
+            if (parsedUser.Email === activeUserEmail || parsedUser.email === activeUserEmail) {
+              const normalizedUser = {
+                ...parsedUser,
+                Email: parsedUser.Email || parsedUser.email || activeUserEmail,
+                TeamIDs: parsedUser.TeamIDs ? (Array.isArray(parsedUser.TeamIDs) ? parsedUser.TeamIDs : [parsedUser.TeamIDs]) : (parsedUser.TeamID ? [parsedUser.TeamID] : []),
+                TeamNames: parsedUser.TeamNames ? (Array.isArray(parsedUser.TeamNames) ? parsedUser.TeamNames : [parsedUser.TeamNames]) : (parsedUser.TeamName ? [parsedUser.TeamName] : []),
+                TeamID: parsedUser.TeamID || (parsedUser.TeamIDs && parsedUser.TeamIDs.length > 0 ? (Array.isArray(parsedUser.TeamIDs) ? parsedUser.TeamIDs[0] : parsedUser.TeamIDs) : ''),
+                TeamName: parsedUser.TeamName || (parsedUser.TeamNames && parsedUser.TeamNames.length > 0 ? (Array.isArray(parsedUser.TeamNames) ? parsedUser.TeamNames[0] : parsedUser.TeamNames) : '')
+              };
+              setActiveUser(normalizedUser);
               // Add user to local users array if not present
-              setUsers(prev => [...prev, parsedUser]);
+              setUsers(prev => [...prev, normalizedUser]);
             }
           } catch (e) {
             console.error('Failed to parse stored user:', e);
@@ -448,17 +582,25 @@ export default function App() {
         usersList={users}
         onLoginSuccess={(email, user) => {
           console.log('App.tsx onLoginSuccess called', { email, user });
-          localStorage.setItem('trustgrid_active_user_email', email);
-          localStorage.setItem('trustgrid_user', JSON.stringify(user));
+          const normalizedUser = {
+            ...user,
+            Email: user.Email || (user as any).email || email,
+            TeamIDs: user.TeamIDs ? (Array.isArray(user.TeamIDs) ? user.TeamIDs : [user.TeamIDs]) : (user.TeamID ? [user.TeamID] : []),
+            TeamNames: user.TeamNames ? (Array.isArray(user.TeamNames) ? user.TeamNames : [user.TeamNames]) : (user.TeamName ? [user.TeamName] : []),
+            TeamID: user.TeamID || (user.TeamIDs && user.TeamIDs.length > 0 ? (Array.isArray(user.TeamIDs) ? user.TeamIDs[0] : user.TeamIDs) : ''),
+            TeamName: user.TeamName || (user.TeamNames && user.TeamNames.length > 0 ? (Array.isArray(user.TeamNames) ? user.TeamNames[0] : user.TeamNames) : '')
+          };
+          localStorage.setItem('PMS_active_user_email', email);
+          localStorage.setItem('PMS_user', JSON.stringify(normalizedUser));
           console.log('localStorage set');
           setActiveUserEmail(email);
           console.log('setActiveUserEmail called');
-          setActiveUser(user);
+          setActiveUser(normalizedUser);
           console.log('setActiveUser called');
           // Add user to local users array if not present
           setUsers(prev => {
             if (!prev.find(u => u.Email === email)) {
-              return [...prev, user];
+              return [...prev, normalizedUser];
             }
             return prev;
           });
@@ -470,15 +612,30 @@ export default function App() {
 
   // Helpers to push state updates safely with durable persistence
   const logAudit = async (entityType: AuditLog['EntityType'], entityId: string, action: string, oldVal = '', newVal = '') => {
+    // Safely parse JSON values with guard for plain strings
+    const parseSafely = (value: string): any => {
+      if (!value) return null;
+      if (typeof value !== 'string') return value;
+      // Check if it looks like JSON
+      if (value.startsWith('{') || value.startsWith('[')) {
+        try {
+          return JSON.parse(value);
+        } catch {
+          return value; // Return as string if parse fails
+        }
+      }
+      return value; // Return plain string as-is
+    };
+
     await dbService.logAction(
       entityType,
       entityId,
       action,
       activeUser.Email,
-      oldVal ? JSON.parse(oldVal) : null,
-      newVal ? JSON.parse(newVal) : null
+      parseSafely(oldVal),
+      parseSafely(newVal)
     );
-    await loadDatabase();
+    // SSE will handle sync automatically - no need to reload database
   };
 
   // Rule 1: Task visibility filters depending on Role
@@ -486,7 +643,7 @@ export default function App() {
     const today = new Date();
     today.setHours(0,0,0,0);
 
-    const visible = tasks.map(task => {
+    const visible = (tasks || []).map(task => {
       // Dynamically derive Overdue state
       if (task.Status !== 'Closed' && task.Status !== 'Reviewed') {
         const dueDate = new Date(task.DueDate);
@@ -497,21 +654,22 @@ export default function App() {
       }
       return task;
     }).filter(task => {
+      // Role scope filter - Admins see everything, including inactive or deleted tasks
+      if (activeUser.Role === 'Admin') return true;
+
       if (!task.Active) return false;
       if (task.DeletedAt) return false;
-      
-      const assignees = task.AssignedToEmail.split(',').map(e => e.trim().toLowerCase());
-      const isAssignee = assignees.includes(activeUser.Email.toLowerCase());
 
-      // Role scope filter
-      if (activeUser.Role === 'Admin') return true;
+      const assignees = (task.AssignedToEmail || '').split(',').map(e => e.trim().toLowerCase());
+      const isAssignee = assignees.includes(activeUser.Email?.toLowerCase() || '');
+
       if (activeUser.Role === 'Stakeholder') {
         // Stakeholders see tasks assigned to them, by them, or to their subordinates
         const hasManagedAssignee = assignees.some(email => {
-          const u = users.find(usr => usr.Email.toLowerCase() === email);
-          return u && u.ManagerEmail.toLowerCase() === activeUser.Email.toLowerCase();
+          const u = users.find(usr => usr.Email?.toLowerCase() === email);
+          return u && u.ManagerEmail?.toLowerCase() === activeUser.Email?.toLowerCase();
         });
-        return isAssignee || task.AssignedByEmail.toLowerCase() === activeUser.Email.toLowerCase() || hasManagedAssignee;
+        return isAssignee || task.AssignedByEmail?.toLowerCase() === activeUser.Email?.toLowerCase() || hasManagedAssignee;
       }
       if (activeUser.Role === 'Sub-stakeholder') {
         // Sub-stakeholders see tasks assigned to them
@@ -592,20 +750,20 @@ export default function App() {
   };
   
   const filteredTasks = getFilteredTasks().filter(task => {
-    const assignees = task.AssignedToEmail.split(',').map(e => e.trim());
+    const assignees = (task.AssignedToEmail || '').split(',').map(e => e.trim());
     const assigneeNames = assignees.map(email => {
-      const found = users.find(u => u.Email.toLowerCase() === email.toLowerCase());
+      const found = users.find(u => u.Email?.toLowerCase() === email.toLowerCase());
       return found ? found.FullName : email;
     }).join(', ');
 
     // Text search
-    const matchesSearch = task.Title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          task.TaskID.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          task.AssignedToEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          assigneeNames.toLowerCase().includes(searchQuery.toLowerCase());
-    
+    const matchesSearch = (task.Title?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
+                          (task.TaskID?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
+                          (task.AssignedToEmail?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
+                          (assigneeNames.toLowerCase().includes(searchQuery.toLowerCase()) || false);
+
     // Assignation Tab
-    const isAssignee = assignees.map(e => e.toLowerCase()).includes(activeUser.Email.toLowerCase());
+    const isAssignee = assignees.map(e => e.toLowerCase()).includes(activeUser.Email?.toLowerCase() || '');
     let matchesScope = true;
     if (filterScope === 'assigned_to_me') {
       matchesScope = isAssignee;
@@ -625,33 +783,33 @@ export default function App() {
   // Calculate Dashboard Home Metrics
   const visibleTasksForMetrics = getVisibleTasks();
   const today = getCurrentLocalDate();
-  
+
   // Active Tasks: Count of tasks with status other than Closed/Reviewed
-  const metricActiveTasks = visibleTasksForMetrics.filter(t => t.Status !== 'Closed' && t.Status !== 'Reviewed').length;
-  
+  const metricActiveTasks = (visibleTasksForMetrics || []).filter(t => t.Status !== 'Closed' && t.Status !== 'Reviewed').length;
+
   // Overdue: Active tasks whose due date is less than today's date
-  const metricOverdue = visibleTasksForMetrics.filter(t => {
+  const metricOverdue = (visibleTasksForMetrics || []).filter(t => {
     if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
     return t.DueDate < today;
   }).length;
-  
+
   // Due Today: Active tasks whose due date is today's date
-  const metricDueToday = visibleTasksForMetrics.filter(t => {
+  const metricDueToday = (visibleTasksForMetrics || []).filter(t => {
     if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
     return t.DueDate === today;
   }).length;
-  
+
   // Completed This Week: Closed/Reviewed tasks with a CompletionDate within the last 7 days
   const oneWeekAgo = new Date();
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-  const metricCompletedThisWeek = visibleTasksForMetrics.filter(t => {
+  const metricCompletedThisWeek = (visibleTasksForMetrics || []).filter(t => {
     if (t.Status !== 'Closed' && t.Status !== 'Reviewed') return false;
     if (!t.CompletionDate) return false;
     const completionDate = new Date(t.CompletionDate);
     return completionDate >= oneWeekAgo;
   }).length;
-  
-  const metricFollowUps = followUps.filter(f => {
+
+  const metricFollowUps = (followUps || []).filter(f => {
     if (f.Status !== 'Active' && f.Status !== 'Pending') return false;
     if (activeUser.Role === 'Admin') return true;
     return f.CreatedByEmail === activeUser.Email;
@@ -744,9 +902,7 @@ export default function App() {
           `${newTask.AssignedToEmail}`
         );
       }
-      console.log('Reloading database after save...');
-      await loadDatabase();
-      console.log('Database reloaded successfully');
+      // SSE will handle sync automatically - no need to reload database
     } catch (error) {
       console.error('Error creating task/template:', error);
       throw error;
@@ -763,7 +919,7 @@ export default function App() {
 
     for (const file of uploadedFiles) {
       try {
-        const token = localStorage.getItem('trustgrid_auth_token');
+        const token = localStorage.getItem('PMS_auth_token');
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
         };
@@ -844,7 +1000,7 @@ export default function App() {
     }
 
     await logAudit('Report', propId, 'Published Progress Report', '', JSON.stringify({ TaskID: data.TaskID, Status: data.StatusUpdate }));
-    await loadDatabase();
+    // SSE will handle sync automatically - no need to reload database
   };
 
   const handleCloseTask = async (taskId: string, remark: string) => {
@@ -869,7 +1025,7 @@ export default function App() {
     }
 
     await logAudit('Task', taskId, 'Task Cleared & Closed', '', JSON.stringify({ Remark: remark }));
-    await loadDatabase();
+    // SSE will handle sync automatically - no need to reload database
   };
 
   const handleUpdateTask = async (taskId: string, fields: Partial<Task>) => {
@@ -898,7 +1054,7 @@ export default function App() {
       }
       
       await logAudit('Task', taskId, 'Updated Task Properties', '', JSON.stringify(fields));
-      await loadDatabase();
+      // SSE will handle sync automatically - no need to reload database
     }
   };
 
@@ -977,14 +1133,53 @@ export default function App() {
     }
 
     await logAudit('FollowUp', followId, 'Follow-Up Sparked & Linked', '', JSON.stringify({ ParentID: parentTaskId, ChildID: newTaskId }));
-    await loadDatabase();
+    // SSE will handle sync automatically - no need to reload database
   };
 
   // Administration interactions
+  const handleUpdateUserTeams = async (email: string, teamIDs: string[], teamNames: string[]) => {
+    const foundUser = users.find(u => u.Email === email);
+    if (foundUser) {
+      const updatedUser = { 
+        ...foundUser, 
+        TeamIDs: teamIDs, 
+        TeamNames: teamNames, 
+        UpdatedAt: new Date().toISOString() 
+      };
+      await dbService.saveUser(updatedUser);
+      await logAudit('User', foundUser.UserID, `Updated Team memberships to: ${teamNames.join(', ')}`, JSON.stringify(foundUser.TeamIDs), JSON.stringify(teamIDs));
+      // SSE will handle sync automatically - no need to reload database
+    }
+  };
+
+  const handleDeleteTeam = async (teamId: string) => {
+    const targetTeam = teams.find(t => t.TeamID === teamId);
+    if (!targetTeam) return;
+
+    // 1. Delete from teams collection
+    await dbService.deleteTeam(teamId);
+
+    // 2. Remove team reference from all users who belonged to it
+    const usersToUpdate = users.filter(u => u.TeamIDs.includes(teamId));
+    for (const u of usersToUpdate) {
+      const updatedTeamIDs = u.TeamIDs.filter(id => id !== teamId);
+      const updatedTeamNames = u.TeamNames.filter(name => name !== targetTeam.TeamName);
+      await dbService.saveUser({
+        ...u,
+        TeamIDs: updatedTeamIDs,
+        TeamNames: updatedTeamNames,
+        UpdatedAt: new Date().toISOString()
+      });
+    }
+
+    await logAudit('Team', teamId, `Deleted Team: ${targetTeam.TeamName}`, JSON.stringify(targetTeam), '');
+    // SSE will handle sync automatically - no need to reload database
+  };
+
   const handleAddUser = async (newUser: User) => {
     await dbService.saveUser(newUser);
     await logAudit('User', newUser.UserID, 'Account Authorized', '', JSON.stringify(newUser));
-    await loadDatabase();
+    // SSE will handle sync automatically - no need to reload database
   };
 
   const handleToggleUserStatus = async (email: string) => {
@@ -992,14 +1187,14 @@ export default function App() {
     if (foundUser) {
       const updatedUser = { ...foundUser, Active: !foundUser.Active, UpdatedAt: new Date().toISOString() };
       await dbService.saveUser(updatedUser);
-      await logAudit('User', foundUser.UserID, `Toggle Active State : ${updatedUser.Active}`, `Active: ${foundUser.Active}`, `Active: ${updatedUser.Active}`);
-      await loadDatabase();
+      await logAudit('User', foundUser.UserID, `Toggle Active State : ${updatedUser.Active}`, JSON.stringify({ Active: foundUser.Active }), JSON.stringify({ Active: updatedUser.Active }));
+      // SSE will handle sync automatically - no need to reload database
     }
   };
 
   const handleApproveUser = async (email: string) => {
     try {
-      const token = localStorage.getItem('trustgrid_auth_token');
+      const token = localStorage.getItem('PMS_auth_token');
       const response = await fetch('/api/approve-user', {
         method: 'POST',
         headers: {
@@ -1016,7 +1211,7 @@ export default function App() {
         return;
       }
 
-      await loadDatabase();
+      // SSE will handle sync automatically - no need to reload database
     } catch (error) {
       console.error('Error approving user:', error);
     }
@@ -1028,14 +1223,14 @@ export default function App() {
       const updatedUser = { ...foundUser, Role: newRole, UpdatedAt: new Date().toISOString() };
       await dbService.saveUser(updatedUser);
       await dbService.logAction('User', foundUser.UserID, `Role updated to ${newRole}`, foundUser.Email, null, updatedUser);
-      await loadDatabase();
+      // SSE will handle sync automatically - no need to reload database
     }
   };
 
   const handleAddTemplate = async (newTemplate: TaskTemplate) => {
     await dbService.saveTemplate(newTemplate);
     await logAudit('Template', newTemplate.TemplateID, 'Template Structured', '', JSON.stringify(newTemplate));
-    await loadDatabase();
+    // SSE will handle sync automatically - no need to reload database
   };
 
   const handleToggleTemplateStatus = async (tempId: string) => {
@@ -1044,7 +1239,7 @@ export default function App() {
       const updated = { ...found, Active: !found.Active, UpdatedAt: new Date().toISOString() };
       await dbService.saveTemplate(updated);
       await logAudit('Template', found.TemplateID, `Toggle Schedule Active State : ${updated.Active}`, `Active: ${found.Active}`, `Active: ${updated.Active}`);
-      await loadDatabase();
+      // SSE will handle sync automatically - no need to reload database
     }
   };
 
@@ -1058,7 +1253,7 @@ export default function App() {
     setSettings(updated);
     await dbService.saveSettings(updated);
     await logAudit('Settings', key, `Update Config Parameter`, '', value);
-    await loadDatabase();
+    // SSE will handle sync automatically - no need to reload database
   };
 
   // Subtask handlers
@@ -1073,14 +1268,14 @@ export default function App() {
       UpdatedAt: new Date().toISOString()
     };
     await dbService.saveSubtask(newSubtask);
-    await loadDatabase();
+    // SSE will handle sync automatically - no need to reload database
   };
 
   const handleToggleSubtask = async (subtaskId: string, isDone: boolean) => {
     const subtask = subtasks.find(s => s.SubtaskID === subtaskId);
     if (subtask) {
       await dbService.saveSubtask({ ...subtask, IsDone: isDone });
-      await loadDatabase();
+      // SSE will handle sync automatically - no need to reload database
     }
   };
 
@@ -1107,7 +1302,7 @@ export default function App() {
       CreatedBy: activeUser.Email
     };
     await dbService.saveComment(newComment);
-    await loadDatabase();
+    // SSE will handle sync automatically - no need to reload database
   };
 
 
@@ -1117,7 +1312,7 @@ export default function App() {
     try {
       const result = await checkAndGenerateRecurringTasks(templates, tasks);
       if (result.generatedCount > 0) {
-        await loadDatabase();
+        // SSE will handle sync automatically - no need to reload database
         
         // Fire custom template based emails for every generated task card
         for (const t of result.newTasks) {
@@ -1164,6 +1359,25 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans antialiased text-slate-800">
       
+      {/* PWA Banners */}
+      <InstallBanner />
+      <OfflineBanner />
+      <UpdateBanner />
+      
+      {/* SSE Connection Status Indicator */}
+      <div className="fixed top-5 right-5 z-[9998] flex items-center gap-2 bg-white border border-slate-200 shadow-lg rounded-full px-3 py-1.5 text-xs font-medium">
+        <div className={`h-2 w-2 rounded-full ${
+          sseConnectionStatus === 'connected' ? 'bg-emerald-500' :
+          sseConnectionStatus === 'connecting' ? 'bg-amber-500 animate-pulse' :
+          sseConnectionStatus === 'error' ? 'bg-red-500' : 'bg-slate-400'
+        }`} />
+        <span className="text-slate-600">
+          {sseConnectionStatus === 'connected' ? 'Live' :
+           sseConnectionStatus === 'connecting' ? 'Connecting…' :
+           sseConnectionStatus === 'error' ? 'Disconnected' : 'Offline'}
+        </span>
+      </div>
+
       {/* Dynamic Toast Notification (Non-blocking alert replacement) */}
       <AnimatePresence>
         {simulationMessage && (
@@ -1211,7 +1425,7 @@ export default function App() {
           setIsDrawerOpen(true);
         }}
         onLogout={() => {
-          localStorage.removeItem('trustgrid_active_user_email');
+          localStorage.removeItem('PMS_active_user_email');
           setActiveUserEmail('');
           setActiveUser(null);
         }}
@@ -1225,8 +1439,7 @@ export default function App() {
             console.log('Saving user to database:', userData);
             await dbService.saveUser(userData);
             console.log('User saved successfully');
-            await loadDatabase();
-            console.log('Database reloaded after user save');
+            // SSE will handle sync automatically - no need to reload database
           } catch (error) {
             console.error('Failed to save user to database:', error);
             throw error;
@@ -1237,7 +1450,7 @@ export default function App() {
             console.log('Saving template to database:', templateData);
             await dbService.saveTemplate(templateData);
             console.log('Template saved successfully');
-            await loadDatabase();
+            // SSE will handle sync automatically - no need to reload database
           } catch (error) {
             console.error('Failed to save template to database:', error);
             throw error;
@@ -1250,7 +1463,7 @@ export default function App() {
               console.log('Toggling template status:', templateId, !template.Active);
               await dbService.saveTemplate({ ...template, Active: !template.Active });
               console.log('Template status toggled successfully');
-              await loadDatabase();
+              // SSE will handle sync automatically - no need to reload database
             }
           } catch (error) {
             console.error('Failed to toggle template status:', error);
@@ -1263,7 +1476,7 @@ export default function App() {
             await dbService.saveTeam(teamData);
             console.log('Team saved successfully');
             await logAudit('Team', teamData.TeamID, 'Created Team', '', JSON.stringify(teamData));
-            await loadDatabase();
+            // SSE will handle sync automatically - no need to reload database
           } catch (error) {
             console.error('Failed to save team to database:', error);
             throw error;
@@ -1274,7 +1487,7 @@ export default function App() {
             console.log('Toggling team status:', teamId);
             await dbService.toggleTeamStatus(teamId);
             console.log('Team status toggled successfully');
-            await loadDatabase();
+            // SSE will handle sync automatically - no need to reload database
           } catch (error) {
             console.error('Failed to toggle team status:', error);
             throw error;
@@ -1288,7 +1501,7 @@ export default function App() {
             );
             await dbService.saveSettings(updatedSettings);
             console.log('Setting updated successfully');
-            await loadDatabase();
+            // SSE will handle sync automatically - no need to reload database
           } catch (error) {
             console.error('Failed to update setting:', error);
             throw error;
@@ -1303,6 +1516,8 @@ export default function App() {
         onToggleUserStatus={handleToggleUserStatus}
         onUpdateUserRole={handleUpdateUserRole}
         onApproveUser={handleApproveUser}
+        onUpdateUserTeams={handleUpdateUserTeams}
+        onDeleteTeam={handleDeleteTeam}
         isDarkMode={isDarkMode}
         onToggleTheme={() => setIsDarkMode(!isDarkMode)}
         onSyncDatabase={handleManualSync}
@@ -1364,6 +1579,7 @@ export default function App() {
             onCloseTask={handleCloseTask}
             onUpdateTask={handleUpdateTask}
             usersList={users}
+            teamsList={teams}
           />
         )}
 
@@ -1449,7 +1665,7 @@ export default function App() {
                 UpdatedAt: new Date().toISOString(),
               };
               await dbService.saveTeam(newTeam);
-              await loadDatabase();
+              // SSE will handle sync automatically - no need to reload database
             }}
           />
         )}

@@ -367,7 +367,7 @@ export default function SettingsPage({ user, onLogout }: SettingsPageProps) {
 
               <div className="pt-6 border-t border-[var(--color-border)]">
                 <h3 className="text-sm font-medium text-[#0f172a] mb-3">Support</h3>
-                <a href="mailto:support@trustgrid.com" className="text-sm text-[var(--color-accent)] hover:underline">
+                <a href="mailto:support@PMS.com" className="text-sm text-[var(--color-accent)] hover:underline">
                   Contact Support
                 </a>
               </div>

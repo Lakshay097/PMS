@@ -17,6 +17,8 @@ export interface User {
   RequestedAt?: string;
   ApprovedBy?: string; // Email of the admin who approved
   ApprovedAt?: string;
+  TeamID?: string;
+  TeamName?: string;
 }
 
 export interface Team {
@@ -80,6 +82,7 @@ export interface Task {
   OriginalDueDate?: string;
   EtaRequestCount?: number;
   DeletedAt: string | null;
+  TeamID?: string;
 }
 
 export interface TaskReport {

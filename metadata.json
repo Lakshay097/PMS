@@ -1,5 +1,5 @@
 {
-  "name": "Remix: Remix: TrustGrid TaskFlow",
+  "name": "Remix: Remix: PMS TaskFlow",
   "description": "A production-ready role-based task management and reporting dashboard backed by GS/Apps Script architecture.",
   "requestFramePermissions": [],
   "majorCapabilities": [

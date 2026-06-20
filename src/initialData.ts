@@ -4,7 +4,7 @@ export const INITIAL_USERS: User[] = [
   {
     UserID: "USR-001",
     FullName: "Admin Account",
-    Email: "admin@trustgrid.com",
+    Email: "admin@PMS.com",
     Role: "Admin",
     ManagerEmail: "",
     TeamIDs: ["T-ALL"],

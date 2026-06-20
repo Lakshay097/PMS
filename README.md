@@ -69,7 +69,7 @@ On first launch, the application will:
 3. Create all required tabs (Users, Teams, Tasks, Templates, Reports, FollowUps, AuditLogs, Settings, Subtasks, Comments)
 
 **Default Admin User:**
-- Email: `admin@trustgrid.com`
+- Email: `admin@PMS.com`
 - Password: `TG-1234` (change this immediately after first login)
 
 ---
