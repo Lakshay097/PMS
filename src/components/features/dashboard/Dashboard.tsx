@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -23,8 +23,8 @@ import {
   Filter,
   RefreshCw
 } from 'lucide-react';
-import { Task, User as UserType, TaskTemplate, AuditLog, AppSetting, Team } from '../types';
-import AdminPanel from './AdminPanel';
+import { Task, User as UserType, TaskTemplate, AuditLog, AppSetting, Team } from '../../../types';
+import AdminPanel from '../../AdminPanel';
 
 interface DashboardProps {
   tasks: Task[];
@@ -397,7 +397,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
                           {task.TaskID}: {task.Title.length > 50 ? task.Title.substring(0, 50) + '...' : task.Title}
                         </p>
                         <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                          Due: {task.DueDate} • Priority: {task.Priority}
+                          Due: {task.DueDate} ΓÇó Priority: {task.Priority}
                         </p>
                       </div>
                     </div>
@@ -584,8 +584,8 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
                     </div>
                     <div className="flex items-center space-x-4 text-sm">
                       <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>{template.RecurrenceType}</span>
-                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>• {template.Category}</span>
-                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>• Next: {template.NextGenerationDate}</span>
+                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>ΓÇó {template.Category}</span>
+                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>ΓÇó Next: {template.NextGenerationDate}</span>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -614,7 +614,8 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   const renderTeam = () => {
     const teamMembers = getTeamMembers();
@@ -1220,4 +1221,5 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
       </main>
     </div>
   );
+}
 }

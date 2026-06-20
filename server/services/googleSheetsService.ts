@@ -18,9 +18,9 @@ export interface GoogleSheetsTokenResponse {
  */
 export async function generateGoogleSheetsToken(): Promise<GoogleSheetsTokenResponse | null> {
   try {
-    const email = config.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-    const privateKey = config.GOOGLE_PRIVATE_KEY;
-    const spreadsheetId = config.GOOGLE_SPREADSHEET_ID;
+    const email = config.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
+    const privateKey = config.GOOGLE_PRIVATE_KEY?.trim();
+    const spreadsheetId = config.GOOGLE_SPREADSHEET_ID?.trim();
 
     if (!email || !privateKey) {
       logger.error("Google Service Account credentials not provided in environment.");
@@ -56,7 +56,7 @@ export async function generateGoogleSheetsToken(): Promise<GoogleSheetsTokenResp
         "Content-Type": "application/x-www-form-urlencoded"
       },
       body: new URLSearchParams({
-        grant_type: "urn:ietf:params:oauth-grant-type:jwt-bearer",
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
         assertion: jwt
       })
     });

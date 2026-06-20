@@ -1,5 +1,5 @@
 import React from 'react';
-import KPICard from '../shared/KPICard';
+import KPICard from '../../shared/KPICard';
 import { Users, Calendar, Mail, FileText, Settings, Activity, ChevronRight, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 
 interface AdminHomeProps {

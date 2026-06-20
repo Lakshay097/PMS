@@ -60,7 +60,7 @@ import CreateReportModal from './components/CreateReportModal';
 import FollowUpModal from './components/FollowUpModal';
 import TaskDrawer from './components/features/tasks/TaskDrawer';
 import AdminPanel from './components/AdminPanel';
-import LoginScreen from './components/features/auth/LoginScreen';
+import LoginPage from './pages/LoginPage';
 import Dashboard from './components/features/dashboard/Dashboard';
 import EditProfileModal from './components/EditProfileModal';
 import ChangePasswordModal from './components/ChangePasswordModal';
@@ -580,7 +580,7 @@ export default function App() {
 
   if (!activeUser) {
     return (
-      <LoginScreen
+      <LoginPage
         usersList={users}
         onLoginSuccess={(email, user) => {
           console.log('App.tsx onLoginSuccess called', { email, user });

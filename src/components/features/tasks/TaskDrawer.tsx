@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Calendar, User, FileText, Link as LinkIcon, History, AlertCircle, CheckCircle, TrendingUp, Edit2, Save, Trash, ShieldAlert } from 'lucide-react';
-import { Task, TaskReport, User as UserType, Team } from '../types';
+import { Task, TaskReport, User as UserType, Team } from '../../../types/index';
 
 // Helper function to get tomorrow's date in YYYY-MM-DD format
 const getTomorrowDate = (): string => {

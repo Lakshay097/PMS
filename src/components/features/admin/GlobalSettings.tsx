@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import FormField from '../shared/FormField';
+import FormField from '../../shared/FormField';
 import { Save, AlertTriangle, Clock, Shield, Bell, Calendar, Server, CheckCircle } from 'lucide-react';
 
 interface Setting {

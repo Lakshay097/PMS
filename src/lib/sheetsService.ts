@@ -77,9 +77,10 @@ export const initAuth = (
 
   // Check for service account token from backend
   fetch('/api/token')
-    .then(res => {
+    .then(async res => {
       if (res.ok) return res.json();
-      throw new Error('Failed to get service account token');
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Failed to get service account token');
     })
     .then(data => {
       if (!active) return;

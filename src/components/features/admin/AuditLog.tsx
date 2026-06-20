@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import Drawer from '../shared/Drawer';
-import FilterChip from '../shared/FilterChip';
+import Drawer from '../../shared/Drawer';
+import FilterChip from '../../shared/FilterChip';
 import { Search, Download, Calendar, Filter as FilterIcon, ChevronRight, AlertTriangle, Info, AlertCircle, CheckCircle } from 'lucide-react';
-import { AuditLog } from '../../types';
+import { AuditLog } from '../../../types/index';
 
 interface AuditLogProps {
   auditLogs: AuditLog[];
