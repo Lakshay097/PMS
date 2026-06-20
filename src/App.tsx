@@ -4,6 +4,7 @@ import { useAppEvents } from './hooks/useAppEvents';
 import { useDatabase } from './hooks/useDatabase';
 import { useTaskOperations } from './hooks/useTaskOperations';
 import { useUserOperations } from './hooks/useUserOperations';
+import { useTeamOperations } from './hooks/useTeamOperations';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   INITIAL_USERS,
@@ -727,6 +728,14 @@ export default function App() {
     logAudit,
   });
 
+  // Team operations hook
+  const { handleDeleteTeam } = useTeamOperations({
+    teams,
+    users,
+    syncDatabase: loadDatabase,
+    logAudit,
+  });
+
   // Actions implementation
   const handleSubmitProgressReport = async (data: any) => {
     const propId = `RP-${Math.floor(1000 + Math.random() * 8999)}`;
@@ -808,31 +817,6 @@ export default function App() {
     }
 
     await logAudit('Report', propId, 'Published Progress Report', '', JSON.stringify({ TaskID: data.TaskID, Status: data.StatusUpdate }));
-    // SSE will handle sync automatically - no need to reload database
-  };
-
-  // Administration interactions
-  const handleDeleteTeam = async (teamId: string) => {
-    const targetTeam = teams.find(t => t.TeamID === teamId);
-    if (!targetTeam) return;
-
-    // 1. Delete from teams collection
-    await dbService.deleteTeam(teamId);
-
-    // 2. Remove team reference from all users who belonged to it
-    const usersToUpdate = users.filter(u => u.TeamIDs.includes(teamId));
-    for (const u of usersToUpdate) {
-      const updatedTeamIDs = u.TeamIDs.filter(id => id !== teamId);
-      const updatedTeamNames = u.TeamNames.filter(name => name !== targetTeam.TeamName);
-      await dbService.saveUser({
-        ...u,
-        TeamIDs: updatedTeamIDs,
-        TeamNames: updatedTeamNames,
-        UpdatedAt: new Date().toISOString()
-      });
-    }
-
-    await logAudit('Team', teamId, `Deleted Team: ${targetTeam.TeamName}`, JSON.stringify(targetTeam), '');
     // SSE will handle sync automatically - no need to reload database
   };
 
@@ -1196,4 +1180,5 @@ export default function App() {
     </div>
   );
 }
+
 
