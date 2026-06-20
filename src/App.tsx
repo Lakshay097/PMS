@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
+import { useAppModals } from './hooks/useAppModals';
+import { useAppEvents } from './hooks/useAppEvents';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   INITIAL_USERS,
@@ -147,18 +149,32 @@ export default function App() {
   const [isSimulatingRecurrence, setIsSimulatingRecurrence] = useState(false);
 
   // Dialog controlling states
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-  const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false);
-  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
-  const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
-  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
-  const [isConfigureNotificationsModalOpen, setIsConfigureNotificationsModalOpen] = useState(false);
-  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
-  const [isAddTeamModalOpen, setIsAddTeamModalOpen] = useState(false);
-  const [preSelectedAssignee, setPreSelectedAssignee] = useState<string | undefined>(undefined);
+  const {
+    selectedTask,
+    setSelectedTask,
+    isDrawerOpen,
+    setIsDrawerOpen,
+    isTaskModalOpen,
+    setIsTaskModalOpen,
+    isReportModalOpen,
+    setIsReportModalOpen,
+    isFollowUpModalOpen,
+    setIsFollowUpModalOpen,
+    expandedTaskId,
+    setExpandedTaskId,
+    isEditProfileModalOpen,
+    setIsEditProfileModalOpen,
+    isChangePasswordModalOpen,
+    setIsChangePasswordModalOpen,
+    isConfigureNotificationsModalOpen,
+    setIsConfigureNotificationsModalOpen,
+    isAddUserModalOpen,
+    setIsAddUserModalOpen,
+    isAddTeamModalOpen,
+    setIsAddTeamModalOpen,
+    preSelectedAssignee,
+    setPreSelectedAssignee,
+  } = useAppModals();
 
   // Tasks Board Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -499,38 +515,7 @@ export default function App() {
   };
 
   // Handle mobile back button and keyboard shortcuts
-  useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
-      event.preventDefault();
-      // Handle browser back button
-      if (activeView !== 'dashboard') {
-        setActiveView('dashboard');
-      }
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Alt + Left Arrow - Go back
-      if (event.altKey && event.key === 'ArrowLeft') {
-        event.preventDefault();
-        if (activeView !== 'dashboard') {
-          setActiveView('dashboard');
-        }
-      }
-      // Alt + Right Arrow - Go forward (could be implemented if needed)
-      if (event.altKey && event.key === 'ArrowRight') {
-        event.preventDefault();
-        // Could implement forward navigation if needed
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [activeView]);
+  useAppEvents(activeView, setActiveView);
 
   // 2. Track Active User Session adaptation
   useEffect(() => {
