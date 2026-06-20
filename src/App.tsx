@@ -10,7 +10,7 @@ import {
   INITIAL_AUDITS,
   INITIAL_SETTINGS
 } from './initialData';
-import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AuditLog, AppSetting, TaskStatus, SystemAlert, Subtask, Comment } from './types';
+import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AuditLog, AppSetting, TaskStatus, SystemAlert, Subtask, Comment } from './types/index';
 import { dbService, initializeDatabase } from './lib/dbService';
 import { initAuth, getAccessToken, sheetsApi } from './lib/sheetsService';
 import { checkAndGenerateRecurringTasks, evaluateOverdueTasks } from './lib/taskEngine';
@@ -58,15 +58,15 @@ import {
 import CreateTaskModal from './components/CreateTaskModal';
 import CreateReportModal from './components/CreateReportModal';
 import FollowUpModal from './components/FollowUpModal';
-import TaskDrawer from './components/TaskDrawer';
+import TaskDrawer from './components/features/tasks/TaskDrawer';
 import AdminPanel from './components/AdminPanel';
-import LoginScreen from './components/LoginScreen';
-import Dashboard from './components/Dashboard';
+import LoginScreen from './components/features/auth/LoginScreen';
+import Dashboard from './components/features/dashboard/Dashboard';
 import EditProfileModal from './components/EditProfileModal';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import ConfigureNotificationsModal from './components/ConfigureNotificationsModal';
-import AddUserModal from './components/AddUserModal';
-import AddTeamModal from './components/AddTeamModal';
+import AddUserModal from './components/features/admin/AddUserModal';
+import AddTeamModal from './components/features/tasks/AddTeamModal';
 
 type ActiveView = 'dashboard' | 'tasks' | 'templates' | 'admin';
 

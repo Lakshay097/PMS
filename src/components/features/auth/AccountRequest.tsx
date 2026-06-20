@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Lock, User, Building2, ArrowLeft, CheckCircle, Clock, X } from 'lucide-react';
-import { requestAccount } from '../api/auth';
+import { requestAccount } from '../../../api/auth';
 
 interface AccountRequestProps {
   onBackToLogin: () => void;

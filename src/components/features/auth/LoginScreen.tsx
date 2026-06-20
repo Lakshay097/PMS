@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Mail, Lock, LogIn, Shield, Zap, UserPlus } from 'lucide-react';
-import { User } from '../types';
+import { User } from '../../../types/index';
 import AccountRequest from './AccountRequest';
-import { login, mapUserResponseToUser } from '../api/auth';
+import { login, mapUserResponseToUser } from '../../../api/auth';
 
 interface LoginScreenProps {
   usersList: User[];
