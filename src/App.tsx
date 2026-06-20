@@ -61,7 +61,7 @@ import FollowUpModal from './components/FollowUpModal';
 import TaskDrawer from './components/features/tasks/TaskDrawer';
 import AdminPanel from './components/AdminPanel';
 import LoginPage from './pages/LoginPage';
-import Dashboard from './components/features/dashboard/Dashboard';
+import DashboardPage from './pages/DashboardPage';
 import EditProfileModal from './components/EditProfileModal';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import ConfigureNotificationsModal from './components/ConfigureNotificationsModal';
@@ -1388,7 +1388,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* NEW UI - Dashboard handles all views */}
-      <Dashboard
+      <DashboardPage
         tasks={getVisibleTasks()}
         currentUser={activeUser}
         onNewTask={(assigneeEmail) => {
