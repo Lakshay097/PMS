@@ -1,5 +1,13 @@
 // Google Sheets Primary Database Layer
 // All data persistence goes directly to Google Sheets - no LocalStorage fallback
+
+// TECH-DEBT: All writes happen client-side via dbService directly to Google Sheets.
+// Ideal architecture would have server-side controllers handling writes and broadcasting SSE events.
+// Deferred — requires full API layer refactor.
+
+// TECH-DEBT: syncQueue.ts is implemented but not integrated.
+// Wire into dbService.ts write failures for retry on network errors.
+
 import {
   User,
   Team,
@@ -26,6 +34,7 @@ import {
 } from '../initialData';
 import { sheetsApi, getAccessToken, HEADERS } from './sheetsService';
 import { logger } from '../utils/logger';
+import { notifyChange } from '../api/client';
 
 // Operation Types for Audit & Error Hooks
 export enum OperationType {
@@ -40,7 +49,7 @@ export enum OperationType {
 // In-memory cache for performance (not persistence)
 // This cache is cleared on page refresh and is only for performance optimization
 const memoryCache = new Map<string, any[]>();
-const CACHE_TTL = 1 * 60 * 1000; // 1 minute (reduced from 5 minutes for better sync)
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 function getFromCache<T>(key: string): T[] | null {
   const cached = memoryCache.get(key);
@@ -76,7 +85,7 @@ export async function initializeDatabase(): Promise<void> {
 
   try {
     logger.log("Initializing Google Sheets database...");
-    
+
     // Ensure the spreadsheet exists or create it
     const spreadId = await sheetsApi.getOrCreateSpreadsheet();
     if (!spreadId) {
@@ -85,7 +94,9 @@ export async function initializeDatabase(): Promise<void> {
 
     // Check if database is empty by checking users
     const users = await sheetsApi.getCollection<User>('users');
+    setCache('users', users); // Cache for batchLoadAll
     const tasks = await sheetsApi.getCollection<Task>('tasks');
+    setCache('tasks', tasks); // Cache for batchLoadAll
 
     const isNewSpreadsheet = users.length === 0 && tasks.length === 0;
 
@@ -168,6 +179,9 @@ export const dbService = {
       await sheetsApi.saveCollection('users', users);
       clearCache('users'); // Invalidate cache after write
       clearCache('teams'); // Also clear teams cache since team names might be referenced
+      
+      // Notify other clients immediately (fire and forget)
+      notifyChange('users', 'updated', user.UserID).catch(() => {});
     } catch (error) {
       throw new Error(`Failed to save user to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -202,6 +216,9 @@ export const dbService = {
       await sheetsApi.saveCollection('teams', teams);
       clearCache('teams');
       clearCache('users'); // Also clear users cache since team relationships might change
+      
+      // Notify other clients immediately (fire and forget)
+      notifyChange('teams', 'updated', team.TeamID).catch(() => {});
     } catch (error) {
       throw new Error(`Failed to save team to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -216,6 +233,9 @@ export const dbService = {
         team.UpdatedAt = new Date().toISOString();
         await sheetsApi.saveCollection('teams', teams);
         clearCache('teams');
+        
+        // Notify other clients immediately (fire and forget)
+        notifyChange('teams', 'updated', teamId).catch(() => {});
       }
     } catch (error) {
       throw new Error(`Failed to toggle team status: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -229,6 +249,9 @@ export const dbService = {
       await sheetsApi.saveCollection('teams', filtered);
       clearCache('teams');
       clearCache('users');
+      
+      // Notify other clients immediately (fire and forget)
+      notifyChange('teams', 'deleted', teamId).catch(() => {});
     } catch (error) {
       throw new Error(`Failed to delete team: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -262,6 +285,9 @@ export const dbService = {
       
       await sheetsApi.saveCollection('templates', templates);
       clearCache('templates');
+      
+      // Notify other clients immediately (fire and forget)
+      notifyChange('templates', 'updated', template.TemplateID).catch(() => {});
     } catch (error) {
       throw new Error(`Failed to save template to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -273,6 +299,9 @@ export const dbService = {
       const filtered = templates.filter(t => t.TemplateID !== templateId);
       await sheetsApi.saveCollection('templates', filtered);
       clearCache('templates');
+      
+      // Notify other clients immediately (fire and forget)
+      notifyChange('templates', 'deleted', templateId).catch(() => {});
     } catch (error) {
       throw new Error(`Failed to delete template from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -316,6 +345,9 @@ export const dbService = {
       
       await sheetsApi.saveCollection('tasks', tasks);
       clearCache('tasks');
+      
+      // Notify other clients immediately (fire and forget)
+      notifyChange('tasks', 'updated', task.TaskID).catch(() => {});
     } catch (error) {
       throw new Error(`Failed to save task to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -341,6 +373,9 @@ export const dbService = {
       reports.push(report);
       await sheetsApi.saveCollection('reports', reports);
       clearCache('reports');
+      
+      // Notify other clients immediately (fire and forget)
+      notifyChange('reports', 'created', report.ReportID).catch(() => {});
     } catch (error) {
       throw new Error(`Failed to save report to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -366,6 +401,9 @@ export const dbService = {
       followups.push(follow);
       await sheetsApi.saveCollection('followups', followups);
       clearCache('followups');
+      
+      // Notify other clients immediately (fire and forget)
+      notifyChange('followups', 'created', follow.FollowUpID).catch(() => {});
     } catch (error) {
       throw new Error(`Failed to save followup to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -409,6 +447,9 @@ export const dbService = {
       audits.unshift(newLog); // Put recent log on top
       await sheetsApi.saveCollection('auditlogs', audits);
       clearCache('auditlogs');
+      
+      // Notify other clients immediately (fire and forget)
+      notifyChange('auditlogs', 'created', newLog.LogID).catch(() => {});
     } catch (error) {
       throw new Error(`Failed to log action to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -432,6 +473,9 @@ export const dbService = {
     try {
       await sheetsApi.saveCollection('settings', settingsList);
       clearCache('settings');
+      
+      // Notify other clients immediately (fire and forget)
+      notifyChange('settings', 'updated', 'settings').catch(() => {});
     } catch (error) {
       throw new Error(`Failed to save settings to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -465,6 +509,9 @@ export const dbService = {
       
       await sheetsApi.saveCollection('subtasks', subtasks);
       clearCache('subtasks');
+      
+      // Notify other clients immediately (fire and forget)
+      notifyChange('subtasks', 'updated', subtask.SubtaskID).catch(() => {});
     } catch (error) {
       throw new Error(`Failed to save subtask to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -485,6 +532,9 @@ export const dbService = {
       const updated = [...filtered, ...newSubtasks];
       await sheetsApi.saveCollection('subtasks', updated);
       clearCache('subtasks');
+      
+      // Notify other clients immediately (fire and forget)
+      notifyChange('subtasks', 'updated', taskId).catch(() => {});
     } catch (error) {
       throw new Error(`Failed to save subtasks batch to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -510,9 +560,80 @@ export const dbService = {
       comments.push(comment);
       await sheetsApi.saveCollection('comments', comments);
       clearCache('comments');
+      
+      // Notify other clients immediately (fire and forget)
+      notifyChange('comments', 'created', comment.CommentID).catch(() => {});
     } catch (error) {
       throw new Error(`Failed to save comment to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  },
+
+  // Batch load all collections in a single API call
+  async batchLoadAll(): Promise<{
+    users: User[];
+    tasks: Task[];
+    teams: Team[];
+    templates: TaskTemplate[];
+    auditlogs: AuditLog[];
+    settings: AppSetting[];
+    reports: TaskReport[];
+    followups: FollowUp[];
+    subtasks: Subtask[];
+    comments: Comment[];
+  }> {
+    const collections = [
+      'users', 'tasks', 'teams', 'templates', 
+      'auditlogs', 'settings', 'reports', 
+      'followups', 'subtasks', 'comments'
+    ];
+
+    const raw = await sheetsApi.batchGetCollections(collections);
+
+    // Apply the same data transformations as individual getters
+    const users: User[] = (raw.users || []).map((u: any) => ({
+      ...u,
+      TeamIDs: u.TeamIDs 
+        ? (Array.isArray(u.TeamIDs) ? u.TeamIDs : [u.TeamIDs]) 
+        : (u.TeamID ? [u.TeamID] : []),
+      TeamNames: u.TeamNames 
+        ? (Array.isArray(u.TeamNames) ? u.TeamNames : [u.TeamNames]) 
+        : (u.TeamName ? [u.TeamName] : []),
+    }));
+
+    const tasks: Task[] = (raw.tasks || []).map((t: any) => ({
+      ...t,
+      AssignedToTeamIDs: t.AssignedToTeamIDs 
+        ? (Array.isArray(t.AssignedToTeamIDs) 
+            ? t.AssignedToTeamIDs 
+            : [t.AssignedToTeamIDs]) 
+        : (t.TeamID ? [t.TeamID] : []),
+    }));
+
+    // Populate cache for each collection so subsequent 
+    // individual reads hit cache, not Google Sheets
+    setCache('users', users);
+    setCache('tasks', tasks);
+    setCache('teams', raw.teams || []);
+    setCache('templates', raw.templates || []);
+    setCache('auditlogs', raw.auditlogs || []);
+    setCache('settings', raw.settings || []);
+    setCache('reports', raw.reports || []);
+    setCache('followups', raw.followups || []);
+    setCache('subtasks', raw.subtasks || []);
+    setCache('comments', raw.comments || []);
+
+    return {
+      users,
+      tasks,
+      teams: raw.teams || [],
+      templates: raw.templates || [],
+      auditlogs: raw.auditlogs || [],
+      settings: raw.settings || [],
+      reports: raw.reports || [],
+      followups: raw.followups || [],
+      subtasks: raw.subtasks || [],
+      comments: raw.comments || [],
+    };
   },
 
   // Targeted sync for specific collections (for SSE-based sync)

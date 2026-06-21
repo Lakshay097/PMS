@@ -70,6 +70,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Bypass Vite/dev paths to prevent intercepting development server requests
+  if (url.pathname.includes('/@vite') || 
+      url.pathname.includes('/@react-refresh') || 
+      url.pathname.includes('/src/') ||
+      url.pathname.includes('.tsx') ||
+      url.pathname.includes('.ts')) {
+    return; // Let the browser handle it normally, don't intercept
+  }
+
   // API routes - Network First with offline fallback
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(

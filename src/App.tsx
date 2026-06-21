@@ -24,7 +24,8 @@ import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AuditLog, AppSett
 import { dbService, initializeDatabase } from './lib/dbService';
 import { initAuth, getAccessToken, sheetsApi } from './lib/sheetsService';
 import { checkAndGenerateRecurringTasks, evaluateOverdueTasks } from './lib/taskEngine';
-import { initSSEClient, disconnectSSEClient, ConnectionStatus } from './lib/sseClient';
+import { useRealtimeSync } from './hooks/useRealtimeSync';
+import { useAuth } from './contexts/AuthContext';
 import InstallBanner from './components/InstallBanner';
 import OfflineBanner from './components/OfflineBanner';
 import UpdateBanner from './components/UpdateBanner';
@@ -66,6 +67,11 @@ import {
 
 // Components
 import Spinner from './components/ui/Spinner';
+import ErrorBoundary from './components/ErrorBoundary';
+
+// TECH-DEBT: Main bundle still 407kb (gzip 127kb). Run
+// npx vite-bundle-visualizer and inspect index chunk for
+// large deps that could be lazy loaded or replaced.
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -86,6 +92,10 @@ const AddTeamModal = lazy(() => import('./components/features/tasks/AddTeamModal
 type ActiveView = 'dashboard' | 'tasks' | 'templates' | 'admin';
 
 export default function App() {
+  // Real-time sync — invalidates React Query cache on SSE events
+  const { token } = useAuth();
+  useRealtimeSync(token);
+
   // Database States loaded from LocalStorage
   const {
     users,
@@ -114,7 +124,7 @@ export default function App() {
     lastSyncTime,
     loadDatabase,
     syncDatabase,
-  } = useDatabase();
+  } = useDatabase(false); // Will be reloaded when auth initializes
 
   // Active Simulated Session email state
   const [activeUserEmail, setActiveUserEmail] = useState<string>(() => {
@@ -274,15 +284,47 @@ export default function App() {
   };
 
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isAuthInitialized, setIsAuthInitialized] = useState<boolean>(false);
 
   // Google Sheets database state triggers
   const [isSheetsConnected, setIsSheetsConnected] = useState(false);
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
   const [sheetsSpreadsheetId, setSheetsSpreadsheetId] = useState<string | null>(null);
-  
-  // SSE connection status
-  const [sseConnectionStatus, setSseConnectionStatus] = useState<ConnectionStatus>('disconnected');
+
+  // Initialize Google Sheets authentication on mount
+  useEffect(() => {
+    const cleanup = initAuth(
+      (token) => {
+        logger.log('Google Sheets authentication successful');
+        setIsAuthInitialized(true);
+      },
+      (error) => {
+        logger.error('Google Sheets authentication failed:', error);
+        setIsAuthInitialized(false);
+      }
+    );
+    return cleanup;
+  }, []);
+
+  // Reload database when auth initializes
+  useEffect(() => {
+    if (isAuthInitialized) {
+      loadDatabase();
+    }
+  }, [isAuthInitialized]);
+
+  // Debug logging to identify email mismatches
+  useEffect(() => {
+    if (tasks.length > 0 && activeUser) {
+      console.log('[DEBUG] Tasks:', JSON.stringify(tasks, null, 2));
+      console.log('[DEBUG] ActiveUser:', JSON.stringify(activeUser, null, 2));
+      if (tasks[0]) {
+        console.log('[DEBUG] Task[0].AssignedToEmail:', JSON.stringify(tasks[0].AssignedToEmail));
+        console.log('[DEBUG] Task[0].AssignedByEmail:', JSON.stringify(tasks[0].AssignedByEmail));
+      }
+      console.log('[DEBUG] ActiveUser.Email:', JSON.stringify(activeUser.Email));
+    }
+  }, [tasks, activeUser]);
 
   // Simple debounce function
   function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
@@ -308,100 +350,6 @@ export default function App() {
     await loadDatabase();
   };
 
-  // SSE connection for real-time sync
-  useEffect(() => {
-    setIsBackendConnected(true);
-
-    const sseClient = initSSEClient({
-      onConnected: (lastModified) => {
-        logger.log('SSE connected, lastModified:', lastModified);
-      },
-      onChange: async (changedCollections, lastModified) => {
-        logger.log('SSE change detected:', changedCollections);
-        await handleSSEChange(changedCollections);
-      },
-      onStatusChange: (status) => {
-        setSseConnectionStatus(status);
-      }
-    });
-
-    sseClient.connect();
-
-    return () => {
-      disconnectSSEClient();
-    };
-  }, [isBackendConnected]);
-
-  // Handle SSE changes by syncing specific collections
-  const handleSSEChange = async (collections: string[]) => {
-    try {
-      setIsSyncingSheets(true);
-      
-      // Sync only the changed collections
-      await dbService.syncCollections(collections);
-      
-      // Reload the affected collections into state
-      const collectionMap: Record<string, () => Promise<any>> = {
-        users: () => dbService.getUsers(),
-        teams: () => dbService.getTeams(),
-        templates: () => dbService.getTemplates(),
-        tasks: () => dbService.getTasks(),
-        reports: () => dbService.getReports(),
-        followups: () => dbService.getFollowups(),
-        auditlogs: () => dbService.getAuditLogs(),
-        settings: () => dbService.getSettings(),
-        subtasks: () => dbService.getSubtasks(),
-        comments: () => dbService.getComments()
-      };
-
-      const updates = await Promise.allSettled(
-        collections.map(col => collectionMap[col]?.())
-      );
-
-      // Update state for successfully fetched collections
-      collections.forEach((col, idx) => {
-        if (updates[idx].status === 'fulfilled' && updates[idx].value) {
-          switch (col) {
-            case 'users':
-              setUsers(updates[idx].value);
-              break;
-            case 'teams':
-              setTeams(updates[idx].value);
-              break;
-            case 'templates':
-              setTemplates(updates[idx].value);
-              break;
-            case 'tasks':
-              setTasks(updates[idx].value);
-              break;
-            case 'reports':
-              setReports(updates[idx].value);
-              break;
-            case 'followups':
-              setFollowUps(updates[idx].value);
-              break;
-            case 'auditlogs':
-              setAudits(updates[idx].value);
-              break;
-            case 'settings':
-              setSettings(updates[idx].value);
-              break;
-            case 'subtasks':
-              setSubtasks(updates[idx].value);
-              break;
-            case 'comments':
-              setComments(updates[idx].value);
-              break;
-          }
-        }
-      });
-    } catch (error) {
-      console.error('Error handling SSE change:', error);
-    } finally {
-      setIsSyncingSheets(false);
-    }
-  };
-
   // Handle mobile back button and keyboard shortcuts
   useAppEvents(activeView, setActiveView);
 
@@ -410,6 +358,7 @@ export default function App() {
     if (users.length > 0) {
       const found = users.find(u => u.Email === activeUserEmail);
       if (found) {
+        console.log('[Adaptation Effect] found user:', found);
         setActiveUser(found);
         // Force redirect to Dashboard when switching credentials to prevent scoping bugs
         if (found.Role === ROLE.SUB_STAKEHOLDER && activeView === 'admin') {
@@ -435,58 +384,14 @@ export default function App() {
               setUsers(prev => [...prev, normalizedUser]);
             }
           } catch (e) {
-            console.error('Failed to parse stored user:', e);
+            logger.error('Failed to parse stored user:', e);
           }
         }
       }
     }
   }, [activeUserEmail, users, activeView]);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[#0F172A] flex items-center justify-center font-sans px-4">
-        <div className="text-center space-y-4 text-white">
-          <RefreshCw className="animate-spin text-blue-500 mx-auto" size={40} />
-          <p className="text-sm font-semibold text-slate-300">Syncing PMS Platform State...</p>
-          <div className="text-[10px] text-slate-500 font-mono">Verifying Cloud Database Connections &amp; Security Roles</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!activeUser) {
-    return (
-      <LoginPage
-        usersList={users}
-        onLoginSuccess={(email, user) => {
-          logger.log('App.tsx onLoginSuccess called', { email, user });
-          const normalizedUser = {
-            ...user,
-            Email: user.Email || (user as any).email || email,
-            TeamIDs: user.TeamIDs ? (Array.isArray(user.TeamIDs) ? user.TeamIDs : [user.TeamIDs]) : (user.TeamID ? [user.TeamID] : []),
-            TeamNames: user.TeamNames ? (Array.isArray(user.TeamNames) ? user.TeamNames : [user.TeamNames]) : (user.TeamName ? [user.TeamName] : []),
-            TeamID: user.TeamID || (user.TeamIDs && user.TeamIDs.length > 0 ? (Array.isArray(user.TeamIDs) ? user.TeamIDs[0] : user.TeamIDs) : ''),
-            TeamName: user.TeamName || (user.TeamNames && user.TeamNames.length > 0 ? (Array.isArray(user.TeamNames) ? user.TeamNames[0] : user.TeamNames) : '')
-          };
-          localStorage.setItem('PMS_active_user_email', email);
-          localStorage.setItem('PMS_user', JSON.stringify(normalizedUser));
-          logger.log('localStorage set');
-          setActiveUserEmail(email);
-          logger.log('setActiveUserEmail called');
-          setActiveUser(normalizedUser);
-          logger.log('setActiveUser called');
-          // Add user to local users array if not present
-          setUsers(prev => {
-            if (!prev.find(u => u.Email === email)) {
-              return [...prev, normalizedUser];
-            }
-            return prev;
-          });
-          logger.log('onLoginSuccess completed');
-        }}
-      />
-    );
-  }
+  // (Early returns moved to the bottom of the hooks section to satisfy Rules of Hooks)
 
   // Helpers to push state updates safely with durable persistence
   const logAudit = async (entityType: AuditLog['EntityType'], entityId: string, action: string, oldVal = '', newVal = '') => {
@@ -518,6 +423,7 @@ export default function App() {
 
   // Rule 1: Task visibility filters depending on Role
   const getVisibleTasks = () => {
+    console.log('[App] getVisibleTasks called, visibleTasks:', visibleTasks.length);
     return visibleTasks;
   };
 
@@ -526,6 +432,7 @@ export default function App() {
   };
 
   const getFilteredTasks = () => {
+    if (!activeUser) return [];
     const today = new Date();
     today.setHours(0,0,0,0);
 
@@ -568,7 +475,9 @@ export default function App() {
   };
 
   // useMemo: tasks list can be large, filter is O(n)
-  const filteredTasks = useMemo(() => getFilteredTasks().filter(task => {
+  const filteredTasks = useMemo(() => {
+    if (!activeUser) return [];
+    return getFilteredTasks().filter(task => {
     const assignees = (task.AssignedToEmail || '').split(',').map(e => e.trim());
     const assigneeNames = assignees.map(email => {
       const found = users.find(u => u.Email?.toLowerCase() === email.toLowerCase());
@@ -597,7 +506,8 @@ export default function App() {
     const matchesAssigneeSearch = filterAssigneeName === 'All' || assignees.includes(filterAssigneeName);
 
     return matchesSearch && matchesScope && matchesStatus && matchesPriority && matchesType && matchesAssigneeSearch;
-  }), [tasks, users, activeUser, searchQuery, filterScope, filterStatus, filterPriority, filterType, filterAssigneeName]);
+    });
+  }, [tasks, users, activeUser, searchQuery, filterScope, filterStatus, filterPriority, filterType, filterAssigneeName]);
 
   // Task operations hook
   const {
@@ -668,7 +578,7 @@ export default function App() {
       priority: filterPriority,
     },
     currentView: filterScope === 'assigned_to_me' ? 'my-tasks' : filterScope === 'created_by_me' ? 'assigned-by-me' : 'all',
-    activeUser,
+    activeUser: activeUser || { Role: '', Email: '', TeamIDs: [], TeamNames: [] },
   });
 
   // useMemo: reports list can be large, filter and sort is O(n)
@@ -717,7 +627,7 @@ export default function App() {
         });
         uploadedFileUrls.push(uploadData.webViewLink);
       } catch (error) {
-        console.error('Error uploading file:', error);
+        logger.error('Error uploading file:', error);
       }
     }
 
@@ -792,6 +702,57 @@ export default function App() {
     }
   };
 
+  if (dbIsLoading) {
+    console.log('[App] dbIsLoading is true, showing spinner');
+    return (
+      <div className="min-h-screen bg-[#0F172A] flex items-center justify-center font-sans px-4">
+        <div className="text-center space-y-4 text-white">
+          <RefreshCw className="animate-spin text-blue-500 mx-auto" size={40} />
+          <p className="text-sm font-semibold text-slate-300">Syncing PMS Platform State...</p>
+          <div className="text-[10px] text-slate-500 font-mono">Verifying Cloud Database Connections &amp; Security Roles</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!activeUser) {
+    console.log('[App] activeUser is null, showing LoginPage');
+    return (
+      <Suspense fallback={<Spinner size="lg" />}>
+        <LoginPage
+          usersList={users}
+          onLoginSuccess={(email, user) => {
+            logger.log('App.tsx onLoginSuccess called', { email, user });
+            const normalizedUser = {
+              ...user,
+              Email: user.Email || (user as any).email || email,
+              TeamIDs: user.TeamIDs ? (Array.isArray(user.TeamIDs) ? user.TeamIDs : [user.TeamIDs]) : (user.TeamID ? [user.TeamID] : []),
+              TeamNames: user.TeamNames ? (Array.isArray(user.TeamNames) ? user.TeamNames : [user.TeamNames]) : (user.TeamName ? [user.TeamName] : []),
+              TeamID: user.TeamID || (user.TeamIDs && user.TeamIDs.length > 0 ? (Array.isArray(user.TeamIDs) ? user.TeamIDs[0] : user.TeamIDs) : ''),
+              TeamName: user.TeamName || (user.TeamNames && user.TeamNames.length > 0 ? (Array.isArray(user.TeamNames) ? user.TeamNames[0] : user.TeamNames) : '')
+            };
+            localStorage.setItem('PMS_active_user_email', email);
+            localStorage.setItem('PMS_user', JSON.stringify(normalizedUser));
+            logger.log('localStorage set');
+            setActiveUserEmail(email);
+            logger.log('setActiveUserEmail called');
+            setActiveUser(normalizedUser);
+            logger.log('setActiveUser called');
+            // Add user to local users array if not present
+            setUsers(prev => {
+              if (!prev.find(u => u.Email === email)) {
+                return [...prev, normalizedUser];
+              }
+              return prev;
+            });
+            logger.log('onLoginSuccess completed');
+          }}
+        />
+      </Suspense>
+    );
+  }
+
+  console.log('[App] Rendering DashboardPage, tasks:', tasks.length, 'activeUser:', !!activeUser);
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans antialiased text-slate-800">
       
@@ -799,20 +760,6 @@ export default function App() {
       <InstallBanner />
       <OfflineBanner />
       <UpdateBanner />
-      
-      {/* SSE Connection Status Indicator */}
-      <div className="fixed top-5 right-5 z-[9998] flex items-center gap-2 bg-white border border-slate-200 shadow-lg rounded-full px-3 py-1.5 text-xs font-medium">
-        <div className={`h-2 w-2 rounded-full ${
-          sseConnectionStatus === 'connected' ? 'bg-emerald-500' :
-          sseConnectionStatus === 'connecting' ? 'bg-amber-500 animate-pulse' :
-          sseConnectionStatus === 'error' ? 'bg-red-500' : 'bg-slate-400'
-        }`} />
-        <span className="text-slate-600">
-          {sseConnectionStatus === 'connected' ? 'Live' :
-           sseConnectionStatus === 'connecting' ? 'Connecting…' :
-           sseConnectionStatus === 'error' ? 'Disconnected' : 'Offline'}
-        </span>
-      </div>
 
       {/* Dynamic Toast Notification (Non-blocking alert replacement) */}
       <AnimatePresence>
@@ -849,8 +796,20 @@ export default function App() {
       </AnimatePresence>
 
       {/* NEW UI - Dashboard handles all views */}
-      <Suspense fallback={<Spinner size="lg" />}>
-        <DashboardPage
+      <ErrorBoundary
+        fallback={
+          <div className="flex items-center justify-center h-64 
+                          text-gray-500 dark:text-gray-400">
+            This section failed to load. 
+            <button onClick={() => window.location.reload()} 
+                    className="ml-2 text-blue-600 underline">
+              Reload
+            </button>
+          </div>
+        }
+      >
+        <Suspense fallback={<Spinner size="lg" />}>
+          <DashboardPage
         tasks={getVisibleTasks()}
         currentUser={activeUser}
         onNewTask={(assigneeEmail) => {
@@ -962,7 +921,8 @@ export default function App() {
         lastSyncTime={lastSyncTime}
         dbConnectionStatus={dbConnectionStatus}
       />
-      </Suspense>
+        </Suspense>
+      </ErrorBoundary>
 
       <Suspense fallback={<Spinner size="lg" />}>
         <AnimatePresence>

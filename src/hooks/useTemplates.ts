@@ -5,21 +5,23 @@ import { getTemplates, getTemplate, createTemplate, updateTemplate, deleteTempla
  * Hook to fetch all templates
  */
 export function useTemplates() {
-  return useQuery({
+  const { data: templates = [], error, isLoading } = useQuery({
     queryKey: ['templates'],
     queryFn: getTemplates,
   });
+  return { templates, error, isLoading };
 }
 
 /**
  * Hook to fetch a single template by ID
  */
 export function useTemplate(id: string) {
-  return useQuery({
+  const { data: template, error, isLoading } = useQuery({
     queryKey: ['templates', id],
     queryFn: () => getTemplate(id),
     enabled: !!id,
   });
+  return { template, error, isLoading };
 }
 
 /**

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { User, Task, Team, TaskTemplate, AuditLog, AppSetting, TaskReport, FollowUp, Subtask, Comment } from '../types';
-import { dbService } from '../lib/dbService';
+import { dbService, initializeDatabase, forceClearAllCaches } from '../lib/dbService';
+import { getAccessToken } from '../lib/sheetsService';
 
-export function useDatabase() {
+export function useDatabase(isAuthInitialized: boolean = false) {
   const [users, setUsers] = useState<User[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -24,35 +25,37 @@ export function useDatabase() {
       setIsSyncing(true);
       setDbConnectionStatus('connected');
 
-      const { forceClearAllCaches } = await import('../lib/dbService');
       forceClearAllCaches();
 
-      const { initializeDatabase } = await import('../lib/dbService');
+      // Wait for authentication token to be available
+      let token = getAccessToken();
+      let retries = 0;
+      const maxRetries = 30; // Increased to 30 retries (15 seconds)
+      while (!token && retries < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        token = getAccessToken();
+        retries++;
+      }
+
+      if (!token) {
+        throw new Error('Google Sheets authentication failed. No access token available after waiting.');
+      }
+
       await initializeDatabase();
 
-      const [loadedUsers, loadedTasks, loadedTeams, loadedTemplates, loadedAudits, loadedSettings, loadedReports, loadedFollowUps, loadedSubtasks, loadedComments] = await Promise.all([
-        dbService.getUsers(),
-        dbService.getTasks(),
-        dbService.getTeams(),
-        dbService.getTemplates(),
-        dbService.getAuditLogs(),
-        dbService.getSettings(),
-        dbService.getReports(),
-        dbService.getFollowups(),
-        dbService.getSubtasks(),
-        dbService.getComments(),
-      ]);
+      // ONE request fetches everything
+      const data = await dbService.batchLoadAll();
 
-      setUsers(loadedUsers);
-      setTasks(loadedTasks);
-      setTeams(loadedTeams);
-      setTemplates(loadedTemplates);
-      setAudits(loadedAudits);
-      setSettings(loadedSettings);
-      setReports(loadedReports);
-      setFollowUps(loadedFollowUps);
-      setSubtasks(loadedSubtasks);
-      setComments(loadedComments);
+      setUsers(data.users);
+      setTasks(data.tasks);
+      setTeams(data.teams);
+      setTemplates(data.templates);
+      setAudits(data.auditlogs);
+      setSettings(data.settings);
+      setReports(data.reports);
+      setFollowUps(data.followups);
+      setSubtasks(data.subtasks);
+      setComments(data.comments);
       setLastSyncTime(new Date().toISOString());
     } catch (error) {
       console.error('Error loading database:', error);
@@ -68,8 +71,10 @@ export function useDatabase() {
   };
 
   useEffect(() => {
-    loadDatabase();
-  }, []);
+    if (isAuthInitialized) {
+      loadDatabase();
+    }
+  }, [isAuthInitialized]);
 
   return {
     users,

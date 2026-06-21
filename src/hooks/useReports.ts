@@ -5,21 +5,23 @@ import { getReports, getReport, createReport, updateReport, deleteReport } from 
  * Hook to fetch all reports
  */
 export function useReports() {
-  return useQuery({
+  const { data: reports = [], error, isLoading } = useQuery({
     queryKey: ['reports'],
     queryFn: getReports,
   });
+  return { reports, error, isLoading };
 }
 
 /**
  * Hook to fetch a single report by ID
  */
 export function useReport(id: string) {
-  return useQuery({
+  const { data: report, error, isLoading } = useQuery({
     queryKey: ['reports', id],
     queryFn: () => getReport(id),
     enabled: !!id,
   });
+  return { report, error, isLoading };
 }
 
 /**

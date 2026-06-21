@@ -5,21 +5,23 @@ import { getTeams, getTeam, createTeam, updateTeam, deleteTeam } from '../api/te
  * Hook to fetch all teams
  */
 export function useTeams() {
-  return useQuery({
+  const { data: teams = [], error, isLoading } = useQuery({
     queryKey: ['teams'],
     queryFn: getTeams,
   });
+  return { teams, error, isLoading };
 }
 
 /**
  * Hook to fetch a single team by ID
  */
 export function useTeam(id: string) {
-  return useQuery({
+  const { data: team, error, isLoading } = useQuery({
     queryKey: ['teams', id],
     queryFn: () => getTeam(id),
     enabled: !!id,
   });
+  return { team, error, isLoading };
 }
 
 /**

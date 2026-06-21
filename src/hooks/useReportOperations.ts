@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { Task, TaskReport } from '../types';
 import { dbService } from '../lib/dbService';
+import { uploadFile } from '../api/upload';
 
 interface UseReportOperationsProps {
   tasks: Task[];
@@ -39,7 +40,6 @@ export function useReportOperations({
           headers['Authorization'] = `Bearer ${token}`;
         }
 
-        const { uploadFile } = await import('../api/upload');
         const uploadData = await uploadFile({
           fileName: file.name,
           fileData: file.data,

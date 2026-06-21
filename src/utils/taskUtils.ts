@@ -25,7 +25,7 @@ export function getVisibleTasks(tasks: Task[], activeUser: any, currentView: str
   
   const today = getCurrentLocalDate();
   
-  return tasks.filter(task => {
+  const afterRoleFilter = tasks.filter(task => {
     // Admin sees everything
     if (activeUser.Role === ROLE.ADMIN) return true;
     
@@ -42,7 +42,9 @@ export function getVisibleTasks(tasks: Task[], activeUser: any, currentView: str
     }
     
     return false;
-  }).filter(task => {
+  });
+  
+  const afterViewFilter = afterRoleFilter.filter(task => {
     // Apply view filters
     if (currentView === 'my-tasks') {
       return task.AssignedToEmail?.includes(activeUser.Email);
@@ -51,25 +53,33 @@ export function getVisibleTasks(tasks: Task[], activeUser: any, currentView: str
       return task.AssignedByEmail === activeUser.Email;
     }
     return true;
-  }).filter(task => {
+  });
+  
+  const afterCategoryFilter = afterViewFilter.filter(task => {
     // Apply category filter
     if (filters.category && filters.category !== 'All') {
       return task.Category === filters.category;
     }
     return true;
-  }).filter(task => {
+  });
+  
+  const afterStatusFilter = afterCategoryFilter.filter(task => {
     // Apply status filter
     if (filters.status && filters.status !== 'All') {
       return task.Status === filters.status;
     }
     return true;
-  }).filter(task => {
+  });
+  
+  const afterPriorityFilter = afterStatusFilter.filter(task => {
     // Apply priority filter
     if (filters.priority && filters.priority !== 'All') {
       return task.Priority === filters.priority;
     }
     return true;
-  }).filter(task => {
+  });
+  
+  const afterSearchFilter = afterPriorityFilter.filter(task => {
     // Apply search filter
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
@@ -81,6 +91,8 @@ export function getVisibleTasks(tasks: Task[], activeUser: any, currentView: str
     }
     return true;
   });
+  
+  return afterSearchFilter;
 }
 
 export function getOverdueAndSoonTasks(tasks: Task[], activeUser: any) {

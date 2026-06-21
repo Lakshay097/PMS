@@ -3,6 +3,8 @@
  * Handles authentication, error handling, and request/response transformation
  */
 
+import { logger } from '../utils/logger';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 const DEFAULT_TIMEOUT = 10000; // 10 seconds
 
@@ -143,3 +145,25 @@ export const api = {
   patch: <T = any>(endpoint: string, body?: any, options?: Omit<RequestOptions, 'method' | 'body'>) =>
     apiRequest<T>(endpoint, { ...options, method: 'PATCH', body }),
 };
+
+/**
+ * Notify server of a data change for immediate SSE broadcast
+ * Non-critical — failures are logged but don't block the UI
+ */
+export async function notifyChange(
+  collection: string,
+  action: 'created' | 'updated' | 'deleted',
+  entityId: string
+): Promise<void> {
+  try {
+    await api.post('/api/events/notify', {
+      collection,
+      action,
+      entityId
+    });
+  } catch {
+    // Non-critical — polling fallback will catch it
+    // Do not throw, do not block the UI
+    logger.warn('[SSE] Failed to broadcast change notification');
+  }
+}

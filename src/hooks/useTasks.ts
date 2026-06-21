@@ -5,21 +5,23 @@ import { getTasks, getTask, createTask, updateTask, deleteTask } from '../api/ta
  * Hook to fetch all tasks
  */
 export function useTasks() {
-  return useQuery({
+  const { data: tasks = [], error, isLoading } = useQuery({
     queryKey: ['tasks'],
     queryFn: getTasks,
   });
+  return { tasks, error, isLoading };
 }
 
 /**
  * Hook to fetch a single task by ID
  */
 export function useTask(id: string) {
-  return useQuery({
+  const { data: task, error, isLoading } = useQuery({
     queryKey: ['tasks', id],
     queryFn: () => getTask(id),
     enabled: !!id,
   });
+  return { task, error, isLoading };
 }
 
 /**

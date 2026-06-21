@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 import { config } from '../config';
-import { InternalServerError } from '../utils/AppError';
+import { InternalServerError, UnauthorizedError } from '../utils/AppError';
+import { generateGoogleSheetsToken, fetchSheetValues } from './googleSheetsService';
 
 /**
  * User response interface
@@ -59,7 +61,7 @@ export function createToken(
 }
 
 /**
- * Performs user login (simplified for demo)
+ * Performs user login
  * @param email - User email
  * @param password - User password
  * @returns Login response
@@ -69,22 +71,82 @@ export async function login(email: string, password: string): Promise<LoginRespo
     throw new InternalServerError("Email and password are required");
   }
 
-  // Simple authentication - for demo purposes
-  // In production, you should verify against a real database
-  const userId = generateUserId();
+  // Get Google Sheets access token
+  const tokenData = await generateGoogleSheetsToken();
+  if (!tokenData) {
+    throw new InternalServerError("Failed to authenticate with Google Sheets");
+  }
+
+  const spreadsheetId = tokenData.spreadsheetId;
+  if (!spreadsheetId) {
+    throw new InternalServerError("Spreadsheet ID not found");
+  }
+
+  // Fetch users from Google Sheets
+  const usersRange = 'users!A:R';
+  const users = await fetchSheetValues(tokenData.accessToken, spreadsheetId, usersRange);
+
+  if (!users || users.length === 0) {
+    throw new InternalServerError("Failed to fetch users");
+  }
+
   const normalizedEmail = email.toLowerCase();
-  const fullName = email.split('@')[0];
+  let foundUser: any[] | null = null;
+
+  // Skip header row (index 0) and find user by email (email is at index 2)
+  for (let i = 1; i < users.length; i++) {
+    const row = users[i];
+    if (row[2] === normalizedEmail) {
+      foundUser = row;
+      break;
+    }
+  }
+
+  if (!foundUser) {
+    throw new UnauthorizedError("Invalid email or password");
+  }
+
+  // Check if user is active (Active is at index 7)
+  const activeValue = foundUser[7];
+  if (activeValue !== 'true' && activeValue !== 'TRUE' && activeValue !== true) {
+    throw new UnauthorizedError("Account is not active. Please wait for admin approval.");
+  }
+
+  // Verify password (password is at index 12)
+  const storedPassword = foundUser[12];
+  const isBcryptHash = storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2a$');
   
-  const token = createToken(normalizedEmail, userId, 'Admin', fullName);
+  let passwordMatches = false;
+  if (isBcryptHash) {
+    passwordMatches = await bcrypt.compare(password, storedPassword);
+  } else {
+    // Legacy plaintext fallback
+    passwordMatches = password === storedPassword;
+  }
+
+  if (!passwordMatches) {
+    throw new UnauthorizedError("Invalid email or password");
+  }
+
+  // Extract user data from the row
+  const userId = foundUser[0]; // UserID (A)
+  const fullName = foundUser[1]; // FullName (B)
+  const role = foundUser[3]; // Role (D)
+  const teamId = foundUser[5]; // TeamID (F)
+  const teamName = foundUser[6]; // TeamName (G)
+  const active = foundUser[7] === 'true' || foundUser[7] === true; // Active (H)
+
+  // Create JWT token
+  const token = createToken(normalizedEmail, userId, role, fullName);
 
   const userResponse: UserResponse = {
     email: normalizedEmail,
     UserID: userId,
-    Role: 'Admin',
+    Role: role,
     FullName: fullName,
-    TeamID: 'T-00',
-    TeamName: 'Admin Team',
-    Active: true
+    TeamID: teamId,
+    TeamName: teamName,
+    Active: active
   };
 
   return {

@@ -18,6 +18,7 @@ export function useTaskForm({ initialTask, onSubmit }: UseTaskFormProps) {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const handleChange = (field: string, value: string) => {
     setFields(prev => ({ ...prev, [field]: value }));
@@ -63,6 +64,7 @@ export function useTaskForm({ initialTask, onSubmit }: UseTaskFormProps) {
     }
 
     setIsSubmitting(true);
+    setServerError(null);
     try {
       await onSubmit({
         Title: fields.title,
@@ -75,7 +77,7 @@ export function useTaskForm({ initialTask, onSubmit }: UseTaskFormProps) {
       return true;
     } catch (error) {
       console.error('Error submitting task:', error);
-      setErrors({ submit: 'Failed to submit task. Please try again.' });
+      setServerError('Failed to submit task. Please try again.');
       return false;
     } finally {
       setIsSubmitting(false);
@@ -92,6 +94,7 @@ export function useTaskForm({ initialTask, onSubmit }: UseTaskFormProps) {
       dueDate: initialTask?.DueDate || '',
     });
     setErrors({});
+    setServerError(null);
   };
 
   return {
@@ -100,6 +103,7 @@ export function useTaskForm({ initialTask, onSubmit }: UseTaskFormProps) {
     handleChange,
     handleSubmit,
     isSubmitting,
+    serverError,
     reset,
   };
 }

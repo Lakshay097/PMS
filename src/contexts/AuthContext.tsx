@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types/index';
 import { login, mapUserResponseToUser } from '../api/auth';
+import { logger } from '../utils/logger';
 
 interface AuthContextType {
   user: User | null;
@@ -31,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
       } catch (error) {
-        console.error('Failed to parse stored user:', error);
+        logger.error('Failed to parse stored user:', error);
         localStorage.removeItem('auth_token');
         localStorage.removeItem('PMS_user');
       }

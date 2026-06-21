@@ -12,6 +12,7 @@ export function useLoginForm({ onSubmit }: UseLoginFormProps) {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const handleChange = (field: string, value: string) => {
     setFields(prev => ({ ...prev, [field]: value }));
@@ -70,6 +71,7 @@ export function useLoginForm({ onSubmit }: UseLoginFormProps) {
       password: '',
     });
     setErrors({});
+    setServerError(null);
   };
 
   return {
@@ -78,6 +80,7 @@ export function useLoginForm({ onSubmit }: UseLoginFormProps) {
     handleChange,
     handleSubmit,
     isSubmitting,
+    serverError,
     reset,
   };
 }

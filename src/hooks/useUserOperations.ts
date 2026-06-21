@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { User, Team } from '../types';
 import { dbService } from '../lib/dbService';
 import { ROLE } from '../constants/status';
+import { approveUser } from '../api/auth';
 
 interface UseUserOperationsProps {
   users: User[];
@@ -27,8 +28,9 @@ export function useUserOperations({
       };
       await dbService.saveUser(updatedUser);
       await logAudit('User', foundUser.UserID, `Updated Team memberships to: ${teamNames.join(', ')}`, JSON.stringify(foundUser.TeamIDs), JSON.stringify(teamIDs));
+      await syncDatabase();
     }
-  }, [users, logAudit]);
+  }, [users, logAudit, syncDatabase]);
 
   const handleAddUser = useCallback(async (newUser: User) => {
     await dbService.saveUser(newUser);
@@ -46,7 +48,6 @@ export function useUserOperations({
 
   const handleApproveUser = useCallback(async (email: string) => {
     try {
-      const { approveUser } = await import('../api/auth');
       await approveUser({ email });
     } catch (error) {
       console.error('Error approving user:', error);

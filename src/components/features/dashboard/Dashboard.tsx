@@ -64,10 +64,43 @@ interface DashboardProps {
   onDeleteTeam?: (teamId: string) => Promise<void>;
 }
 
-export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, onLogout, templates = [], onViewChange, users = [], onAddUser, onAddTemplate, onToggleTemplateStatus, onUpdateSetting, onEditProfile, onChangePassword, onConfigureNotifications, onToggleUserActive, isDarkMode = false, onToggleTheme, onSyncDatabase, isSyncing = false, lastSyncTime, dbConnectionStatus = 'connected', audits = [], settings = [], teams = [], onToggleUserStatus, onUpdateUserRole, onApproveUser, onAddTeam, onToggleTeamStatus, onUpdateUserTeams, onDeleteTeam }: DashboardProps) {
+export default function Dashboard({
+  tasks,
+  currentUser,
+  onNewTask,
+  onTaskClick,
+  onLogout,
+  templates = [],
+  onViewChange,
+  users = [],
+  onAddUser,
+  onAddTemplate,
+  onToggleTemplateStatus,
+  onUpdateSetting,
+  onEditProfile,
+  onChangePassword,
+  onConfigureNotifications,
+  onToggleUserActive,
+  isDarkMode = false,
+  onToggleTheme,
+  onSyncDatabase,
+  isSyncing = false,
+  lastSyncTime,
+  dbConnectionStatus = 'connected',
+  audits = [],
+  settings = [],
+  teams = [],
+  onToggleUserStatus,
+  onUpdateUserRole,
+  onApproveUser,
+  onAddTeam,
+  onToggleTeamStatus,
+  onUpdateUserTeams,
+  onDeleteTeam,
+}: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState<'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings'>('overview');
-  const [navigationHistory, setNavigationHistory] = useState<'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings'[]>([]);
+  const [navigationHistory, setNavigationHistory] = useState<Array<'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings'>>([]);
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
   const [filterAssignee, setFilterAssignee] = useState('All');
@@ -145,8 +178,10 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
     return diffDays;
   };
 
-  const handleViewChange = (view: 'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings', filterStatus?: string) => {
-    // Add current view to history before changing
+  const handleViewChange = (
+    view: 'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings',
+    filterStatus?: string
+  ) => {
     if (activeView !== view) {
       setNavigationHistory(prev => [...prev, activeView]);
     }
@@ -173,17 +208,13 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
   // Get team members based on user role
   const getTeamMembers = () => {
     if (currentUser.Role === ROLE.ADMIN) {
-      // Admin sees all users
-      return (users || []);
+      return users || [];
     } else if (currentUser.Role === ROLE.STAKEHOLDER) {
-      // Stakeholder sees sub-stakeholders where they are the manager, plus themselves
       return (users || []).filter(u =>
         u.Email === currentUser.Email ||
-        (u.Role === ROLE.SUB_STAKEHOLDER &&
-        u.ManagerEmail === currentUser.Email)
+        (u.Role === ROLE.SUB_STAKEHOLDER && u.ManagerEmail === currentUser.Email)
       );
     } else {
-      // Sub-stakeholder sees their manager (stakeholder), plus themselves
       return (users || []).filter(u =>
         u.Email === currentUser.Email ||
         u.Email === currentUser.ManagerEmail
@@ -193,7 +224,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
 
   const getFilteredTasks = () => {
     let filtered = tasks || [];
-    
+
     if (filterStatus !== 'All') {
       filtered = filtered.filter(t => t.Status === filterStatus);
     }
@@ -204,26 +235,24 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
       filtered = filtered.filter(t => t.AssignedToEmail === filterAssignee);
     }
     if (searchQuery) {
-      filtered = filtered.filter(t => 
+      filtered = filtered.filter(t =>
         (t.Title && t.Title.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (t.TaskID && t.TaskID.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (t.AssignedToEmail && t.AssignedToEmail.toLowerCase().includes(searchQuery.toLowerCase()))
       );
     }
-    
-    // Sort by urgency: overdue first, then due soon
+
     const today = new Date().toISOString().split('T')[0];
     const sorted = filtered.sort((a, b) => {
       const aOverdue = a.DueDate < today && a.Status !== 'Closed' && a.Status !== 'Reviewed';
       const bOverdue = b.DueDate < today && b.Status !== 'Closed' && b.Status !== 'Reviewed';
-      
+
       if (aOverdue && !bOverdue) return -1;
       if (!aOverdue && bOverdue) return 1;
-      
-      // If both overdue or both not overdue, sort by due date
+
       return a.DueDate.localeCompare(b.DueDate);
     });
-    
+
     return sorted;
   };
 
@@ -324,7 +353,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
           {needsAttention.map((task, index) => {
             const daysUntil = getDaysUntilDue(task.DueDate);
             const dueText = daysUntil < 0 ? 'Overdue' : daysUntil === 0 ? 'Today' : `${daysUntil} days`;
-            
+
             return (
               <motion.div
                 key={task.TaskID}
@@ -381,7 +410,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
               alerts.map((task) => {
                 const isOverdue = task.DueDate < today;
                 return (
-                  <div 
+                  <div
                     key={task.TaskID}
                     onClick={() => onTaskClick(task)}
                     className={`${isOverdue ? 'bg-red-500/10 border-red-500/20 hover:bg-red-500/20' : 'bg-yellow-500/10 border-yellow-500/20 hover:bg-yellow-500/20'} border rounded-lg p-4 cursor-pointer transition-colors`}
@@ -400,7 +429,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
                           {task.TaskID}: {task.Title.length > 50 ? task.Title.substring(0, 50) + '...' : task.Title}
                         </p>
                         <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                          Due: {task.DueDate} ΓÇó Priority: {task.Priority}
+                          Due: {task.DueDate} &bull; Priority: {task.Priority}
                         </p>
                       </div>
                     </div>
@@ -431,8 +460,8 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
           </div>
           <div className="p-6 space-y-4">
             {recentActivity.map((activity, index) => (
-              <div 
-                key={index} 
+              <div
+                key={index}
                 onClick={() => activity.type === 'report' ? handleViewChange('tasks', 'Submitted') : handleViewChange('tasks', 'In progress')}
                 className="flex items-start space-x-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-[#1E293B]/30 rounded-lg p-2 -mx-2 transition-colors"
               >
@@ -475,7 +504,6 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
   );
 
   const renderSchedules = () => {
-    // Filter templates based on search query
     const filteredTemplates = searchQuery
       ? templates.filter(t =>
           (t.Title && t.Title.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -503,73 +531,66 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
           <div className={`divide-y ${isDarkMode ? 'divide-[#1E293B]' : 'divide-slate-200'}`}>
             {filteredTemplates.filter(t => t.Active).length > 0 ? (
               filteredTemplates.filter(t => t.Active).map((template) => (
-              <div key={template.TemplateID} className="py-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{template.Title}</h4>
-                      <span className={`text-xs font-bold px-2 py-1 rounded border ${getPriorityColor(template.Priority)}`}>
-                        {template.Priority}
-                      </span>
+                <div key={template.TemplateID} className="py-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{template.Title}</h4>
+                        <span className={`text-xs font-bold px-2 py-1 rounded border ${getPriorityColor(template.Priority)}`}>
+                          {template.Priority}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-4 text-sm">
+                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>{template.RecurrenceType}</span>
+                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>&bull; {template.Category}</span>
+                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>&bull; Next: {template.NextGenerationDate}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-4 text-sm">
-                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>{template.RecurrenceType}</span>
-                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>ΓÇó {template.Category}</span>
-                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>ΓÇó Next: {template.NextGenerationDate}</span>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => onNewTask()}
+                        className={`px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors ${
+                          isDarkMode
+                            ? 'text-slate-700 hover:text-slate-900 bg-slate-200 hover:bg-slate-300'
+                            : 'text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200'
+                        }`}
+                      >
+                        Edit
+                      </button>
+                      <button className="px-3 py-1 text-xs font-bold uppercase tracking-wider text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors">
+                        Delete
+                      </button>
                     </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => onNewTask()}
-                      className={`px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors ${
-                        isDarkMode 
-                          ? 'text-slate-700 hover:text-slate-900 bg-slate-200 hover:bg-slate-300' 
-                          : 'text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200'
-                      }`}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="px-3 py-1 text-xs font-bold uppercase tracking-wider text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors"
-                    >
-                      Delete
-                    </button>
                   </div>
                 </div>
-              </div>
-            ))
-          ) : (
-            <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No active schedules found</div>
-          )}
+              ))
+            ) : (
+              <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No active schedules found</div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
     );
   };
 
   const renderTeam = () => {
     const teamMembers = getTeamMembers();
 
-    // Filter team members based on search query
-    const filteredTeamMembers = searchQuery 
-      ? teamMembers.filter(user => 
+    const filteredTeamMembers = searchQuery
+      ? teamMembers.filter(user =>
           (user.FullName && user.FullName.toLowerCase().includes(searchQuery.toLowerCase())) ||
           (user.Email && user.Email.toLowerCase().includes(searchQuery.toLowerCase()))
         )
       : teamMembers;
 
-    // Group users by team for Admin view (use filtered users), including all teams in the system
     const groupedTeams: Record<string, UserType[]> = {};
 
-    // Initialize keys with all existing teams so empty teams are also displayed
     (teams || []).forEach(t => {
       groupedTeams[t.TeamName] = [];
     });
-    
-    // Add fallback for Unassigned members
+
     groupedTeams['Unassigned'] = [];
 
-    // Map users to their respective teams (handles users belonging to multiple teams)
     filteredTeamMembers.forEach(user => {
       if (user.TeamNames && user.TeamNames.length > 0) {
         user.TeamNames.forEach(teamName => {
@@ -583,7 +604,6 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
       }
     });
 
-    // Remove Unassigned key if it remains empty to keep clean UI
     if (groupedTeams['Unassigned'].length === 0) {
       delete groupedTeams['Unassigned'];
     }
@@ -598,20 +618,20 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
               </h3>
               <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                 {currentUser.Role === ROLE.ADMIN ? 'Manage teams and their members' :
-                 currentUser.Role === ROLE.STAKEHOLDER ? 'Your sub-stakeholders' : 
+                 currentUser.Role === ROLE.STAKEHOLDER ? 'Your sub-stakeholders' :
                  'Your manager'}
               </p>
             </div>
             {currentUser.Role === ROLE.ADMIN && (
               <div className="flex items-center space-x-2">
-                <button 
+                <button
                   onClick={() => handleViewChange('admin')}
                   className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                 >
                   <Plus size={16} />
                   <span>Add Member</span>
                 </button>
-                <button 
+                <button
                   onClick={() => handleViewChange('admin')}
                   className="flex items-center space-x-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                 >
@@ -623,7 +643,6 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
           </div>
 
           {currentUser.Role === ROLE.ADMIN ? (
-            // Admin view: Show teams with their members (including inactive ones)
             <div className="space-y-4">
               {Object.entries(groupedTeams).map(([teamName, teamUsers]) => (
                 <div key={teamName} className={`border rounded-lg p-4 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
@@ -631,8 +650,8 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
                     <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{teamName}</h4>
                     <div className="flex items-center space-x-2">
                       <span className={`text-xs font-bold px-2 py-1 rounded border ${
-                        teamUsers.filter(u => u.Active).length > 0 
-                          ? 'bg-green-500/10 text-green-400 border-green-500/20' 
+                        teamUsers.filter(u => u.Active).length > 0
+                          ? 'bg-green-500/10 text-green-400 border-green-500/20'
                           : 'bg-red-500/10 text-red-400 border-red-500/20'
                       }`}>
                         {teamUsers.filter(u => u.Active).length} / {teamUsers.length} Active
@@ -677,8 +696,8 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
                             <button
                               onClick={() => onToggleUserActive && onToggleUserActive(member.UserID, !member.Active)}
                               className={`text-xs font-medium px-2 py-1 rounded border transition-colors ${
-                                member.Active 
-                                  ? 'text-green-400 bg-green-500/10 border-green-500/20 hover:bg-green-500/20' 
+                                member.Active
+                                  ? 'text-green-400 bg-green-500/10 border-green-500/20 hover:bg-green-500/20'
                                   : 'text-red-400 bg-red-500/10 border-red-500/20 hover:bg-red-500/20'
                               }`}
                             >
@@ -701,7 +720,6 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
               )}
             </div>
           ) : (
-            // Non-admin view: Show filtered team members
             <div className="space-y-3">
               {teamMembers.length > 0 ? (
                 teamMembers.map((member) => (
@@ -731,8 +749,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
                 ))
               ) : (
                 <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                  {currentUser.Role === ROLE.STAKEHOLDER ? 'No sub-stakeholders assigned to you' : 
-                   'No manager assigned'}
+                  {currentUser.Role === ROLE.STAKEHOLDER ? 'No sub-stakeholders assigned to you' : 'No manager assigned'}
                 </div>
               )}
             </div>
@@ -743,7 +760,6 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
   };
 
   const renderReports = () => {
-    // Filter tasks for reports based on search query
     const reportTasks = tasks.filter(t => t.Status === 'Submitted' || t.Status === 'In Progress');
     const filteredReportTasks = searchQuery
       ? reportTasks.filter(t =>
@@ -760,8 +776,8 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
             <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Progress Reports</h3>
             <div className="flex items-center space-x-2">
               <select className={`border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                isDarkMode 
-                  ? 'bg-[#1E293B] border-[#334155] text-white' 
+                isDarkMode
+                  ? 'bg-[#1E293B] border-[#334155] text-white'
                   : 'bg-slate-50 border-slate-200 text-slate-900'
               }`}>
                 <option>All Reports</option>
@@ -772,72 +788,68 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
           </div>
           <div className="space-y-3">
             {filteredReportTasks.length > 0 ? (
-              <>
-                {/* PERF-CHECK: if list exceeds 50 items, add @tanstack/react-virtual */}
-                {filteredReportTasks.map((task) => (
-                  <div
-                    key={task.TaskID}
-                    onClick={() => onTaskClick(task)}
-                    className={`border rounded-lg p-4 hover:border-[#475569] transition-colors cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h4 className={`font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{task.Title}</h4>
-                        <div className={`flex items-center space-x-4 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                          <span>Task: {task.TaskID}</span>
-                          <span>Due: {task.DueDate}</span>
-                        </div>
+              filteredReportTasks.map((task) => (
+                <div
+                  key={task.TaskID}
+                  onClick={() => onTaskClick(task)}
+                  className={`border rounded-lg p-4 hover:border-[#475569] transition-colors cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h4 className={`font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{task.Title}</h4>
+                      <div className={`flex items-center space-x-4 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                        <span>Task: {task.TaskID}</span>
+                        <span>Due: {task.DueDate}</span>
                       </div>
-                      <span className={`text-xs font-bold px-2 py-1 rounded border ${
-                        task.Status === 'Submitted' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                        'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-                      }`}>
-                        {task.Status}
-                      </span>
                     </div>
+                    <span className={`text-xs font-bold px-2 py-1 rounded border ${
+                      task.Status === 'Submitted' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                      'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                    }`}>
+                      {task.Status}
+                    </span>
                   </div>
-                ))}
-              </>
+                </div>
+              ))
             ) : (
               <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No reports found</div>
             )}
+          </div>
         </div>
       </div>
-    </div>
-  );
-
-  const renderAdmin = () => {
-    return (
-      <AdminPanel
-        users={users}
-        templates={templates}
-        audits={audits}
-        settings={settings}
-        teams={teams}
-        onAddUser={onAddUser || (() => {})}
-        onToggleUserStatus={onToggleUserStatus || (() => {})}
-        onAddTemplate={onAddTemplate || (() => {})}
-        onToggleTemplateStatus={onToggleTemplateStatus || (() => {})}
-        onUpdateSetting={onUpdateSetting || (() => {})}
-        onUpdateUserRole={onUpdateUserRole || (() => {})}
-        onApproveUser={onApproveUser || (() => {})}
-        onAddTeam={onAddTeam || (() => {})}
-        onToggleTeamStatus={onToggleTeamStatus || (() => {})}
-        onUpdateUserTeams={onUpdateUserTeams || (() => {})}
-        onDeleteTeam={onDeleteTeam || (() => {})}
-        onSyncDatabase={onSyncDatabase}
-        isSyncing={isSyncing}
-        lastSyncTime={lastSyncTime}
-        dbConnectionStatus={dbConnectionStatus}
-      />
     );
   };
+
+  const renderAdmin = () => (
+    <AdminPanel
+      users={users}
+      templates={templates}
+      audits={audits}
+      settings={settings}
+      teams={teams}
+      onAddUser={onAddUser || (() => {})}
+      onToggleUserStatus={onToggleUserStatus || (() => {})}
+      onAddTemplate={onAddTemplate || (() => {})}
+      onToggleTemplateStatus={onToggleTemplateStatus || (() => {})}
+      onUpdateSetting={onUpdateSetting || (() => {})}
+      onUpdateUserRole={onUpdateUserRole || (() => {})}
+      onApproveUser={onApproveUser || (() => {})}
+      onAddTeam={onAddTeam || (() => {})}
+      onToggleTeamStatus={onToggleTeamStatus || (() => {})}
+      onUpdateUserTeams={onUpdateUserTeams || (() => {})}
+      onDeleteTeam={onDeleteTeam || (() => {})}
+      onSyncDatabase={onSyncDatabase}
+      isSyncing={isSyncing}
+      lastSyncTime={lastSyncTime}
+      dbConnectionStatus={dbConnectionStatus}
+    />
+  );
 
   const renderSettings = () => (
     <div className="space-y-6">
       <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
         <h3 className={`font-semibold text-lg mb-6 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Account Settings</h3>
-        
+
         <div className="space-y-6">
           <div className={`border rounded-lg p-4 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
             <div className="flex items-center justify-between">
@@ -845,7 +857,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
                 <h4 className={`font-medium mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Profile Information</h4>
                 <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Update your personal details</p>
               </div>
-              <button 
+              <button
                 onClick={onEditProfile}
                 className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
               >
@@ -860,7 +872,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
                 <h4 className={`font-medium mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Change Password</h4>
                 <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Update your password</p>
               </div>
-              <button 
+              <button
                 onClick={onChangePassword}
                 className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
               >
@@ -877,7 +889,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
               </div>
               <div className="flex items-center space-x-2">
                 <span className="text-green-400 text-sm font-medium">Enabled</span>
-                <button 
+                <button
                   onClick={onConfigureNotifications}
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-slate-200 hover:bg-slate-300 text-slate-900'}`}
                 >
@@ -912,7 +924,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
               <h4 className={`font-medium mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Delete Account</h4>
               <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Permanently delete your account and all data</p>
             </div>
-            <button 
+            <button
               onClick={onLogout}
               className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
@@ -1028,7 +1040,6 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
             </ul>
           </div>
 
-
           {/* Account Section */}
           <div>
             <p className={`text-xs font-bold uppercase tracking-wider mb-3 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Account</p>
@@ -1098,8 +1109,8 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className={`w-80 border rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm ${
-                    isDarkMode 
-                      ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-400' 
+                    isDarkMode
+                      ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-400'
                       : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-500'
                   }`}
                 />
@@ -1125,14 +1136,14 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
 
         {/* Syncing Banner */}
         {isSyncing && (
-          <div className={`px-8 py-3 bg-blue-50 border-b border-blue-200 dark:bg-blue-900/20 dark:border-blue-800 flex items-center space-x-3`}>
+          <div className="px-8 py-3 bg-blue-50 border-b border-blue-200 dark:bg-blue-900/20 dark:border-blue-800 flex items-center space-x-3">
             <RefreshCw size={16} className="text-blue-600 dark:text-blue-400 animate-spin" />
             <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Syncing changes...</span>
           </div>
         )}
 
         {/* Content */}
-        <div className="p-8">
+        <div className="p-8 min-h-screen">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeView}
@@ -1154,5 +1165,4 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
       </main>
     </div>
   );
-}
 }

@@ -29,11 +29,36 @@ export class SSEService {
     // Keep connection alive with ping every 25s
     const pingInterval = setInterval(() => {
       if (this.connections.has(res)) {
-        res.write(': ping\n\n');
+        res.write(`event: ping\ndata: {}\n\n`);
       } else {
         clearInterval(pingInterval);
       }
     }, 25000);
+  }
+
+  /**
+   * Broadcast a change notification to all connected clients
+   */
+  public broadcastChange(data: {
+    collection: string;
+    action: string;
+    entityId: string;
+    changedBy: string;
+    timestamp: string;
+  }): void {
+    const payload = JSON.stringify({
+      changed: [data.collection],
+      ...data
+    });
+
+    for (const connection of this.connections) {
+      try {
+        connection.write(`data: ${payload}\n\n`);
+      } catch (err) {
+        // Connection might be dead, remove it
+        this.connections.delete(connection);
+      }
+    }
   }
 
   /**
@@ -92,7 +117,7 @@ export class SSEService {
       } catch (err) {
         logger.error('Error in audit loop:', err);
       }
-    }, 10000); // Check every 10 seconds
+    }, 60_000); // Check every 60 seconds (fallback only)
   }
 
   /**

@@ -5,21 +5,23 @@ import { getUsers, getUser, updateUser, deleteUser } from '../api/users';
  * Hook to fetch all users
  */
 export function useUsers() {
-  return useQuery({
+  const { data: users = [], error, isLoading } = useQuery({
     queryKey: ['users'],
     queryFn: getUsers,
   });
+  return { users, error, isLoading };
 }
 
 /**
  * Hook to fetch a single user by ID
  */
 export function useUser(id: string) {
-  return useQuery({
+  const { data: user, error, isLoading } = useQuery({
     queryKey: ['users', id],
     queryFn: () => getUser(id),
     enabled: !!id,
   });
+  return { user, error, isLoading };
 }
 
 /**

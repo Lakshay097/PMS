@@ -6,16 +6,21 @@ import './index.css';
 import { registerSW } from './utils/registerSW';
 import { queryClient } from './lib/queryClient';
 import { AuthProvider } from './contexts/AuthContext';
+import ErrorBoundary from './components/ErrorBoundary';
 
-// Register service worker for PWA functionality
-registerSW();
+// Register service worker for PWA functionality (production only)
+if (import.meta.env.PROD) {
+  registerSW();
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );

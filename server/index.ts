@@ -9,6 +9,7 @@ import { requestLogger } from './middleware/logger';
 import apiRoutes from './routes';
 import { logger } from './utils/logger';
 import { sseService } from './services/sseService';
+import { authenticateToken, AuthRequest } from './middleware/auth';
 
 validateEnv();
 
@@ -39,6 +40,23 @@ async function startServer() {
   app.use('/api', apiRoutes);
   app.get("/api/changes/stream", sseService.getSSEHandler());
   sseService.startAuditLoop();
+
+  // POST /api/events/notify - immediate SSE broadcast endpoint
+  app.post('/api/events/notify', authenticateToken, (req: AuthRequest, res) => {
+    const { collection, action, entityId } = req.body;
+    const changedBy = req.user?.email || 'unknown';
+
+    // Broadcast immediately to all SSE clients
+    sseService.broadcastChange({
+      collection,
+      action,
+      entityId,
+      changedBy,
+      timestamp: new Date().toISOString()
+    });
+
+    return res.json({ success: true });
+  });
 
   app.get('/sw.js', (req, res) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
