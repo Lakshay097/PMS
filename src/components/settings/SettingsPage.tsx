@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import FormField from '../shared/FormField';
 import { User, Lock, Bell, Sun, Moon, HelpCircle, Save, LogOut, Monitor, Smartphone } from 'lucide-react';
+import { logger } from '../../utils/logger';
 
 interface SettingsPageProps {
   user?: {
@@ -37,7 +38,7 @@ export default function SettingsPage({ user, onLogout }: SettingsPageProps) {
   ];
 
   const handleSave = () => {
-    console.log('Saving settings:', formData);
+    logger.log('Saving settings:', formData);
   };
 
   const handleLogout = () => {

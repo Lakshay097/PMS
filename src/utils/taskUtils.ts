@@ -1,4 +1,5 @@
 import { Task, TaskReport, FollowUp } from '../types';
+import { ROLE } from '../constants/status';
 
 export function parseSafely(value: string): any {
   try {
@@ -26,17 +27,17 @@ export function getVisibleTasks(tasks: Task[], activeUser: any, currentView: str
   
   return tasks.filter(task => {
     // Admin sees everything
-    if (activeUser.Role === 'Admin') return true;
+    if (activeUser.Role === ROLE.ADMIN) return true;
     
     // Stakeholders see their assigned tasks and tasks they assigned
-    if (activeUser.Role === 'Stakeholder') {
+    if (activeUser.Role === ROLE.STAKEHOLDER) {
       const assignedToMe = task.AssignedToEmail?.includes(activeUser.Email);
       const assignedByMe = task.AssignedByEmail === activeUser.Email;
       return assignedToMe || assignedByMe;
     }
     
     // Sub-stakeholders see only their assigned tasks
-    if (activeUser.Role === 'Sub-stakeholder') {
+    if (activeUser.Role === ROLE.SUB_STAKEHOLDER) {
       return task.AssignedToEmail?.includes(activeUser.Email);
     }
     
@@ -91,13 +92,13 @@ export function getOverdueAndSoonTasks(tasks: Task[], activeUser: any) {
   const threeDaysFromNowStr = threeDaysFromNow.toISOString().split('T')[0];
   
   const visibleTasks = tasks.filter(task => {
-    if (activeUser.Role === 'Admin') return true;
-    if (activeUser.Role === 'Stakeholder') {
+    if (activeUser.Role === ROLE.ADMIN) return true;
+    if (activeUser.Role === ROLE.STAKEHOLDER) {
       const assignedToMe = task.AssignedToEmail?.includes(activeUser.Email);
       const assignedByMe = task.AssignedByEmail === activeUser.Email;
       return assignedToMe || assignedByMe;
     }
-    if (activeUser.Role === 'Sub-stakeholder') {
+    if (activeUser.Role === ROLE.SUB_STAKEHOLDER) {
       return task.AssignedToEmail?.includes(activeUser.Email);
     }
     return false;
@@ -121,7 +122,7 @@ export function getOverdueAndSoonTasks(tasks: Task[], activeUser: any) {
 export function getVisibleReports(reports: TaskReport[], activeUser: any) {
   if (!reports) return [];
   
-  if (activeUser.Role === 'Admin') return reports;
+  if (activeUser.Role === ROLE.ADMIN) return reports;
   
   return reports.filter(report => {
     return report.SubmittedByEmail === activeUser.Email;

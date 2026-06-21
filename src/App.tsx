@@ -8,6 +8,8 @@ import { useTeamOperations } from './hooks/useTeamOperations';
 import { useTemplateOperations } from './hooks/useTemplateOperations';
 import { useTaskMetrics } from './hooks/useTaskMetrics';
 import { motion, AnimatePresence } from 'framer-motion';
+import { logger } from './utils/logger';
+import { ROLE } from './constants/status';
 import {
   INITIAL_USERS,
   INITIAL_TEAMS,
@@ -63,21 +65,23 @@ import {
 } from 'lucide-react';
 
 // Components
-import CreateTaskModal from './components/CreateTaskModal';
-import CreateReportModal from './components/CreateReportModal';
-import FollowUpModal from './components/FollowUpModal';
-import TaskDrawer from './components/features/tasks/TaskDrawer';
 import Spinner from './components/ui/Spinner';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const TasksPage = lazy(() => import('./pages/TasksPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
-import EditProfileModal from './components/EditProfileModal';
-import ChangePasswordModal from './components/ChangePasswordModal';
-import ConfigureNotificationsModal from './components/ConfigureNotificationsModal';
-import AddUserModal from './components/features/admin/AddUserModal';
-import AddTeamModal from './components/features/tasks/AddTeamModal';
+
+// Lazy load modal components
+const CreateTaskModal = lazy(() => import('./components/CreateTaskModal'));
+const CreateReportModal = lazy(() => import('./components/CreateReportModal'));
+const FollowUpModal = lazy(() => import('./components/FollowUpModal'));
+const TaskDrawer = lazy(() => import('./components/features/tasks/TaskDrawer'));
+const EditProfileModal = lazy(() => import('./components/EditProfileModal'));
+const ChangePasswordModal = lazy(() => import('./components/ChangePasswordModal'));
+const ConfigureNotificationsModal = lazy(() => import('./components/ConfigureNotificationsModal'));
+const AddUserModal = lazy(() => import('./components/features/admin/AddUserModal'));
+const AddTeamModal = lazy(() => import('./components/features/tasks/AddTeamModal'));
 
 type ActiveView = 'dashboard' | 'tasks' | 'templates' | 'admin';
 
@@ -310,10 +314,10 @@ export default function App() {
 
     const sseClient = initSSEClient({
       onConnected: (lastModified) => {
-        console.log('SSE connected, lastModified:', lastModified);
+        logger.log('SSE connected, lastModified:', lastModified);
       },
       onChange: async (changedCollections, lastModified) => {
-        console.log('SSE change detected:', changedCollections);
+        logger.log('SSE change detected:', changedCollections);
         await handleSSEChange(changedCollections);
       },
       onStatusChange: (status) => {
@@ -408,7 +412,7 @@ export default function App() {
       if (found) {
         setActiveUser(found);
         // Force redirect to Dashboard when switching credentials to prevent scoping bugs
-        if (found.Role === 'Sub-stakeholder' && activeView === 'admin') {
+        if (found.Role === ROLE.SUB_STAKEHOLDER && activeView === 'admin') {
           setActiveView('dashboard');
         }
       } else if (activeUserEmail) {
@@ -455,7 +459,7 @@ export default function App() {
       <LoginPage
         usersList={users}
         onLoginSuccess={(email, user) => {
-          console.log('App.tsx onLoginSuccess called', { email, user });
+          logger.log('App.tsx onLoginSuccess called', { email, user });
           const normalizedUser = {
             ...user,
             Email: user.Email || (user as any).email || email,
@@ -466,11 +470,11 @@ export default function App() {
           };
           localStorage.setItem('PMS_active_user_email', email);
           localStorage.setItem('PMS_user', JSON.stringify(normalizedUser));
-          console.log('localStorage set');
+          logger.log('localStorage set');
           setActiveUserEmail(email);
-          console.log('setActiveUserEmail called');
+          logger.log('setActiveUserEmail called');
           setActiveUser(normalizedUser);
-          console.log('setActiveUser called');
+          logger.log('setActiveUser called');
           // Add user to local users array if not present
           setUsers(prev => {
             if (!prev.find(u => u.Email === email)) {
@@ -478,7 +482,7 @@ export default function App() {
             }
             return prev;
           });
-          console.log('onLoginSuccess completed');
+          logger.log('onLoginSuccess completed');
         }}
       />
     );
@@ -544,7 +548,7 @@ export default function App() {
       return task;
     }).filter(task => {
       // Role scope filter - Admins see everything, including inactive or deleted tasks
-      if (activeUser.Role === 'Admin') return true;
+      if (activeUser.Role === ROLE.ADMIN) return true;
 
       if (!task.Active) return false;
       if (task.DeletedAt) return false;
@@ -552,7 +556,7 @@ export default function App() {
       const assignees = (task.AssignedToEmail || '').split(',').map(e => e.trim().toLowerCase());
       const isAssignee = assignees.includes(activeUser.Email?.toLowerCase() || '');
 
-      if (activeUser.Role === 'Stakeholder') {
+      if (activeUser.Role === ROLE.STAKEHOLDER) {
         // Stakeholders see tasks assigned to them, by them, or to their subordinates
         const hasManagedAssignee = assignees.some(email => {
           const u = users.find(usr => usr.Email?.toLowerCase() === email);
@@ -560,7 +564,7 @@ export default function App() {
         });
         return isAssignee || task.AssignedByEmail?.toLowerCase() === activeUser.Email?.toLowerCase() || hasManagedAssignee;
       }
-      if (activeUser.Role === 'Sub-stakeholder') {
+      if (activeUser.Role === ROLE.SUB_STAKEHOLDER) {
         // Sub-stakeholders see tasks assigned to them
         return isAssignee;
       }
@@ -866,9 +870,9 @@ export default function App() {
         teams={teams}
         onAddUser={async (userData) => {
           try {
-            console.log('Saving user to database:', userData);
+            logger.log('Saving user to database:', userData);
             await dbService.saveUser(userData);
-            console.log('User saved successfully');
+            logger.log('User saved successfully');
             // SSE will handle sync automatically - no need to reload database
           } catch (error) {
             console.error('Failed to save user to database:', error);
@@ -877,9 +881,9 @@ export default function App() {
         }}
         onAddTemplate={async (templateData) => {
           try {
-            console.log('Saving template to database:', templateData);
+            logger.log('Saving template to database:', templateData);
             await dbService.saveTemplate(templateData);
-            console.log('Template saved successfully');
+            logger.log('Template saved successfully');
             // SSE will handle sync automatically - no need to reload database
           } catch (error) {
             console.error('Failed to save template to database:', error);
@@ -890,9 +894,9 @@ export default function App() {
           try {
             const template = templates.find(t => t.TemplateID === templateId);
             if (template) {
-              console.log('Toggling template status:', templateId, !template.Active);
+              logger.log('Toggling template status:', templateId, !template.Active);
               await dbService.saveTemplate({ ...template, Active: !template.Active });
-              console.log('Template status toggled successfully');
+              logger.log('Template status toggled successfully');
               // SSE will handle sync automatically - no need to reload database
             }
           } catch (error) {
@@ -902,9 +906,9 @@ export default function App() {
         }}
         onAddTeam={async (teamData) => {
           try {
-            console.log('Saving team to database:', teamData);
+            logger.log('Saving team to database:', teamData);
             await dbService.saveTeam(teamData);
-            console.log('Team saved successfully');
+            logger.log('Team saved successfully');
             await logAudit('Team', teamData.TeamID, 'Created Team', '', JSON.stringify(teamData));
             // SSE will handle sync automatically - no need to reload database
           } catch (error) {
@@ -914,9 +918,9 @@ export default function App() {
         }}
         onToggleTeamStatus={async (teamId) => {
           try {
-            console.log('Toggling team status:', teamId);
+            logger.log('Toggling team status:', teamId);
             await dbService.toggleTeamStatus(teamId);
-            console.log('Team status toggled successfully');
+            logger.log('Team status toggled successfully');
             // SSE will handle sync automatically - no need to reload database
           } catch (error) {
             console.error('Failed to toggle team status:', error);
@@ -925,12 +929,12 @@ export default function App() {
         }}
         onUpdateSetting={async (key, value) => {
           try {
-            console.log('Updating setting:', key, value);
+            logger.log('Updating setting:', key, value);
             const updatedSettings = settings.map(s => 
               s.Key === key ? { ...s, Value: value } : s
             );
             await dbService.saveSettings(updatedSettings);
-            console.log('Setting updated successfully');
+            logger.log('Setting updated successfully');
             // SSE will handle sync automatically - no need to reload database
           } catch (error) {
             console.error('Failed to update setting:', error);
@@ -957,11 +961,12 @@ export default function App() {
       />
       </Suspense>
 
-      <AnimatePresence>
-        
-        {/* Create Task modal */}
-        {isTaskModalOpen && (
-          <CreateTaskModal
+      <Suspense fallback={<Spinner size="lg" />}>
+        <AnimatePresence>
+          
+          {/* Create Task modal */}
+          {isTaskModalOpen && (
+            <CreateTaskModal
             currentUser={activeUser}
             usersList={users}
             isOpen={isTaskModalOpen}
@@ -1069,8 +1074,8 @@ export default function App() {
                 TeamIDs: [`TM-${Date.now()}`],
                 TeamNames: [userData.TeamName || 'Default Team'],
                 Active: true,
-                CanCreateFollowUp: userData.Role === 'Admin' || userData.Role === 'Stakeholder',
-                CanCloseTask: userData.Role === 'Admin' || userData.Role === 'Stakeholder',
+                CanCreateFollowUp: userData.Role === ROLE.ADMIN || userData.Role === ROLE.STAKEHOLDER,
+                CanCloseTask: userData.Role === ROLE.ADMIN || userData.Role === ROLE.STAKEHOLDER,
                 CreatedAt: new Date().toISOString(),
                 UpdatedAt: new Date().toISOString(),
                 Password: userData.Password,
@@ -1102,6 +1107,7 @@ export default function App() {
         )}
 
       </AnimatePresence>
+      </Suspense>
     </div>
   );
 }

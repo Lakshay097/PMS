@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Calendar, User, FileText, Link as LinkIcon, History, AlertCircle, CheckCircle, TrendingUp, Edit2, Save, Trash, ShieldAlert } from 'lucide-react';
 import { Task, TaskReport, User as UserType, Team } from '../../../types/index';
+import { ROLE } from '../../../constants/status';
 
 // Helper function to get tomorrow's date in YYYY-MM-DD format
 const getTomorrowDate = (): string => {
@@ -129,8 +130,8 @@ export default function TaskDrawer({
     .includes(currentUser.Email?.toLowerCase() || '');
 
   // Determine close credentials
-  const canCloseTask = currentUser.Role === 'Admin' ||
-    (currentUser.Role === 'Stakeholder' && (task.AssignedToTeamIDs || []).some(id => (currentUser.TeamIDs || []).includes(id))) ||
+  const canCloseTask = currentUser.Role === ROLE.ADMIN ||
+    (currentUser.Role === ROLE.STAKEHOLDER && (task.AssignedToTeamIDs || []).some(id => (currentUser.TeamIDs || []).includes(id))) ||
     (isCurrentUserAssignee && currentUser.CanCloseTask);
 
   // Determine report submittal credentials
@@ -142,19 +143,19 @@ export default function TaskDrawer({
       return u && u.ManagerEmail && u.ManagerEmail.toLowerCase() === currentUser.Email?.toLowerCase();
     });
 
-  const canSubmitReport = currentUser.Role === 'Admin' ||
+  const canSubmitReport = currentUser.Role === ROLE.ADMIN ||
     isCurrentUserAssignee ||
-    (currentUser.Role === 'Stakeholder' && (
+    (currentUser.Role === ROLE.STAKEHOLDER && (
       (task.AssignedByEmail || '').toLowerCase() === currentUser.Email?.toLowerCase() ||
       hasSubordinateAssignee
     ));
 
   // Determine follow-up credentials
   // Rule: If task is closed, follow-up can be initiated by any assignee of that task or Admin
-  const canCreateFollowUp = task.Status === 'Closed' && (currentUser.Role === 'Admin' || isCurrentUserAssignee);
+  const canCreateFollowUp = task.Status === 'Closed' && (currentUser.Role === ROLE.ADMIN || isCurrentUserAssignee);
 
   // Determine task editing credentials (Admins only)
-  const canEditTask = currentUser.Role === 'Admin';
+  const canEditTask = currentUser.Role === ROLE.ADMIN;
 
   const handleEditSubmit = () => {
     if (editEmails.length === 0) {
@@ -163,7 +164,7 @@ export default function TaskDrawer({
 
     const firstEmail = editEmails[0];
     const firstUser = usersList.find(u => u.Email === firstEmail);
-    const assignedRole = firstUser ? firstUser.Role : 'Stakeholder';
+    const assignedRole = firstUser ? firstUser.Role : ROLE.STAKEHOLDER;
     const assignedTeamIDs = firstUser ? firstUser.TeamIDs : [];
     const primaryTeamID = assignedTeamIDs.length > 0 ? assignedTeamIDs[0] : '';
 

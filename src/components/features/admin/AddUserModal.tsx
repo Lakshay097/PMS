@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, User, Mail, Building2, Shield } from 'lucide-react';
+import { ROLE } from '../../../constants/status';
 
 interface AddUserModalProps {
   isOpen: boolean;
@@ -11,7 +12,7 @@ interface AddUserModalProps {
 interface UserData {
   FullName: string;
   Email: string;
-  Role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder';
+  Role: typeof ROLE[keyof typeof ROLE];
   ManagerEmail: string;
   TeamName: string;
   Password: string;
@@ -20,7 +21,7 @@ interface UserData {
 export default function AddUserModal({ isOpen, onClose, onSave, existingUsers }: AddUserModalProps) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'Admin' | 'Stakeholder' | 'Sub-stakeholder'>('Sub-stakeholder');
+  const [role, setRole] = useState<typeof ROLE[keyof typeof ROLE]>(ROLE.SUB_STAKEHOLDER);
   const [managerEmail, setManagerEmail] = useState('');
   const [teamName, setTeamName] = useState('');
   const [password, setPassword] = useState('');
@@ -45,7 +46,7 @@ export default function AddUserModal({ isOpen, onClose, onSave, existingUsers }:
     }
 
     // Validate manager email for sub-stakeholders
-    if (role === 'Sub-stakeholder' && !managerEmail) {
+    if (role === ROLE.SUB_STAKEHOLDER && !managerEmail) {
       setError('Manager email is required for sub-stakeholders');
       return;
     }
@@ -62,7 +63,7 @@ export default function AddUserModal({ isOpen, onClose, onSave, existingUsers }:
     // Reset form
     setFullName('');
     setEmail('');
-    setRole('Sub-stakeholder');
+    setRole(ROLE.SUB_STAKEHOLDER);
     setManagerEmail('');
     setTeamName('');
     setPassword('');
@@ -119,18 +120,18 @@ export default function AddUserModal({ isOpen, onClose, onSave, existingUsers }:
               <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <select
                 value={role}
-                onChange={(e) => setRole(e.target.value as 'Admin' | 'Stakeholder' | 'Sub-stakeholder')}
+                onChange={(e) => setRole(e.target.value as typeof ROLE[keyof typeof ROLE])}
                 className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
                 required
               >
-                <option value="Admin">Admin</option>
-                <option value="Stakeholder">Stakeholder</option>
-                <option value="Sub-stakeholder">Sub-stakeholder</option>
+                <option value={ROLE.ADMIN}>Admin</option>
+                <option value={ROLE.STAKEHOLDER}>Stakeholder</option>
+                <option value={ROLE.SUB_STAKEHOLDER}>Sub-stakeholder</option>
               </select>
             </div>
           </div>
 
-          {role === 'Sub-stakeholder' && (
+          {role === ROLE.SUB_STAKEHOLDER && (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Manager Email</label>
               <div className="relative">

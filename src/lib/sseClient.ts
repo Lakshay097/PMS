@@ -1,5 +1,6 @@
 // SSE Client for real-time change sync
 // Connects to /api/changes/stream and handles reconnection with backoff
+import { logger } from '../utils/logger';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'error';
 
@@ -62,7 +63,7 @@ export class SSEClient {
             const serverTime = new Date(data.lastModified).getTime();
             const localTime = new Date(this.localLastSyncTimestamp).getTime();
             if (serverTime > localTime) {
-              console.log('Server ahead, syncing all collections');
+              logger.log('Server ahead, syncing all collections');
               this.handlers.onChange?.(
                 ['users', 'teams', 'templates', 'tasks', 'reports', 'followups', 'auditlogs', 'settings', 'subtasks', 'comments'],
                 data.lastModified
@@ -110,7 +111,7 @@ export class SSEClient {
     const delay = Math.min(this.reconnectDelay, this.maxReconnectDelay);
     this.reconnectDelay = delay * 2; // Exponential backoff
 
-    console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    logger.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
     
     setTimeout(() => {
       this.connect();

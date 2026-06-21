@@ -1,5 +1,6 @@
 // Sync Queue for optimistic writes with retry logic
 // Handles deduplication and automatic retry with backoff
+import { logger } from '../utils/logger';
 
 export interface QueuedWrite {
   id: string; // entityType + entityId (deduplication key)
@@ -28,7 +29,7 @@ class SyncQueue {
     
     // If write for same key already queued, replace it (latest wins)
     if (this.queue.has(id)) {
-      console.log(`Replacing existing queued write for ${id}`);
+      logger.log(`Replacing existing queued write for ${id}`);
     }
 
     const queuedWrite: QueuedWrite = {
@@ -61,14 +62,14 @@ class SyncQueue {
       await write.operation();
       // Success - remove from queue
       this.queue.delete(id);
-      console.log(`Write succeeded for ${id}`);
+      logger.log(`Write succeeded for ${id}`);
     } catch (error) {
       write.attempts++;
       
       if (write.attempts < this.maxRetries) {
         // Retry with backoff
         const delay = this.retryDelays[write.attempts - 1];
-        console.log(`Write failed for ${id}, retrying in ${delay}ms (attempt ${write.attempts}/${this.maxRetries})`);
+        logger.log(`Write failed for ${id}, retrying in ${delay}ms (attempt ${write.attempts}/${this.maxRetries})`);
         
         if (write.onRetry) {
           write.onRetry();

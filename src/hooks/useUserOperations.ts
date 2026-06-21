@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { User, Team } from '../types';
 import { dbService } from '../lib/dbService';
+import { ROLE } from '../constants/status';
 
 interface UseUserOperationsProps {
   users: User[];
@@ -52,7 +53,7 @@ export function useUserOperations({
     }
   }, []);
 
-  const handleUpdateUserRole = useCallback(async (email: string, newRole: 'Admin' | 'Stakeholder' | 'Sub-stakeholder') => {
+  const handleUpdateUserRole = useCallback(async (email: string, newRole: typeof ROLE[keyof typeof ROLE]) => {
     const foundUser = users.find(u => u.Email === email);
     if (foundUser) {
       const updatedUser = { ...foundUser, Role: newRole, UpdatedAt: new Date().toISOString() };

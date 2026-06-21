@@ -1,5 +1,6 @@
 import { api } from './client';
 import { User } from '../types/index';
+import { ROLE } from '../constants/status';
 
 /**
  * Login request body
@@ -39,7 +40,7 @@ export function mapUserResponseToUser(response: UserResponse): User {
     UserID: response.UserID,
     FullName: response.FullName,
     Email: response.email,
-    Role: response.Role as 'Admin' | 'Stakeholder' | 'Sub-stakeholder',
+    Role: response.Role as typeof ROLE[keyof typeof ROLE],
     ManagerEmail: '',
     TeamIDs: [response.TeamID],
     TeamNames: [response.TeamName],

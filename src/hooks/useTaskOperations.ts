@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { Task, User, TaskTemplate, Subtask, Comment, FollowUp, TaskStatus } from '../types';
 import { dbService } from '../lib/dbService';
 import { checkAndGenerateRecurringTasks } from '../lib/taskEngine';
+import { ROLE } from '../constants/status';
 
 interface UseTaskOperationsProps {
   tasks: Task[];
@@ -57,8 +58,8 @@ export function useTaskOperations({
           LastGeneratedDate: '',
           AssignedByEmail: currentUser.Email,
           AssignedToEmail: data.AssignedToEmail,
-          AssignedToRole: 'Stakeholder',
-          TeamID: currentUser.Role === 'Admin' ? 'T-ALL' : (currentUser.TeamIDs.length > 0 ? currentUser.TeamIDs[0] : 'T-01'),
+          AssignedToRole: ROLE.STAKEHOLDER,
+          TeamID: currentUser.Role === ROLE.ADMIN ? 'T-ALL' : (currentUser.TeamIDs.length > 0 ? currentUser.TeamIDs[0] : 'T-01'),
           Active: true,
           CreatedAt: nowStr,
           UpdatedAt: nowStr

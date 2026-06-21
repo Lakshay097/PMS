@@ -25,6 +25,7 @@ import {
   INITIAL_COMMENTS
 } from '../initialData';
 import { sheetsApi, getAccessToken, HEADERS } from './sheetsService';
+import { logger } from '../utils/logger';
 
 // Operation Types for Audit & Error Hooks
 export enum OperationType {
@@ -74,7 +75,7 @@ export async function initializeDatabase(): Promise<void> {
   }
 
   try {
-    console.log("Initializing Google Sheets database...");
+    logger.log("Initializing Google Sheets database...");
     
     // Ensure the spreadsheet exists or create it
     const spreadId = await sheetsApi.getOrCreateSpreadsheet();
@@ -89,7 +90,7 @@ export async function initializeDatabase(): Promise<void> {
     const isNewSpreadsheet = users.length === 0 && tasks.length === 0;
 
     if (isNewSpreadsheet) {
-      console.log("Google Sheets database is empty. Seeding initial data...");
+      logger.log("Google Sheets database is empty. Seeding initial data...");
       
       // Seed initial data sequentially to avoid rate limiting
       const collections = [
@@ -111,9 +112,9 @@ export async function initializeDatabase(): Promise<void> {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
 
-      console.log("Initial data seeded successfully.");
+      logger.log("Initial data seeded successfully.");
     } else {
-      console.log("Database already initialized with existing data.");
+      logger.log("Database already initialized with existing data.");
     }
   } catch (error) {
     console.error("Failed to initialize database:", error);
@@ -521,7 +522,7 @@ export const dbService = {
     // Guard against concurrent syncs for same collection
     for (const collection of collections) {
       if (syncInProgress.has(collection)) {
-        console.log(`Skipping ${collection} - sync already in progress`);
+        logger.log(`Skipping ${collection} - sync already in progress`);
         continue;
       }
       syncInProgress.add(collection);
@@ -582,7 +583,7 @@ export const dbService = {
         }
       }
 
-      console.log(`Synced collections: ${collections.join(', ')}`);
+      logger.log(`Synced collections: ${collections.join(', ')}`);
     } finally {
       collections.forEach(collection => syncInProgress.delete(collection));
     }

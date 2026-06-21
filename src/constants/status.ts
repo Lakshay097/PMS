@@ -9,6 +9,9 @@ export const TASK_STATUS = {
   CLOSED: 'Closed',
   REOPENED: 'Reopened',
   OVERDUE: 'Overdue',
+  // Additional constants for API/backend compatibility
+  OPEN: 'open',
+  DONE: 'done',
 } as const;
 
 export type TaskStatus = typeof TASK_STATUS[keyof typeof TASK_STATUS];
@@ -35,3 +38,12 @@ export const ROLE = {
 } as const;
 
 export type Role = typeof ROLE[keyof typeof ROLE];
+
+/**
+ * User role constants (for API/backend compatibility)
+ */
+export const USER_ROLE = {
+  ADMIN: 'admin',
+  MEMBER: 'member',
+  VIEWER: 'viewer',
+} as const;

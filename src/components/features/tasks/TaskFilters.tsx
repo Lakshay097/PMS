@@ -1,6 +1,7 @@
 import React from 'react';
 import { Filter } from 'lucide-react';
 import { User as UserType } from '../../../types';
+import { ROLE } from '../../../constants/status';
 
 interface TaskFiltersProps {
   filterStatus: string;
@@ -62,7 +63,7 @@ export default function TaskFilters({
         <option value="Medium">Medium</option>
         <option value="Low">Low</option>
       </select>
-      {currentUser.Role === 'Admin' && (
+      {currentUser.Role === ROLE.ADMIN && (
         <select
           value={filterAssignee}
           onChange={(e) => onFilterAssigneeChange(e.target.value)}

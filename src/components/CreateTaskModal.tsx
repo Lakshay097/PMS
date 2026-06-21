@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Calendar, ClipboardList, Repeat, UserPlus, Info } from 'lucide-react';
 import { User, TaskTemplate, Task, TaskStatus } from '../types';
+import { ROLE } from '../constants/status';
 
 interface CreateTaskModalProps {
   currentUser: User;
@@ -52,8 +53,8 @@ export default function CreateTaskModal({ currentUser, usersList, isOpen, onClos
   // Rule: Admin can assign to anyone. Stakeholders can assign to themselves or subordinates (ManagerEmail = stakeholder email)
   const filteredAssignees = usersList.filter(user => {
     if (!user.Active) return false;
-    if (currentUser.Role === 'Admin') return true;
-    if (currentUser.Role === 'Stakeholder') {
+    if (currentUser.Role === ROLE.ADMIN) return true;
+    if (currentUser.Role === ROLE.STAKEHOLDER) {
       return (user.Email.toLowerCase() === currentUser.Email.toLowerCase()) || (user.ManagerEmail.toLowerCase() === currentUser.Email.toLowerCase());
     }
     return false;

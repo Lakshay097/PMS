@@ -24,6 +24,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { Task, User as UserType, TaskTemplate, AuditLog, AppSetting, Team } from '../../../types';
+import { ROLE } from '../../../constants/status';
 import AdminPanel from '../../AdminPanel';
 import TaskList from '../tasks/TaskList';
 import TaskFilters from '../tasks/TaskFilters';
@@ -171,14 +172,14 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
 
   // Get team members based on user role
   const getTeamMembers = () => {
-    if (currentUser.Role === 'Admin') {
+    if (currentUser.Role === ROLE.ADMIN) {
       // Admin sees all users
       return (users || []);
-    } else if (currentUser.Role === 'Stakeholder') {
+    } else if (currentUser.Role === ROLE.STAKEHOLDER) {
       // Stakeholder sees sub-stakeholders where they are the manager, plus themselves
       return (users || []).filter(u =>
         u.Email === currentUser.Email ||
-        (u.Role === 'Sub-stakeholder' &&
+        (u.Role === ROLE.SUB_STAKEHOLDER &&
         u.ManagerEmail === currentUser.Email)
       );
     } else {
@@ -593,15 +594,15 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                {currentUser.Role === 'Admin' ? 'Teams & Members' : 'Team Members'}
+                {currentUser.Role === ROLE.ADMIN ? 'Teams & Members' : 'Team Members'}
               </h3>
               <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                {currentUser.Role === 'Admin' ? 'Manage teams and their members' :
-                 currentUser.Role === 'Stakeholder' ? 'Your sub-stakeholders' : 
+                {currentUser.Role === ROLE.ADMIN ? 'Manage teams and their members' :
+                 currentUser.Role === ROLE.STAKEHOLDER ? 'Your sub-stakeholders' : 
                  'Your manager'}
               </p>
             </div>
-            {currentUser.Role === 'Admin' && (
+            {currentUser.Role === ROLE.ADMIN && (
               <div className="flex items-center space-x-2">
                 <button 
                   onClick={() => handleViewChange('admin')}
@@ -621,7 +622,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
             )}
           </div>
 
-          {currentUser.Role === 'Admin' ? (
+          {currentUser.Role === ROLE.ADMIN ? (
             // Admin view: Show teams with their members (including inactive ones)
             <div className="space-y-4">
               {Object.entries(groupedTeams).map(([teamName, teamUsers]) => (
@@ -659,13 +660,13 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
                           </div>
                           <div className="flex items-center space-x-3">
                             <span className={`text-xs font-bold px-2 py-1 rounded border ${
-                              member.Role === 'Admin' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                              member.Role === 'Stakeholder' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                              member.Role === ROLE.ADMIN ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                              member.Role === ROLE.STAKEHOLDER ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
                               'bg-slate-500/10 text-slate-400 border-slate-500/20'
                             }`}>
                               {member.Role}
                             </span>
-                            {member.Role === 'Stakeholder' && (
+                            {member.Role === ROLE.STAKEHOLDER && (
                               <button
                                 onClick={() => onNewTask(member.Email)}
                                 className="text-xs font-medium px-2 py-1 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 transition-colors"
@@ -716,8 +717,8 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
                     </div>
                     <div className="flex items-center space-x-3">
                       <span className={`text-xs font-bold px-2 py-1 rounded border ${
-                        member.Role === 'Admin' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                        member.Role === 'Stakeholder' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                        member.Role === ROLE.ADMIN ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                        member.Role === ROLE.STAKEHOLDER ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
                         'bg-slate-500/10 text-slate-400 border-slate-500/20'
                       }`}>
                         {member.Role}
@@ -730,7 +731,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
                 ))
               ) : (
                 <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                  {currentUser.Role === 'Stakeholder' ? 'No sub-stakeholders assigned to you' : 
+                  {currentUser.Role === ROLE.STAKEHOLDER ? 'No sub-stakeholders assigned to you' : 
                    'No manager assigned'}
                 </div>
               )}
@@ -1008,7 +1009,7 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
                   <span className="font-medium text-sm">Reports</span>
                 </button>
               </li>
-              {currentUser.Role === 'Admin' && (
+              {currentUser.Role === ROLE.ADMIN && (
                 <li>
                   <button
                     onClick={() => handleViewChange('admin')}

@@ -1,5 +1,6 @@
 // Google Sheets integration - Primary database layer
 // Uses service account token for authentication with retry logic and proper error handling
+import { logger } from '../utils/logger';
 
 export const SHEETS_SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
@@ -188,7 +189,7 @@ export const sheetsApi = {
         try {
           const metadata = await this.getSpreadsheetMetadata(cachedSpreadsheetId);
           if (metadata) {
-            console.log('Using cached Google Spreadsheet:', cachedSpreadsheetId);
+            logger.log('Using cached Google Spreadsheet:', cachedSpreadsheetId);
             return cachedSpreadsheetId;
           }
         } catch (e) {
@@ -198,7 +199,7 @@ export const sheetsApi = {
       }
 
       // 2. Query Drive to locate "PMS Systems Database"
-      console.log('Searching for database file in Google Drive...');
+      logger.log('Searching for database file in Google Drive...');
       const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
         "name='PMS Systems Database' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false"
       )}`;
@@ -222,12 +223,12 @@ export const sheetsApi = {
       if (searchData.files && searchData.files.length > 0) {
         const spreadId = searchData.files[0].id;
         cachedSpreadsheetId = spreadId;
-        console.log('Found existing database spreadsheet on Google Drive:', spreadId);
+        logger.log('Found existing database spreadsheet on Google Drive:', spreadId);
         return spreadId;
       }
 
       // 3. Not found, create a brand new Google Spreadsheet with all required tabs
-      console.log('No database spreadsheet found. Creating a new "PMS Systems Database" with all tabs...');
+      logger.log('No database spreadsheet found. Creating a new "PMS Systems Database" with all tabs...');
       const createUrl = 'https://sheets.googleapis.com/v4/spreadsheets';
       
       const requiredSheets = Object.keys(HEADERS).map(name => ({
@@ -264,7 +265,7 @@ export const sheetsApi = {
       const createdSpreadsheet = await createRes.json();
       const newSpreadId = createdSpreadsheet.spreadsheetId;
       cachedSpreadsheetId = newSpreadId;
-      console.log('Successfully created database spreadsheet on Google Drive with ID:', newSpreadId);
+      logger.log('Successfully created database spreadsheet on Google Drive with ID:', newSpreadId);
       return newSpreadId;
     });
   },
@@ -307,7 +308,7 @@ export const sheetsApi = {
       const headers = HEADERS[sheetName];
       const rows = objectsToRows(data, headers);
 
-      console.log(`Writing collection [${sheetName}] containing ${data.length} records to Google Sheets...`);
+      logger.log(`Writing collection [${sheetName}] containing ${data.length} records to Google Sheets...`);
 
       // First Clear the existing sheet content to prevent dangling old rows
       const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1:Z9999:clear`;
@@ -357,7 +358,7 @@ export const sheetsApi = {
         }
         throw new Error(`Failed to save table ${sheetName} to Google Sheets. Status: ${res.statusText}`);
       }
-      console.log(`Successfully saved collection [${sheetName}] to Google Sheets.`);
+      logger.log(`Successfully saved collection [${sheetName}] to Google Sheets.`);
     });
   },
 
@@ -377,7 +378,7 @@ export const sheetsApi = {
       const headers = HEADERS[sheetName];
       const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1:Z9999?valueRenderOption=FORMATTED_VALUE`;
 
-      console.log(`Fetching collection [${sheetName}] from Google Sheets database...`);
+      logger.log(`Fetching collection [${sheetName}] from Google Sheets database...`);
       const res = await fetchWithRetry(readUrl, {
         headers: { Authorization: `Bearer ${token}` }
       });

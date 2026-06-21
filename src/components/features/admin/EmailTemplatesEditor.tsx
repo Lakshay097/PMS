@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Send, Save, Copy, RotateCcw, Smartphone, Monitor, Code } from 'lucide-react';
+import { logger } from '../../../utils/logger';
 
 interface EmailTemplate {
   id: string;
@@ -77,17 +78,17 @@ export default function EmailTemplatesEditor({ onBack }: EmailTemplatesEditorPro
 
   const handleSave = () => {
     // Save logic
-    console.log('Saving template:', { subject, body });
+    logger.log('Saving template:', { subject, body });
   };
 
   const handleTestSend = () => {
     // Test send logic
-    console.log('Sending test email');
+    logger.log('Sending test email');
   };
 
   const handleDuplicate = () => {
     // Duplicate logic
-    console.log('Duplicating template');
+    logger.log('Duplicating template');
   };
 
   const handleRestoreDefault = () => {

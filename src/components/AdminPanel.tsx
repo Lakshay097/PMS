@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { User as UserType, TaskTemplate, AuditLog, AppSetting, Team } from '../types';
+import { ROLE } from '../constants/status';
 import { 
   Users, 
   Repeat, 
@@ -32,7 +33,7 @@ interface AdminPanelProps {
   onAddTemplate: (template: TaskTemplate) => void;
   onToggleTemplateStatus: (templateId: string) => void;
   onUpdateSetting: (key: string, value: string) => void;
-  onUpdateUserRole: (email: string, role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder') => void;
+  onUpdateUserRole: (email: string, role: typeof ROLE[keyof typeof ROLE]) => void;
   onApproveUser: (email: string) => void;
   onAddTeam: (team: Team) => void;
   onToggleTeamStatus: (teamId: string) => void;
@@ -72,7 +73,7 @@ export default function AdminPanel({
   // Create User state
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'Admin' | 'Stakeholder'>('Stakeholder');
+  const [role, setRole] = useState<typeof ROLE[keyof typeof ROLE]>(ROLE.STAKEHOLDER);
   const [managerEmail, setManagerEmail] = useState('');
   const [teamSelections, setTeamSelections] = useState<string[]>([]);
   const [password, setPassword] = useState('');

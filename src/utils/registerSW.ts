@@ -1,9 +1,11 @@
+import { logger } from './logger';
+
 export function registerSW() {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', async () => {
       try {
         const reg = await navigator.serviceWorker.register('/sw.js');
-        console.log('[App] SW registered:', reg.scope);
+        logger.log('[App] SW registered:', reg.scope);
 
         // Check for updates every 60 seconds
         setInterval(() => reg.update(), 60_000);
