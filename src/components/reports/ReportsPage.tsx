@@ -14,6 +14,7 @@ export default function ReportsPage({ auditLogs }: ReportsPageProps) {
   const [eventTypeFilter, setEventTypeFilter] = useState<string>('all');
 
   // Get unique actors
+  {/* PERF-CHECK: if list exceeds 50 items, add @tanstack/react-virtual */}
   const actors = Array.from(new Set(auditLogs.map(log => log.ActionByEmail)));
 
   // Get unique event types

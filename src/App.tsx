@@ -525,13 +525,6 @@ export default function App() {
     return { overdue, soon };
   };
 
-  const getVisibleReports = () => {
-    const visibleTaskIds = new Set(visibleTasks.map(t => t.TaskID));
-    return reports
-      .filter(r => visibleTaskIds.has(r.TaskID))
-      .sort((a, b) => new Date(b.CreatedAt || b.ReportDate).getTime() - new Date(a.CreatedAt || a.ReportDate).getTime());
-  };
-
   const getFilteredTasks = () => {
     const today = new Date();
     today.setHours(0,0,0,0);
@@ -574,7 +567,8 @@ export default function App() {
     return visible;
   };
 
-  const filteredTasks = getFilteredTasks().filter(task => {
+  // useMemo: tasks list can be large, filter is O(n)
+  const filteredTasks = useMemo(() => getFilteredTasks().filter(task => {
     const assignees = (task.AssignedToEmail || '').split(',').map(e => e.trim());
     const assigneeNames = assignees.map(email => {
       const found = users.find(u => u.Email?.toLowerCase() === email.toLowerCase());
@@ -603,7 +597,7 @@ export default function App() {
     const matchesAssigneeSearch = filterAssigneeName === 'All' || assignees.includes(filterAssigneeName);
 
     return matchesSearch && matchesScope && matchesStatus && matchesPriority && matchesType && matchesAssigneeSearch;
-  });
+  }), [tasks, users, activeUser, searchQuery, filterScope, filterStatus, filterPriority, filterType, filterAssigneeName]);
 
   // Task operations hook
   const {
@@ -676,6 +670,15 @@ export default function App() {
     currentView: filterScope === 'assigned_to_me' ? 'my-tasks' : filterScope === 'created_by_me' ? 'assigned-by-me' : 'all',
     activeUser,
   });
+
+  // useMemo: reports list can be large, filter and sort is O(n)
+  const getVisibleReports = useMemo(() => {
+    {/* PERF-CHECK: if list exceeds 50 items, add @tanstack/react-virtual */}
+    const visibleTaskIds = new Set(visibleTasks.map(t => t.TaskID));
+    return reports
+      .filter(r => visibleTaskIds.has(r.TaskID))
+      .sort((a, b) => new Date(b.CreatedAt || b.ReportDate).getTime() - new Date(a.CreatedAt || a.ReportDate).getTime());
+  }, [visibleTasks, reports]);
 
   // Template operations hook
   const {

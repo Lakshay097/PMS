@@ -21,6 +21,7 @@ export default function TaskList({
   return (
     <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
       <div className={`divide-y ${isDarkMode ? 'divide-[#1E293B]' : 'divide-slate-200'}`}>
+        {/* PERF-CHECK: if list exceeds 50 items, add @tanstack/react-virtual */}
         {tasks.map((task) => (
           <div
             key={task.TaskID}

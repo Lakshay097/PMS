@@ -92,36 +92,39 @@ export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks }
                   <p className="text-sm text-muted">No urgent tasks requiring attention</p>
                 </div>
               ) : (
-                urgentTasks.map((task) => (
-                  <div
-                    key={task.TaskID}
-                    onClick={() => onTaskClick?.(task.TaskID)}
-                    className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="text-sm font-medium text-[#0f172a] truncate">{task.Title}</h3>
-                          <PriorityBadge priority={task.Priority} size="sm" />
+                <>
+                  {/* PERF-CHECK: if list exceeds 50 items, add @tanstack/react-virtual */}
+                  {urgentTasks.map((task) => (
+                    <div
+                      key={task.TaskID}
+                      onClick={() => onTaskClick?.(task.TaskID)}
+                      className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="text-sm font-medium text-[#0f172a] truncate">{task.Title}</h3>
+                            <PriorityBadge priority={task.Priority} size="sm" />
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-muted">
+                            <span className="flex items-center gap-1">
+                              <Calendar size={12} />
+                              {new Date(task.DueDate).toLocaleDateString()}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <User size={12} />
+                              {task.AssignedToEmail}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3 text-xs text-muted">
-                          <span className="flex items-center gap-1">
-                            <Calendar size={12} />
-                            {new Date(task.DueDate).toLocaleDateString()}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <User size={12} />
-                            {task.AssignedToEmail}
-                          </span>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <StatusBadge status={task.Status} size="sm" />
+                          <ArrowRight size={16} className="text-muted" />
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <StatusBadge status={task.Status} size="sm" />
-                        <ArrowRight size={16} className="text-muted" />
                       </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+                </>
               )}
             </div>
 

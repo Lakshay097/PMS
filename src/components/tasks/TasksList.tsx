@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import StatusBadge from '../shared/StatusBadge';
 import PriorityBadge from '../shared/PriorityBadge';
 import FilterChip from '../shared/FilterChip';
@@ -22,7 +22,8 @@ export default function TasksList({ tasks, onTaskClick, onCreateTask, currentUse
   const [showFilters, setShowFilters] = useState(false);
 
   // Filter tasks based on saved view and filters
-  const filteredTasks = tasks.filter(task => {
+  // useMemo: tasks list can be large, filter is O(n)
+  const filteredTasks = useMemo(() => tasks.filter(task => {
     // Saved view filter
     if (savedView === 'assigned-to-me' && task.AssignedToEmail !== currentUserId) return false;
     if (savedView === 'assigned-by-me' && task.AssignedByEmail !== currentUserId) return false;
@@ -44,7 +45,7 @@ export default function TasksList({ tasks, onTaskClick, onCreateTask, currentUse
     if (priorityFilter !== 'all' && task.Priority !== priorityFilter) return false;
 
     return true;
-  });
+  }), [tasks, savedView, currentUserId, searchQuery, statusFilter, priorityFilter]);
 
   const clearFilters = () => {
     setStatusFilter('all');
@@ -227,6 +228,7 @@ export default function TasksList({ tasks, onTaskClick, onCreateTask, currentUse
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
+                {/* PERF-CHECK: if list exceeds 50 items, add @tanstack/react-virtual */}
                 {filteredTasks.map((task) => (
                   <tr
                     key={task.TaskID}

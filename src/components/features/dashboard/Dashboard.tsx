@@ -772,32 +772,35 @@ export default function Dashboard({ tasks, currentUser, onNewTask, onTaskClick, 
           </div>
           <div className="space-y-3">
             {filteredReportTasks.length > 0 ? (
-              filteredReportTasks.map((task) => (
-              <div 
-                key={task.TaskID}
-                onClick={() => onTaskClick(task)}
-                className={`border rounded-lg p-4 hover:border-[#475569] transition-colors cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h4 className={`font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{task.Title}</h4>
-                    <div className={`flex items-center space-x-4 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                      <span>Task: {task.TaskID}</span>
-                      <span>Due: {task.DueDate}</span>
+              <>
+                {/* PERF-CHECK: if list exceeds 50 items, add @tanstack/react-virtual */}
+                {filteredReportTasks.map((task) => (
+                  <div
+                    key={task.TaskID}
+                    onClick={() => onTaskClick(task)}
+                    className={`border rounded-lg p-4 hover:border-[#475569] transition-colors cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h4 className={`font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{task.Title}</h4>
+                        <div className={`flex items-center space-x-4 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                          <span>Task: {task.TaskID}</span>
+                          <span>Due: {task.DueDate}</span>
+                        </div>
+                      </div>
+                      <span className={`text-xs font-bold px-2 py-1 rounded border ${
+                        task.Status === 'Submitted' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                        'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                      }`}>
+                        {task.Status}
+                      </span>
                     </div>
                   </div>
-                  <span className={`text-xs font-bold px-2 py-1 rounded border ${
-                    task.Status === 'Submitted' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                    'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-                  }`}>
-                    {task.Status}
-                  </span>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No reports found</div>
-          )}
+                ))}
+              </>
+            ) : (
+              <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No reports found</div>
+            )}
         </div>
       </div>
     </div>

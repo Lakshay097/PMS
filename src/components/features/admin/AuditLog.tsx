@@ -19,6 +19,7 @@ export default function AuditLogPage({ auditLogs, onExport }: AuditLogProps) {
   const [severityFilter, setSeverityFilter] = useState<'all' | 'info' | 'warning' | 'error'>('all');
 
   // Get unique values
+  {/* PERF-CHECK: if list exceeds 50 items, add @tanstack/react-virtual */}
   const actors = Array.from(new Set(auditLogs.map(log => log.ActionByEmail)));
   const entities = Array.from(new Set(auditLogs.map(log => log.EntityType)));
   const actions = Array.from(new Set(auditLogs.map(log => log.Action)));
