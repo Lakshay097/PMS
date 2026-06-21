@@ -82,7 +82,7 @@ async function startServer() {
       }
     }));
     app.get("*", (req, res) => {
-      if (req.path.startsWith('/api/') || req.path.startsWith('/assets/') || req.path.includes('.')) {
+      if (req.path.startsWith('/api/')) {
         res.status(404).send('Not Found');
         return;
       }
