@@ -38,7 +38,10 @@ export function useDatabase(isAuthInitialized: boolean = false) {
       }
 
       if (!token) {
-        throw new Error('Google Sheets authentication failed. No access token available after waiting.');
+        const errorMsg = 'Google Sheets authentication failed. The backend service may not be running or credentials are not configured. Please check that GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY are set in Cloud Run secrets.';
+        console.error(errorMsg);
+        alert(errorMsg);
+        throw new Error(errorMsg);
       }
 
       await initializeDatabase();
@@ -60,6 +63,7 @@ export function useDatabase(isAuthInitialized: boolean = false) {
     } catch (error) {
       console.error('Error loading database:', error);
       setDbConnectionStatus('error');
+      alert(`Failed to load database: ${error instanceof Error ? error.message : 'Unknown error'}. Please refresh the page or contact support.`);
     } finally {
       setIsLoading(false);
       setIsSyncing(false);
