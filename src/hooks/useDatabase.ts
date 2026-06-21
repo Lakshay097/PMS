@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { User, Task, Team, TaskTemplate, AuditLog, AppSetting, TaskReport, FollowUp, Subtask, Comment } from '../types';
 import { dbService, initializeDatabase, forceClearAllCaches } from '../lib/dbService';
-import { getAccessToken } from '../lib/sheetsService';
+import { getAccessToken, clearCachedSpreadsheetId } from '../lib/sheetsService';
 
 export function useDatabase(isAuthInitialized: boolean = false) {
   const [users, setUsers] = useState<User[]>([]);
@@ -26,6 +26,7 @@ export function useDatabase(isAuthInitialized: boolean = false) {
       setDbConnectionStatus('connected');
 
       forceClearAllCaches();
+      clearCachedSpreadsheetId(); // Force re-search for spreadsheet instead of using cached ID
 
       // Wait for authentication token to be available
       let token = getAccessToken();

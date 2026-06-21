@@ -124,6 +124,12 @@ export const logout = async () => {
   cachedSpreadsheetId = null;
 };
 
+// Clear cached spreadsheet ID to force re-search
+export const clearCachedSpreadsheetId = () => {
+  cachedSpreadsheetId = null;
+  logger.log('Cached spreadsheet ID cleared. Will re-search on next access.');
+};
+
 // HELPER: Convert array of objects to sheet rows
 export function objectsToRows(data: any[], headers: string[]): any[][] {
   const rows = [headers];
