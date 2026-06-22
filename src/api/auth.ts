@@ -107,3 +107,26 @@ export async function requestAccount(data: AccountRequest): Promise<AccountReque
 export async function approveUser(data: ApproveUserRequest): Promise<ApproveUserResponse> {
   return api.post<ApproveUserResponse>('/approve-user', data);
 }
+
+/**
+ * Change password request body
+ */
+export interface ChangePasswordRequest {
+  oldPassword: string;
+  newPassword: string;
+}
+
+/**
+ * Change password response
+ */
+export interface ChangePasswordResponse {
+  success: boolean;
+  message: string;
+}
+
+/**
+ * Change user password (requires auth)
+ */
+export async function changePassword(data: ChangePasswordRequest): Promise<ChangePasswordResponse> {
+  return api.post<ChangePasswordResponse>('/change-password', data);
+}

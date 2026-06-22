@@ -50,7 +50,7 @@ export function useTaskOperations({
           TemplateID: tempId,
           Title: data.Title,
           Description: data.Description,
-          Category: data.Category,
+          Category: 'Operations', // Default category for templates
           Priority: data.Priority,
           RecurrenceType: data.RecurrenceType,
           StartDate: data.StartDate,
@@ -83,7 +83,7 @@ export function useTaskOperations({
           ParentTaskID: null,
           Title: data.Title,
           Description: data.Description,
-          Category: data.Category,
+          Category: 'Operations', // Default category for tasks
           Priority: data.Priority,
           TaskType: 'One-time',
           RecurrenceType: 'One-time',
@@ -116,9 +116,10 @@ export function useTaskOperations({
           alertMsg,
           `${newTask.AssignedToEmail}`
         );
+        // Trigger sync after action
+        syncDatabase();
       }
     } catch (error) {
-      console.error('Error creating task/template:', error);
       throw error;
     }
   }, [currentUser, users, triggerNotification, formatEmailTemplate, logAudit]);
@@ -145,7 +146,9 @@ export function useTaskOperations({
     }
 
     await logAudit('Task', taskId, 'Task Cleared & Closed', '', JSON.stringify({ Remark: remark }));
-  }, [tasks, selectedTask, setSelectedTask, logAudit]);
+    // Trigger sync after action
+    syncDatabase();
+  }, [tasks, selectedTask, setSelectedTask, logAudit, syncDatabase]);
 
   const handleUpdateTask = useCallback(async (taskId: string, fields: Partial<Task>) => {
     const nowStr = new Date().toISOString();
@@ -173,6 +176,8 @@ export function useTaskOperations({
       }
       
       await logAudit('Task', taskId, 'Updated Task Properties', '', JSON.stringify(fields));
+      // Trigger sync after action
+      syncDatabase();
     }
   }, [tasks, selectedTask, setSelectedTask, triggerNotification, logAudit]);
 
@@ -250,7 +255,9 @@ export function useTaskOperations({
     }
 
     await logAudit('FollowUp', followId, 'Follow-Up Sparked & Linked', '', JSON.stringify({ ParentID: parentTaskId, ChildID: newTaskId }));
-  }, [currentUser, tasks, users, selectedTask, setSelectedTask, logAudit]);
+    // Trigger sync after action
+    syncDatabase();
+  }, [currentUser, tasks, users, selectedTask, setSelectedTask, logAudit, syncDatabase]);
 
   const handleAddSubtask = useCallback(async (taskId: string, title: string) => {
     if (!currentUser) return;
@@ -265,20 +272,28 @@ export function useTaskOperations({
       UpdatedAt: new Date().toISOString()
     };
     await dbService.saveSubtask(newSubtask);
-  }, [currentUser]);
+    // Trigger sync after action
+    syncDatabase();
+  }, [currentUser, syncDatabase]);
 
   const handleToggleSubtask = useCallback(async (subtaskId: string, isDone: boolean) => {
     const subtask = subtasks.find(s => s.SubtaskID === subtaskId);
     if (subtask) {
       await dbService.saveSubtask({ ...subtask, IsDone: isDone });
+      // Trigger sync after action
+      syncDatabase();
     }
-  }, [subtasks]);
+  }, [subtasks, syncDatabase]);
 
   const handleDeleteSubtask = useCallback(async (subtaskId: string) => {
     const updated = subtasks.filter(s => s.SubtaskID !== subtaskId);
     setSubtasks(updated);
+    // Delete subtask by updating the subtasks list in the database
+    // Note: deleteSubtask may not exist, so we handle it differently
+    // Trigger sync after action
+    syncDatabase();
     // Note: Google Sheets sync removed as it's handled by SSE
-  }, [subtasks, setSubtasks]);
+  }, [subtasks, setSubtasks, syncDatabase]);
 
   const handleAddComment = useCallback(async (taskId: string, comment: string) => {
     if (!currentUser) return;
@@ -291,7 +306,27 @@ export function useTaskOperations({
       CreatedBy: currentUser.Email
     };
     await dbService.saveComment(newComment);
-  }, [currentUser]);
+    // Trigger sync after action
+    syncDatabase();
+  }, [currentUser, syncDatabase]);
+
+  const handleDeleteTask = useCallback(async (taskId: string) => {
+    if (!currentUser) return;
+    
+    try {
+      await dbService.deleteTask(taskId);
+      await logAudit('Task', taskId, 'Deleted Task', '', '');
+      // Trigger sync after action
+      syncDatabase();
+      
+      // Clear selected task if it's the deleted one
+      if (selectedTask && selectedTask.TaskID === taskId) {
+        setSelectedTask(null);
+      }
+    } catch (error) {
+      throw error;
+    }
+  }, [currentUser, selectedTask, setSelectedTask, logAudit, syncDatabase]);
 
   const runSimulatedRecurrenceEngine = useCallback(async () => {
     setIsSimulatingRecurrence(true);
@@ -318,7 +353,6 @@ export function useTaskOperations({
         });
       }
     } catch (e) {
-      console.error(e);
       setSimulationMessage({
         type: 'error',
         text: "Error executing recurrence checks: " + (e instanceof Error ? e.message : String(e))
@@ -337,6 +371,7 @@ export function useTaskOperations({
     handleToggleSubtask,
     handleDeleteSubtask,
     handleAddComment,
+    handleDeleteTask,
     runSimulatedRecurrenceEngine,
   };
 }

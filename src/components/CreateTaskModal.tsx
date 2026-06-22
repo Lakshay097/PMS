@@ -12,7 +12,6 @@ interface CreateTaskModalProps {
   onSubmit: (data: {
     Title: string;
     Description: string;
-    Category: string;
     Priority: 'Low' | 'Medium' | 'High' | 'Critical';
     TaskType: 'One-time' | 'Recurring';
     RecurrenceType: 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Half-yearly' | 'One-time';
@@ -28,7 +27,6 @@ export default function CreateTaskModal({ currentUser, usersList, isOpen, onClos
   const [taskType, setTaskType] = useState<'One-time' | 'Recurring'>('One-time');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('Operations');
   const [priority, setPriority] = useState<'Low' | 'Medium' | 'High' | 'Critical'>('Medium');
   const [recurrenceType, setRecurrenceType] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Half-yearly'>('Weekly');
   
@@ -115,7 +113,6 @@ export default function CreateTaskModal({ currentUser, usersList, isOpen, onClos
     onSubmit({
       Title: title,
       Description: description,
-      Category: category,
       Priority: priority,
       TaskType: taskType,
       RecurrenceType: taskType === 'Recurring' ? recurrenceType : 'One-time',
@@ -128,7 +125,6 @@ export default function CreateTaskModal({ currentUser, usersList, isOpen, onClos
     // Reset fields
     setTitle('');
     setDescription('');
-    setCategory('Operations');
     setPriority('Medium');
     setStartDate(todayStr);
     setDueDate(nextWeekStr);

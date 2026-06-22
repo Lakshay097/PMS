@@ -50,7 +50,7 @@ export function useUserOperations({
     try {
       await approveUser({ email });
     } catch (error) {
-      console.error('Error approving user:', error);
+      // Error handling without console logging
     }
   }, []);
 

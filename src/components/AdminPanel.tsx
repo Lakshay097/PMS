@@ -39,10 +39,7 @@ interface AdminPanelProps {
   onToggleTeamStatus: (teamId: string) => void;
   onUpdateUserTeams: (email: string, teamIDs: string[], teamNames: string[]) => void;
   onDeleteTeam: (teamId: string) => void;
-  onSyncDatabase?: () => void;
-  isSyncing?: boolean;
-  lastSyncTime?: string;
-  dbConnectionStatus?: 'connected' | 'disconnected' | 'error';
+  isDarkMode?: boolean;
 }
 
 export default function AdminPanel({
@@ -62,10 +59,7 @@ export default function AdminPanel({
   onToggleTeamStatus,
   onUpdateUserTeams,
   onDeleteTeam,
-  onSyncDatabase,
-  isSyncing = false,
-  lastSyncTime,
-  dbConnectionStatus = 'connected',
+  isDarkMode = false,
 }: AdminPanelProps) {
   // Master administrative tabs
   const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'teams' | 'templates' | 'email_templates' | 'audits' | 'settings'>('users');
@@ -278,171 +272,151 @@ export default function AdminPanel({
       .replace(/{AssignedByEmail}/g, "admin@PMS.com");
   };
 
-  const getRoleBadgeColor = (role: string) => {
+  const getRoleBadgeColor = (role: string, isDarkMode: boolean) => {
     switch (role) {
-      case 'Admin': return 'bg-red-50 text-red-700 border-red-200';
-      case 'Stakeholder': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-      case 'Sub-stakeholder': return 'bg-amber-50 text-amber-700 border-amber-200';
-      default: return 'bg-slate-50 text-slate-700';
+      case 'Admin': return isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200';
+      case 'Stakeholder': return isDarkMode ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-indigo-50 text-indigo-700 border-indigo-200';
+      case 'Sub-stakeholder': return isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200';
+      default: return isDarkMode ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-slate-50 text-slate-700';
     }
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg border border-[#E2E8F0] overflow-hidden font-sans">
+    <div className={`rounded-xl border overflow-hidden font-sans ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
       
-      {/* 1. Header & Real-time Metrics Panels */}
-      <div className="bg-[#0F172A] px-6 py-5 border-b border-[#1E293B]">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-          <div className="flex items-center space-x-2.5">
-            <div className="p-2 bg-red-500/10 rounded-lg">
-              <Shield className="text-red-400" size={24} />
+      {/* Integrated Header - matches Dashboard style */}
+      <div className={`px-4 md:px-6 py-4 border-b ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'}`}>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center space-x-3">
+            <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-blue-500/10' : 'bg-blue-100'}`}>
+              <Shield className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} size={20} />
             </div>
             <div>
-              <h3 className="text-white font-extrabold text-lg tracking-tight font-sans">Admin Panel</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5 uppercase tracking-widest font-mono">Manage Users, Teams & Templates</p>
+              <h3 className={`font-bold text-base md:text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Admin Panel</h3>
+              <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Manage users, teams & templates</p>
             </div>
           </div>
 
-          <div className="flex overflow-x-auto gap-1 bg-[#1E293B] rounded-lg p-0.5 w-full lg:w-auto">
+          {/* Tab Navigation - scrollable on mobile */}
+          <div className={`flex rounded-lg p-1 gap-1 overflow-x-auto w-full sm:w-auto ${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-100'}`}>
             <button
               onClick={() => setActiveAdminSubTab('users')}
-              className={`flex items-center space-x-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all select-none cursor-pointer w-full sm:w-auto text-center justify-center ${
+              className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
                 activeAdminSubTab === 'users'
-                  ? 'bg-[#2563EB] text-white shadow-sm'
-                  : 'text-slate-400 hover:text-[#F8FAFC]'
+                  ? 'bg-blue-500 text-white'
+                  : isDarkMode
+                  ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
               }`}
             >
               <Users size={14} />
-              <span>Users</span>
+              <span className="hidden sm:inline">Users</span>
             </button>
             <button
               onClick={() => setActiveAdminSubTab('teams')}
-              className={`flex items-center space-x-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all select-none cursor-pointer w-full sm:w-auto text-center justify-center ${
+              className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
                 activeAdminSubTab === 'teams'
-                  ? 'bg-[#2563EB] text-white shadow-sm'
-                  : 'text-slate-400 hover:text-[#F8FAFC]'
+                  ? 'bg-blue-500 text-white'
+                  : isDarkMode
+                  ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
               }`}
             >
               <Users size={14} />
-              <span>Teams</span>
+              <span className="hidden sm:inline">Teams</span>
             </button>
             <button
               onClick={() => setActiveAdminSubTab('templates')}
-              className={`flex items-center space-x-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all select-none cursor-pointer w-full sm:w-auto text-center justify-center ${
+              className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
                 activeAdminSubTab === 'templates'
-                  ? 'bg-[#2563EB] text-white shadow-sm'
-                  : 'text-slate-400 hover:text-[#F8FAFC]'
+                  ? 'bg-blue-500 text-white'
+                  : isDarkMode
+                  ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
               }`}
             >
               <Repeat size={14} />
-              <span>Templates</span>
+              <span className="hidden sm:inline">Templates</span>
             </button>
             <button
               onClick={() => setActiveAdminSubTab('audits')}
-              className={`flex items-center space-x-1.5 px-3 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all select-none cursor-pointer w-full sm:w-auto text-center justify-center ${
+              className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
                 activeAdminSubTab === 'audits'
-                  ? 'bg-[#2563EB] text-white shadow-sm'
-                  : 'text-slate-400 hover:text-[#F8FAFC]'
+                  ? 'bg-blue-500 text-white'
+                  : isDarkMode
+                  ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
               }`}
             >
               <History size={14} />
-              <span>Audit Log</span>
+              <span className="hidden sm:inline">Audit Log</span>
             </button>
-          </div>
-        </div>
-
-        {/* Dynamic statistics analytics strip */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-5 border-t border-[#1E293B]/60 text-slate-300 font-mono text-xs">
-          <div 
-            onClick={() => setActiveAdminSubTab('users')}
-            className={`bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B] cursor-pointer hover:bg-slate-800/80 hover:border-blue-550/50 transition-all select-none duration-150 ${
-              activeAdminSubTab === 'users' ? 'ring-2 ring-[#2563EB] border-[#2563EB] bg-slate-900' : ''
-            }`}
-          >
-            <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Users</span>
-            <span className="text-xl font-bold font-sans text-white block mt-1">{users.filter(u => u.Active).length} <span className="text-xs text-slate-500 font-normal">Active</span></span>
-          </div>
-          <div 
-            onClick={() => setActiveAdminSubTab('teams')}
-            className={`bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B] cursor-pointer hover:bg-slate-800/80 hover:border-emerald-550/50 transition-all select-none duration-150 ${
-              activeAdminSubTab === 'teams' ? 'ring-2 ring-emerald-500 border-emerald-500 bg-slate-900' : ''
-            }`}
-          >
-            <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Teams</span>
-            <span className="text-xl font-bold font-sans text-emerald-400 block mt-1">{teams.filter(t => t.Active).length} <span className="text-xs text-slate-500 font-normal font-mono">Active</span></span>
-          </div>
-          <div 
-            onClick={() => setActiveAdminSubTab('templates')}
-            className={`bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B] cursor-pointer hover:bg-slate-800/80 hover:border-cyan-550/50 transition-all select-none duration-150 ${
-              activeAdminSubTab === 'templates' ? 'ring-2 ring-cyan-550 border-cyan-550 bg-slate-900' : ''
-            }`}
-          >
-            <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Templates</span>
-            <span className="text-xl font-bold font-sans text-blue-400 block mt-1">{templates.filter(t => t.Active).length} <span className="text-xs text-slate-500 font-normal font-mono">Running</span></span>
-          </div>
-          <div 
-            onClick={onSyncDatabase}
-            className="bg-slate-900/60 p-3.5 rounded-xl border border-[#1E293B] cursor-pointer hover:bg-slate-800/80 hover:border-slate-700 transition-all select-none duration-150"
-            title="Click to force database synchronization"
-          >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] text-slate-500 uppercase tracking-widest block">Database Sync</span>
-              <div className={`w-2 h-2 rounded-full ${
-                dbConnectionStatus === 'connected' ? 'bg-emerald-400' : 
-                dbConnectionStatus === 'error' ? 'bg-red-400' : 'bg-slate-400'
-              }`} />
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-400 font-normal">
-                {lastSyncTime ? `Synced ${new Date(lastSyncTime).toLocaleTimeString()}` : 'Not synced'}
-              </span>
-              {onSyncDatabase && (
-                <button
-                  disabled={isSyncing}
-                  className="text-cyan-400 hover:text-cyan-300 disabled:text-slate-500 disabled:cursor-not-allowed transition-colors cursor-pointer border-none bg-transparent"
-                >
-                  <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
-                </button>
-              )}
-            </div>
+            <button
+              onClick={() => setActiveAdminSubTab('email_templates')}
+              className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
+                activeAdminSubTab === 'email_templates'
+                  ? 'bg-blue-500 text-white'
+                  : isDarkMode
+                  ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+              }`}
+            >
+              <Mail size={14} />
+              <span className="hidden sm:inline">Email</span>
+            </button>
+            <button
+              onClick={() => setActiveAdminSubTab('settings')}
+              className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
+                activeAdminSubTab === 'settings'
+                  ? 'bg-blue-500 text-white'
+                  : isDarkMode
+                  ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+              }`}
+            >
+              <Settings size={14} />
+              <span className="hidden sm:inline">Settings</span>
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="p-6 bg-slate-50/40">
+      <div className={`p-4 md:p-6 ${isDarkMode ? 'bg-[#0F141F]' : 'bg-slate-50'}`}>
         
         {/* SUBTAB 1: Users Mapping Directory */}
         {activeAdminSubTab === 'users' && (
-          <div className="space-y-6">
+          <div className="space-y-8">
             
             {/* Pending approvals row if any */}
             {(() => {
               const pendingApprovals = users.filter(u => u.ApprovalStatus === 'pending' && !u.Active);
               if (pendingApprovals.length === 0) return null;
               return (
-                <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-5 space-y-3.5 shadow-xs animate-fade-in">
-                  <div className="flex items-center space-x-2 text-amber-800">
-                    <Shield size={16} className="text-amber-600 animate-pulse stroke-[2.5]" />
-                    <h4 className="font-extrabold text-xs tracking-wider uppercase font-mono">
-                      System Access Enrollment Authorization Requests Awaiting Review ({pendingApprovals.length})
+                <div className={`border rounded-xl p-6 space-y-4 ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20' : 'bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200'}`}>
+                  <div className={`flex items-center space-x-3 ${isDarkMode ? 'text-amber-400' : 'text-amber-800'}`}>
+                    <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-amber-500/20' : 'bg-amber-100'}`}>
+                      <Shield size={18} className={isDarkMode ? 'text-amber-400' : 'text-amber-600'} />
+                    </div>
+                    <h4 className="font-bold text-sm uppercase tracking-wider">
+                      Pending Approvals ({pendingApprovals.length})
                     </h4>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-4">
                     {pendingApprovals.map(req => (
-                      <div key={req.UserID} className="bg-white border border-amber-150 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:shadow-sm transition-all duration-150">
+                      <div key={req.UserID} className={`border rounded-xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:shadow-md transition-all ${isDarkMode ? 'bg-[#1E293B] border-amber-500/20' : 'bg-white border-amber-200'}`}>
                         <div>
-                          <div className="font-extrabold text-slate-900 text-xs sm:text-sm">{req.FullName}</div>
-                          <div className="text-[10px] text-[#2563EB] font-mono font-bold mt-0.5">{req.Email}</div>
-                          <div className="text-[10px] text-slate-500 leading-relaxed mt-2 p-1.5 py-1 bg-slate-50 rounded border inline-block">
-                            Role Target: <strong className="text-slate-800 font-mono text-[9px] uppercase">{req.Role}</strong> &bull; Manager: {req.ManagerEmail || "Direct Admin Mode"}
+                          <div className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{req.FullName}</div>
+                          <div className={`text-xs font-mono mt-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{req.Email}</div>
+                          <div className={`text-xs mt-2 p-2 rounded-lg inline-block ${isDarkMode ? 'bg-[#334155] text-slate-300' : 'bg-slate-50 text-slate-500'}`}>
+                            Role: <strong className={isDarkMode ? 'text-white' : 'text-slate-800'}>{req.Role}</strong> • Manager: {req.ManagerEmail || "Direct Admin"}
                           </div>
                         </div>
                         <button
                           onClick={() => onApproveUser(req.Email)}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[10px] uppercase tracking-wider px-4 py-2 rounded-lg transition-all shadow-md cursor-pointer border-none flex items-center space-x-1.5"
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider px-5 py-2.5 rounded-xl transition-all shadow-md cursor-pointer border-none flex items-center space-x-2"
                         >
-                          <CheckSquare size={13} />
-                          <span>Approve &amp; Activate</span>
+                          <CheckSquare size={14} />
+                          <span>Approve</span>
                         </button>
                       </div>
                     ))}
@@ -451,54 +425,56 @@ export default function AdminPanel({
               );
             })()}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8">
               
-              {/* Provisioning Form */}
-              <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 space-y-4 shadow-sm h-fit">
-                <div className="flex items-center space-x-1.5 border-b border-[#E2E8F0] pb-2 text-[#0F172A]">
-                  <Plus size={16} className="text-[#2563EB] stroke-[2.5]" />
-                  <h4 className="font-extrabold text-[#010915] text-xs uppercase tracking-wider font-mono">Provision New System Identity</h4>
+              {/* Modern Provisioning Form */}
+              <div className={`border rounded-xl p-6 space-y-5 shadow-sm h-fit ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}>
+                <div className={`flex items-center space-x-3 border-b pb-4 ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
+                  <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-blue-500/10' : 'bg-blue-100'}`}>
+                    <Plus size={18} className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} />
+                  </div>
+                  <h4 className={`font-bold text-sm uppercase tracking-wider ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Add New User</h4>
                 </div>
                 
                 {userSuccessMessage && (
-                  <div className="p-3 text-xs text-emerald-800 bg-emerald-50 border border-emerald-150 rounded-lg font-semibold flex items-center gap-1.5 animate-pulse">
-                    <CheckCircle size={14} className="text-emerald-600" />
+                  <div className={`p-4 text-sm rounded-xl font-semibold flex items-center gap-2 ${isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-800 bg-emerald-50 border-emerald-200'}`}>
+                    <CheckCircle size={16} className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} />
                     <span>{userSuccessMessage}</span>
                   </div>
                 )}
 
                 <form onSubmit={handleUserCreateSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1.5">Full Legal Name</label>
+                    <label className={`block text-xs font-semibold uppercase tracking-wider mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Full Name</label>
                     <input
                       type="text"
                       required
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="e.g. Rachel Zane"
-                      className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                      placeholder="Rachel Zane"
+                      className={`w-full text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'}`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1.5">Official Email Address</label>
+                    <label className={`block text-xs font-semibold uppercase tracking-wider mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Email</label>
                     <input
                       type="email"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="e.g. rachel@PMS.com"
-                      className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                      placeholder="rachel@PMS.com"
+                      className={`w-full text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'}`}
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1.5">Role Authorization</label>
+                      <label className={`block text-xs font-semibold uppercase tracking-wider mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Role</label>
                       <select
                         value={role}
                         onChange={(e) => setRole(e.target.value as any)}
-                        className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-2 py-2.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB] cursor-pointer"
+                        className={`w-full text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
                       >
                         <option value="Admin">Admin</option>
                         <option value="Stakeholder">Stakeholder</option>
@@ -506,11 +482,11 @@ export default function AdminPanel({
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1.5">Teams (Optional)</label>
-                      <div className="space-y-2 max-h-32 overflow-y-auto border border-[#E2E8F0] rounded-lg p-2 bg-white">
+                      <label className={`block text-xs font-semibold uppercase tracking-wider mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Teams</label>
+                      <div className={`space-y-2 max-h-32 overflow-y-auto border rounded-xl p-3 ${isDarkMode ? 'border-[#475569] bg-[#334155]' : 'border-slate-200 bg-slate-50'}`}>
                         {teams.length > 0 ? (
                           teams.map(t => (
-                            <label key={t.TeamID} className="flex items-center space-x-2 text-xs cursor-pointer">
+                            <label key={t.TeamID} className="flex items-center space-x-2 text-sm cursor-pointer">
                               <input
                                 type="checkbox"
                                 value={t.TeamID}
@@ -522,13 +498,13 @@ export default function AdminPanel({
                                     setTeamSelections(teamSelections.filter(id => id !== t.TeamID));
                                   }
                                 }}
-                                className="rounded border-[#E2E8F0] text-[#2563EB] focus:ring-1 focus:ring-[#2563EB]"
+                                className={`rounded focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'border-[#475569] bg-[#334155] text-blue-400' : 'border-slate-300 text-blue-600'}`}
                               />
-                              <span className="text-slate-800">{t.TeamName}</span>
+                              <span className={isDarkMode ? 'text-slate-300' : 'text-slate-700'}>{t.TeamName}</span>
                             </label>
                           ))
                         ) : (
-                          <p className="text-xs text-slate-500 italic p-2">No teams available</p>
+                          <p className={`text-sm italic p-2 ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>No teams available</p>
                         )}
                       </div>
                     </div>
@@ -536,38 +512,35 @@ export default function AdminPanel({
 
                   {role === 'Stakeholder' && (
                     <div>
-                      <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1.5 flex justify-between">
-                        <span>Reporting Manager (Optional)</span>
-                        <span className="text-[8px] text-indigo-600 font-normal lowercase tracking-normal">Requires Email Match</span>
-                      </label>
+                      <label className={`block text-xs font-semibold uppercase tracking-wider mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Manager Email</label>
                       <input
                         type="email"
                         value={managerEmail}
                         onChange={(e) => setManagerEmail(e.target.value)}
                         placeholder="sales.lead@PMS.com"
-                        className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                        className={`w-full text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'}`}
                       />
                     </div>
                   )}
 
                   <div>
-                    <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1.5">Password (Min 6 characters)</label>
+                    <label className={`block text-xs font-semibold uppercase tracking-wider mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Password</label>
                     <input
                       type="password"
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••"
-                      className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                      className={`w-full text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'}`}
                     />
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg py-2.5 text-xs font-extrabold uppercase tracking-widest transition-all duration-150 shadow-md cursor-pointer border-none flex items-center justify-center space-x-1"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-3 text-sm font-bold uppercase tracking-wider transition-all duration-200 shadow-md cursor-pointer border-none flex items-center justify-center space-x-2"
                   >
-                    <Plus size={14} />
-                    <span>Authorize Profile</span>
+                    <Plus size={16} />
+                    <span>Create User</span>
                   </button>
                 </form>
               </div>
@@ -576,16 +549,16 @@ export default function AdminPanel({
               <div className="lg:col-span-2 space-y-4">
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="relative w-full sm:w-80">
-                    <Search className="absolute left-3 top-2.5 text-slate-400" size={14} />
+                    <Search className={`absolute left-3 top-2.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={14} />
                     <input
                       type="text"
                       value={userSearchText}
                       onChange={(e) => setUserSearchText(e.target.value)}
                       placeholder="Search mapping name, email, or role..."
-                      className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg pl-9 pr-3 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                      className={`w-full text-xs rounded-lg pl-9 pr-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' : 'bg-white border-[#E2E8F0] text-slate-800 placeholder-slate-400'}`}
                     />
                   </div>
-                  <span className="text-[10px] text-[#64748B] font-bold uppercase tracking-widest font-mono">
+                  <span className={`text-[10px] font-bold uppercase tracking-widest font-mono ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>
                     Session Authorization: {users.length} Identities
                   </span>
                 </div>
@@ -602,49 +575,51 @@ export default function AdminPanel({
                       return (
                         <div 
                           key={user.UserID}
-                          className={`bg-white border rounded-xl p-5 flex flex-col justify-between gap-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${
-                            isBanned ? 'border-red-200 bg-red-50/10' : 'border-slate-200'
+                          className={`border rounded-xl p-5 flex flex-col justify-between gap-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${
+                            isBanned 
+                              ? isDarkMode ? 'border-red-500/20 bg-red-500/10' : 'border-red-200 bg-red-50/10'
+                              : isDarkMode ? 'border-[#334155] bg-[#1E293B]' : 'border-slate-200 bg-white'
                           }`}
                         >
                           <div className="space-y-3">
                             <div className="flex justify-between items-start">
                               <div>
-                                <h5 className="font-extrabold text-slate-900 text-sm sm:text-base">{user.FullName}</h5>
-                                <p className="text-xs text-[#2563EB] font-mono mt-0.5">{user.Email}</p>
+                                <h5 className={`font-extrabold text-sm sm:text-base ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{user.FullName}</h5>
+                                <p className={`text-xs font-mono mt-0.5 ${isDarkMode ? 'text-blue-400' : 'text-[#2563EB]'}`}>{user.Email}</p>
                               </div>
-                              <span className="text-[10px] text-slate-400 font-mono">{user.UserID}</span>
+                              <span className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{user.UserID}</span>
                             </div>
 
                             <div className="flex flex-wrap gap-1">
                               {(user.TeamNames || []).map((tName, i) => (
-                                <span key={i} className="inline-flex items-center bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                <span key={i} className={`inline-flex items-center border text-[10px] font-bold px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
                                   {tName}
                                 </span>
                               ))}
                               {(user.TeamNames || []).length === 0 && (
-                                <span className="inline-flex items-center bg-slate-50 border border-slate-200 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-full italic">
+                                <span className={`inline-flex items-center border text-[10px] font-bold px-2 py-0.5 rounded-full italic ${isDarkMode ? 'bg-slate-500/10 border-slate-500/20 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
                                   No Teams
                                 </span>
                               )}
                             </div>
 
-                            <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-xs">
-                              <span className="text-slate-500 font-medium">Reporting Line:</span>
+                            <div className={`pt-2 border-t flex justify-between items-center text-xs ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
+                              <span className={`font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Reporting Line:</span>
                               {user.ManagerEmail ? (
-                                <span className="text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded font-mono text-[10px]">{user.ManagerEmail}</span>
+                                <span className={`px-1.5 py-0.5 rounded font-mono text-[10px] ${isDarkMode ? 'text-slate-300 bg-[#334155]' : 'text-slate-700 bg-slate-100'}`}>{user.ManagerEmail}</span>
                               ) : (
-                                <span className="text-slate-400 italic">-- Direct Node --</span>
+                                <span className={`italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>-- Direct Node --</span>
                               )}
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                          <div className={`flex items-center justify-between gap-3 pt-3 border-t ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
                             <div className="flex items-center gap-1.5 flex-grow">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">Role:</span>
+                              <span className={`text-[10px] font-bold uppercase font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>Role:</span>
                               <select
                                 value={user.Role}
                                 onChange={(e) => onUpdateUserRole(user.Email, e.target.value as any)}
-                                className={`text-[10px] uppercase font-mono font-bold px-2 py-1 rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer bg-white ${getRoleBadgeColor(user.Role)}`}
+                                className={`text-[10px] uppercase font-mono font-bold px-2 py-1 rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer ${isDarkMode ? 'bg-[#1E293B] text-white' : 'bg-white'} ${getRoleBadgeColor(user.Role, isDarkMode)}`}
                               >
                                 <option value="Admin">Admin</option>
                                 <option value="Stakeholder">Stakeholder</option>
@@ -656,8 +631,8 @@ export default function AdminPanel({
                               onClick={() => onToggleUserStatus(user.Email)}
                               className={`text-[10px] font-extrabold uppercase tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer ${
                                 user.Active
-                                  ? 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
-                                  : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
+                                  ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
+                                  : isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
                               }`}
                             >
                               {user.Active ? '● Active' : '■ Banned'}
@@ -677,46 +652,46 @@ export default function AdminPanel({
           <div className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Add Team Form */}
-              <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 space-y-4 shadow-sm h-fit">
-                <div className="flex items-center space-x-1.5 border-b border-[#E2E8F0] pb-2 text-[#0F172A]">
-                  <Plus size={16} className="text-[#2563EB] stroke-[2.5]" />
-                  <h4 className="font-extrabold text-[#010915] text-xs uppercase tracking-wider font-mono">Create New Team</h4>
+              <div className={`border rounded-xl p-5 space-y-4 shadow-sm h-fit ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0]'}`}>
+                <div className={`flex items-center space-x-1.5 border-b pb-2 ${isDarkMode ? 'border-[#334155] text-white' : 'border-[#E2E8F0] text-[#0F172A]'}`}>
+                  <Plus size={16} className={isDarkMode ? 'text-blue-400' : 'text-[#2563EB]'} />
+                  <h4 className={`font-extrabold text-xs uppercase tracking-wider font-mono ${isDarkMode ? 'text-white' : 'text-[#010915]'}`}>Create New Team</h4>
                 </div>
 
                 {teamSuccessMessage && (
-                  <div className="p-3 text-xs text-emerald-800 bg-emerald-50 border border-emerald-150 rounded-lg font-semibold flex items-center gap-1 animate-pulse">
-                    <CheckCircle size={14} className="text-emerald-600" />
+                  <div className={`p-3 text-xs rounded-lg font-semibold flex items-center gap-1 animate-pulse ${isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-800 bg-emerald-50 border-emerald-150'}`}>
+                    <CheckCircle size={14} className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} />
                     <span>{teamSuccessMessage}</span>
                   </div>
                 )}
 
                 <form onSubmit={handleTeamCreateSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1.5">Team Name</label>
+                    <label className={`block text-[9.5px] font-bold uppercase tracking-widest mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Team Name</label>
                     <input
                       type="text"
                       required
                       value={teamName}
                       onChange={(e) => setTeamName(e.target.value)}
                       placeholder="e.g. Engineering Team"
-                      className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                      className={`w-full text-xs rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-white border-[#E2E8F0] text-slate-800 placeholder-slate-400'}`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1.5">Description (Optional)</label>
+                    <label className={`block text-[9.5px] font-bold uppercase tracking-widest mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Description (Optional)</label>
                     <textarea
                       value={teamDescription}
                       onChange={(e) => setTeamDescription(e.target.value)}
                       placeholder="Team description and purpose..."
                       rows={3}
-                      className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB] font-sans resize-none"
+                      className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans resize-none ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-white border-[#E2E8F0] text-slate-800 placeholder-slate-400'}`}
                     />
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg py-2.5 text-xs font-extrabold uppercase tracking-widest transition-all duration-150 shadow-md cursor-pointer border-none flex items-center justify-center space-x-1"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-xs font-extrabold uppercase tracking-widest transition-all duration-150 shadow-md cursor-pointer border-none flex items-center justify-center space-x-1"
                   >
                     <Plus size={14} />
                     <span>Create Team</span>
@@ -727,7 +702,7 @@ export default function AdminPanel({
               {/* Teams List */}
               <div className="lg:col-span-2 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="font-extrabold text-[#0F172A] text-sm uppercase tracking-wider font-mono">All Teams ({teams.length})</h4>
+                  <h4 className={`font-extrabold text-sm uppercase tracking-wider font-mono ${isDarkMode ? 'text-white' : 'text-[#0F172A]'}`}>All Teams ({teams.length})</h4>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -737,22 +712,24 @@ export default function AdminPanel({
                     return (
                       <div 
                         key={team.TeamID}
-                        className={`bg-white border rounded-xl p-5 flex flex-col justify-between gap-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${
-                          isExpanded ? 'border-blue-300 ring-1 ring-blue-100' : 'border-slate-200'
+                        className={`border rounded-xl p-5 flex flex-col justify-between gap-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${
+                          isExpanded 
+                            ? isDarkMode ? 'border-blue-500/50 ring-1 ring-blue-500/20' : 'border-blue-300 ring-1 ring-blue-100'
+                            : isDarkMode ? 'border-[#334155] bg-[#1E293B]' : 'border-slate-200 bg-white'
                         }`}
                       >
                         <div className="space-y-3">
                           <div className="flex justify-between items-start">
                             <div>
-                              <h5 className="font-extrabold text-slate-900 text-sm sm:text-base">{team.TeamName}</h5>
-                              <p className="text-[11px] text-slate-500 mt-1">{team.Description || 'No description provided'}</p>
+                              <h5 className={`font-extrabold text-sm sm:text-base ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{team.TeamName}</h5>
+                              <p className={`text-[11px] mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{team.Description || 'No description provided'}</p>
                             </div>
-                            <span className="text-[10px] text-slate-400 font-mono">{team.TeamID}</span>
+                            <span className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{team.TeamID}</span>
                           </div>
 
-                          <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-100">
-                            <span className="text-slate-500 font-medium">Active Members:</span>
-                            <span className="bg-[#2563EB]/10 text-[#2563EB] text-xs font-extrabold px-2.5 py-0.5 rounded-full">
+                          <div className={`flex justify-between items-center text-xs pt-2 border-t ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
+                            <span className={`font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Active Members:</span>
+                            <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded-full ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-[#2563EB]/10 text-[#2563EB]'}`}>
                               {teamUsers.length} members
                             </span>
                           </div>
@@ -760,21 +737,21 @@ export default function AdminPanel({
 
                         {/* Inline Expandable Membership Editor */}
                         {isExpanded && (
-                          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3 shadow-inner">
-                            <div className="font-extrabold text-[9px] uppercase tracking-wider text-slate-500 font-mono">
+                          <div className={`border rounded-xl p-3.5 space-y-3 shadow-inner ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
+                            <div className={`font-extrabold text-[9px] uppercase tracking-wider font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                               Manage {team.TeamName} Members
                             </div>
                             <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                               {teamUsers.map(u => (
-                                <div key={u.UserID} className="flex justify-between items-center bg-white border border-[#E2E8F0] p-2 rounded-lg text-xs">
+                                <div key={u.UserID} className={`flex justify-between items-center border p-2 rounded-lg text-xs ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-white border-[#E2E8F0]'}`}>
                                   <div className="truncate pr-2">
-                                    <div className="font-bold text-slate-800 truncate">{u.FullName}</div>
-                                    <div className="text-[9.5px] text-slate-500 font-mono truncate">{u.Email}</div>
+                                    <div className={`font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{u.FullName}</div>
+                                    <div className={`text-[9.5px] font-mono truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{u.Email}</div>
                                   </div>
                                   <button
                                     type="button"
                                     onClick={() => handleRemoveMember(u.Email, team.TeamID, team.TeamName)}
-                                    className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition-colors border-none cursor-pointer bg-transparent"
+                                    className={`p-1 rounded transition-colors border-none cursor-pointer bg-transparent ${isDarkMode ? 'text-red-400 hover:text-red-300 hover:bg-red-500/20' : 'text-red-500 hover:text-red-700 hover:bg-red-50'}`}
                                     title="Remove from team"
                                   >
                                     <X size={13} />
@@ -782,15 +759,15 @@ export default function AdminPanel({
                                 </div>
                               ))}
                               {teamUsers.length === 0 && (
-                                <div className="text-slate-400 text-xs italic py-1">No members assigned to this team.</div>
+                                <div className={`text-xs italic py-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>No members assigned to this team.</div>
                               )}
                             </div>
                             
                             {/* Add member select dropdown inside card */}
-                            <div className="flex gap-1.5 pt-1.5 border-t border-slate-200">
+                            <div className={`flex gap-1.5 pt-1.5 border-t ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
                               <select
                                 id={`add-member-select-${team.TeamID}`}
-                                className="bg-white border border-[#CBD5E1] rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 flex-grow"
+                                className={`rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 flex-grow ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-[#CBD5E1] text-slate-700'}`}
                                 defaultValue=""
                               >
                                 <option value="" disabled>-- Add member --</option>
@@ -807,7 +784,7 @@ export default function AdminPanel({
                                     select.value = ""; // reset select dropdown
                                   }
                                 }}
-                                className="bg-blue-605 hover:bg-blue-500 text-white font-extrabold text-[10px] uppercase px-3.5 py-2 rounded-lg border-none cursor-pointer shadow-sm"
+                                className="bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-[10px] uppercase px-3.5 py-2 rounded-lg border-none cursor-pointer shadow-sm"
                               >
                                 Add
                               </button>
@@ -815,13 +792,13 @@ export default function AdminPanel({
                           </div>
                         )}
 
-                        <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                        <div className={`flex items-center justify-between gap-3 pt-3 border-t ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
                           <button
                             onClick={() => onToggleTeamStatus(team.TeamID)}
                             className={`text-[10px] font-extrabold uppercase tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer ${
                               team.Active
-                                ? 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
-                                : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
+                                ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
+                                : isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
                             }`}
                           >
                             {team.Active ? '● Active' : '■ Inactive'}
@@ -831,7 +808,7 @@ export default function AdminPanel({
                             <button
                               type="button"
                               onClick={() => setExpandedTeamId(isExpanded ? null : team.TeamID)}
-                              className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors border-none cursor-pointer"
+                              className={`px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors border-none cursor-pointer ${isDarkMode ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400' : 'bg-blue-50 hover:bg-blue-100 text-blue-700'}`}
                             >
                               {isExpanded ? 'Hide' : 'Members'}
                             </button>
@@ -842,7 +819,7 @@ export default function AdminPanel({
                                   onDeleteTeam(team.TeamID);
                                 }
                               }}
-                              className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors border-none cursor-pointer"
+                              className={`px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors border-none cursor-pointer ${isDarkMode ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400' : 'bg-red-50 hover:bg-red-100 text-red-700'}`}
                             >
                               Delete
                             </button>
@@ -869,58 +846,58 @@ export default function AdminPanel({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
               {/* Add Recurrence Blueprint Form */}
-              <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 space-y-4 shadow-sm h-fit">
-                <div className="flex items-center space-x-1.5 border-b border-[#E2E8F0] pb-2 text-[#0F172A]">
-                  <Plus size={16} className="text-[#2563EB] stroke-[2.5]" />
-                  <h4 className="font-extrabold text-[#010915] text-xs uppercase tracking-wider font-mono">Define New Recurrence Blueprint</h4>
+              <div className={`border rounded-xl p-5 space-y-4 shadow-sm h-fit ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0]'}`}>
+                <div className={`flex items-center space-x-1.5 border-b pb-2 ${isDarkMode ? 'border-[#334155] text-white' : 'border-[#E2E8F0] text-[#0F172A]'}`}>
+                  <Plus size={16} className={isDarkMode ? 'text-blue-400' : 'text-[#2563EB]'} />
+                  <h4 className={`font-extrabold text-xs uppercase tracking-wider font-mono ${isDarkMode ? 'text-white' : 'text-[#010915]'}`}>Define New Recurrence Blueprint</h4>
                 </div>
 
                 {templateSuccessMessage && (
-                  <div className="p-3 text-xs text-emerald-850 bg-emerald-50 border border-emerald-150 rounded-lg font-bold flex items-center gap-1 animate-pulse">
-                    <CheckCircle size={14} className="text-emerald-600" />
+                  <div className={`p-3 text-xs rounded-lg font-bold flex items-center gap-1 animate-pulse ${isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-850 bg-emerald-50 border-emerald-150'}`}>
+                    <CheckCircle size={14} className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} />
                     <span>{templateSuccessMessage}</span>
                   </div>
                 )}
 
                 {templateErrorMessage && (
-                  <div className="p-3 text-xs text-red-850 bg-red-50 border border-red-150 rounded-lg font-bold flex items-center gap-1 animate-pulse">
-                    <AlertCircle size={14} className="text-red-600" />
+                  <div className={`p-3 text-xs rounded-lg font-bold flex items-center gap-1 animate-pulse ${isDarkMode ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-red-850 bg-red-50 border-red-150'}`}>
+                    <AlertCircle size={14} className={isDarkMode ? 'text-red-400' : 'text-red-600'} />
                     <span>{templateErrorMessage}</span>
                   </div>
                 )}
 
                 <form onSubmit={handleTemplateCreateSubmit} className="space-y-3.5">
                   <div>
-                    <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1">Standard Checklist Title</label>
+                    <label className={`block text-[9.5px] font-bold uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Standard Checklist Title</label>
                     <input
                       type="text"
                       required
                       value={tempTitle}
                       onChange={(e) => setTempTitle(e.target.value)}
                       placeholder="e.g. Fortnightly SOC2 Assets Audit"
-                      className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                      className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-white border-[#E2E8F0] text-slate-800 placeholder-slate-400'}`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1">Detailed Description Instructions</label>
+                    <label className={`block text-[9.5px] font-bold uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Detailed Description Instructions</label>
                     <textarea
                       required
                       value={tempDesc}
                       onChange={(e) => setTempDesc(e.target.value)}
                       placeholder="Identify active cluster nodes, map pending anomalies, and verify signature certificates..."
                       rows={3}
-                      className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB] font-sans resize-none"
+                      className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans resize-none ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-white border-[#E2E8F0] text-slate-800 placeholder-slate-400'}`}
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1">Recurrence Rate</label>
+                      <label className={`block text-[9.5px] font-bold uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Recurrence Rate</label>
                       <select
                         value={tempRecurrence}
                         onChange={(e) => setTempRecurrence(e.target.value as any)}
-                        className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-2 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB] cursor-pointer"
+                        className={`w-full text-xs rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-[#E2E8F0] text-slate-800'}`}
                       >
                         <option value="Daily">Daily</option>
                         <option value="Weekly">Weekly</option>
@@ -931,11 +908,11 @@ export default function AdminPanel({
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1">Category</label>
+                      <label className={`block text-[9.5px] font-bold uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Category</label>
                       <select
                         value={tempCategory}
                         onChange={(e) => setTempCategory(e.target.value)}
-                        className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-2 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB] cursor-pointer"
+                        className={`w-full text-xs rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-[#E2E8F0] text-slate-800'}`}
                       >
                         <option value="Operations">Operations</option>
                         <option value="Finance">Finance</option>
@@ -947,11 +924,11 @@ export default function AdminPanel({
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1">Priority Rank</label>
+                      <label className={`block text-[9.5px] font-bold uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Priority Rank</label>
                       <select
                         value={tempPriority}
                         onChange={(e) => setTempPriority(e.target.value as any)}
-                        className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-2 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB] cursor-pointer"
+                        className={`w-full text-xs rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-[#E2E8F0] text-slate-800'}`}
                       >
                         <option value="Low">Low</option>
                         <option value="Medium">Medium</option>
@@ -961,24 +938,24 @@ export default function AdminPanel({
                     </div>
 
                     <div>
-                      <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1">Schedule Start Date</label>
+                      <label className={`block text-[9.5px] font-bold uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Schedule Start Date</label>
                       <input
                         type="date"
                         required
                         value={tempStartDate}
                         onChange={(e) => setTempStartDate(e.target.value)}
-                        className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-2 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB] cursor-pointer"
+                        className={`w-full text-xs rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-[#E2E8F0] text-slate-800'}`}
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-[9.5px] font-bold text-[#64748B] uppercase tracking-widest mb-1">Default Responsible Identity</label>
+                    <label className={`block text-[9.5px] font-bold uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Default Responsible Identity</label>
                     <select
                       required
                       value={tempAssignToEmail}
                       onChange={(e) => setTempAssignToEmail(e.target.value)}
-                      className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-2 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB] cursor-pointer"
+                      className={`w-full text-xs rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-[#E2E8F0] text-slate-800'}`}
                     >
                       <option value="">Select recipient email...</option>
                       {users.map(u => (
@@ -989,7 +966,7 @@ export default function AdminPanel({
 
                   <button
                     type="submit"
-                    className="w-full bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg py-2.5 text-xs font-extrabold uppercase tracking-widest transition-all duration-150 shadow-md cursor-pointer border-none flex items-center justify-center space-x-1"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-xs font-extrabold uppercase tracking-widest transition-all duration-150 shadow-md cursor-pointer border-none flex items-center justify-center space-x-1"
                   >
                     <Plus size={14} />
                     <span>Synchronize Scheduler</span>
@@ -1001,16 +978,16 @@ export default function AdminPanel({
               <div className="lg:col-span-2 space-y-4">
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="relative w-full sm:w-80">
-                    <Search className="absolute left-3 top-2.5 text-slate-400" size={14} />
+                    <Search className={`absolute left-3 top-2.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={14} />
                     <input
                       type="text"
                       value={templateSearchText}
                       onChange={(e) => setTemplateSearchText(e.target.value)}
                       placeholder="Search blueprints title or recipient..."
-                      className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg pl-9 pr-3 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                      className={`w-full text-xs rounded-lg pl-9 pr-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' : 'bg-white border-[#E2E8F0] text-slate-800 placeholder-slate-400'}`}
                     />
                   </div>
-                  <span className="text-[10px] text-[#64748B] font-bold uppercase tracking-widest font-mono">
+                  <span className={`text-[10px] font-bold uppercase tracking-widest font-mono ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>
                     Blueprints Matrix: {templates.length} Scheduler Threads
                   </span>
                 </div>
@@ -1027,49 +1004,51 @@ export default function AdminPanel({
                       return (
                         <div 
                           key={template.TemplateID}
-                          className={`bg-white border rounded-xl p-5 flex flex-col justify-between gap-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${
-                            !isActive ? 'border-red-200 bg-red-50/10' : 'border-slate-200'
+                          className={`border rounded-xl p-5 flex flex-col justify-between gap-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${
+                            !isActive 
+                              ? isDarkMode ? 'border-red-500/20 bg-red-500/10' : 'border-red-200 bg-red-50/10'
+                              : isDarkMode ? 'border-[#334155] bg-[#1E293B]' : 'border-slate-200 bg-white'
                           }`}
                         >
                           <div className="space-y-3">
                             <div className="flex justify-between items-start">
                               <div>
-                                <h5 className="font-extrabold text-slate-900 text-sm sm:text-base">{template.Title}</h5>
-                                <p className="text-xs text-slate-500 font-medium mt-0.5">{template.Category} &bull; {template.RecurrenceType}</p>
+                                <h5 className={`font-extrabold text-sm sm:text-base ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{template.Title}</h5>
+                                <p className={`text-xs font-medium mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{template.Category} &bull; {template.RecurrenceType}</p>
                               </div>
-                              <span className="text-[10px] text-slate-400 font-mono">{template.TemplateID}</span>
+                              <span className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{template.TemplateID}</span>
                             </div>
 
                             <div className="flex gap-1.5">
                               <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                                template.Priority === 'Critical' ? 'bg-red-50 text-red-700 border-red-200' :
-                                template.Priority === 'High' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                template.Priority === 'Medium' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                                'bg-slate-50 text-slate-700 border-slate-200'
+                                template.Priority === 'Critical' ? isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200' :
+                                template.Priority === 'High' ? isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-orange-50 text-orange-700 border-orange-200' :
+                                template.Priority === 'Medium' ? isDarkMode ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                isDarkMode ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-slate-50 text-slate-700 border-slate-200'
                               }`}>
                                 {template.Priority} Priority
                               </span>
                             </div>
 
-                            <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-xs">
-                              <span className="text-slate-500 font-medium">Assigned Target:</span>
-                              <span className="text-slate-800 font-semibold truncate max-w-[200px]">{template.AssignedToEmail}</span>
+                            <div className={`pt-2 border-t flex justify-between items-center text-xs ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
+                              <span className={`font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Assigned Target:</span>
+                              <span className={`font-semibold truncate max-w-[200px] ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{template.AssignedToEmail}</span>
                             </div>
 
                             <div className="flex justify-between items-center text-xs">
-                              <span className="text-slate-500 font-medium">Next Run:</span>
-                              <span className="text-slate-800 font-mono font-semibold">{template.NextGenerationDate}</span>
+                              <span className={`font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Next Run:</span>
+                              <span className={`font-mono font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{template.NextGenerationDate}</span>
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between gap-3 pt-3 border-t border-[#F1F5F9]">
-                            <span className="text-[10px] text-slate-400 font-mono">Created {new Date(template.CreatedAt).toLocaleDateString()}</span>
+                          <div className={`flex items-center justify-between gap-3 pt-3 border-t ${isDarkMode ? 'border-[#334155]' : 'border-[#F1F5F9]'}`}>
+                            <span className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Created {new Date(template.CreatedAt).toLocaleDateString()}</span>
                             <button
                               onClick={() => onToggleTemplateStatus(template.TemplateID)}
                               className={`text-[10px] font-extrabold uppercase tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer text-center ${
                                 template.Active
-                                  ? 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
-                                  : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
+                                  ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
+                                  : isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
                               }`}
                             >
                               {template.Active ? '● Running' : '■ Paused'}
@@ -1092,19 +1071,19 @@ export default function AdminPanel({
         {/* SUBTAB 3: Specialized Email Template Customisation Workbench (STRICTLY REQUESTED CEILING OPTION) */}
         {activeAdminSubTab === 'email_templates' && (
           <div className="space-y-5 animate-fade-in">
-            <div className="bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-200 rounded-xl p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className={`border rounded-xl p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-emerald-200'}`}>
               <div>
-                <h4 className="font-extrabold text-emerald-900 text-sm uppercase tracking-wider font-mono">Automated Email Templates Workbench</h4>
-                <p className="text-xs text-slate-600 mt-1 max-w-2xl">
+                <h4 className={`font-extrabold text-sm uppercase tracking-wider font-mono ${isDarkMode ? 'text-emerald-400' : 'text-emerald-900'}`}>Automated Email Templates Workbench</h4>
+                <p className={`text-xs mt-1 max-w-2xl ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                   Configure structural boilerplate layouts for simulated emails. This allows customizable, client-wide alert configurations that will automatically fire during cycle execution and overdue audits.
                 </p>
               </div>
-              <div className="bg-white px-3 py-2 rounded-lg border border-emerald-200 flex gap-1.5 items-center">
-                <label className="text-[10px] font-mono font-black text-slate-500 uppercase tracking-widest">Active Selector:</label>
+              <div className={`px-3 py-2 rounded-lg border flex gap-1.5 items-center ${isDarkMode ? 'bg-[#1E293B] border-emerald-500/20' : 'bg-white border-emerald-200'}`}>
+                <label className={`text-[10px] font-mono font-black uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Active Selector:</label>
                 <select
                   value={selectedEmailTemplateKey}
                   onChange={(e) => setSelectedEmailTemplateKey(e.target.value as any)}
-                  className="bg-transparent border-none text-emerald-800 font-extrabold text-xs focus:ring-0 outline-none cursor-pointer"
+                  className={`bg-transparent border-none font-extrabold text-xs focus:ring-0 outline-none cursor-pointer ${isDarkMode ? 'text-emerald-400' : 'text-emerald-800'}`}
                 >
                   <option value="template_assigned_email">Task Assignment Alert (HTML/Text)</option>
                   <option value="template_delayed_email">Delayed / Overdue Alert (HTML/Text)</option>
@@ -1115,23 +1094,23 @@ export default function AdminPanel({
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               
               {/* Left Side: Template Editor Box */}
-              <div className="bg-white border border-[#E2E8F0] p-6 rounded-2xl shadow-sm space-y-4">
-                <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-2">
+              <div className={`border p-6 rounded-2xl shadow-sm space-y-4 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0]'}`}>
+                <div className={`flex justify-between items-center border-b pb-2 ${isDarkMode ? 'border-[#334155]' : 'border-[#E2E8F0]'}`}>
                   <div className="flex items-center space-x-1.5">
-                    <Edit className="text-emerald-600" size={16} />
-                    <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider font-mono">Template Code Composer</h4>
+                    <Edit className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} size={16} />
+                    <h4 className={`font-bold text-xs uppercase tracking-wider font-mono ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Template Code Composer</h4>
                   </div>
-                  <span className="text-[9.5px] text-slate-400 font-mono font-bold uppercase">{selectedEmailTemplateKey}</span>
+                  <span className={`text-[9.5px] font-mono font-bold uppercase ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`}>{selectedEmailTemplateKey}</span>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-mono font-black text-slate-500 uppercase tracking-widest">Email Content Template Editor</label>
-                  <p className="text-[10px] text-slate-400">Write custom text or HTML code. Click the visual tokens below to quickly inject placeholders at your current cursor!</p>
+                  <label className={`block text-[10px] font-mono font-black uppercase tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Email Content Template Editor</label>
+                  <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Write custom text or HTML code. Click the visual tokens below to quickly inject placeholders at your current cursor!</p>
                 </div>
 
                 {/* Interactive Token badges list */}
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-150 space-y-2">
-                  <span className="block text-[8px] font-black font-mono text-slate-400 uppercase tracking-widest">Interactive Placeholders (Click to insert)</span>
+                <div className={`p-3 rounded-lg border space-y-2 ${isDarkMode ? 'bg-[#334155] border-[#475569]' : 'bg-slate-50 border-slate-150'}`}>
+                  <span className={`block text-[8px] font-black font-mono uppercase tracking-widest ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Interactive Placeholders (Click to insert)</span>
                   <div className="flex flex-wrap gap-1.5">
                     {[
                       { token: "{TaskID}", desc: "Task Identifier Code" },
@@ -1147,7 +1126,7 @@ export default function AdminPanel({
                         onClick={() => handleInsertToken(tok.token)}
                         title={tok.desc}
                         type="button"
-                        className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-150 text-[10px] sm:text-[11px] font-mono font-extrabold px-2 py-1 rounded transition-all cursor-pointer select-none"
+                        className={`text-[10px] sm:text-[11px] font-mono font-extrabold px-2 py-1 rounded transition-all cursor-pointer select-none ${isDarkMode ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-150'}`}
                       >
                         {tok.token}
                       </button>
@@ -1169,7 +1148,7 @@ export default function AdminPanel({
                 <div className="flex items-center justify-between">
                   <div>
                     {emailSaveSuccess && (
-                      <span className="text-emerald-600 text-xs font-bold flex items-center space-x-1 animate-pulse">
+                      <span className={`text-xs font-bold flex items-center space-x-1 animate-pulse ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
                         <CheckCircle size={14} />
                         <span>Changes Saved Successfully!</span>
                       </span>
@@ -1187,9 +1166,9 @@ export default function AdminPanel({
               </div>
 
               {/* Right Side: Live HTML / Text simulated email client card preview */}
-              <div className="bg-[#0F172A] border border-[#1E293B] rounded-2xl p-6 text-slate-100 flex flex-col justify-between shadow-2xl h-full min-h-[420px]">
+              <div className={`border rounded-2xl p-6 flex flex-col justify-between shadow-2xl h-full min-h-[420px] ${isDarkMode ? 'bg-[#0F172A] border-[#1E293B] text-slate-100' : 'bg-[#0F172A] border-[#1E293B] text-slate-100'}`}>
                 <div>
-                  <div className="flex items-center justify-between border-b border-[#1E293B] pb-4 mb-4">
+                  <div className={`flex items-center justify-between border-b pb-4 mb-4 ${isDarkMode ? 'border-[#1E293B]' : 'border-[#1E293B]'}`}>
                     <div className="flex items-center space-x-2">
                       <div className="w-3 h-3 rounded-full bg-red-500" />
                       <div className="w-3 h-3 rounded-full bg-yellow-500" />
@@ -1199,7 +1178,7 @@ export default function AdminPanel({
                   </div>
 
                   {/* Simulated Mail Header */}
-                  <div className="bg-slate-900/80 p-4 rounded-xl border border-[#1E293B] space-y-2 text-slate-300 font-mono text-[10px] leading-relaxed mb-4">
+                  <div className={`p-4 rounded-xl border space-y-2 font-mono text-[10px] leading-relaxed mb-4 ${isDarkMode ? 'bg-slate-900/80 border-[#1E293B] text-slate-300' : 'bg-slate-900/80 border-[#1E293B] text-slate-300'}`}>
                     <div>
                       <span className="text-slate-500 uppercase">From:</span> auto_alert@PMS.live
                     </div>
@@ -1220,7 +1199,7 @@ export default function AdminPanel({
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-[#1E293B] text-[9.5px] text-slate-400 font-mono font-medium leading-relaxed">
+                <div className={`mt-4 pt-3 border-t text-[9.5px] font-mono font-medium leading-relaxed ${isDarkMode ? 'border-[#1E293B] text-slate-400' : 'border-[#1E293B] text-slate-400'}`}>
                   Notice: Real-time changes above dynamically replace tags inside the simulation thread. Submit or generate tasks to view actual live results in the simulated logs list!
                 </div>
               </div>
@@ -1233,17 +1212,17 @@ export default function AdminPanel({
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               <div>
-                <h4 className="font-extrabold text-[#0F172A] text-sm uppercase tracking-wider font-mono">Central Audit Trail Ledger</h4>
-                <p className="text-xs text-slate-500">Append-only row registers tracking system state transitions.</p>
+                <h4 className={`font-extrabold text-sm uppercase tracking-wider font-mono ${isDarkMode ? 'text-white' : 'text-[#0F172A]'}`}>Central Audit Trail Ledger</h4>
+                <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Append-only row registers tracking system state transitions.</p>
               </div>
               <div className="relative w-full sm:w-80">
-                <Search className="absolute left-3 top-2.5 text-slate-400" size={14} />
+                <Search className={`absolute left-3 top-2.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={14} />
                 <input
                   type="text"
                   value={auditSearchText}
                   onChange={(e) => setAuditSearchText(e.target.value)}
                   placeholder="Filter logs by action, table, or actor..."
-                  className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg pl-9 pr-3 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                  className={`w-full text-xs rounded-lg pl-9 pr-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' : 'bg-white border-[#E2E8F0] text-slate-800 placeholder-slate-400'}`}
                 />
               </div>
             </div>
@@ -1303,9 +1282,9 @@ export default function AdminPanel({
         {/* SUBTAB 5: Spreadsheets Global Configuration parameters */}
         {activeAdminSubTab === 'settings' && (
           <div className="space-y-4">
-            <div className="bg-blue-50/70 border border-blue-200 p-4.5 rounded-xl flex items-start gap-3">
-              <Info className="text-blue-600 mt-0.5 shrink-0" size={16} />
-              <div className="text-xs text-blue-900 leading-normal">
+            <div className={`border p-4.5 rounded-xl flex items-start gap-3 ${isDarkMode ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50/70 border-blue-200'}`}>
+              <Info className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} size={16} />
+              <div className={`text-xs leading-normal ${isDarkMode ? 'text-blue-300' : 'text-blue-900'}`}>
                 <strong className="block font-bold">Instruction Parameters Guide:</strong>
                 These variables represent physical synchronization values used to control scheduler logic. Changes are applied globally and affect all user role mappings.
               </div>
@@ -1317,10 +1296,10 @@ export default function AdminPanel({
                 if (isTemplateKey) return null; // We render templates beautifully in the separate Tab!
 
                 return (
-                  <div key={st.Key} className="bg-white border border-[#E2E8F0] rounded-xl p-5 flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow">
+                  <div key={st.Key} className={`border rounded-xl p-5 flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0]'}`}>
                     <div className="space-y-1">
-                      <span className="text-[10px] font-mono text-[#64748B] font-extrabold uppercase tracking-widest block">PARAMETER REGISTER KEY</span>
-                      <span className="font-extrabold text-[#010915] font-mono text-xs">{st.Key}</span>
+                      <span className={`text-[10px] font-mono font-extrabold uppercase tracking-widest block ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>PARAMETER REGISTER KEY</span>
+                      <span className={`font-extrabold font-mono text-xs ${isDarkMode ? 'text-white' : 'text-[#010915]'}`}>{st.Key}</span>
                     </div>
                     <div className="mt-4 flex items-center space-x-2">
                       <input
@@ -1328,7 +1307,7 @@ export default function AdminPanel({
                         defaultValue={st.Value}
                         id={`input-st-${st.Key}`}
                         placeholder="Type value..."
-                        className="flex-1 bg-slate-50 border border-[#E2E8F0] rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                        className={`flex-1 rounded-lg px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-slate-50 border-[#E2E8F0] text-slate-800'}`}
                       />
                       <button 
                         onClick={() => {
@@ -1345,7 +1324,7 @@ export default function AdminPanel({
                         className={`text-white rounded-lg text-xs font-extrabold uppercase tracking-widest px-4 py-2 transition-all cursor-pointer border-none flex items-center space-x-0.5 shrink-0 ${
                           settingSaveFlash === st.Key ? 'bg-emerald-600 hover:bg-emerald-500' :
                           settingErrorFlash === st.Key ? 'bg-amber-600 hover:bg-amber-500' :
-                          'bg-[#2563EB] hover:bg-[#1d4ed8]'
+                          'bg-blue-600 hover:bg-blue-700'
                         }`}
                       >
                         {settingSaveFlash === st.Key ? 'Saved!' : settingErrorFlash === st.Key ? 'No Change' : 'Apply'}

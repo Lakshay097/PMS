@@ -151,8 +151,8 @@ export default function TaskDrawer({
     ));
 
   // Determine follow-up credentials
-  // Rule: If task is closed, follow-up can be initiated by any assignee of that task or Admin
-  const canCreateFollowUp = task.Status === 'Closed' && (currentUser.Role === ROLE.ADMIN || isCurrentUserAssignee);
+  // Rule: Admins can create follow-ups on any task, assignees can create follow-ups on their assigned tasks
+  const canCreateFollowUp = currentUser.Role === ROLE.ADMIN || isCurrentUserAssignee;
 
   // Determine task editing credentials (Admins only)
   const canEditTask = currentUser.Role === ROLE.ADMIN;

@@ -1,6 +1,14 @@
 // Google Sheets integration - Primary database layer
-// Uses service account token for authentication with retry logic and proper error handling
+// Uses backend proxy to avoid CORS issues in browser
 import { logger } from '../utils/logger';
+import { api } from '../api/client';
+
+export interface GoogleSheetsTokenResponse {
+  accessToken: string;
+  spreadsheetId: string | null;
+  expiresIn: number;
+  serviceAccountActive: boolean;
+}
 
 export const SHEETS_SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
@@ -20,53 +28,15 @@ export const HEADERS = {
   comments: ['CommentID', 'TaskID', 'Comment', 'CreatedAt', 'CreatedBy']
 };
 
-let cachedAccessToken: string | null = null;
 let cachedSpreadsheetId: string | null = null;
 
 // Request queue to prevent rate limiting
 let requestQueue: Promise<unknown> = Promise.resolve();
 
-// Retry configuration
-const MAX_RETRIES = 5; // Increased from 3
-const INITIAL_RETRY_DELAY = 2000; // Increased from 1000ms
-
-// Exponential backoff with jitter
-function getRetryDelay(attempt: number): number {
-  const baseDelay = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
-  const jitter = Math.random() * 500; // Increased jitter to 500ms
-  return baseDelay + jitter;
-}
-
 // Queue a request to prevent rate limiting
 async function queueRequest<T>(requestFn: () => Promise<T>): Promise<T> {
   requestQueue = requestQueue.then(requestFn, requestFn);
   return requestQueue as Promise<T>;
-}
-
-// Generic fetch with retry logic
-async function fetchWithRetry(url: string, options: RequestInit, attempt: number = 0): Promise<Response> {
-  try {
-    const response = await fetch(url, options);
-    
-    // Retry on 5xx errors or 429 (rate limit)
-    if (!response.ok && (response.status >= 500 || response.status === 429) && attempt < MAX_RETRIES) {
-      const delay = getRetryDelay(attempt);
-      console.warn(`Request failed with status ${response.status}, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return fetchWithRetry(url, options, attempt + 1);
-    }
-    
-    return response;
-  } catch (error) {
-    // Retry on network errors
-    if (attempt < MAX_RETRIES) {
-      const delay = getRetryDelay(attempt);
-      console.warn(`Network error, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`, error);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return fetchWithRetry(url, options, attempt + 1);
-    }
-    throw error;
-  }
 }
 
 // Initialize auth state and check service account API
@@ -77,16 +47,10 @@ export const initAuth = (
   let active = true;
 
   // Check for service account token from backend
-  fetch('/api/token')
-    .then(async res => {
-      if (res.ok) return res.json();
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || 'Failed to get service account token');
-    })
+  api.get<GoogleSheetsTokenResponse>('/token', { skipAuth: true })
     .then(data => {
       if (!active) return;
       if (data && data.accessToken) {
-        cachedAccessToken = data.accessToken;
         if (data.spreadsheetId) {
           cachedSpreadsheetId = data.spreadsheetId;
         }
@@ -111,16 +75,11 @@ export const initAuth = (
   };
 };
 
-export const getAccessToken = (): string | null => {
-  return cachedAccessToken;
-};
-
 export const getSpreadsheetId = (): string | null => {
   return cachedSpreadsheetId;
 };
 
 export const logout = async () => {
-  cachedAccessToken = null;
   cachedSpreadsheetId = null;
 };
 
@@ -180,36 +139,16 @@ export function rowsToObjects<T>(rows: any[][], headers: string[]): T[] {
   return items;
 }
 
-// REST Google API Functions
+// REST Google API Functions (via backend proxy to avoid CORS)
 // Internal, unqueued Sheets API operations to avoid deadlock on cross-calls
 const sheetsApiInternal = {
   async getSpreadsheetMetadata(spreadsheetId: string): Promise<any> {
-    const token = getAccessToken();
-    if (!token) throw new Error('Unauthenticated.');
-
-    const res = await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (!res.ok) {
-      // Explicitly throw rate limit and service unavailable errors to prevent fallback to create
-      if (res.status === 429) {
-        throw new Error(`Rate limit exceeded (429) when accessing spreadsheet. Please retry later.`);
-      }
-      if (res.status === 503) {
-        throw new Error(`Service unavailable (503) when accessing spreadsheet. Please retry later.`);
-      }
-      throw new Error(`Could not retrieve spreadsheet metadata. Status: ${res.status}`);
-    }
-    return res.json();
+    const res = await api.get(`/sheets/${spreadsheetId}/metadata`, { skipAuth: true });
+    return res;
   },
 
   // Check if a spreadsheet exists, create it if it doesn't
   async getOrCreateSpreadsheet(): Promise<string> {
-    const token = getAccessToken();
-    if (!token) {
-      throw new Error('Google Sheets authentication failed. Service account token not available. Please configure GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY in your environment variables.');
-    }
-
     // 1. Try using cached spreadsheet ID
     if (cachedSpreadsheetId) {
       try {
@@ -224,84 +163,17 @@ const sheetsApiInternal = {
       }
     }
 
-    // 2. Query Drive to locate "PMS Systems Database"
-    logger.log('Searching for database file in Google Drive...');
-    const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
-      "name='PMS Systems Database' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false"
-    )}`;
-
-    const searchRes = await fetchWithRetry(searchUrl, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    if (!searchRes.ok) {
-      // Explicitly throw rate limit and service unavailable errors to prevent fallback to create
-      if (searchRes.status === 429) {
-        throw new Error(`Rate limit exceeded (429) when searching Drive. Please retry later.`);
-      }
-      if (searchRes.status === 503) {
-        throw new Error(`Service unavailable (503) when searching Drive. Please retry later.`);
-      }
-      throw new Error(`Failed to query Google Drive. Status: ${searchRes.statusText}. Please verify your service account has Drive API permissions.`);
-    }
-
-    const searchData = await searchRes.json();
-    if (searchData.files && searchData.files.length > 0) {
-      const spreadId = searchData.files[0].id;
-      cachedSpreadsheetId = spreadId;
-      logger.log('Found existing database spreadsheet on Google Drive:', spreadId);
-      return spreadId;
-    }
-
-    // 3. Not found, create a brand new Google Spreadsheet with all required tabs
-    logger.log('No database spreadsheet found. Creating a new "PMS Systems Database" with all tabs...');
-    const createUrl = 'https://sheets.googleapis.com/v4/spreadsheets';
+    // 2. Get or create spreadsheet via backend proxy
+    logger.log('Getting or creating spreadsheet via backend proxy...');
+    const data = await api.get<{ spreadsheetId: string; metadata: any }>('/sheets/spreadsheet', { skipAuth: true });
     
-    const requiredSheets = Object.keys(HEADERS).map(name => ({
-      properties: { title: name }
-    }));
-
-    const createRes = await fetchWithRetry(createUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        properties: {
-          title: 'PMS Systems Database'
-        },
-        sheets: requiredSheets
-      })
-    });
-
-    if (!createRes.ok) {
-      const errPayload = await createRes.json().catch(() => ({}));
-      console.error('Failed to create spreadsheet', errPayload);
-      // Explicitly throw rate limit and service unavailable errors
-      if (createRes.status === 429) {
-        throw new Error(`Rate limit exceeded (429) when creating spreadsheet. Please retry later.`);
-      }
-      if (createRes.status === 503) {
-        throw new Error(`Service unavailable (503) when creating spreadsheet. Please retry later.`);
-      }
-      throw new Error(`Failed to create Google Spreadsheet database. Status: ${createRes.statusText}. Please verify your service account has Sheets API permissions.`);
-    }
-
-    const createdSpreadsheet = await createRes.json();
-    const newSpreadId = createdSpreadsheet.spreadsheetId;
-    cachedSpreadsheetId = newSpreadId;
-    logger.log('Successfully created database spreadsheet on Google Drive with ID:', newSpreadId);
-    return newSpreadId;
+    cachedSpreadsheetId = data.spreadsheetId;
+    logger.log('Successfully obtained spreadsheet ID:', data.spreadsheetId);
+    return data.spreadsheetId;
   },
 
   // Save full collection to Google Sheets with atomic clear-then-write
   async saveCollection(sheetName: keyof typeof HEADERS, data: any[]): Promise<void> {
-    const token = getAccessToken();
-    if (!token) {
-      throw new Error('Google Sheets authentication failed. Cannot save data.');
-    }
-
     const spreadsheetId = await sheetsApiInternal.getOrCreateSpreadsheet();
     if (!spreadsheetId) {
       throw new Error('Failed to get spreadsheet ID.');
@@ -313,90 +185,26 @@ const sheetsApiInternal = {
     logger.log(`Writing collection [${sheetName}] containing ${data.length} records to Google Sheets...`);
 
     // First Clear the existing sheet content to prevent dangling old rows
-    const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1:Z9999:clear`;
-    const clearRes = await fetchWithRetry(clearUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!clearRes.ok) {
-      const err = await clearRes.json().catch(() => ({}));
-      console.error(`Failed to clear ${sheetName} sheet`, err);
-      // Explicitly throw rate limit and service unavailable errors
-      if (clearRes.status === 429) {
-        throw new Error(`Rate limit exceeded (429) when clearing ${sheetName}. Please retry later.`);
-      }
-      if (clearRes.status === 503) {
-        throw new Error(`Service unavailable (503) when clearing ${sheetName}. Please retry later.`);
-      }
-      throw new Error(`Failed to clear sheet ${sheetName}. Status: ${clearRes.statusText}`);
-    }
+    await api.post(`/sheets/${spreadsheetId}/values/${sheetName}!A1:Z9999/clear`, {}, { skipAuth: true });
 
     // Write new content
-    const writeUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1?valueInputOption=USER_ENTERED`;
-    const res = await fetchWithRetry(writeUrl, {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        values: rows
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.error(`Failed to update ${sheetName} sheet`, err);
-      // Explicitly throw rate limit and service unavailable errors
-      if (res.status === 429) {
-        throw new Error(`Rate limit exceeded (429) when saving ${sheetName}. Please retry later.`);
-      }
-      if (res.status === 503) {
-        throw new Error(`Service unavailable (503) when saving ${sheetName}. Please retry later.`);
-      }
-      throw new Error(`Failed to save table ${sheetName} to Google Sheets. Status: ${res.statusText}`);
-    }
+    await api.put(`/sheets/${spreadsheetId}/values/${sheetName}!A1`, { values: rows }, { skipAuth: true });
+    
     logger.log(`Successfully saved collection [${sheetName}] to Google Sheets.`);
   },
 
   // Fetch concrete sheet collection of records
   async getCollection<T>(sheetName: keyof typeof HEADERS): Promise<T[]> {
-    const token = getAccessToken();
-    if (!token) {
-      throw new Error('Google Sheets authentication failed. Cannot load data.');
-    }
-
     const spreadsheetId = await sheetsApiInternal.getOrCreateSpreadsheet();
     if (!spreadsheetId) {
       throw new Error('Failed to get spreadsheet ID.');
     }
 
     const headers = HEADERS[sheetName];
-    const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1:Z9999?valueRenderOption=FORMATTED_VALUE`;
-
+    
     logger.log(`Fetching collection [${sheetName}] from Google Sheets database...`);
-    const res = await fetchWithRetry(readUrl, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      console.error(`Failed to read sheet ${sheetName}`, err);
-      // Explicitly throw rate limit and service unavailable errors
-      if (res.status === 429) {
-        throw new Error(`Rate limit exceeded (429) when fetching ${sheetName}. Please retry later.`);
-      }
-      if (res.status === 503) {
-        throw new Error(`Service unavailable (503) when fetching ${sheetName}. Please retry later.`);
-      }
-      throw new Error(`Failed to load ${sheetName} from Google Sheets. Status: ${res.statusText}`);
-    }
-
-    const payload = await res.json();
+    const payload = await api.get<{ values: any[][] }>(`/sheets/${spreadsheetId}/values/${sheetName}!A1:Z9999`, { skipAuth: true });
+    
     return rowsToObjects<T>(payload.values, headers);
   },
 
@@ -404,27 +212,15 @@ const sheetsApiInternal = {
     collections: string[]
   ): Promise<Record<string, any[]>> {
     const spreadsheetId = await sheetsApiInternal.getOrCreateSpreadsheet();
-    const token = getAccessToken();
     
-    if (!token) throw new Error('No access token available');
-
     // Build ranges query: users!A1:Z9999, tasks!A1:Z9999, etc.
     const rangesParam = collections
       .map(c => `ranges=${encodeURIComponent(`${c}!A1:Z9999`)}`)
       .join('&');
 
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${rangesParam}&valueRenderOption=FORMATTED_VALUE`;
-
     logger.log(`Batch fetching ${collections.length} collections from Google Sheets...`);
-    const response = await fetchWithRetry(url, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    if (!response.ok) {
-      throw new Error(`batchGet failed: ${response.status}`);
-    }
-
-    const data = await response.json();
+    const data = await api.get<{ valueRanges: any[] }>(`/sheets/${spreadsheetId}/values:batchGet?${rangesParam}`, { skipAuth: true });
+    
     const result: Record<string, any[]> = {};
 
     // data.valueRanges is an array matching the order of collections

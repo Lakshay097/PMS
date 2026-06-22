@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { User, Task, Team, TaskTemplate, AuditLog, AppSetting, TaskReport, FollowUp, Subtask, Comment } from '../types';
 import { dbService, initializeDatabase, forceClearAllCaches } from '../lib/dbService';
-import { getAccessToken, clearCachedSpreadsheetId } from '../lib/sheetsService';
+import { clearCachedSpreadsheetId } from '../lib/sheetsService';
 
 export function useDatabase(isAuthInitialized: boolean = false) {
   const [users, setUsers] = useState<User[]>([]);
@@ -27,23 +27,6 @@ export function useDatabase(isAuthInitialized: boolean = false) {
 
       forceClearAllCaches();
       clearCachedSpreadsheetId(); // Force re-search for spreadsheet instead of using cached ID
-
-      // Wait for authentication token to be available
-      let token = getAccessToken();
-      let retries = 0;
-      const maxRetries = 30; // Increased to 30 retries (15 seconds)
-      while (!token && retries < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        token = getAccessToken();
-        retries++;
-      }
-
-      if (!token) {
-        const errorMsg = 'Google Sheets authentication failed. The backend service may not be running or credentials are not configured. Please check that GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY are set in Cloud Run secrets.';
-        console.error(errorMsg);
-        alert(errorMsg);
-        throw new Error(errorMsg);
-      }
 
       await initializeDatabase();
 
@@ -73,6 +56,38 @@ export function useDatabase(isAuthInitialized: boolean = false) {
 
   const syncDatabase = async () => {
     await loadDatabase();
+  };
+
+  const silentSync = async () => {
+    try {
+      setIsSyncing(true);
+      setDbConnectionStatus('connected');
+
+      forceClearAllCaches();
+      clearCachedSpreadsheetId(); // Force re-search for spreadsheet instead of using cached ID
+
+      await initializeDatabase();
+
+      // ONE request fetches everything
+      const data = await dbService.batchLoadAll();
+
+      setUsers(data.users);
+      setTasks(data.tasks);
+      setTeams(data.teams);
+      setTemplates(data.templates);
+      setAudits(data.auditlogs);
+      setSettings(data.settings);
+      setReports(data.reports);
+      setFollowUps(data.followups);
+      setSubtasks(data.subtasks);
+      setComments(data.comments);
+      setLastSyncTime(new Date().toISOString());
+    } catch (error) {
+      console.error('Error during silent sync:', error);
+      setDbConnectionStatus('error');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   useEffect(() => {
@@ -108,5 +123,6 @@ export function useDatabase(isAuthInitialized: boolean = false) {
     lastSyncTime,
     loadDatabase,
     syncDatabase,
+    silentSync,
   };
 }

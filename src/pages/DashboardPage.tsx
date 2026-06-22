@@ -35,6 +35,7 @@ interface DashboardPageProps {
   onToggleTeamStatus?: (teamId: string) => void;
   onUpdateUserTeams?: (email: string, teamIDs: string[], teamNames: string[]) => Promise<void>;
   onDeleteTeam?: (teamId: string) => Promise<void>;
+  onDeleteTask?: (taskId: string) => void;
 }
 
 export default function DashboardPage(props: DashboardPageProps) {

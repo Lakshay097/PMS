@@ -22,7 +22,7 @@ import {
 } from './initialData';
 import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AuditLog, AppSetting, TaskStatus, SystemAlert, Subtask, Comment } from './types/index';
 import { dbService, initializeDatabase } from './lib/dbService';
-import { initAuth, getAccessToken, sheetsApi } from './lib/sheetsService';
+import { initAuth, sheetsApi } from './lib/sheetsService';
 import { checkAndGenerateRecurringTasks, evaluateOverdueTasks } from './lib/taskEngine';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { useAuth } from './contexts/AuthContext';
@@ -124,6 +124,7 @@ export default function App() {
     lastSyncTime,
     loadDatabase,
     syncDatabase,
+    silentSync,
   } = useDatabase(false); // Will be reloaded when auth initializes
 
   // Active Simulated Session email state
@@ -316,13 +317,7 @@ export default function App() {
   // Debug logging to identify email mismatches
   useEffect(() => {
     if (tasks.length > 0 && activeUser) {
-      console.log('[DEBUG] Tasks:', JSON.stringify(tasks, null, 2));
-      console.log('[DEBUG] ActiveUser:', JSON.stringify(activeUser, null, 2));
-      if (tasks[0]) {
-        console.log('[DEBUG] Task[0].AssignedToEmail:', JSON.stringify(tasks[0].AssignedToEmail));
-        console.log('[DEBUG] Task[0].AssignedByEmail:', JSON.stringify(tasks[0].AssignedByEmail));
-      }
-      console.log('[DEBUG] ActiveUser.Email:', JSON.stringify(activeUser.Email));
+      // Debug logging removed
     }
   }, [tasks, activeUser]);
 
@@ -345,9 +340,9 @@ export default function App() {
     [loadDatabase]
   );
 
-  // Manual sync function for AdminPanel
+  // Manual sync function for AdminPanel - use silent sync to avoid blocking UI
   const handleManualSync = async () => {
-    await loadDatabase();
+    await silentSync();
   };
 
   // Handle mobile back button and keyboard shortcuts
@@ -358,7 +353,6 @@ export default function App() {
     if (users.length > 0) {
       const found = users.find(u => u.Email === activeUserEmail);
       if (found) {
-        console.log('[Adaptation Effect] found user:', found);
         setActiveUser(found);
         // Force redirect to Dashboard when switching credentials to prevent scoping bugs
         if (found.Role === ROLE.SUB_STAKEHOLDER && activeView === 'admin') {
@@ -423,7 +417,6 @@ export default function App() {
 
   // Rule 1: Task visibility filters depending on Role
   const getVisibleTasks = () => {
-    console.log('[App] getVisibleTasks called, visibleTasks:', visibleTasks.length);
     return visibleTasks;
   };
 
@@ -519,6 +512,7 @@ export default function App() {
     handleToggleSubtask,
     handleDeleteSubtask,
     handleAddComment,
+    handleDeleteTask,
     runSimulatedRecurrenceEngine,
   } = useTaskOperations({
     tasks,
@@ -676,6 +670,8 @@ export default function App() {
     }
 
     await logAudit('Report', propId, 'Published Progress Report', '', JSON.stringify({ TaskID: data.TaskID, Status: data.StatusUpdate }));
+    // Trigger sync after action
+    handleManualSync();
   };
 
   const handleUpdateSetting = async (key: string, value: string) => {
@@ -703,7 +699,6 @@ export default function App() {
   };
 
   if (dbIsLoading) {
-    console.log('[App] dbIsLoading is true, showing spinner');
     return (
       <div className="min-h-screen bg-[#0F172A] flex items-center justify-center font-sans px-4">
         <div className="text-center space-y-4 text-white">
@@ -716,13 +711,11 @@ export default function App() {
   }
 
   if (!activeUser) {
-    console.log('[App] activeUser is null, showing LoginPage');
     return (
       <Suspense fallback={<Spinner size="lg" />}>
         <LoginPage
           usersList={users}
           onLoginSuccess={(email, user) => {
-            logger.log('App.tsx onLoginSuccess called', { email, user });
             const normalizedUser = {
               ...user,
               Email: user.Email || (user as any).email || email,
@@ -733,11 +726,8 @@ export default function App() {
             };
             localStorage.setItem('PMS_active_user_email', email);
             localStorage.setItem('PMS_user', JSON.stringify(normalizedUser));
-            logger.log('localStorage set');
             setActiveUserEmail(email);
-            logger.log('setActiveUserEmail called');
             setActiveUser(normalizedUser);
-            logger.log('setActiveUser called');
             // Add user to local users array if not present
             setUsers(prev => {
               if (!prev.find(u => u.Email === email)) {
@@ -745,14 +735,12 @@ export default function App() {
               }
               return prev;
             });
-            logger.log('onLoginSuccess completed');
           }}
         />
       </Suspense>
     );
   }
 
-  console.log('[App] Rendering DashboardPage, tasks:', tasks.length, 'activeUser:', !!activeUser);
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans antialiased text-slate-800">
       
@@ -832,23 +820,19 @@ export default function App() {
         teams={teams}
         onAddUser={async (userData) => {
           try {
-            logger.log('Saving user to database:', userData);
             await dbService.saveUser(userData);
-            logger.log('User saved successfully');
-            // SSE will handle sync automatically - no need to reload database
+            // Trigger sync after action
+            handleManualSync();
           } catch (error) {
-            console.error('Failed to save user to database:', error);
             throw error;
           }
         }}
         onAddTemplate={async (templateData) => {
           try {
-            logger.log('Saving template to database:', templateData);
             await dbService.saveTemplate(templateData);
-            logger.log('Template saved successfully');
-            // SSE will handle sync automatically - no need to reload database
+            // Trigger sync after action
+            handleManualSync();
           } catch (error) {
-            console.error('Failed to save template to database:', error);
             throw error;
           }
         }}
@@ -856,50 +840,42 @@ export default function App() {
           try {
             const template = templates.find(t => t.TemplateID === templateId);
             if (template) {
-              logger.log('Toggling template status:', templateId, !template.Active);
               await dbService.saveTemplate({ ...template, Active: !template.Active });
-              logger.log('Template status toggled successfully');
-              // SSE will handle sync automatically - no need to reload database
+              // Trigger sync after action
+              handleManualSync();
             }
           } catch (error) {
-            console.error('Failed to toggle template status:', error);
             throw error;
           }
         }}
         onAddTeam={async (teamData) => {
           try {
-            logger.log('Saving team to database:', teamData);
             await dbService.saveTeam(teamData);
-            logger.log('Team saved successfully');
             await logAudit('Team', teamData.TeamID, 'Created Team', '', JSON.stringify(teamData));
-            // SSE will handle sync automatically - no need to reload database
+            // Trigger sync after action
+            handleManualSync();
           } catch (error) {
-            console.error('Failed to save team to database:', error);
             throw error;
           }
         }}
         onToggleTeamStatus={async (teamId) => {
           try {
-            logger.log('Toggling team status:', teamId);
             await dbService.toggleTeamStatus(teamId);
-            logger.log('Team status toggled successfully');
-            // SSE will handle sync automatically - no need to reload database
+            // Trigger sync after action
+            handleManualSync();
           } catch (error) {
-            console.error('Failed to toggle team status:', error);
             throw error;
           }
         }}
         onUpdateSetting={async (key, value) => {
           try {
-            logger.log('Updating setting:', key, value);
             const updatedSettings = settings.map(s => 
               s.Key === key ? { ...s, Value: value } : s
             );
             await dbService.saveSettings(updatedSettings);
-            logger.log('Setting updated successfully');
-            // SSE will handle sync automatically - no need to reload database
+            // Trigger sync after action
+            handleManualSync();
           } catch (error) {
-            console.error('Failed to update setting:', error);
             throw error;
           }
         }}
@@ -914,10 +890,11 @@ export default function App() {
         onApproveUser={handleApproveUser}
         onUpdateUserTeams={handleUpdateUserTeams}
         onDeleteTeam={handleDeleteTeam}
+        onDeleteTask={handleDeleteTask}
         isDarkMode={isDarkMode}
         onToggleTheme={() => setIsDarkMode(!isDarkMode)}
         onSyncDatabase={handleManualSync}
-        isSyncing={isSyncingSheets}
+        isSyncing={dbIsSyncing}
         lastSyncTime={lastSyncTime}
         dbConnectionStatus={dbConnectionStatus}
       />

@@ -32,7 +32,7 @@ import {
   INITIAL_SUBTASKS,
   INITIAL_COMMENTS
 } from '../initialData';
-import { sheetsApi, getAccessToken, HEADERS } from './sheetsService';
+import { sheetsApi, HEADERS } from './sheetsService';
 import { logger } from '../utils/logger';
 import { notifyChange } from '../api/client';
 
@@ -78,11 +78,6 @@ function clearCache(key?: string): void {
 
 // Initialize Google Sheets database with seed data if empty
 export async function initializeDatabase(): Promise<void> {
-  const token = getAccessToken();
-  if (!token) {
-    throw new Error('Google Sheets authentication failed. Cannot initialize database.');
-  }
-
   try {
     logger.log("Initializing Google Sheets database...");
 
@@ -350,6 +345,20 @@ export const dbService = {
       notifyChange('tasks', 'updated', task.TaskID).catch(() => {});
     } catch (error) {
       throw new Error(`Failed to save task to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  },
+
+  async deleteTask(taskId: string): Promise<void> {
+    try {
+      const tasks = await this.getTasks();
+      const filtered = tasks.filter(t => t.TaskID !== taskId);
+      await sheetsApi.saveCollection('tasks', filtered);
+      clearCache('tasks');
+      
+      // Notify other clients immediately (fire and forget)
+      notifyChange('tasks', 'deleted', taskId).catch(() => {});
+    } catch (error) {
+      throw new Error(`Failed to delete task from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 

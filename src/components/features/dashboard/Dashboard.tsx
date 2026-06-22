@@ -21,7 +21,8 @@ import {
   Shield,
   Wrench,
   Filter,
-  RefreshCw
+  RefreshCw,
+  X
 } from 'lucide-react';
 import { Task, User as UserType, TaskTemplate, AuditLog, AppSetting, Team } from '../../../types';
 import { ROLE } from '../../../constants/status';
@@ -62,6 +63,7 @@ interface DashboardProps {
   onToggleTeamStatus?: (teamId: string) => void;
   onUpdateUserTeams?: (email: string, teamIDs: string[], teamNames: string[]) => Promise<void>;
   onDeleteTeam?: (teamId: string) => Promise<void>;
+  onDeleteTask?: (taskId: string) => void;
 }
 
 export default function Dashboard({
@@ -97,6 +99,7 @@ export default function Dashboard({
   onToggleTeamStatus,
   onUpdateUserTeams,
   onDeleteTeam,
+  onDeleteTask,
 }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState<'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings'>('overview');
@@ -105,6 +108,32 @@ export default function Dashboard({
   const [filterPriority, setFilterPriority] = useState('All');
   const [filterAssignee, setFilterAssignee] = useState('All');
   const [isSidebarVisible, setIsSidebarVisible] = useState(false);
+  const [taskSubView, setTaskSubView] = useState<'my-tasks' | 'team-tasks'>('my-tasks');
+  const [lastActionTime, setLastActionTime] = useState(Date.now());
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+
+  // Function to trigger sync after user actions (silent)
+  const triggerSyncAfterAction = () => {
+    if (onSyncDatabase && !isSyncing) {
+      setLastActionTime(Date.now());
+      onSyncDatabase();
+    }
+  };
+
+  // Auto-sync every 5 minutes to avoid rate limiting (silent)
+  useEffect(() => {
+    const syncInterval = setInterval(() => {
+      if (onSyncDatabase && !isSyncing) {
+        // Only auto-sync if no user action in the last 2 minutes
+        const timeSinceLastAction = Date.now() - lastActionTime;
+        if (timeSinceLastAction > 120000) { // 2 minutes
+          onSyncDatabase();
+        }
+      }
+    }, 300000); // 5 minutes
+
+    return () => clearInterval(syncInterval);
+  }, [onSyncDatabase, isSyncing, lastActionTime]);
 
   // Calculate metrics
   const activeTasks = tasks.filter(t => t.Status !== 'Closed' && t.Status !== 'Reviewed').length;
@@ -223,7 +252,60 @@ export default function Dashboard({
   };
 
   const getFilteredTasks = () => {
-    let filtered = tasks || [];
+    // First apply role-based filtering using taskSubView
+    const subView = currentUser.Role === ROLE.SUB_STAKEHOLDER ? 'my-tasks' : taskSubView;
+    
+    // Get sub-stakeholders for the current user (if they are a stakeholder)
+    const subStakeholders = currentUser.Role === ROLE.STAKEHOLDER 
+      ? (users || []).filter(u => u.Role === ROLE.SUB_STAKEHOLDER && u.ManagerEmail?.toLowerCase() === currentUser.Email.toLowerCase())
+      : [];
+    
+    const subStakeholderEmails = subStakeholders.map(u => u.Email.toLowerCase());
+    
+    // Get team members for the current user
+    const myTeamMembers = currentUser.TeamIDs && currentUser.TeamIDs.length > 0
+      ? (users || []).filter(u => u.TeamIDs.some(teamId => currentUser.TeamIDs.includes(teamId)))
+      : [];
+    
+    const teamMemberEmails = myTeamMembers.map(u => u.Email.toLowerCase());
+    
+    const roleFiltered = (tasks || []).filter(task => {
+      // Admin: My Tasks = assigned to me, Team Tasks = all tasks
+      if (currentUser.Role === ROLE.ADMIN) {
+        if (subView === 'my-tasks') {
+          return task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
+        }
+        // team-tasks - show all tasks
+        return true;
+      }
+      
+      // Stakeholder: My Tasks = assigned to me, Team Tasks = sub-stakeholder tasks + team tasks
+      if (currentUser.Role === ROLE.STAKEHOLDER) {
+        const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
+        const assignedByMe = task.AssignedByEmail?.toLowerCase() === currentUser.Email.toLowerCase();
+        const assignedToSubStakeholder = task.AssignedToEmail?.toLowerCase().split(',').some(email => 
+          subStakeholderEmails.includes(email.trim().toLowerCase())
+        );
+        const assignedToTeamMember = task.AssignedToEmail?.toLowerCase().split(',').some(email => 
+          teamMemberEmails.includes(email.trim().toLowerCase())
+        );
+        
+        if (subView === 'my-tasks') {
+          return assignedToMe;
+        }
+        // team-tasks - show sub-stakeholder tasks and team tasks
+        return assignedToSubStakeholder || assignedToTeamMember;
+      }
+      
+      // Sub-stakeholder: My Tasks = assigned to me only
+      if (currentUser.Role === ROLE.SUB_STAKEHOLDER) {
+        return task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
+      }
+      
+      return false;
+    });
+
+    let filtered = roleFiltered;
 
     if (filterStatus !== 'All') {
       filtered = filtered.filter(t => t.Status === filterStatus);
@@ -482,6 +564,37 @@ export default function Dashboard({
 
   const renderTasks = () => (
     <div className="space-y-6">
+      {/* Task Sub-tabs for Admin and Stakeholder only */}
+      {(currentUser.Role === ROLE.ADMIN || currentUser.Role === ROLE.STAKEHOLDER) && (
+        <div className={`border rounded-xl p-4 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => setTaskSubView('my-tasks')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                taskSubView === 'my-tasks'
+                  ? 'bg-blue-500 text-white'
+                  : isDarkMode
+                  ? 'bg-[#1E293B] text-slate-400 hover:text-white'
+                  : 'bg-slate-100 text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              My Tasks
+            </button>
+            <button
+              onClick={() => setTaskSubView('team-tasks')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                taskSubView === 'team-tasks'
+                  ? 'bg-blue-500 text-white'
+                  : isDarkMode
+                  ? 'bg-[#1E293B] text-slate-400 hover:text-white'
+                  : 'bg-slate-100 text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {currentUser.Role === ROLE.ADMIN ? 'Team Tasks' : 'Team Tasks (My + Sub-stakeholders)'}
+            </button>
+          </div>
+        </div>
+      )}
       <TaskFilters
         filterStatus={filterStatus}
         filterPriority={filterPriority}
@@ -499,6 +612,9 @@ export default function Dashboard({
         isDarkMode={isDarkMode}
         getPriorityColor={getPriorityColor}
         getStatusColor={getStatusColor}
+        currentUser={currentUser}
+        taskSubView={currentUser.Role === ROLE.SUB_STAKEHOLDER ? 'my-tasks' : taskSubView}
+        onDeleteTask={onDeleteTask}
       />
     </div>
   );
@@ -657,7 +773,7 @@ export default function Dashboard({
                         {teamUsers.filter(u => u.Active).length} / {teamUsers.length} Active
                       </span>
                       <button
-                        onClick={() => onNewTask()}
+                        onClick={() => onNewTask(teamUsers.map(u => u.Email).join(', '))}
                         className="text-xs font-medium px-2 py-1 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 transition-colors"
                       >
                         Assign Task to Team
@@ -741,6 +857,14 @@ export default function Dashboard({
                       }`}>
                         {member.Role}
                       </span>
+                      {member.Role === ROLE.STAKEHOLDER && (
+                        <button
+                          onClick={() => onNewTask(member.Email)}
+                          className="text-xs font-medium px-2 py-1 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+                        >
+                          Assign Task
+                        </button>
+                      )}
                       <span className={`text-xs font-medium ${member.Active ? 'text-green-400' : 'text-red-400'}`}>
                         {member.Active ? 'Active' : 'Inactive'}
                       </span>
@@ -838,10 +962,7 @@ export default function Dashboard({
       onToggleTeamStatus={onToggleTeamStatus || (() => {})}
       onUpdateUserTeams={onUpdateUserTeams || (() => {})}
       onDeleteTeam={onDeleteTeam || (() => {})}
-      onSyncDatabase={onSyncDatabase}
-      isSyncing={isSyncing}
-      lastSyncTime={lastSyncTime}
-      dbConnectionStatus={dbConnectionStatus}
+      isDarkMode={isDarkMode}
     />
   );
 
@@ -938,8 +1059,47 @@ export default function Dashboard({
 
   return (
     <div className={`flex min-h-screen font-sans ${isDarkMode ? 'bg-[#0A0E1A]' : 'bg-slate-50'}`}>
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarVisible && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setIsSidebarVisible(false)}
+        />
+      )}
+
+      {/* Mobile Search Modal */}
+      {isMobileSearchOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 md:hidden flex items-start justify-center pt-20 px-4">
+          <div className={`w-full max-w-lg rounded-xl shadow-2xl p-4 ${isDarkMode ? 'bg-[#0F141F] border border-[#1E293B]' : 'bg-white border border-slate-200'}`}>
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} size={18} />
+                <input
+                  type="text"
+                  placeholder="Search tasks, people..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  autoFocus
+                  className={`w-full border rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm ${
+                    isDarkMode
+                      ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-400'
+                      : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-500'
+                  }`}
+                />
+              </div>
+              <button
+                onClick={() => setIsMobileSearchOpen(false)}
+                className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Sidebar */}
-      <aside className={`${isSidebarVisible ? '' : 'hidden'} w-64 border-r flex flex-col ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
+      <aside className={`${isSidebarVisible ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed md:relative z-50 w-64 h-full border-r flex flex-col transition-transform duration-300 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
         {/* Logo */}
         <div className={`p-6 border-b ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'}`}>
           <div className="flex items-center space-x-3">
@@ -1074,13 +1234,13 @@ export default function Dashboard({
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
         {/* Header */}
-        <header className={`px-8 py-5 sticky top-0 z-10 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
+        <header className={`px-4 md:px-8 py-4 md:py-5 sticky top-0 z-10 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 md:space-x-4">
               {/* Toggle Sidebar Button */}
               <button
                 onClick={() => setIsSidebarVisible(!isSidebarVisible)}
-                className={`p-2.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
+                className={`p-2 md:p-2.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
               >
                 <LayoutDashboard size={20} />
               </button>
@@ -1088,62 +1248,60 @@ export default function Dashboard({
               {navigationHistory.length > 0 && (
                 <button
                   onClick={handleBack}
-                  className={`p-2.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
+                  className={`p-2 md:p-2.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
                   title="Go back"
                 >
                   <ChevronLeft size={20} />
                 </button>
               )}
-              <div>
-                <h2 className={`text-2xl font-bold capitalize ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{activeView}</h2>
-                <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Welcome back, {currentUser.FullName || currentUser.Email}</p>
+              <div className="block sm:hidden">
+                <h2 className={`text-lg font-bold capitalize ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{activeView}</h2>
+              </div>
+              <div className="hidden sm:block">
+                <h2 className={`text-xl md:text-2xl font-bold capitalize ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{activeView}</h2>
+                <p className={`text-xs md:text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Welcome back, {currentUser.FullName || currentUser.Email}</p>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 md:space-x-4">
+              {/* Manual Sync Button */}
+              {onSyncDatabase && (
+                <button
+                  onClick={onSyncDatabase}
+                  disabled={isSyncing}
+                  className="flex items-center space-x-1 sm:space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-2 sm:px-3 py-2 rounded-lg font-medium text-xs transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+                  <span className="hidden sm:inline">{isSyncing ? 'Syncing...' : 'Sync'}</span>
+                </button>
+              )}
+              {/* Mobile Search Toggle */}
+              <button
+                onClick={() => setIsMobileSearchOpen(true)}
+                className={`md:hidden p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
+              >
+                <Search size={18} />
+              </button>
               {/* Search Bar */}
-              <div className="relative">
+              <div className="relative hidden md:block">
                 <Search className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} size={18} />
                 <input
                   type="text"
                   placeholder="Search tasks, people..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className={`w-80 border rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm ${
+                  className={`w-64 md:w-80 border rounded-lg pl-10 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm ${
                     isDarkMode
                       ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-400'
                       : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-500'
                   }`}
                 />
               </div>
-              {/* New Task Button */}
-              <button
-                onClick={onNewTask}
-                className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2.5 rounded-lg font-medium text-sm transition-colors"
-              >
-                <Plus size={18} />
-                <span>New task</span>
-              </button>
-              {/* Profile Icon */}
-              <button
-                onClick={onEditProfile}
-                className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isDarkMode ? 'bg-slate-800/50 hover:bg-slate-700/50 text-slate-400 hover:text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900'}`}
-              >
-                <User size={20} />
-              </button>
             </div>
           </div>
         </header>
 
-        {/* Syncing Banner */}
-        {isSyncing && (
-          <div className="px-8 py-3 bg-blue-50 border-b border-blue-200 dark:bg-blue-900/20 dark:border-blue-800 flex items-center space-x-3">
-            <RefreshCw size={16} className="text-blue-600 dark:text-blue-400 animate-spin" />
-            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Syncing changes...</span>
-          </div>
-        )}
-
         {/* Content */}
-        <div className="p-8 min-h-screen">
+        <div className="p-4 md:p-8 min-h-screen">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeView}

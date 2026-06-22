@@ -98,7 +98,9 @@ export function useReportOperations({
     }
 
     await logAudit('Report', propId, 'Published Progress Report', '', JSON.stringify({ TaskID: data.TaskID, Status: data.StatusUpdate }));
-  }, [tasks, currentUser, logAudit, triggerNotification, selectedTask, setSelectedTask]);
+    // Trigger sync after action
+    syncDatabase();
+  }, [tasks, currentUser, logAudit, triggerNotification, selectedTask, setSelectedTask, syncDatabase]);
 
   return {
     handleSubmitProgressReport,
