@@ -7,6 +7,7 @@ interface UseReportOperationsProps {
   tasks: Task[];
   currentUser: any;
   syncDatabase: () => Promise<void>;
+  silentSync: () => Promise<void>;
   logAudit: (entity: string, id: string, action: string, oldValue: string, newValue: string) => Promise<void>;
   triggerNotification: (type: string, message: string, emailSentTo: string) => void;
   selectedTask: Task | null;
@@ -17,6 +18,7 @@ export function useReportOperations({
   tasks,
   currentUser,
   syncDatabase,
+  silentSync,
   logAudit,
   triggerNotification,
   selectedTask,
@@ -99,8 +101,8 @@ export function useReportOperations({
 
     await logAudit('Report', propId, 'Published Progress Report', '', JSON.stringify({ TaskID: data.TaskID, Status: data.StatusUpdate }));
     // Trigger sync after action
-    syncDatabase();
-  }, [tasks, currentUser, logAudit, triggerNotification, selectedTask, setSelectedTask, syncDatabase]);
+    silentSync();
+  }, [tasks, currentUser, logAudit, triggerNotification, selectedTask, setSelectedTask, silentSync]);
 
   return {
     handleSubmitProgressReport,

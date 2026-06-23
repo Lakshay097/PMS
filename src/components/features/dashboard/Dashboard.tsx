@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
@@ -22,9 +22,14 @@ import {
   Wrench,
   Filter,
   RefreshCw,
-  X
+  X,
+  Menu,
+  Mail,
+  Link,
+  Unlink,
+  Loader2
 } from 'lucide-react';
-import { Task, User as UserType, TaskTemplate, AuditLog, AppSetting, Team } from '../../../types';
+import { Task, User as UserType, TaskTemplate, AppSetting, Team } from '../../../types';
 import { ROLE } from '../../../constants/status';
 import AdminPanel from '../../AdminPanel';
 import TaskList from '../tasks/TaskList';
@@ -37,7 +42,7 @@ interface DashboardProps {
   onTaskClick: (task: Task) => void;
   onLogout: () => void;
   templates?: TaskTemplate[];
-  onViewChange?: (view: 'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings') => void;
+  onViewChange?: (view: 'overview' | 'tasks' | 'team' | 'reports' | 'admin' | 'settings') => void;
   users?: UserType[];
   onAddUser?: (userData: UserType) => void;
   onAddTemplate?: (templateData: TaskTemplate) => void;
@@ -53,7 +58,7 @@ interface DashboardProps {
   isSyncing?: boolean;
   lastSyncTime?: string;
   dbConnectionStatus?: 'connected' | 'disconnected' | 'error';
-  audits?: AuditLog[];
+  audits?: AppSetting[];
   settings?: AppSetting[];
   teams?: Team[];
   onToggleUserStatus?: (email: string) => void;
@@ -64,6 +69,15 @@ interface DashboardProps {
   onUpdateUserTeams?: (email: string, teamIDs: string[], teamNames: string[]) => Promise<void>;
   onDeleteTeam?: (teamId: string) => Promise<void>;
   onDeleteTask?: (taskId: string) => void;
+  isDrawerOpen?: boolean;
+  isTaskModalOpen?: boolean;
+  isReportModalOpen?: boolean;
+  isFollowUpModalOpen?: boolean;
+  isEditProfileModalOpen?: boolean;
+  isChangePasswordModalOpen?: boolean;
+  isConfigureNotificationsModalOpen?: boolean;
+  isAddUserModalOpen?: boolean;
+  isAddTeamModalOpen?: boolean;
 }
 
 export default function Dashboard({
@@ -100,17 +114,154 @@ export default function Dashboard({
   onUpdateUserTeams,
   onDeleteTeam,
   onDeleteTask,
+  isDrawerOpen = false,
+  isTaskModalOpen = false,
+  isReportModalOpen = false,
+  isFollowUpModalOpen = false,
+  isEditProfileModalOpen = false,
+  isChangePasswordModalOpen = false,
+  isConfigureNotificationsModalOpen = false,
+  isAddUserModalOpen = false,
+  isAddTeamModalOpen = false,
 }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeView, setActiveView] = useState<'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings'>('overview');
-  const [navigationHistory, setNavigationHistory] = useState<Array<'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings'>>([]);
+  const [activeView, setActiveView] = useState<'overview' | 'tasks' | 'team' | 'reports' | 'admin' | 'settings'>('overview');
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
   const [filterAssignee, setFilterAssignee] = useState('All');
   const [isSidebarVisible, setIsSidebarVisible] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('sidebarCollapsed') === 'true';
+  });
   const [taskSubView, setTaskSubView] = useState<'my-tasks' | 'team-tasks'>('my-tasks');
+  const [taskContentType, setTaskContentType] = useState<'tasks' | 'schedules'>('tasks');
   const [lastActionTime, setLastActionTime] = useState(Date.now());
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+  const [gmailConnected, setGmailConnected] = useState(false);
+  const [gmailLoading, setGmailLoading] = useState(false);
+  const [connectionMessage, setConnectionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Check if any modal is open
+  const isAnyModalOpen = isDrawerOpen || isTaskModalOpen || isReportModalOpen || 
+    isFollowUpModalOpen || isEditProfileModalOpen || isChangePasswordModalOpen ||
+    isConfigureNotificationsModalOpen || isAddUserModalOpen || isAddTeamModalOpen;
+
+  // Persist sidebar collapse state
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', isSidebarCollapsed ? 'true' : 'false');
+  }, [isSidebarCollapsed]);
+
+  // Check Gmail connection status on mount
+  useEffect(() => {
+    checkGmailStatus();
+    
+    // Check for OAuth callback in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const emailSuccess = urlParams.get('email_success');
+    const emailError = urlParams.get('email_error');
+    
+    if (emailSuccess === 'true') {
+      setConnectionMessage({ type: 'success', text: 'Gmail connected successfully!' });
+      checkGmailStatus();
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (emailError) {
+      const errorMessages: Record<string, string> = {
+        'access_denied': 'Authorization was denied',
+        'missing_code': 'Authorization code missing',
+        'token_exchange_failed': 'Failed to exchange authorization code',
+        'failed_to_get_email': 'Failed to retrieve email address',
+        'save_failed': 'Failed to save connection',
+        'unknown_error': 'An unknown error occurred',
+      };
+      setConnectionMessage({ 
+        type: 'error', 
+        text: errorMessages[emailError] || 'Connection failed' 
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  const checkGmailStatus = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
+
+      const response = await fetch('/api/auth/gmail/status', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setGmailConnected(data.connected);
+      }
+    } catch (err) {
+      console.error('Error checking Gmail status:', err);
+    }
+  };
+
+  const handleConnectGmail = async () => {
+    setGmailLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        setConnectionMessage({ type: 'error', text: 'Please log in first' });
+        setGmailLoading(false);
+        return;
+      }
+
+      const response = await fetch('/api/auth/gmail/url', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.authUrl) {
+          window.location.href = data.authUrl;
+        } else {
+          setConnectionMessage({ type: 'error', text: 'No authorization URL returned' });
+        }
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        setConnectionMessage({ type: 'error', text: errorData.error || 'Failed to get authorization URL' });
+      }
+    } catch (err) {
+      console.error('Error connecting Gmail:', err);
+      setConnectionMessage({ type: 'error', text: 'Failed to connect Gmail' });
+    } finally {
+      setGmailLoading(false);
+    }
+  };
+
+  const handleDisconnectGmail = async () => {
+    setGmailLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
+
+      const response = await fetch('/api/auth/gmail/disconnect', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        setGmailConnected(false);
+        setConnectionMessage({ type: 'success', text: 'Gmail disconnected successfully' });
+      } else {
+        setConnectionMessage({ type: 'error', text: 'Failed to disconnect Gmail' });
+      }
+    } catch (err) {
+      console.error('Error disconnecting Gmail:', err);
+      setConnectionMessage({ type: 'error', text: 'Failed to disconnect Gmail' });
+    } finally {
+      setGmailLoading(false);
+    }
+  };
 
   // Function to trigger sync after user actions (silent)
   const triggerSyncAfterAction = () => {
@@ -208,11 +359,12 @@ export default function Dashboard({
   };
 
   const handleViewChange = (
-    view: 'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings',
+    view: 'overview' | 'tasks' | 'team' | 'reports' | 'admin' | 'settings',
     filterStatus?: string
   ) => {
     if (activeView !== view) {
-      setNavigationHistory(prev => [...prev, activeView]);
+      // Push to browser history
+      window.history.pushState({ view: activeView }, '', `#${view}`);
     }
     setActiveView(view);
     if (filterStatus) {
@@ -223,16 +375,25 @@ export default function Dashboard({
     }
   };
 
-  const handleBack = () => {
-    if (navigationHistory.length > 0) {
-      const previousView = navigationHistory[navigationHistory.length - 1];
-      setNavigationHistory(prev => prev.slice(0, -1));
-      setActiveView(previousView);
-      if (onViewChange) {
-        onViewChange(previousView);
+  // Initialize browser history with initial view
+  useEffect(() => {
+    window.history.replaceState({ view: activeView }, '', `#${activeView}`);
+  }, []);
+
+  // Listen for browser back/forward navigation
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state && event.state.view) {
+        setActiveView(event.state.view);
+        if (onViewChange) {
+          onViewChange(event.state.view);
+        }
       }
-    }
-  };
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [onViewChange]);
 
   // Get team members based on user role
   const getTeamMembers = () => {
@@ -442,7 +603,7 @@ export default function Dashboard({
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.6 + index * 0.1 }}
-                onClick={() => onTaskClick(task)}
+                onClick={(e) => { e.preventDefault(); onTaskClick(task); }}
                 className={`p-6 transition-colors cursor-pointer ${isDarkMode ? 'hover:bg-[#1E293B]/30' : 'hover:bg-slate-50'}`}
               >
                 <div className="flex items-start justify-between">
@@ -494,7 +655,7 @@ export default function Dashboard({
                 return (
                   <div
                     key={task.TaskID}
-                    onClick={() => onTaskClick(task)}
+                    onClick={(e) => { e.preventDefault(); onTaskClick(task); }}
                     className={`${isOverdue ? 'bg-red-500/10 border-red-500/20 hover:bg-red-500/20' : 'bg-yellow-500/10 border-yellow-500/20 hover:bg-yellow-500/20'} border rounded-lg p-4 cursor-pointer transition-colors`}
                   >
                     <div className="flex items-start space-x-3">
@@ -564,8 +725,57 @@ export default function Dashboard({
 
   const renderTasks = () => (
     <div className="space-y-6">
-      {/* Task Sub-tabs for Admin and Stakeholder only */}
-      {(currentUser.Role === ROLE.ADMIN || currentUser.Role === ROLE.STAKEHOLDER) && (
+      {/* Header with Create Task button and Content Type Toggle */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Tasks & Schedules</h2>
+          <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+            {taskContentType === 'tasks' 
+              ? (currentUser.Role === ROLE.ADMIN ? 'Manage all tasks' : 'Manage your assigned tasks')
+              : 'Manage recurring task schedules'
+            }
+          </p>
+        </div>
+        <div className="flex items-center space-x-3">
+          {/* Content Type Toggle */}
+          <div className={`flex rounded-lg p-1 ${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-100'}`}>
+            <button
+              onClick={() => setTaskContentType('tasks')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                taskContentType === 'tasks'
+                  ? 'bg-blue-500 text-white'
+                  : isDarkMode
+                  ? 'text-slate-400 hover:text-white'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Tasks
+            </button>
+            <button
+              onClick={() => setTaskContentType('schedules')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                taskContentType === 'schedules'
+                  ? 'bg-blue-500 text-white'
+                  : isDarkMode
+                  ? 'text-slate-400 hover:text-white'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Schedules
+            </button>
+          </div>
+          <button
+            onClick={() => onNewTask()}
+            className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            <Plus size={16} />
+            <span>{taskContentType === 'schedules' ? 'Create Schedule' : 'Create Task'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Task Sub-tabs for Admin and Stakeholder only - only show for tasks */}
+      {taskContentType === 'tasks' && (currentUser.Role === ROLE.ADMIN || currentUser.Role === ROLE.STAKEHOLDER) && (
         <div className={`border rounded-xl p-4 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
           <div className="flex items-center space-x-4">
             <button
@@ -590,63 +800,45 @@ export default function Dashboard({
                   : 'bg-slate-100 text-slate-600 hover:text-slate-900'
               }`}
             >
-              {currentUser.Role === ROLE.ADMIN ? 'Team Tasks' : 'Team Tasks (My + Sub-stakeholders)'}
+              {currentUser.Role === ROLE.ADMIN ? 'Team Tasks' : 'Assigned by Me'}
             </button>
           </div>
         </div>
       )}
-      <TaskFilters
-        filterStatus={filterStatus}
-        filterPriority={filterPriority}
-        filterAssignee={filterAssignee}
-        currentUser={currentUser}
-        users={users}
-        isDarkMode={isDarkMode}
-        onFilterStatusChange={setFilterStatus}
-        onFilterPriorityChange={setFilterPriority}
-        onFilterAssigneeChange={setFilterAssignee}
-      />
-      <TaskList
-        tasks={getFilteredTasks()}
-        onTaskClick={onTaskClick}
-        isDarkMode={isDarkMode}
-        getPriorityColor={getPriorityColor}
-        getStatusColor={getStatusColor}
-        currentUser={currentUser}
-        taskSubView={currentUser.Role === ROLE.SUB_STAKEHOLDER ? 'my-tasks' : taskSubView}
-        onDeleteTask={onDeleteTask}
-      />
-    </div>
-  );
+      
+      {/* Show tasks content */}
+      {taskContentType === 'tasks' && (
+        <>
+          <TaskFilters
+            filterStatus={filterStatus}
+            filterPriority={filterPriority}
+            filterAssignee={filterAssignee}
+            currentUser={currentUser}
+            users={users}
+            isDarkMode={isDarkMode}
+            onFilterStatusChange={setFilterStatus}
+            onFilterPriorityChange={setFilterPriority}
+            onFilterAssigneeChange={setFilterAssignee}
+          />
+          <TaskList
+            tasks={getFilteredTasks()}
+            onTaskClick={onTaskClick}
+            isDarkMode={isDarkMode}
+            getPriorityColor={getPriorityColor}
+            getStatusColor={getStatusColor}
+            currentUser={currentUser}
+            taskSubView={currentUser.Role === ROLE.SUB_STAKEHOLDER ? 'my-tasks' : taskSubView}
+            onDeleteTask={onDeleteTask}
+          />
+        </>
+      )}
 
-  const renderSchedules = () => {
-    const filteredTemplates = searchQuery
-      ? templates.filter(t =>
-          (t.Title && t.Title.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          (t.Category && t.Category.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          (t.RecurrenceType && t.RecurrenceType.toLowerCase().includes(searchQuery.toLowerCase()))
-        )
-      : templates;
-
-    return (
-      <div className="space-y-6">
+      {/* Show schedules content */}
+      {taskContentType === 'schedules' && (
         <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Recurring Schedules</h3>
-              <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Manage automated task generation schedules</p>
-            </div>
-            <button
-              onClick={onNewTask}
-              className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
-              <Plus size={16} />
-              <span>Create Schedule</span>
-            </button>
-          </div>
           <div className={`divide-y ${isDarkMode ? 'divide-[#1E293B]' : 'divide-slate-200'}`}>
-            {filteredTemplates.filter(t => t.Active).length > 0 ? (
-              filteredTemplates.filter(t => t.Active).map((template) => (
+            {templates.filter(t => t.Active).length > 0 ? (
+              templates.filter(t => t.Active).map((template) => (
                 <div key={template.TemplateID} className="py-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -658,7 +850,6 @@ export default function Dashboard({
                       </div>
                       <div className="flex items-center space-x-4 text-sm">
                         <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>{template.RecurrenceType}</span>
-                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>&bull; {template.Category}</span>
                         <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>&bull; Next: {template.NextGenerationDate}</span>
                       </div>
                     </div>
@@ -673,9 +864,6 @@ export default function Dashboard({
                       >
                         Edit
                       </button>
-                      <button className="px-3 py-1 text-xs font-bold uppercase tracking-wider text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg transition-colors">
-                        Delete
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -685,9 +873,9 @@ export default function Dashboard({
             )}
           </div>
         </div>
-      </div>
-    );
-  };
+      )}
+    </div>
+  );
 
   const renderTeam = () => {
     const teamMembers = getTeamMembers();
@@ -948,7 +1136,6 @@ export default function Dashboard({
     <AdminPanel
       users={users}
       templates={templates}
-      audits={audits}
       settings={settings}
       teams={teams}
       onAddUser={onAddUser || (() => {})}
@@ -1018,6 +1205,35 @@ export default function Dashboard({
                 </button>
               </div>
             </div>
+          </div>
+
+          <div className={`border rounded-lg p-4 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className={`font-medium mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Email Integration</h4>
+                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Connect Gmail to send emails as yourself</p>
+              </div>
+              <div className="flex items-center space-x-2">
+                {gmailConnected ? (
+                  <span className="text-green-400 text-sm font-medium">Connected</span>
+                ) : (
+                  <span className="text-slate-400 text-sm font-medium">Not Connected</span>
+                )}
+                <button
+                  onClick={gmailConnected ? handleDisconnectGmail : handleConnectGmail}
+                  disabled={gmailLoading}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-slate-200 hover:bg-slate-300 text-slate-900'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {gmailLoading ? <Loader2 size={16} className="animate-spin" /> : gmailConnected ? <Unlink size={16} /> : <Link size={16} />}
+                  <span>{gmailLoading ? 'Loading...' : gmailConnected ? 'Disconnect' : 'Connect'}</span>
+                </button>
+              </div>
+            </div>
+            {connectionMessage && (
+              <div className={`mt-3 p-3 rounded-md text-sm ${connectionMessage.type === 'success' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                {connectionMessage.text}
+              </div>
+            )}
           </div>
 
           <div className={`border rounded-lg p-4 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
@@ -1098,102 +1314,113 @@ export default function Dashboard({
         </div>
       )}
       
+      {/* Modal Backdrop Overlay - Covers entire screen including sidebar */}
+      {isAnyModalOpen && (
+        <div className="fixed inset-0 z-40 bg-slate-900/50 pointer-events-none" />
+      )}
+
       {/* Sidebar */}
-      <aside className={`${isSidebarVisible ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed md:relative z-50 w-64 h-full border-r flex flex-col transition-transform duration-300 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
+      <aside className={`${isSidebarVisible ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed md:fixed top-0 left-0 h-screen z-10 border-r flex flex-col transition-all duration-300 ease-in-out ${isAnyModalOpen ? 'opacity-40 pointer-events-none' : ''} ${isSidebarCollapsed ? 'md:w-16' : 'md:w-64'} ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
         {/* Logo */}
-        <div className={`p-6 border-b ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'}`}>
-          <div className="flex items-center space-x-3">
-            <img src="/pw-logo.jpg" alt="PW Logo" className="w-10 h-10 object-contain" />
-          </div>
+        <div className={`p-4 border-b flex items-center justify-center ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'} ${isSidebarCollapsed ? 'md:px-2' : 'md:px-6'}`}>
+          <img src="/pw-logo.jpg" alt="PW Logo" className={`object-contain ${isSidebarCollapsed ? 'w-8 h-8' : 'w-10 h-10'}`} />
+          {!isSidebarCollapsed && <span className="ml-3 font-bold text-lg hidden md:block">PMS</span>}
         </div>
 
-        {/* User Info */}
-        <div className={`p-4 border-b ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'}`}>
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full flex items-center justify-center">
-              <User className="text-white" size={18} />
-            </div>
-            <div>
-              <p className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{currentUser.FullName}</p>
-              <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{currentUser.Role}</p>
+        {/* Collapse Toggle Button */}
+        <div className={`p-2 border-b flex justify-center ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'}`}>
+          <button
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
+            title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
+        </div>
+
+        {/* User Info - Hidden when collapsed */}
+        {!isSidebarCollapsed && (
+          <div className={`p-4 border-b ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'}`}>
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full flex items-center justify-center">
+                <User className="text-white" size={18} />
+              </div>
+              <div>
+                <p className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{currentUser.FullName}</p>
+                <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{currentUser.Role}</p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-6 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+        <nav className={`flex-1 overflow-y-auto ${isSidebarCollapsed ? 'px-2 py-4' : 'p-4 space-y-6'}`} style={{ maxHeight: 'calc(100vh - 280px)' }}>
           {/* Workspace Section */}
           <div>
-            <p className={`text-xs font-bold uppercase tracking-wider mb-3 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Workspace</p>
+            {!isSidebarCollapsed && <p className={`text-xs font-bold uppercase tracking-wider mb-3 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Workspace</p>}
             <ul className="space-y-1">
               <li>
                 <button
                   onClick={() => handleViewChange('overview')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${
                     activeView === 'overview' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
+                  title={isSidebarCollapsed ? 'Overview' : ''}
                 >
                   <LayoutDashboard size={18} />
-                  <span className="font-medium text-sm">Overview</span>
+                  {!isSidebarCollapsed && <span className="font-medium text-sm">Overview</span>}
                 </button>
               </li>
               <li>
                 <button
                   onClick={() => handleViewChange('tasks')}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors ${
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg transition-colors ${
                     activeView === 'tasks' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
+                  title={isSidebarCollapsed ? 'Tasks' : ''}
                 >
-                  <div className="flex items-center space-x-3">
+                  <div className={`flex items-center ${isSidebarCollapsed ? '' : 'space-x-3'}`}>
                     <ClipboardList size={18} />
-                    <span className="font-medium text-sm">Tasks</span>
+                    {!isSidebarCollapsed && <span className="font-medium text-sm">Tasks</span>}
                   </div>
-                  <span className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{tasks.length}</span>
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleViewChange('schedules')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
-                    activeView === 'schedules' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
-                >
-                  <Calendar size={18} />
-                  <span className="font-medium text-sm">Schedules</span>
+                  {!isSidebarCollapsed && <span className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{tasks.length}</span>}
                 </button>
               </li>
               <li>
                 <button
                   onClick={() => handleViewChange('team')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${
                     activeView === 'team' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
+                  title={isSidebarCollapsed ? 'Team' : ''}
                 >
                   <Users size={18} />
-                  <span className="font-medium text-sm">Team</span>
+                  {!isSidebarCollapsed && <span className="font-medium text-sm">Team</span>}
                 </button>
               </li>
               <li>
                 <button
                   onClick={() => handleViewChange('reports')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${
                     activeView === 'reports' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
+                  title={isSidebarCollapsed ? 'Reports' : ''}
                 >
                   <FileText size={18} />
-                  <span className="font-medium text-sm">Reports</span>
+                  {!isSidebarCollapsed && <span className="font-medium text-sm">Reports</span>}
                 </button>
               </li>
               {currentUser.Role === ROLE.ADMIN && (
                 <li>
                   <button
                     onClick={() => handleViewChange('admin')}
-                    className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
+                    className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${
                       activeView === 'admin' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                     }`}
+                    title={isSidebarCollapsed ? 'Admin Panel' : ''}
                   >
                     <Shield size={18} />
-                    <span className="font-medium text-sm">Admin Panel</span>
+                    {!isSidebarCollapsed && <span className="font-medium text-sm">Admin Panel</span>}
                   </button>
                 </li>
               )}
@@ -1202,17 +1429,18 @@ export default function Dashboard({
 
           {/* Account Section */}
           <div>
-            <p className={`text-xs font-bold uppercase tracking-wider mb-3 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Account</p>
+            {!isSidebarCollapsed && <p className={`text-xs font-bold uppercase tracking-wider mb-3 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Account</p>}
             <ul className="space-y-1">
               <li>
                 <button
                   onClick={() => handleViewChange('settings')}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${
                     activeView === 'settings' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
+                  title={isSidebarCollapsed ? 'Settings' : ''}
                 >
                   <Settings size={18} />
-                  <span className="font-medium text-sm">Settings</span>
+                  {!isSidebarCollapsed && <span className="font-medium text-sm">Settings</span>}
                 </button>
               </li>
             </ul>
@@ -1223,37 +1451,28 @@ export default function Dashboard({
         <div className={`p-4 border-t ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'}`}>
           <button
             onClick={onLogout}
-            className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
+            className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors`}
+            title={isSidebarCollapsed ? 'Sign out' : ''}
           >
             <LogOut size={18} />
-            <span className="font-medium text-sm">Sign out</span>
+            {!isSidebarCollapsed && <span className="font-medium text-sm">Sign out</span>}
           </button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
+      <main className={`flex-1 overflow-y-auto transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'md:ml-16' : 'md:ml-64'}`}>
         {/* Header */}
-        <header className={`px-4 md:px-8 py-4 md:py-5 sticky top-0 z-10 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
+        <header className={`px-4 md:px-8 py-4 md:py-5 sticky top-0 z-30 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 md:space-x-4">
-              {/* Toggle Sidebar Button */}
+              {/* Toggle Sidebar Button - Hamburger menu for mobile */}
               <button
                 onClick={() => setIsSidebarVisible(!isSidebarVisible)}
-                className={`p-2 md:p-2.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
+                className={`md:hidden p-2 md:p-2.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
               >
-                <LayoutDashboard size={20} />
+                <Menu size={20} />
               </button>
-              {/* Back Button */}
-              {navigationHistory.length > 0 && (
-                <button
-                  onClick={handleBack}
-                  className={`p-2 md:p-2.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
-                  title="Go back"
-                >
-                  <ChevronLeft size={20} />
-                </button>
-              )}
               <div className="block sm:hidden">
                 <h2 className={`text-lg font-bold capitalize ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{activeView}</h2>
               </div>
@@ -1263,6 +1482,14 @@ export default function Dashboard({
               </div>
             </div>
             <div className="flex items-center space-x-2 md:space-x-4">
+              {/* Profile Button */}
+              <button
+                onClick={onEditProfile}
+                className={`p-2 md:p-2.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
+                title="Profile"
+              >
+                <User size={20} />
+              </button>
               {/* Manual Sync Button */}
               {onSyncDatabase && (
                 <button
@@ -1312,7 +1539,6 @@ export default function Dashboard({
             >
               {activeView === 'overview' && renderOverview()}
               {activeView === 'tasks' && renderTasks()}
-              {activeView === 'schedules' && renderSchedules()}
               {activeView === 'team' && renderTeam()}
               {activeView === 'reports' && renderReports()}
               {activeView === 'admin' && renderAdmin()}

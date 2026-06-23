@@ -156,7 +156,7 @@ export async function notifyChange(
   entityId: string
 ): Promise<void> {
   try {
-    await api.post('/api/events/notify', {
+    await api.post('/events/notify', {
       collection,
       action,
       entityId

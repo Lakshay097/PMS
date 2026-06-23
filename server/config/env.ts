@@ -70,4 +70,10 @@ export const config = {
   // User ID Generation
   USER_ID_MIN: 1000,
   USER_ID_MAX: 9999,
+
+  // Gmail OAuth
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
+  GMAIL_REDIRECT_URI: process.env.GMAIL_REDIRECT_URI || 'http://localhost:3000/auth/gmail/callback',
+  DEFAULT_FALLBACK_EMAIL: process.env.DEFAULT_FALLBACK_EMAIL || 'noreply@pms.local',
 } as const;

@@ -6,6 +6,7 @@ interface UseTeamOperationsProps {
   teams: Team[];
   users: User[];
   syncDatabase: () => Promise<void>;
+  silentSync: () => Promise<void>;
   logAudit: (entity: string, id: string, action: string, oldValue: string, newValue: string) => Promise<void>;
 }
 
@@ -13,6 +14,7 @@ export function useTeamOperations({
   teams,
   users,
   syncDatabase,
+  silentSync,
   logAudit,
 }: UseTeamOperationsProps) {
   const handleDeleteTeam = useCallback(async (teamId: string) => {

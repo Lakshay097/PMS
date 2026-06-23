@@ -16,7 +16,6 @@ interface TaskCreationFormProps {
 export interface TaskFormData {
   title: string;
   description: string;
-  category: string;
   taskType: 'One-time' | 'Recurring';
   recurrenceType: 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Half-yearly' | 'One-time';
   startDate: string;
@@ -39,7 +38,6 @@ export default function TaskCreationForm({
   const [formData, setFormData] = useState<TaskFormData>({
     title: task?.Title || '',
     description: task?.Description || '',
-    category: task?.Category || '',
     taskType: task?.TaskType || 'One-time',
     recurrenceType: task?.RecurrenceType || 'One-time',
     startDate: task?.StartDate || new Date().toISOString().split('T')[0],
@@ -95,7 +93,6 @@ export default function TaskCreationForm({
     setFormData({
       title: '',
       description: '',
-      category: '',
       taskType: 'One-time',
       recurrenceType: 'One-time',
       startDate: new Date().toISOString().split('T')[0],
@@ -136,15 +133,6 @@ export default function TaskCreationForm({
               />
             </FormField>
 
-            <FormField label="Category">
-              <input
-                type="text"
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                placeholder="e.g., Development, Design, Marketing"
-                className="w-full px-3 py-2 bg-gray-50 border border-[var(--color-border)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
-              />
-            </FormField>
 
             <FormField label="Task Type">
               <select

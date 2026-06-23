@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Mail, Send, Save, Copy, RotateCcw, Smartphone, Monitor, Code } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, Send, Save, Copy, RotateCcw, Smartphone, Monitor, Code, Loader2 } from 'lucide-react';
 import { logger } from '../../../utils/logger';
 
 interface EmailTemplate {
@@ -27,6 +27,38 @@ export default function EmailTemplatesEditor({ onBack }: EmailTemplatesEditorPro
   const [body, setBody] = useState(selectedTemplate.body);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [showRawHtml, setShowRawHtml] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Load templates from server on mount
+  useEffect(() => {
+    loadTemplates();
+  }, []);
+
+  const loadTemplates = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
+
+      const response = await fetch('/api/email/templates', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Update templates list with server data
+        logger.log('Loaded templates from server:', data);
+      }
+    } catch (err) {
+      logger.error('Error loading templates:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const templates: EmailTemplate[] = [
     {
@@ -76,9 +108,39 @@ export default function EmailTemplatesEditor({ onBack }: EmailTemplatesEditorPro
     setBody(template.body);
   };
 
-  const handleSave = () => {
-    // Save logic
-    logger.log('Saving template:', { subject, body });
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
+
+      const response = await fetch('/api/email/templates', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          templateName: selectedTemplate.name.toLowerCase().replace(/\s+/g, '_'),
+          subject,
+          body,
+        }),
+      });
+
+      if (response.ok) {
+        setSaveMessage({ type: 'success', text: 'Template saved successfully!' });
+        setTimeout(() => setSaveMessage(null), 3000);
+      } else {
+        setSaveMessage({ type: 'error', text: 'Failed to save template' });
+        setTimeout(() => setSaveMessage(null), 3000);
+      }
+    } catch (err) {
+      logger.error('Error saving template:', err);
+      setSaveMessage({ type: 'error', text: 'Failed to save template' });
+      setTimeout(() => setSaveMessage(null), 3000);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleTestSend = () => {
@@ -135,10 +197,18 @@ export default function EmailTemplatesEditor({ onBack }: EmailTemplatesEditorPro
               </button>
             )}
             <h1 className="text-xl font-semibold text-[#0f172a]">Email Templates</h1>
+            {isLoading && <Loader2 size={16} className="animate-spin text-muted" />}
           </div>
           <p className="text-sm text-muted mt-1">Manage notification and alert templates</p>
         </div>
         <div className="flex items-center gap-2">
+          {saveMessage && (
+            <div className={`px-3 py-2 rounded-md text-sm ${
+              saveMessage.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+            }`}>
+              {saveMessage.text}
+            </div>
+          )}
           <button
             onClick={handleRestoreDefault}
             className="flex items-center gap-2 px-3 py-2 border border-[var(--color-border)] rounded-md text-sm text-[#0f172a] hover:bg-gray-50 transition-colors"
@@ -155,10 +225,11 @@ export default function EmailTemplatesEditor({ onBack }: EmailTemplatesEditorPro
           </button>
           <button
             onClick={handleSave}
-            className="flex items-center gap-2 px-3 py-2 bg-[var(--color-accent)] text-white rounded-md text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors"
+            disabled={isSaving}
+            className="flex items-center gap-2 px-3 py-2 bg-[var(--color-accent)] text-white rounded-md text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Save size={16} />
-            <span>Save</span>
+            {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            <span>{isSaving ? 'Saving...' : 'Save'}</span>
           </button>
         </div>
       </div>

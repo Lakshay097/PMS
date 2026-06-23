@@ -7,6 +7,9 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
+import { initializeEmailSheets, getGmailAuthUrlHandler, gmailCallbackHandler, getGmailStatusHandler, disconnectGmailHandler } from "./server/controllers/gmailAuthController";
+import { triggerTaskAssignmentHandler, triggerTaskDueSoonHandler, triggerTaskOverdueHandler, triggerReportSubmissionHandler } from "./server/controllers/emailTriggerController";
+import { getEmailTemplatesHandler, saveEmailTemplateHandler, updateEmailTemplateHandler } from "./server/controllers/emailTemplateController";
 
 dotenv.config();
 
@@ -167,6 +170,9 @@ async function startServer() {
   const PORT = process.env.PORT || 3000;
   const JWT_SECRET = (process.env.JWT_SECRET as string) || 'change-this-secret-in-production';
   const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '12');
+
+  // Initialize email-related sheets
+  await initializeEmailSheets();
 
   // Trust proxy for rate limiting behind proxies (only trust specific proxies)
   app.set('trust proxy', 1); // Trust first proxy
@@ -495,6 +501,23 @@ async function startServer() {
     }
   });
 
+  // Gmail OAuth routes
+  app.get("/api/auth/gmail/url", authenticateToken, getGmailAuthUrlHandler);
+  app.get("/auth/gmail/callback", gmailCallbackHandler);
+  app.get("/api/auth/gmail/status", authenticateToken, getGmailStatusHandler);
+  app.post("/api/auth/gmail/disconnect", authenticateToken, disconnectGmailHandler);
+
+  // Email trigger routes
+  app.post("/api/email/trigger/task-assignment", authenticateToken, triggerTaskAssignmentHandler);
+  app.post("/api/email/trigger/task-due-soon", authenticateToken, triggerTaskDueSoonHandler);
+  app.post("/api/email/trigger/task-overdue", authenticateToken, triggerTaskOverdueHandler);
+  app.post("/api/email/trigger/report-submission", authenticateToken, triggerReportSubmissionHandler);
+
+  // Email template routes
+  app.get("/api/email/templates", authenticateToken, getEmailTemplatesHandler);
+  app.post("/api/email/templates", authenticateToken, saveEmailTemplateHandler);
+  app.post("/api/auth/email/templates/update", authenticateToken, updateEmailTemplateHandler);
+
 
   // SSE endpoint for real-time change sync
   const sseConnections = new Set<express.Response>();
@@ -696,12 +719,12 @@ async function startServer() {
     app.get("*", (req, res) => {
       // Don't intercept API routes
       if (req.path.startsWith('/api/')) {
-        res.status(404).send('Not Found');
+        res.status(404).type('text/plain').send('Not Found');
         return;
       }
       // Don't intercept static asset requests
       if (req.path.startsWith('/assets/') || req.path.includes('.')) {
-        res.status(404).send('Not Found');
+        res.status(404).type('text/plain').send('Not Found');
         return;
       }
       // For all other routes, serve index.html (let static middleware handle actual files first)

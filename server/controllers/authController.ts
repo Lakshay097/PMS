@@ -23,6 +23,14 @@ interface AccountRequestRequestBody {
 }
 
 /**
+ * Change password request body
+ */
+interface ChangePasswordRequestBody {
+  oldPassword: string;
+  newPassword: string;
+}
+
+/**
  * POST /api/login
  * Simple login endpoint
  */
@@ -203,5 +211,92 @@ export async function approveUserHandler(req: AuthRequest, res: Response): Promi
   res.json({
     success: true,
     message: "User approved successfully"
+  });
+}
+
+/**
+ * POST /api/change-password
+ * Protected endpoint to change user password
+ */
+export async function changePasswordHandler(req: AuthRequest, res: Response): Promise<void> {
+  const { oldPassword, newPassword } = req.body as ChangePasswordRequestBody;
+
+  if (!oldPassword || !newPassword) {
+    throw new BadRequestError("Old password and new password are required");
+  }
+
+  if (newPassword.length < 6) {
+    throw new BadRequestError("New password must be at least 6 characters");
+  }
+
+  // Get Google Sheets access token
+  const tokenData = await generateGoogleSheetsToken();
+  if (!tokenData) {
+    throw new InternalServerError("Failed to authenticate with Google Sheets");
+  }
+
+  const spreadsheetId = tokenData.spreadsheetId;
+  if (!spreadsheetId) {
+    throw new InternalServerError("Spreadsheet ID not found");
+  }
+
+  // Fetch all users
+  const usersRange = 'users!A:R';
+  const users = await fetchSheetValues(tokenData.accessToken, spreadsheetId, usersRange);
+
+  if (!users) {
+    throw new InternalServerError("Failed to fetch users");
+  }
+
+  const userEmail = req.user?.email;
+  if (!userEmail) {
+    throw new BadRequestError("User email not found in token");
+  }
+
+  const normalizedEmail = userEmail.toLowerCase();
+
+  // Find the user
+  let userRowIndex = -1;
+  let userRow: any[] | null = null;
+
+  for (let i = 0; i < users.length; i++) {
+    const row = users[i];
+    if (row[3] === normalizedEmail) { // Email is in column 4 (index 3)
+      userRowIndex = i;
+      userRow = row;
+      break;
+    }
+  }
+
+  if (!userRow) {
+    throw new NotFoundError("User not found");
+  }
+
+  // Verify old password
+  const storedPassword = userRow[12]; // Password is in column 13 (index 12)
+  if (storedPassword !== oldPassword) {
+    throw new BadRequestError("Old password is incorrect");
+  }
+
+  // Update password
+  const now = new Date().toISOString();
+  userRow[12] = newPassword; // Password (M)
+  userRow[11] = now; // UpdatedAt (L)
+
+  // Update the user row in Google Sheets
+  const success = await updateSheetValues(
+    tokenData.accessToken,
+    spreadsheetId,
+    `users!A${userRowIndex + 1}:R${userRowIndex + 1}`,
+    [userRow]
+  );
+
+  if (!success) {
+    throw new InternalServerError("Failed to update password");
+  }
+
+  res.json({
+    success: true,
+    message: "Password changed successfully"
   });
 }

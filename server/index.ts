@@ -10,10 +10,14 @@ import apiRoutes from './routes';
 import { logger } from './utils/logger';
 import { sseService } from './services/sseService';
 import { authenticateToken, AuthRequest } from './middleware/auth';
+import { oauthRateLimiter, loginRateLimiter } from './middleware/rateLimiters';
+import * as gmailAuthController from './controllers/gmailAuthController';
 
 validateEnv();
 
 async function startServer() {
+  // Initialize email-related sheets
+  await gmailAuthController.initializeEmailSheets();
   const app = express();
 
   app.set('trust proxy', 1);
@@ -40,6 +44,10 @@ async function startServer() {
   app.use('/api', apiRoutes);
   app.get("/api/changes/stream", sseService.getSSEHandler());
   sseService.startAuditLoop();
+
+  // Gmail OAuth callback route (public, not under /api/)
+  // Rate limited: 20 failed requests per 15 minutes per IP
+  app.get('/auth/gmail/callback', oauthRateLimiter, gmailAuthController.gmailCallbackHandler);
 
   // POST /api/events/notify - immediate SSE broadcast endpoint
   app.post('/api/events/notify', authenticateToken, (req: AuthRequest, res) => {
