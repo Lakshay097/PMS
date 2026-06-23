@@ -15,7 +15,6 @@ import {
   TaskTemplate,
   TaskReport,
   FollowUp,
-  AuditLog,
   AppSetting,
   Subtask,
   Comment
@@ -27,7 +26,6 @@ import {
   INITIAL_TASKS,
   INITIAL_REPORTS,
   INITIAL_FOLLOWUPS,
-  INITIAL_AUDITS,
   INITIAL_SETTINGS,
   INITIAL_SUBTASKS,
   INITIAL_COMMENTS
@@ -87,42 +85,66 @@ export async function initializeDatabase(): Promise<void> {
       throw new Error('Failed to create or access Google Sheets spreadsheet.');
     }
 
-    // Check if database is empty by checking users
-    const users = await sheetsApi.getCollection<User>('users');
-    setCache('users', users); // Cache for batchLoadAll
-    const tasks = await sheetsApi.getCollection<Task>('tasks');
-    setCache('tasks', tasks); // Cache for batchLoadAll
+    // Run metadata check and retrieve db_initialized flag in parallel
+    const [_, isInitialized] = await Promise.all([
+      sheetsApi.getSpreadsheetMetadata(spreadId),
+      Promise.resolve(localStorage.getItem('db_initialized') === 'true')
+    ]);
 
-    const isNewSpreadsheet = users.length === 0 && tasks.length === 0;
+    // Skip empty check if already initialized (unless we hit a 404 later)
+    if (!isInitialized) {
+      // Check if database is empty by checking users
+      const users = await sheetsApi.getCollection<User>('users');
+      setCache('users', users); // Cache for batchLoadAll
+      const tasks = await sheetsApi.getCollection<Task>('tasks');
+      setCache('tasks', tasks); // Cache for batchLoadAll
 
-    if (isNewSpreadsheet) {
-      logger.log("Google Sheets database is empty. Seeding initial data...");
-      
-      // Seed initial data sequentially to avoid rate limiting
-      const collections = [
-        { name: 'users', data: INITIAL_USERS },
-        { name: 'teams', data: INITIAL_TEAMS },
-        { name: 'templates', data: INITIAL_TEMPLATES },
-        { name: 'tasks', data: INITIAL_TASKS },
-        { name: 'reports', data: INITIAL_REPORTS },
-        { name: 'followups', data: INITIAL_FOLLOWUPS },
-        { name: 'auditlogs', data: INITIAL_AUDITS },
-        { name: 'settings', data: INITIAL_SETTINGS },
-        { name: 'subtasks', data: INITIAL_SUBTASKS },
-        { name: 'comments', data: INITIAL_COMMENTS }
-      ];
+      const isNewSpreadsheet = users.length === 0 && tasks.length === 0;
 
-      for (const collection of collections) {
-        await sheetsApi.saveCollection(collection.name as 'users' | 'teams' | 'templates' | 'tasks' | 'reports' | 'followups' | 'auditlogs' | 'settings' | 'subtasks' | 'comments', collection.data);
-        // Add a small delay between saves to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 500));
+      if (isNewSpreadsheet) {
+        logger.log("Google Sheets database is empty. Seeding initial data...");
+        
+        // Seed initial data in batches of 3-4 to avoid rate limiting
+        const collections = [
+          { name: 'users', data: INITIAL_USERS },
+          { name: 'teams', data: INITIAL_TEAMS },
+          { name: 'templates', data: INITIAL_TEMPLATES },
+          { name: 'tasks', data: INITIAL_TASKS },
+          { name: 'reports', data: INITIAL_REPORTS },
+          { name: 'followups', data: INITIAL_FOLLOWUPS },
+          { name: 'settings', data: INITIAL_SETTINGS },
+          { name: 'subtasks', data: INITIAL_SUBTASKS },
+          { name: 'comments', data: INITIAL_COMMENTS }
+        ];
+
+        // Process in batches of 3-4 to avoid rate limits
+        const batchSize = 3;
+        for (let i = 0; i < collections.length; i += batchSize) {
+          const batch = collections.slice(i, i + batchSize);
+          await Promise.all(batch.map(collection => 
+            sheetsApi.saveCollection(collection.name as 'users' | 'teams' | 'templates' | 'tasks' | 'reports' | 'followups' | 'settings' | 'subtasks' | 'comments', collection.data)
+          ));
+          // Small delay between batches
+          if (i + batchSize < collections.length) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        }
+
+        logger.log("Initial data seeded successfully.");
+        localStorage.setItem('db_initialized', 'true');
+      } else {
+        logger.log("Database already initialized with existing data.");
+        localStorage.setItem('db_initialized', 'true');
       }
-
-      logger.log("Initial data seeded successfully.");
     } else {
-      logger.log("Database already initialized with existing data.");
+      logger.log("Database already initialized (flag set). Skipping empty check.");
     }
-  } catch (error) {
+  } catch (error: any) {
+    // Reset initialization flag on 404 errors (spreadsheet deleted)
+    if (error?.statusCode === 404 || error?.message?.includes('404')) {
+      logger.log('Spreadsheet not found (404). Resetting initialization flag.');
+      localStorage.removeItem('db_initialized');
+    }
     console.error("Failed to initialize database:", error);
     throw new Error(`Failed to initialize Google Sheets database: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
@@ -167,11 +189,13 @@ export const dbService = {
 
       if (idx >= 0) {
         users[idx] = { ...users[idx], ...userToSave, UpdatedAt: now };
+        await sheetsApi.saveCollection('users', users);
       } else {
-        users.push({ ...userToSave, CreatedAt: now, UpdatedAt: now });
+        const newUser = { ...userToSave, CreatedAt: now, UpdatedAt: now };
+        users.push(newUser);
+        await sheetsApi.appendRecord('users', newUser);
       }
 
-      await sheetsApi.saveCollection('users', users);
       clearCache('users'); // Invalidate cache after write
       clearCache('teams'); // Also clear teams cache since team names might be referenced
       
@@ -334,11 +358,13 @@ export const dbService = {
 
       if (idx >= 0) {
         tasks[idx] = { ...tasks[idx], ...taskToSave, UpdatedAt: now };
+        await sheetsApi.saveCollection('tasks', tasks);
       } else {
-        tasks.push({ ...taskToSave, CreatedAt: now, UpdatedAt: now });
+        const newTask = { ...taskToSave, CreatedAt: now, UpdatedAt: now };
+        tasks.push(newTask);
+        await sheetsApi.appendRecord('tasks', newTask);
       }
       
-      await sheetsApi.saveCollection('tasks', tasks);
       clearCache('tasks');
       
       // Notify other clients immediately (fire and forget)
@@ -380,7 +406,7 @@ export const dbService = {
     try {
       const reports = await this.getReports();
       reports.push(report);
-      await sheetsApi.saveCollection('reports', reports);
+      await sheetsApi.appendRecord('reports', report);
       clearCache('reports');
       
       // Notify other clients immediately (fire and forget)
@@ -415,52 +441,6 @@ export const dbService = {
       notifyChange('followups', 'created', follow.FollowUpID).catch(() => {});
     } catch (error) {
       throw new Error(`Failed to save followup to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  },
-
-  // Audit Logs
-  async getAuditLogs(): Promise<AuditLog[]> {
-    const cached = getFromCache<AuditLog>('auditlogs');
-    if (cached) return cached;
-
-    try {
-      const audits = await sheetsApi.getCollection<AuditLog>('auditlogs');
-      setCache('auditlogs', audits);
-      return audits;
-    } catch (error) {
-      throw new Error(`Failed to load audit logs from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  },
-
-  async logAction(
-    entityType: AuditLog['EntityType'],
-    entityId: string,
-    action: string,
-    actorEmail: string,
-    oldValue: any = null,
-    newValue: any = null
-  ): Promise<void> {
-    try {
-      const newLog: AuditLog = {
-        LogID: `LOG-${Math.floor(Date.now() + Math.random() * 1000)}`,
-        EntityType: entityType,
-        EntityID: entityId,
-        Action: action,
-        OldValueJSON: oldValue ? JSON.stringify(oldValue) : "",
-        NewValueJSON: newValue ? JSON.stringify(newValue) : "",
-        ActionByEmail: actorEmail,
-        ActionDateTime: new Date().toISOString()
-      };
-
-      const audits = await this.getAuditLogs();
-      audits.unshift(newLog); // Put recent log on top
-      await sheetsApi.saveCollection('auditlogs', audits);
-      clearCache('auditlogs');
-      
-      // Notify other clients immediately (fire and forget)
-      notifyChange('auditlogs', 'created', newLog.LogID).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to log action to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -583,7 +563,6 @@ export const dbService = {
     tasks: Task[];
     teams: Team[];
     templates: TaskTemplate[];
-    auditlogs: AuditLog[];
     settings: AppSetting[];
     reports: TaskReport[];
     followups: FollowUp[];
@@ -592,7 +571,7 @@ export const dbService = {
   }> {
     const collections = [
       'users', 'tasks', 'teams', 'templates', 
-      'auditlogs', 'settings', 'reports', 
+      'settings', 'reports', 
       'followups', 'subtasks', 'comments'
     ];
 
@@ -624,7 +603,6 @@ export const dbService = {
     setCache('tasks', tasks);
     setCache('teams', raw.teams || []);
     setCache('templates', raw.templates || []);
-    setCache('auditlogs', raw.auditlogs || []);
     setCache('settings', raw.settings || []);
     setCache('reports', raw.reports || []);
     setCache('followups', raw.followups || []);
@@ -636,7 +614,6 @@ export const dbService = {
       tasks,
       teams: raw.teams || [],
       templates: raw.templates || [],
-      auditlogs: raw.auditlogs || [],
       settings: raw.settings || [],
       reports: raw.reports || [],
       followups: raw.followups || [],
@@ -687,9 +664,6 @@ export const dbService = {
             case 'followups':
               result = await this.getFollowups();
               break;
-            case 'auditlogs':
-              result = await this.getAuditLogs();
-              break;
             case 'settings':
               result = await this.getSettings();
               break;
@@ -716,6 +690,33 @@ export const dbService = {
       logger.log(`Synced collections: ${collections.join(', ')}`);
     } finally {
       collections.forEach(collection => syncInProgress.delete(collection));
+    }
+  },
+
+  async logAction(
+    entityType: string,
+    entityId: string,
+    action: string,
+    actionByEmail: string,
+    oldValue: any = null,
+    newValue: any = null
+  ): Promise<void> {
+    try {
+      const now = new Date().toISOString();
+      const logId = `LOG-${Math.floor(100000 + Math.random() * 900000)}`;
+      const logRecord = {
+        LogID: logId,
+        EntityType: entityType,
+        EntityID: entityId,
+        Action: action,
+        OldValueJSON: oldValue ? JSON.stringify(oldValue) : '',
+        NewValueJSON: newValue ? JSON.stringify(newValue) : '',
+        ActionByEmail: actionByEmail || 'system',
+        ActionDateTime: now
+      };
+      await sheetsApi.appendRecord('auditlogs', logRecord);
+    } catch (error) {
+      console.error('Failed to write audit log:', error);
     }
   }
 };

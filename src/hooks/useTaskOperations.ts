@@ -3,12 +3,14 @@ import { Task, User, TaskTemplate, Subtask, Comment, FollowUp, TaskStatus } from
 import { dbService } from '../lib/dbService';
 import { checkAndGenerateRecurringTasks } from '../lib/taskEngine';
 import { ROLE } from '../constants/status';
+import { triggerTaskAssignmentEmail } from '../api/emailTrigger';
 
 interface UseTaskOperationsProps {
   tasks: Task[];
   users: User[];
   currentUser: User | null;
   syncDatabase: () => Promise<void>;
+  silentSync: () => Promise<void>;
   selectedTask: Task | null;
   setSelectedTask: (task: Task | null) => void;
   triggerNotification: (type: string, message: string, emailSentTo: string) => void;
@@ -25,6 +27,7 @@ export function useTaskOperations({
   users,
   currentUser,
   syncDatabase,
+  silentSync,
   selectedTask,
   setSelectedTask,
   triggerNotification,
@@ -50,7 +53,6 @@ export function useTaskOperations({
           TemplateID: tempId,
           Title: data.Title,
           Description: data.Description,
-          Category: 'Operations', // Default category for templates
           Priority: data.Priority,
           RecurrenceType: data.RecurrenceType,
           StartDate: data.StartDate,
@@ -77,13 +79,17 @@ export function useTaskOperations({
         const firstEmail = data.AssignedToEmail.split(',')[0]?.trim() || '';
         const recipient = users.find(u => u.Email === firstEmail);
         
+        // Use provided team IDs or fallback to recipient's team IDs
+        const assignedTeamIDs = data.AssignedToTeamIDs && data.AssignedToTeamIDs.length > 0 
+          ? data.AssignedToTeamIDs 
+          : (recipient ? recipient.TeamIDs : currentUser.TeamIDs);
+        
         const newTask: Task = {
           TaskID: newId,
           TemplateID: null,
           ParentTaskID: null,
           Title: data.Title,
           Description: data.Description,
-          Category: 'Operations', // Default category for tasks
           Priority: data.Priority,
           TaskType: 'One-time',
           RecurrenceType: 'One-time',
@@ -93,7 +99,7 @@ export function useTaskOperations({
           AssignedByEmail: currentUser.Email,
           AssignedToEmail: data.AssignedToEmail,
           AssignedToRole: recipient ? recipient.Role as any : 'Stakeholder',
-          AssignedToTeamIDs: recipient ? recipient.TeamIDs : currentUser.TeamIDs,
+          AssignedToTeamIDs: assignedTeamIDs,
           Status: 'Not Started',
           PercentComplete: 0,
           LastReportSummary: '',
@@ -110,6 +116,23 @@ export function useTaskOperations({
 
         await dbService.saveTask(newTask);
         await logAudit('Task', newId, 'Created One-time Task Allocation', '', JSON.stringify(data));
+        
+        // Trigger email notification
+        try {
+          await triggerTaskAssignmentEmail({
+            assignerEmail: currentUser.Email,
+            assignedToEmail: newTask.AssignedToEmail,
+            task: {
+              TaskID: newTask.TaskID,
+              Title: newTask.Title,
+              DueDate: newTask.DueDate,
+              Priority: newTask.Priority,
+            },
+          });
+        } catch (emailError) {
+          console.error('Failed to trigger task assignment email:', emailError);
+        }
+        
         const alertMsg = formatEmailTemplate('template_assigned_email', newTask);
         triggerNotification(
           'Task Assignment',
@@ -117,12 +140,12 @@ export function useTaskOperations({
           `${newTask.AssignedToEmail}`
         );
         // Trigger sync after action
-        syncDatabase();
+        silentSync();
       }
     } catch (error) {
       throw error;
     }
-  }, [currentUser, users, triggerNotification, formatEmailTemplate, logAudit]);
+  }, [currentUser, users, triggerNotification, formatEmailTemplate, logAudit, silentSync]);
 
   const handleCloseTask = useCallback(async (taskId: string, remark: string) => {
     const nowStr = new Date().toISOString();
@@ -147,8 +170,8 @@ export function useTaskOperations({
 
     await logAudit('Task', taskId, 'Task Cleared & Closed', '', JSON.stringify({ Remark: remark }));
     // Trigger sync after action
-    syncDatabase();
-  }, [tasks, selectedTask, setSelectedTask, logAudit, syncDatabase]);
+    silentSync();
+  }, [tasks, selectedTask, setSelectedTask, logAudit, silentSync]);
 
   const handleUpdateTask = useCallback(async (taskId: string, fields: Partial<Task>) => {
     const nowStr = new Date().toISOString();
@@ -177,9 +200,9 @@ export function useTaskOperations({
       
       await logAudit('Task', taskId, 'Updated Task Properties', '', JSON.stringify(fields));
       // Trigger sync after action
-      syncDatabase();
+      silentSync();
     }
-  }, [tasks, selectedTask, setSelectedTask, triggerNotification, logAudit]);
+  }, [tasks, selectedTask, setSelectedTask, triggerNotification, logAudit, silentSync]);
 
   const handleCreateFollowUp = useCallback(async (parentTaskId: string, reason: string) => {
     if (!currentUser) return;
@@ -209,7 +232,6 @@ export function useTaskOperations({
       ParentTaskID: parentTaskId,
       Title: `Follow-up #${nextFCount}: ${parent.Title.replace(/\s-\s\[Cycle.*\]/g, "")}`,
       Description: `REASON FOR FOLLOW-UP: ${reason}\n\nORIGINAL PARENT WORK SCOPE: ${parent.Description}`,
-      Category: parent.Category,
       Priority: 'Medium',
       TaskType: 'One-time',
       RecurrenceType: 'One-time',
@@ -256,8 +278,8 @@ export function useTaskOperations({
 
     await logAudit('FollowUp', followId, 'Follow-Up Sparked & Linked', '', JSON.stringify({ ParentID: parentTaskId, ChildID: newTaskId }));
     // Trigger sync after action
-    syncDatabase();
-  }, [currentUser, tasks, users, selectedTask, setSelectedTask, logAudit, syncDatabase]);
+    silentSync();
+  }, [currentUser, tasks, users, selectedTask, setSelectedTask, logAudit, silentSync]);
 
   const handleAddSubtask = useCallback(async (taskId: string, title: string) => {
     if (!currentUser) return;
@@ -273,17 +295,17 @@ export function useTaskOperations({
     };
     await dbService.saveSubtask(newSubtask);
     // Trigger sync after action
-    syncDatabase();
-  }, [currentUser, syncDatabase]);
+    silentSync();
+  }, [currentUser, silentSync]);
 
   const handleToggleSubtask = useCallback(async (subtaskId: string, isDone: boolean) => {
     const subtask = subtasks.find(s => s.SubtaskID === subtaskId);
     if (subtask) {
       await dbService.saveSubtask({ ...subtask, IsDone: isDone });
       // Trigger sync after action
-      syncDatabase();
+      silentSync();
     }
-  }, [subtasks, syncDatabase]);
+  }, [subtasks, silentSync]);
 
   const handleDeleteSubtask = useCallback(async (subtaskId: string) => {
     const updated = subtasks.filter(s => s.SubtaskID !== subtaskId);
@@ -291,9 +313,9 @@ export function useTaskOperations({
     // Delete subtask by updating the subtasks list in the database
     // Note: deleteSubtask may not exist, so we handle it differently
     // Trigger sync after action
-    syncDatabase();
+    silentSync();
     // Note: Google Sheets sync removed as it's handled by SSE
-  }, [subtasks, setSubtasks, syncDatabase]);
+  }, [subtasks, setSubtasks, silentSync]);
 
   const handleAddComment = useCallback(async (taskId: string, comment: string) => {
     if (!currentUser) return;
@@ -307,8 +329,8 @@ export function useTaskOperations({
     };
     await dbService.saveComment(newComment);
     // Trigger sync after action
-    syncDatabase();
-  }, [currentUser, syncDatabase]);
+    silentSync();
+  }, [currentUser, silentSync]);
 
   const handleDeleteTask = useCallback(async (taskId: string) => {
     if (!currentUser) return;
@@ -317,7 +339,7 @@ export function useTaskOperations({
       await dbService.deleteTask(taskId);
       await logAudit('Task', taskId, 'Deleted Task', '', '');
       // Trigger sync after action
-      syncDatabase();
+      silentSync();
       
       // Clear selected task if it's the deleted one
       if (selectedTask && selectedTask.TaskID === taskId) {
@@ -326,7 +348,7 @@ export function useTaskOperations({
     } catch (error) {
       throw error;
     }
-  }, [currentUser, selectedTask, setSelectedTask, logAudit, syncDatabase]);
+  }, [currentUser, selectedTask, setSelectedTask, logAudit, silentSync]);
 
   const runSimulatedRecurrenceEngine = useCallback(async () => {
     setIsSimulatingRecurrence(true);

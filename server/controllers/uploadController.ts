@@ -88,6 +88,24 @@ export async function uploadFileHandler(req: AuthRequest, res: Response): Promis
 
   const fileDataResult = await fileRes.json();
 
+  // Set file permissions to "anyone with the link can view"
+  const permissionRes = await fetch(`https://www.googleapis.com/drive/v3/files/${uploadData.id}/permissions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${tokenData.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      role: 'reader',
+      type: 'anyone',
+    }),
+  });
+
+  if (!permissionRes.ok) {
+    console.error("Failed to set file permissions:", await permissionRes.text());
+    // Continue anyway - file is uploaded, just not publicly accessible
+  }
+
   res.json({
     fileId: uploadData.id,
     fileName: fileName,

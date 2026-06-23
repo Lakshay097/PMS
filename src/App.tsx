@@ -17,15 +17,15 @@ import {
   INITIAL_TASKS,
   INITIAL_REPORTS,
   INITIAL_FOLLOWUPS,
-  INITIAL_AUDITS,
   INITIAL_SETTINGS
 } from './initialData';
-import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AuditLog, AppSetting, TaskStatus, SystemAlert, Subtask, Comment } from './types/index';
+import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AppSetting, TaskStatus, SystemAlert, Subtask, Comment } from './types/index';
 import { dbService, initializeDatabase } from './lib/dbService';
 import { initAuth, sheetsApi } from './lib/sheetsService';
 import { checkAndGenerateRecurringTasks, evaluateOverdueTasks } from './lib/taskEngine';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { useAuth } from './contexts/AuthContext';
+import { changePassword } from './api/auth';
 import InstallBanner from './components/InstallBanner';
 import OfflineBanner from './components/OfflineBanner';
 import UpdateBanner from './components/UpdateBanner';
@@ -68,6 +68,7 @@ import {
 // Components
 import Spinner from './components/ui/Spinner';
 import ErrorBoundary from './components/ErrorBoundary';
+import DashboardSkeleton from './components/DashboardSkeleton';
 
 // TECH-DEBT: Main bundle still 407kb (gzip 127kb). Run
 // npx vite-bundle-visualizer and inspect index chunk for
@@ -177,7 +178,7 @@ export default function App() {
     return rawTemplate
       .replace(/{TaskID}/g, task.TaskID || '')
       .replace(/{Title}/g, task.Title || '')
-      .replace(/{Category}/g, task.Category || '')
+      .replace(/{Description}/g, task.Description || '')
       .replace(/{Priority}/g, task.Priority || '')
       .replace(/{DueDate}/g, task.DueDate || '')
       .replace(/{AssignedToEmail}/g, task.AssignedToEmail || '')
@@ -388,31 +389,8 @@ export default function App() {
   // (Early returns moved to the bottom of the hooks section to satisfy Rules of Hooks)
 
   // Helpers to push state updates safely with durable persistence
-  const logAudit = async (entityType: AuditLog['EntityType'], entityId: string, action: string, oldVal = '', newVal = '') => {
-    // Safely parse JSON values with guard for plain strings
-    const parseSafely = (value: string): any => {
-      if (!value) return null;
-      if (typeof value !== 'string') return value;
-      // Check if it looks like JSON
-      if (value.startsWith('{') || value.startsWith('[')) {
-        try {
-          return JSON.parse(value);
-        } catch {
-          return value; // Return as string if parse fails
-        }
-      }
-      return value; // Return plain string as-is
-    };
-
-    await dbService.logAction(
-      entityType,
-      entityId,
-      action,
-      activeUser.Email,
-      parseSafely(oldVal),
-      parseSafely(newVal)
-    );
-    // SSE will handle sync automatically - no need to reload database
+  const logAudit = async (entityType: string, entityId: string, action: string, oldVal = '', newVal = '') => {
+    // Audit logging disabled
   };
 
   // Rule 1: Task visibility filters depending on Role
@@ -519,6 +497,7 @@ export default function App() {
     users,
     currentUser: activeUser,
     syncDatabase: loadDatabase,
+    silentSync,
     selectedTask,
     setSelectedTask,
     triggerNotification,
@@ -541,6 +520,7 @@ export default function App() {
     users,
     teams,
     syncDatabase: loadDatabase,
+    silentSync,
     logAudit,
   });
 
@@ -549,6 +529,7 @@ export default function App() {
     teams,
     users,
     syncDatabase: loadDatabase,
+    silentSync,
     logAudit,
   });
 
@@ -591,6 +572,7 @@ export default function App() {
   } = useTemplateOperations({
     templates,
     syncDatabase: loadDatabase,
+    silentSync,
     logAudit,
   });
 
@@ -699,15 +681,7 @@ export default function App() {
   };
 
   if (dbIsLoading) {
-    return (
-      <div className="min-h-screen bg-[#0F172A] flex items-center justify-center font-sans px-4">
-        <div className="text-center space-y-4 text-white">
-          <RefreshCw className="animate-spin text-blue-500 mx-auto" size={40} />
-          <p className="text-sm font-semibold text-slate-300">Syncing PMS Platform State...</p>
-          <div className="text-[10px] text-slate-500 font-mono">Verifying Cloud Database Connections &amp; Security Roles</div>
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton isDarkMode={isDarkMode} />;
   }
 
   if (!activeUser) {
@@ -818,6 +792,15 @@ export default function App() {
         audits={audits}
         settings={settings}
         teams={teams}
+        isDrawerOpen={isDrawerOpen}
+        isTaskModalOpen={isTaskModalOpen}
+        isReportModalOpen={isReportModalOpen}
+        isFollowUpModalOpen={isFollowUpModalOpen}
+        isEditProfileModalOpen={isEditProfileModalOpen}
+        isChangePasswordModalOpen={isChangePasswordModalOpen}
+        isConfigureNotificationsModalOpen={isConfigureNotificationsModalOpen}
+        isAddUserModalOpen={isAddUserModalOpen}
+        isAddTeamModalOpen={isAddTeamModalOpen}
         onAddUser={async (userData) => {
           try {
             await dbService.saveUser(userData);
@@ -869,10 +852,30 @@ export default function App() {
         }}
         onUpdateSetting={async (key, value) => {
           try {
-            const updatedSettings = settings.map(s => 
+            const updatedSettings = settings.map(s =>
               s.Key === key ? { ...s, Value: value } : s
             );
             await dbService.saveSettings(updatedSettings);
+
+            // If this is an email template setting, also update the email_templates sheet
+            if (key.startsWith('template_')) {
+              try {
+                await fetch('/api/auth/email/templates/update', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                  },
+                  body: JSON.stringify({
+                    templateName: key.replace('template_', ''),
+                    body: value,
+                  }),
+                });
+              } catch (emailError) {
+                console.error('Failed to sync email template to sheet:', emailError);
+              }
+            }
+
             // Trigger sync after action
             handleManualSync();
           } catch (error) {
@@ -909,6 +912,7 @@ export default function App() {
             <CreateTaskModal
             currentUser={activeUser}
             usersList={users}
+            teamsList={teams}
             isOpen={isTaskModalOpen}
             onClose={() => {
               setIsTaskModalOpen(false);
@@ -980,9 +984,19 @@ export default function App() {
           <ChangePasswordModal
             isOpen={isChangePasswordModalOpen}
             onClose={() => setIsChangePasswordModalOpen(false)}
-            onSave={(oldPassword, newPassword) => {
-              // In a real implementation, this would call an API to change the password
-              console.log('Password change:', { oldPassword, newPassword });
+            onSave={async (oldPassword, newPassword) => {
+              try {
+                const result = await changePassword({ oldPassword, newPassword });
+                if (result.success) {
+                  logger.log('Password changed successfully');
+                  alert('Password changed successfully');
+                } else {
+                  alert(result.message || 'Failed to change password');
+                }
+              } catch (error) {
+                logger.error('Password change error:', error);
+                alert('Failed to change password. Please try again.');
+              }
             }}
           />
         )}

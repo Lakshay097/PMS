@@ -57,7 +57,6 @@ export default function TaskDrawer({
   // Edit Mode states
   const [isEditing, setIsEditing] = useState(false);
   const [editDescription, setEditDescription] = useState('');
-  const [editCategory, setEditCategory] = useState('');
   const [editEmails, setEditEmails] = useState<string[]>([]);
   
   // Reassignment states for Admin
@@ -75,7 +74,6 @@ export default function TaskDrawer({
   useEffect(() => {
     if (task) {
       setEditDescription(task.Description);
-      setEditCategory(task.Category);
       setEditEmails((task.AssignedToEmail || '').split(',').map(e => e.trim()).filter(Boolean));
       setIsEditing(false);
       setReassignUser('');
@@ -171,7 +169,6 @@ export default function TaskDrawer({
     if (onUpdateTask) {
       onUpdateTask(task.TaskID, {
         Description: editDescription,
-        Category: editCategory,
         AssignedToEmail: editEmails.join(', '),
         AssignedToRole: assignedRole as any,
         AssignedToTeamIDs: assignedTeamIDs,
@@ -190,17 +187,14 @@ export default function TaskDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end font-sans">
-      {/* Backdrop */}
-      <div onClick={onClose} className="fixed inset-0 bg-slate-900/40 backdrop-blur-xxs" />
-
-      {/* Slide Out Panel */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center font-sans p-4 pointer-events-none">
+      {/* Centered Modal */}
       <motion.div
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-        className="relative w-full max-w-lg bg-white h-screen shadow-2xl flex flex-col z-10 border-l border-[#E2E8F0]"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        className="relative w-full max-w-2xl max-h-[90vh] bg-white rounded-2xl shadow-2xl flex flex-col pointer-events-auto overflow-hidden"
       >
         {/* Header */}
         <div className="px-6 py-5 bg-[#0F172A] text-white flex items-center justify-between border-b border-[#1E293B]">

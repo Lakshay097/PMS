@@ -1,6 +1,6 @@
 steps:
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/pms-repo/pms-taskflow:latest', '.']
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/pms-repo/pms-taskflow:latest', '--cache-from', 'us-central1-docker.pkg.dev/$PROJECT_ID/pms-repo/pms-taskflow:latest', '.']
 
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/pms-repo/pms-taskflow:latest']
@@ -22,12 +22,22 @@ steps:
       - '--timeout=3600'
       - '--concurrency=80'
       - '--cpu-boost'
-      - '--set-env-vars=GOOGLE_SERVICE_ACCOUNT_EMAIL=ticketsystem@ticketingsystem-498705.iam.gserviceaccount.com'
+      - '--set-env-vars=GOOGLE_SERVICE_ACCOUNT_EMAIL=pms-service-account@pms-taskflow-500309.iam.gserviceaccount.com'
       - '--set-secrets=GOOGLE_PRIVATE_KEY=GOOGLE_PRIVATE_KEY:latest'
       - '--set-env-vars=GOOGLE_SPREADSHEET_ID=1zwbskE3dTGVNn8EGG6Dx45TorL08zCB9ovLvnGeoEWQ'
       - '--set-secrets=JWT_SECRET=JWT_SECRET:latest'
+      - '--set-secrets=GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest'
+      - '--set-secrets=GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest'
       - '--set-env-vars=JWT_EXPIRES_IN=7d'
       - '--set-env-vars=BCRYPT_ROUNDS=12'
       - '--set-env-vars=RATE_LIMIT_WINDOW_MS=900000'
-      - '--set-env-vars=RATE_LIMIT_MAX_REQUESTS=100'
+      - '--set-env-vars=RATE_LIMIT_MAX_REQUESTS=1000'
       - '--set-env-vars=NODE_ENV=production'
+      - '--set-env-vars=VITE_API_BASE_URL=/api'
+      - '--set-env-vars=APP_URL=https://pms-taskflow-556944241861.us-central1.run.app'
+      - '--set-env-vars=GMAIL_REDIRECT_URI=https://pms-taskflow-556944241861.us-central1.run.app/auth/gmail/callback'
+      - '--set-env-vars=DEFAULT_FALLBACK_EMAIL=rajeev.1@pw.live'
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: 'CLOUD_LOGGING_ONLY'

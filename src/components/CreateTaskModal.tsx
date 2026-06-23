@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Calendar, ClipboardList, Repeat, UserPlus, Info } from 'lucide-react';
-import { User, TaskTemplate, Task, TaskStatus } from '../types';
+import { X, Calendar, ClipboardList, Repeat, UserPlus, Info, Users, CheckCircle } from 'lucide-react';
+import { User, TaskTemplate, Task, TaskStatus, Team } from '../types';
 import { ROLE } from '../constants/status';
 
 interface CreateTaskModalProps {
   currentUser: User;
   usersList: User[];
+  teamsList?: Team[];
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: {
@@ -18,12 +19,13 @@ interface CreateTaskModalProps {
     StartDate: string;
     DueDate: string;
     AssignedToEmail: string;
+    AssignedToTeamIDs: string[];
     AttachmentLink: string;
   }) => void;
   preSelectedAssignee?: string;
 }
 
-export default function CreateTaskModal({ currentUser, usersList, isOpen, onClose, onSubmit, preSelectedAssignee }: CreateTaskModalProps) {
+export default function CreateTaskModal({ currentUser, usersList, teamsList = [], isOpen, onClose, onSubmit, preSelectedAssignee }: CreateTaskModalProps) {
   const [taskType, setTaskType] = useState<'One-time' | 'Recurring'>('One-time');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -44,26 +46,34 @@ export default function CreateTaskModal({ currentUser, usersList, isOpen, onClos
   React.useEffect(() => {
     if (isOpen && preSelectedAssignee) {
       setAssignedToEmail(preSelectedAssignee);
+      // Parse comma-separated emails into selectedEmails array
+      const emails = typeof preSelectedAssignee === 'string' 
+        ? preSelectedAssignee.split(',').map(e => e.trim()).filter(e => e)
+        : [String(preSelectedAssignee)];
+      setSelectedEmails(emails);
+    } else if (isOpen) {
+      setSelectedEmails([]);
     }
   }, [isOpen, preSelectedAssignee]);
   
   // Filter eligible assignees based on role
-  // Rule: Admin can assign to anyone. Stakeholders can assign to themselves or subordinates (ManagerEmail = stakeholder email)
+  // Rule: Admin can assign to anyone. Stakeholders can assign to other stakeholders, admins, or themselves
   const filteredAssignees = usersList.filter(user => {
     if (!user.Active) return false;
     if (currentUser.Role === ROLE.ADMIN) return true;
     if (currentUser.Role === ROLE.STAKEHOLDER) {
-      return (user.Email.toLowerCase() === currentUser.Email.toLowerCase()) || (user.ManagerEmail.toLowerCase() === currentUser.Email.toLowerCase());
+      return user.Role === ROLE.ADMIN || user.Role === ROLE.STAKEHOLDER || user.Email.toLowerCase() === currentUser.Email.toLowerCase();
     }
     return false;
   });
 
   const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
+  const [selectedTeamIDs, setSelectedTeamIDs] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [attachmentLink, setAttachmentLink] = useState('');
 
-  // Auto-generate title from description and date
+  // Auto-generate title from priority, description and date
   useEffect(() => {
     if (description.trim() && dueDate) {
       // Extract first few words from description (up to 5 words)
@@ -74,11 +84,11 @@ export default function CreateTaskModal({ currentUser, usersList, isOpen, onClos
       const dateObj = new Date(dueDate);
       const formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       
-      // Generate title
-      const generatedTitle = `${descriptionSnippet} - ${formattedDate}`;
+      // Generate title with priority
+      const generatedTitle = `[${priority}] ${descriptionSnippet} - ${formattedDate}`;
       setTitle(generatedTitle);
     }
-  }, [description, dueDate]);
+  }, [description, dueDate, priority]);
 
   // Filter stakeholders based on search query
   const filteredStakeholders = filteredAssignees.filter(user =>
@@ -108,7 +118,7 @@ export default function CreateTaskModal({ currentUser, usersList, isOpen, onClos
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !description.trim() || selectedEmails.length === 0) return;
+    if (!title.trim() || !description.trim() || (selectedEmails.length === 0 && selectedTeamIDs.length === 0)) return;
 
     onSubmit({
       Title: title,
@@ -117,8 +127,9 @@ export default function CreateTaskModal({ currentUser, usersList, isOpen, onClos
       TaskType: taskType,
       RecurrenceType: taskType === 'Recurring' ? recurrenceType : 'One-time',
       StartDate: startDate,
-      DueDate: taskType === 'One-time' ? dueDate : startDate, // for Templates, due offset is dynamic
+      DueDate: taskType === 'One-time' ? dueDate : startDate,
       AssignedToEmail: selectedEmails.join(', '),
+      AssignedToTeamIDs: selectedTeamIDs,
       AttachmentLink: attachmentLink
     });
 
@@ -130,6 +141,7 @@ export default function CreateTaskModal({ currentUser, usersList, isOpen, onClos
     setDueDate(nextWeekStr);
     setAttachmentLink('');
     setSelectedEmails([]);
+    setSelectedTeamIDs([]);
     onClose();
   };
 
@@ -220,7 +232,7 @@ export default function CreateTaskModal({ currentUser, usersList, isOpen, onClos
             <div>
               <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5 flex items-center space-x-1">
                 <UserPlus size={12} />
-                <span>Assigned Recipients (Multiple Allowed)</span>
+                <span>Assigned Recipients {selectedTeamIDs.length > 0 ? '(Auto-filled from team)' : '(Multiple Allowed)'}</span>
               </label>
               <div className="relative search-dropdown-container">
                 <input
@@ -288,6 +300,69 @@ export default function CreateTaskModal({ currentUser, usersList, isOpen, onClos
                 </div>
               )}
             </div>
+
+            {/* Team Assignment */}
+            {teamsList && teamsList.length > 0 && (
+              <div>
+                <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5 flex items-center space-x-1">
+                  <Users size={12} />
+                  <span>Assign to Team (Optional)</span>
+                </label>
+                <select
+                  value={selectedTeamIDs.length > 0 ? selectedTeamIDs[0] : ''}
+                  onChange={(e) => {
+                    const teamId = e.target.value;
+                    if (teamId) {
+                      setSelectedTeamIDs([teamId]);
+                      // Auto-select all team members
+                      const team = teamsList.find(t => t.TeamID === teamId);
+                      if (team) {
+                        const teamMemberEmails = usersList
+                          .filter(u => u.TeamIDs.includes(teamId) && u.Active)
+                          .map(u => u.Email);
+                        setSelectedEmails(teamMemberEmails);
+                      }
+                    } else {
+                      setSelectedTeamIDs([]);
+                      setSelectedEmails([]);
+                    }
+                  }}
+                  className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                >
+                  <option value="">Select a team...</option>
+                  {teamsList.filter(t => t.Active).map(team => {
+                    const teamUsers = usersList.filter(u => u.TeamIDs.includes(team.TeamID) && u.Active);
+                    return (
+                      <option key={team.TeamID} value={team.TeamID}>
+                        {team.TeamName} ({teamUsers.length} members)
+                      </option>
+                    );
+                  })}
+                </select>
+                {selectedTeamIDs.length > 0 && (
+                  <div className="mt-2 flex items-center gap-1">
+                    {selectedTeamIDs.map(teamId => {
+                      const team = teamsList.find(t => t.TeamID === teamId);
+                      return (
+                        <span key={teamId} className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2.5 py-1 rounded-full border border-emerald-200">
+                          <span>{team ? team.TeamName : teamId}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedTeamIDs([]);
+                              setSelectedEmails([]);
+                            }}
+                            className="text-emerald-500 hover:text-emerald-800 p-0.5 hover:bg-transparent inline-flex items-center border-none"
+                          >
+                            <X size={10} />
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
@@ -394,7 +469,7 @@ export default function CreateTaskModal({ currentUser, usersList, isOpen, onClos
             </button>
             <button
               type="submit"
-              disabled={selectedEmails.length === 0}
+              disabled={selectedEmails.length === 0 && selectedTeamIDs.length === 0}
               className="px-5 py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               Allocate Task

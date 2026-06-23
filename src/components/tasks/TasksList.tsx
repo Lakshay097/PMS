@@ -237,7 +237,6 @@ export default function TasksList({ tasks, onTaskClick, onCreateTask, currentUse
                   >
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-[#0f172a]">{task.Title}</div>
-                      <div className="text-xs text-muted mt-0.5">{task.Category}</div>
                     </td>
                     <td className="px-6 py-4">
                       <StatusBadge status={task.Status} size="sm" />

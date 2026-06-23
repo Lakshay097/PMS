@@ -129,13 +129,6 @@ export default function TaskDetailDrawer({
               </p>
             </div>
 
-            <div>
-              <h3 className="text-sm font-medium text-[#0f172a] mb-2">Category</h3>
-              <span className="inline-block px-2 py-1 bg-gray-100 rounded text-sm text-[#0f172a]">
-                {task.Category}
-              </span>
-            </div>
-
             {task.AttachmentLink && (
               <div>
                 <h3 className="text-sm font-medium text-[#0f172a] mb-2">Attachments</h3>

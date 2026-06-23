@@ -14,12 +14,12 @@ export default defineConfig(() => {
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
-      proxy: {
+      proxy: process.env.NODE_ENV === 'development' ? {
         '/api': {
           target: 'http://localhost:3000',
           changeOrigin: true,
         },
-      },
+      } : undefined,
     },
     build: {
       rollupOptions: {

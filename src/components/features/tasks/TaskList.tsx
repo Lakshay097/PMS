@@ -38,7 +38,7 @@ export default function TaskList({
           return (
             <div
               key={task.TaskID}
-              onClick={() => !taskIsSubStakeholder && onTaskClick(task)}
+              onClick={(e) => { e.preventDefault(); !taskIsSubStakeholder && onTaskClick(task); }}
               className={`p-6 transition-colors ${!taskIsSubStakeholder ? 'cursor-pointer' : 'cursor-default'} ${isDarkMode ? 'hover:bg-[#1E293B]/30' : 'hover:bg-slate-50'}`}
             >
               <div className="flex items-start justify-between">

@@ -253,7 +253,6 @@ function getTasks_(user, filters) {
         if (filters.status !== 'Overdue' && task.Status !== filters.status) continue;
       }
       if (filters.priority && filters.priority !== 'All' && task.Priority !== filters.priority) continue;
-      if (filters.category && filters.category !== 'All' && task.Category !== filters.category) continue;
     }
     
     outTasks.push(task);
@@ -294,7 +293,6 @@ function createTask_(user, taskData) {
       case 'ParentTaskID': return taskData.ParentTaskID || '';
       case 'Title': return taskData.Title;
       case 'Description': return taskData.Description;
-      case 'Category': return taskData.Category;
       case 'Priority': return taskData.Priority;
       case 'TaskType': return taskData.TaskType || 'One-time';
       case 'RecurrenceType': return taskData.RecurrenceType || 'One-time';

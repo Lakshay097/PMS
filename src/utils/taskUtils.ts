@@ -66,12 +66,8 @@ export function getVisibleTasks(tasks: Task[], activeUser: any, currentView: str
         return true; // Admin sees all tasks in team view
       }
       if (activeUser.Role === ROLE.STAKEHOLDER) {
-        const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(activeUser.Email.toLowerCase());
-        const assignedByMe = task.AssignedByEmail?.toLowerCase() === activeUser.Email.toLowerCase();
-        const assignedToSubStakeholder = task.AssignedToEmail?.toLowerCase().split(',').some(email => 
-          subStakeholderEmails.includes(email.trim().toLowerCase())
-        );
-        return assignedToMe || assignedByMe || assignedToSubStakeholder;
+        // Stakeholders only see tasks they assigned
+        return task.AssignedByEmail?.toLowerCase() === activeUser.Email.toLowerCase();
       }
       // Sub-stakeholder only sees their own tasks
       return task.AssignedToEmail?.toLowerCase().includes(activeUser.Email.toLowerCase());
@@ -82,15 +78,7 @@ export function getVisibleTasks(tasks: Task[], activeUser: any, currentView: str
     return true;
   });
   
-  const afterCategoryFilter = afterViewFilter.filter(task => {
-    // Apply category filter
-    if (filters.category && filters.category !== 'All') {
-      return task.Category === filters.category;
-    }
-    return true;
-  });
-  
-  const afterStatusFilter = afterCategoryFilter.filter(task => {
+  const afterStatusFilter = afterViewFilter.filter(task => {
     // Apply status filter
     if (filters.status && filters.status !== 'All') {
       return task.Status === filters.status;
@@ -172,11 +160,6 @@ export function getFilteredTasks(tasks: Task[], filters: any) {
   if (!tasks) return [];
   
   return tasks.filter(task => {
-    if (filters.category && filters.category !== 'All') {
-      return task.Category === filters.category;
-    }
-    return true;
-  }).filter(task => {
     if (filters.status && filters.status !== 'All') {
       return task.Status === filters.status;
     }
