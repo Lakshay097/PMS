@@ -85,7 +85,7 @@ export async function accountRequestHandler(req: Request, res: Response): Promis
 
   // Check if email already exists
   for (const row of existingUsers) {
-    if (row[3] === normalizedEmail) { // Email is in column 4 (index 3)
+    if (row[2] === normalizedEmail) { // Email is in column 3 (index 2)
       throw new BadRequestError("An account with this email already exists");
     }
   }
@@ -94,7 +94,7 @@ export async function accountRequestHandler(req: Request, res: Response): Promis
   // If manager is Admin, role is Stakeholder, otherwise Sub-stakeholder
   let role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder' = 'Sub-stakeholder';
   for (const row of existingUsers) {
-    if (row[3] === normalizedManagerEmail && row[4] === 'Admin') { // Email (index 3) and Role (index 4)
+    if (row[2] === normalizedManagerEmail && row[3] === 'Admin') { // Email (index 2) and Role (index 3)
       role = 'Stakeholder';
       break;
     }
@@ -179,7 +179,7 @@ export async function approveUserHandler(req: AuthRequest, res: Response): Promi
 
   for (let i = 0; i < users.length; i++) {
     const row = users[i];
-    if (row[3] === normalizedEmail) { // Email is in column 4 (index 3)
+    if (row[2] === normalizedEmail) { // Email is in column 3 (index 2)
       userRowIndex = i;
       userRow = row;
       break;
