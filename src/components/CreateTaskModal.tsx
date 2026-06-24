@@ -72,6 +72,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
   const [searchQuery, setSearchQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [attachmentLink, setAttachmentLink] = useState('');
+  const [validationError, setValidationError] = useState('');
 
   // Auto-generate title from priority, description and date
   useEffect(() => {
@@ -118,7 +119,16 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !description.trim() || (selectedEmails.length === 0 && selectedTeamIDs.length === 0)) return;
+    if (!title.trim() || !description.trim()) {
+      setValidationError('Title and description are required');
+      setTimeout(() => setValidationError(''), 3000);
+      return;
+    }
+    if (selectedEmails.length === 0 && selectedTeamIDs.length === 0) {
+      setValidationError('Task must be assigned to at least one stakeholder');
+      setTimeout(() => setValidationError(''), 3000);
+      return;
+    }
 
     onSubmit({
       Title: title,
@@ -142,6 +152,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
     setAttachmentLink('');
     setSelectedEmails([]);
     setSelectedTeamIDs([]);
+    setValidationError('');
     onClose();
   };
 
@@ -164,6 +175,11 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+          {validationError && (
+            <div className="bg-red-50 border border-red-200 text-red-600 text-xs px-4 py-3 rounded-lg">
+              {validationError}
+            </div>
+          )}
           {/* Task Type Switcher */}
           <div>
             <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-2">

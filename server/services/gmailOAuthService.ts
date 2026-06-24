@@ -104,7 +104,8 @@ export async function refreshAccessToken(refreshToken: string): Promise<GoogleOA
 
     if (!response.ok) {
       const errorText = await response.text();
-      logger.error('Failed to refresh access token:', errorText);
+      const errorData = await response.json().catch(() => ({}));
+      logger.error('Failed to refresh access token:', { status: response.status, errorText, errorData });
       return null;
     }
 

@@ -293,5 +293,13 @@ export async function deleteGmailToken(userEmail: string): Promise<boolean> {
  */
 export async function isGmailConnected(userEmail: string): Promise<boolean> {
   const token = await getGmailToken(userEmail);
-  return token !== null && token.refreshToken.length > 0;
+  if (!token) return false;
+  if (!token.refreshToken || token.refreshToken.length === 0) return false;
+  // Check if access token is expired - if it is, the refresh token might also be invalid
+  const now = new Date();
+  const tokenExpiry = new Date(token.tokenExpiry);
+  // If access token is expired by more than 7 days, consider the connection stale
+  const daysSinceExpiry = (now.getTime() - tokenExpiry.getTime()) / (1000 * 60 * 60 * 24);
+  if (daysSinceExpiry > 7) return false;
+  return true;
 }

@@ -347,6 +347,11 @@ export const dbService = {
 
   async saveTask(task: Task): Promise<void> {
     try {
+      // Validate that task has an assigned stakeholder
+      if (!task.AssignedToEmail || task.AssignedToEmail.trim() === '') {
+        throw new Error('Task must be assigned to at least one stakeholder');
+      }
+
       const tasks = await this.getTasks();
       const idx = tasks.findIndex(t => t.TaskID === task.TaskID);
       const now = new Date().toISOString();
