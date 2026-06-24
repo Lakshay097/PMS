@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { triggerTaskAssignmentEmail, triggerTaskDueSoonEmail, triggerTaskOverdueEmail, triggerReportSubmissionEmail } from '../services/emailTriggerService';
+import { triggerTaskAssignmentEmail, triggerTaskDueSoonEmail, triggerTaskOverdueEmail, triggerReportSubmissionEmail, triggerTaskClosureEmail } from '../services/emailTriggerService';
 import { logger } from '../utils/logger';
 
 /**
@@ -105,6 +105,27 @@ export async function triggerReportSubmissionHandler(req: AuthRequest, res: Resp
     });
   } catch (err) {
     logger.error('Error in report submission email trigger:', err);
+    res.status(500).json({ error: 'Failed to trigger email' });
+  }
+}
+
+/**
+ * POST /api/email/trigger/task-closed
+ * Triggers task closure email
+ */
+export async function triggerTaskClosureHandler(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { closedByEmail, assignedToEmail, task, closeRemark } = req.body;
+    if (!closedByEmail || !assignedToEmail || !task || !closeRemark) {
+      res.status(400).json({ error: 'Missing required fields' });
+      return;
+    }
+    triggerTaskClosureEmail(closedByEmail, assignedToEmail, task, closeRemark).catch(err => {
+      logger.error('Error in fire-and-forget closure email trigger:', err);
+    });
+    res.json({ success: true, message: 'Task closure email triggered' });
+  } catch (err) {
+    logger.error('Error in task closure email trigger:', err);
     res.status(500).json({ error: 'Failed to trigger email' });
   }
 }

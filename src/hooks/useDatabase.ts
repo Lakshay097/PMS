@@ -43,7 +43,8 @@ export function useDatabase(isAuthInitialized: boolean = false) {
     } catch (error) {
       console.error('Error loading database:', error);
       setDbConnectionStatus('error');
-      alert(`Failed to load database: ${error instanceof Error ? error.message : 'Unknown error'}. Please refresh the page or contact support.`);
+      // Note: Can't use toast here as it's outside React component context
+      // The UI will show the error status via dbConnectionStatus
     } finally {
       setIsLoading(false);
       setIsSyncing(false);

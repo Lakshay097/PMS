@@ -3,7 +3,7 @@ import { Task, User, TaskTemplate, Subtask, Comment, FollowUp, TaskStatus } from
 import { dbService } from '../lib/dbService';
 import { checkAndGenerateRecurringTasks } from '../lib/taskEngine';
 import { ROLE } from '../constants/status';
-import { triggerTaskAssignmentEmail } from '../api/emailTrigger';
+import { triggerTaskAssignmentEmail, triggerTaskClosureEmail } from '../api/emailTrigger';
 
 interface UseTaskOperationsProps {
   tasks: Task[];
@@ -125,6 +125,7 @@ export function useTaskOperations({
             task: {
               TaskID: newTask.TaskID,
               Title: newTask.Title,
+              Description: newTask.Description,
               DueDate: newTask.DueDate,
               Priority: newTask.Priority,
             },
@@ -165,6 +166,16 @@ export function useTaskOperations({
 
       if (selectedTask && selectedTask.TaskID === taskId) {
         setSelectedTask(updatedTask);
+      }
+      try {
+        await triggerTaskClosureEmail({
+          closedByEmail: currentUser.Email,
+          assignedToEmail: targetTask.AssignedToEmail,
+          task: updatedTask,
+          closeRemark: remark,
+        });
+      } catch (err) {
+        console.error('Failed to trigger closure email:', err);
       }
     }
 

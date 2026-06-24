@@ -3,6 +3,7 @@ import { login, generateUserId } from '../services/authService';
 import { generateGoogleSheetsToken, fetchSheetValues, appendSheetValues, updateSheetValues } from '../services/googleSheetsService';
 import { BadRequestError, NotFoundError, InternalServerError } from '../utils/AppError';
 import { AuthRequest } from '../middleware/auth';
+import bcrypt from 'bcrypt';
 
 /**
  * Login request body
@@ -221,6 +222,8 @@ export async function approveUserHandler(req: AuthRequest, res: Response): Promi
 export async function changePasswordHandler(req: AuthRequest, res: Response): Promise<void> {
   const { oldPassword, newPassword } = req.body as ChangePasswordRequestBody;
 
+  console.log('Password change attempt for user:', req.user?.email);
+
   if (!oldPassword || !newPassword) {
     throw new BadRequestError("Old password and new password are required");
   }
@@ -248,20 +251,24 @@ export async function changePasswordHandler(req: AuthRequest, res: Response): Pr
     throw new InternalServerError("Failed to fetch users");
   }
 
+  console.log('Total users fetched:', users.length);
+
   const userEmail = req.user?.email;
   if (!userEmail) {
     throw new BadRequestError("User email not found in token");
   }
 
   const normalizedEmail = userEmail.toLowerCase();
+  console.log('Looking for user with email:', normalizedEmail);
 
-  // Find the user
+  // Find the user - skip header row (index 0), email is at index 2
   let userRowIndex = -1;
   let userRow: any[] | null = null;
 
-  for (let i = 0; i < users.length; i++) {
+  for (let i = 1; i < users.length; i++) {
     const row = users[i];
-    if (row[3] === normalizedEmail) { // Email is in column 4 (index 3)
+    console.log(`Row ${i} email:`, row[2]);
+    if (row[2] === normalizedEmail) { // Email is in column 3 (index 2)
       userRowIndex = i;
       userRow = row;
       break;
@@ -269,18 +276,32 @@ export async function changePasswordHandler(req: AuthRequest, res: Response): Pr
   }
 
   if (!userRow) {
+    console.log('User not found');
     throw new NotFoundError("User not found");
   }
 
+  console.log('User found at row:', userRowIndex);
+
   // Verify old password
   const storedPassword = userRow[12]; // Password is in column 13 (index 12)
-  if (storedPassword !== oldPassword) {
+  const isBcryptHash = storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2a$');
+  
+  let passwordMatches = false;
+  if (isBcryptHash) {
+    passwordMatches = await bcrypt.compare(oldPassword, storedPassword);
+  } else {
+    // Legacy plaintext fallback
+    passwordMatches = oldPassword === storedPassword;
+  }
+
+  if (!passwordMatches) {
     throw new BadRequestError("Old password is incorrect");
   }
 
-  // Update password
+  // Update password - hash it with bcrypt
   const now = new Date().toISOString();
-  userRow[12] = newPassword; // Password (M)
+  const hashedPassword = await bcrypt.hash(newPassword, parseInt(process.env.BCRYPT_ROUNDS || '12'));
+  userRow[12] = hashedPassword; // Password (M)
   userRow[11] = now; // UpdatedAt (L)
 
   // Update the user row in Google Sheets

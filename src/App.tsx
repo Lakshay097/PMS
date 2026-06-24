@@ -646,6 +646,25 @@ export default function App() {
         `${targetTask.AssignedByEmail}, ${targetTask.AssignedToEmail}`
       );
 
+      try {
+        const token = localStorage.getItem('PMS_auth_token');
+        await fetch('/api/email/trigger/report-submission', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            submitterEmail: activeUser.Email,
+            allocatorEmail: targetTask.AssignedByEmail,
+            task: targetTask,
+            reportContent: data.WorkSummary,
+          }),
+        });
+      } catch (err) {
+        logger.error('Failed to trigger report email:', err);
+      }
+
       if (selectedTask && selectedTask.TaskID === data.TaskID) {
         setSelectedTask(updatedTask);
       }
@@ -654,6 +673,9 @@ export default function App() {
     await logAudit('Report', propId, 'Published Progress Report', '', JSON.stringify({ TaskID: data.TaskID, Status: data.StatusUpdate }));
     // Trigger sync after action
     handleManualSync();
+    setIsReportModalOpen(false);
+    setIsDrawerOpen(false);
+    setSelectedTask(null);
   };
 
   const handleUpdateSetting = async (key: string, value: string) => {
@@ -923,6 +945,30 @@ export default function App() {
           />
         )}
 
+        {/* Task Details Drawer */}
+        {isDrawerOpen && selectedTask && (
+          <TaskDrawer
+            task={selectedTask}
+            isOpen={isDrawerOpen}
+            onClose={() => {
+              setIsDrawerOpen(false);
+              setSelectedTask(null);
+            }}
+            currentUser={activeUser}
+            reports={reports}
+            onOpenReportModal={() => setIsReportModalOpen(true)}
+            onOpenFollowUpModal={() => setIsFollowUpModalOpen(true)}
+           onCloseTask={async (taskId, remark) => {
+                setIsDrawerOpen(false);
+                setSelectedTask(null);
+                handleCloseTask(taskId, remark);
+              }}
+            onUpdateTask={handleUpdateTask}
+            usersList={users}
+            teamsList={teams}
+          />
+        )}
+
         {/* Create Report modal */}
         {isReportModalOpen && selectedTask && (
           <CreateReportModal
@@ -939,27 +985,12 @@ export default function App() {
             task={selectedTask}
             isOpen={isFollowUpModalOpen}
             onClose={() => setIsFollowUpModalOpen(false)}
-            onSubmit={handleCreateFollowUp}
-          />
-        )}
-
-        {/* Task Details Drawer */}
-        {isDrawerOpen && selectedTask && (
-          <TaskDrawer
-            task={selectedTask}
-            isOpen={isDrawerOpen}
-            onClose={() => {
+            onSubmit={async (parentTaskId, reason) => {
+              await handleCreateFollowUp(parentTaskId, reason);
+              setIsFollowUpModalOpen(false);
               setIsDrawerOpen(false);
               setSelectedTask(null);
             }}
-            currentUser={activeUser}
-            reports={reports}
-            onOpenReportModal={() => setIsReportModalOpen(true)}
-            onOpenFollowUpModal={() => setIsFollowUpModalOpen(true)}
-            onCloseTask={handleCloseTask}
-            onUpdateTask={handleUpdateTask}
-            usersList={users}
-            teamsList={teams}
           />
         )}
 
@@ -989,13 +1020,13 @@ export default function App() {
                 const result = await changePassword({ oldPassword, newPassword });
                 if (result.success) {
                   logger.log('Password changed successfully');
-                  alert('Password changed successfully');
+                  setSimulationMessage({ type: 'success', text: 'Password changed successfully' });
                 } else {
-                  alert(result.message || 'Failed to change password');
+                  setSimulationMessage({ type: 'error', text: result.message || 'Failed to change password' });
                 }
               } catch (error) {
                 logger.error('Password change error:', error);
-                alert('Failed to change password. Please try again.');
+                setSimulationMessage({ type: 'error', text: 'Failed to change password. Please try again.' });
               }
             }}
           />
