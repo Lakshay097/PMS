@@ -9,6 +9,7 @@ export interface TaskAssignmentTriggerRequest {
   task: {
     TaskID: string;
     Title: string;
+    Description: string;
     DueDate: string;
     Priority: string;
   };
@@ -81,4 +82,25 @@ export async function triggerTaskOverdueEmail(data: TaskOverdueTriggerRequest): 
  */
 export async function triggerReportSubmissionEmail(data: ReportSubmissionTriggerRequest): Promise<{ success: boolean; message: string }> {
   return api.post<{ success: boolean; message: string }>('/email/trigger/report-submission', data);
+}
+
+/**
+ * Task closure trigger request
+ */
+export interface TaskClosureTriggerRequest {
+  closedByEmail: string;
+  assignedToEmail: string;
+  task: {
+    TaskID: string;
+    Title: string;
+    CompletionDate: string;
+  };
+  closeRemark: string;
+}
+
+/**
+ * Trigger task closure email
+ */
+export async function triggerTaskClosureEmail(data: TaskClosureTriggerRequest): Promise<{ success: boolean; message: string }> {
+  return api.post<{ success: boolean; message: string }>('/email/trigger/task-closed', data);
 }

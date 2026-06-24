@@ -35,7 +35,7 @@ steps:
       - '--set-env-vars=NODE_ENV=production'
       - '--set-env-vars=VITE_API_BASE_URL=/api'
       - '--set-env-vars=APP_URL=https://pms-taskflow-556944241861.us-central1.run.app'
-      - '--set-env-vars=GMAIL_REDIRECT_URI=https://pms-taskflow-556944241861.us-central1.run.app/auth/gmail/callback'
+      - '--set-env-vars=GMAIL_REDIRECT_URI=https://pms-taskflow-556944241861.us-central1.run.app/api/auth/gmail/callback'
       - '--set-env-vars=DEFAULT_FALLBACK_EMAIL=rajeev.1@pw.live'
 
 options:

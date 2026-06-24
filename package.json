@@ -24,6 +24,7 @@
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.546.0",
+    "mime-types": "^3.0.2",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "recharts": "^3.8.1",

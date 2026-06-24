@@ -53,6 +53,7 @@ export default function TaskDrawer({
   const [activeTab, setActiveTab] = useState<'details' | 'history'>('details');
   const [closeRemarkInput, setCloseRemarkInput] = useState('');
   const [showCloseForm, setShowCloseForm] = useState(false);
+  const [etaError, setEtaError] = useState('');
 
   // Edit Mode states
   const [isEditing, setIsEditing] = useState(false);
@@ -187,7 +188,7 @@ export default function TaskDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center font-sans p-4 pointer-events-none">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center font-sans p-4 bg-slate-900/50 backdrop-blur-xs pointer-events-auto">
       {/* Centered Modal */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -583,6 +584,11 @@ export default function TaskDrawer({
                       <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
                         Need extra time? Propose a new estimated date. These updates notify system administrators and teammates automatically.
                       </p>
+                      {etaError && (
+                        <div className="bg-red-50 border border-red-200 text-red-600 text-xs px-3 py-2 rounded-lg">
+                          {etaError}
+                        </div>
+                      )}
                       <div className="flex items-center space-x-2">
                         <input
                           type="date"
@@ -600,7 +606,8 @@ export default function TaskDrawer({
                               
                               // Validate that new ETA is strictly greater than today
                               if (newEta <= today) {
-                                alert('ETA must be set to a date after today. Please select a future date.');
+                                setEtaError('ETA must be set to a date after today. Please select a future date.');
+                                setTimeout(() => setEtaError(''), 3000);
                                 return;
                               }
                               

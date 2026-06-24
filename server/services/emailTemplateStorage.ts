@@ -1,9 +1,6 @@
 import { generateGoogleSheetsToken, fetchSheetValues, appendSheetValues, updateSheetValues, createSheet } from './googleSheetsService';
 import { logger } from '../utils/logger';
 
-/**
- * Email template interface
- */
 export interface EmailTemplate {
   templateName: string;
   subject: string;
@@ -11,9 +8,6 @@ export interface EmailTemplate {
   updatedAt: string;
 }
 
-/**
- * Default email templates
- */
 export const DEFAULT_TEMPLATES: EmailTemplate[] = [
   {
     templateName: 'template_assigned_email',
@@ -27,53 +21,36 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
     body: 'Hello {AssignedToEmail},\n\nThe following task is due within 24 hours:\n\nTask: {Title}\nTask ID: {TaskID}\nDue Date: {DueDate}\nPriority: {Priority}\n\nPlease ensure you complete this task on time.\n\nBest regards,\nPMS Team',
     updatedAt: new Date().toISOString(),
   },
+  {
+    templateName: 'report_submitted',
+    subject: 'Progress Report: {task_name} [{task_id}]',
+    body: 'Hello,\n\nA progress report has been submitted for the following task:\n\nTask: {task_name}\nTask ID: {task_id}\nSubmitted By: {assigned_to}\n\nReport Summary:\n{report_content}\n\nBest regards,\nPMS Team',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    templateName: 'task_closed',
+    subject: 'Task Closed: {task_name} [{task_id}]',
+    body: 'Hello,\n\nThe following task has been marked as closed:\n\nTask: {task_name}\nTask ID: {task_id}\nClosed By: {closed_by}\nCompletion Date: {completion_date}\n\nClose Remarks:\n{close_remark}\n\nBest regards,\nPMS Team',
+    updatedAt: new Date().toISOString(),
+  },
 ];
 
-/**
- * Initializes the email_templates sheet if it doesn't exist
- */
 export async function initializeEmailTemplatesSheet(): Promise<boolean> {
   try {
     const tokenData = await generateGoogleSheetsToken();
-    if (!tokenData || !tokenData.spreadsheetId) {
-      logger.error('Failed to get Google Sheets token for initialization');
-      return false;
-    }
+    if (!tokenData || !tokenData.spreadsheetId) return false;
 
     const spreadsheetId = tokenData.spreadsheetId;
-    
-    // Check if email_templates sheet exists
     const existingValues = await fetchSheetValues(tokenData.accessToken, spreadsheetId, 'email_templates!A1:D1');
-    
-    if (existingValues && existingValues.length > 0) {
-      // Sheet already exists with headers
-      return true;
-    }
+    if (existingValues && existingValues.length > 0) return true;
 
-    // Create the sheet first
     await createSheet(tokenData.accessToken, spreadsheetId, 'email_templates');
+    await appendSheetValues(tokenData.accessToken, spreadsheetId, 'email_templates', [['template_name', 'subject', 'body', 'updated_at']]);
 
-    // Create the sheet with headers and default templates
-    const headers = [
-      ['template_name', 'subject', 'body', 'updated_at']
-    ];
-
-    const success = await appendSheetValues(tokenData.accessToken, spreadsheetId, 'email_templates', headers);
-    
-    if (!success) {
-      logger.error('Failed to create email_templates headers');
-      return false;
-    }
-
-    // Add default templates
     for (const template of DEFAULT_TEMPLATES) {
-      const row = [
-        template.templateName,
-        template.subject,
-        template.body,
-        template.updatedAt,
-      ];
-      await appendSheetValues(tokenData.accessToken, spreadsheetId, 'email_templates', [row]);
+      await appendSheetValues(tokenData.accessToken, spreadsheetId, 'email_templates', [
+        [template.templateName, template.subject, template.body, template.updatedAt],
+      ]);
     }
 
     logger.info('Initialized email_templates sheet with default templates');
@@ -84,35 +61,25 @@ export async function initializeEmailTemplatesSheet(): Promise<boolean> {
   }
 }
 
-/**
- * Retrieves all email templates
- */
 export async function getEmailTemplates(): Promise<EmailTemplate[]> {
   try {
     const tokenData = await generateGoogleSheetsToken();
-    if (!tokenData || !tokenData.spreadsheetId) {
-      logger.error('Failed to get Google Sheets token');
-      return [];
-    }
+    if (!tokenData || !tokenData.spreadsheetId) return DEFAULT_TEMPLATES;
 
-    const spreadsheetId = tokenData.spreadsheetId;
-    const values = await fetchSheetValues(tokenData.accessToken, spreadsheetId, 'email_templates!A:D');
-
-    if (!values || values.length < 2) {
-      return DEFAULT_TEMPLATES;
-    }
+    const values = await fetchSheetValues(tokenData.accessToken, tokenData.spreadsheetId, 'email_templates!A:D');
+    if (!values || values.length < 2) return DEFAULT_TEMPLATES;
 
     const templates: EmailTemplate[] = [];
-
     for (let i = 1; i < values.length; i++) {
       const row = values[i];
       if (row[0]) {
-        templates.push({
-          templateName: row[0],
-          subject: row[1] || '',
-          body: row[2] || '',
-          updatedAt: row[3] || new Date().toISOString(),
-        });
+        templates.push({ templateName: row[0], subject: row[1] || '', body: row[2] || '', updatedAt: row[3] || new Date().toISOString() });
+      }
+    }
+
+    for (const def of DEFAULT_TEMPLATES) {
+      if (!templates.find(t => t.templateName === def.templateName)) {
+        templates.push(def);
       }
     }
 
@@ -123,101 +90,44 @@ export async function getEmailTemplates(): Promise<EmailTemplate[]> {
   }
 }
 
-/**
- * Retrieves a specific email template by name
- */
 export async function getEmailTemplate(templateName: string): Promise<EmailTemplate | null> {
   const templates = await getEmailTemplates();
   let template = templates.find(t => t.templateName === templateName);
-  
-  if (!template) {
-    // Check aliases
-    if (templateName === 'task_due_soon' || templateName === 'task_overdue') {
-      template = templates.find(t => t.templateName === 'template_delayed_email');
-    }
+
+  if (!template && (templateName === 'task_due_soon' || templateName === 'task_overdue')) {
+    template = templates.find(t => t.templateName === 'template_delayed_email');
   }
-  
-  // If still not found, check DEFAULT_TEMPLATES
   if (!template) {
     template = DEFAULT_TEMPLATES.find(t => t.templateName === templateName);
   }
-  
-  // If still not found, try fallback aliases in DEFAULT_TEMPLATES
   if (!template && (templateName === 'task_due_soon' || templateName === 'task_overdue')) {
     template = DEFAULT_TEMPLATES.find(t => t.templateName === 'template_delayed_email');
   }
-  
+
   return template || null;
 }
 
-/**
- * Saves or updates an email template
- */
 export async function saveEmailTemplate(template: EmailTemplate): Promise<boolean> {
   try {
     const tokenData = await generateGoogleSheetsToken();
-    if (!tokenData || !tokenData.spreadsheetId) {
-      logger.error('Failed to get Google Sheets token');
-      return false;
-    }
+    if (!tokenData || !tokenData.spreadsheetId) return false;
 
     const spreadsheetId = tokenData.spreadsheetId;
     const values = await fetchSheetValues(tokenData.accessToken, spreadsheetId, 'email_templates!A:D');
-
-    if (!values) {
-      return false;
-    }
+    if (!values) return false;
 
     const now = new Date().toISOString();
-    const updatedTemplate = { ...template, updatedAt: now };
-
-    // Check if template already exists
     let rowIndex = -1;
     for (let i = 1; i < values.length; i++) {
-      if (values[i][0] === template.templateName) {
-        rowIndex = i;
-        break;
-      }
+      if (values[i][0] === template.templateName) { rowIndex = i; break; }
     }
+
+    const row = [template.templateName, template.subject, template.body, now];
 
     if (rowIndex > 0) {
-      // Update existing row
-      const updatedRow = [
-        template.templateName,
-        template.subject,
-        template.body,
-        now,
-      ];
-
-      const success = await updateSheetValues(
-        tokenData.accessToken,
-        spreadsheetId,
-        `email_templates!A${rowIndex + 1}:D${rowIndex + 1}`,
-        [updatedRow]
-      );
-
-      if (success) {
-        logger.info(`Updated email template: ${template.templateName}`);
-      }
-
-      return success;
-    } else {
-      // Append new row
-      const newRow = [
-        template.templateName,
-        template.subject,
-        template.body,
-        now,
-      ];
-
-      const success = await appendSheetValues(tokenData.accessToken, spreadsheetId, 'email_templates', [newRow]);
-
-      if (success) {
-        logger.info(`Saved new email template: ${template.templateName}`);
-      }
-
-      return success;
+      return updateSheetValues(tokenData.accessToken, spreadsheetId, `email_templates!A${rowIndex + 1}:D${rowIndex + 1}`, [row]);
     }
+    return appendSheetValues(tokenData.accessToken, spreadsheetId, 'email_templates', [row]);
   } catch (err) {
     logger.error('Error saving email template:', err);
     return false;
@@ -225,38 +135,57 @@ export async function saveEmailTemplate(template: EmailTemplate): Promise<boolea
 }
 
 /**
- * Replaces template variables with actual values
+ * Replaces {variable} placeholders in a template string.
+ *
+ * FIX — two improvements:
+ * 1. Alias expansion runs first to unify snake_case ↔ PascalCase keys into expandedVars.
+ * 2. Replacement is done in a deterministic order: longer keys first, so a key like
+ *    {task_name} is never partially consumed by a shorter overlapping key.
+ * 3. A final safety scan logs any remaining {placeholders} so they're visible in logs.
  */
 export function replaceTemplateVariables(
   template: string,
   variables: Record<string, string>
 ): string {
-  let result = template;
-  if (!result) return '';
+  if (!template) return '';
 
+  // Normalize malformed {{var} (double-open, single-close) → {var}
+  template = template.replace(/\{\{([^}]+)\}/g, '{$1}');
+
+  // Step 1: expand aliases so both snake_case and PascalCase keys are available
   const expandedVars: Record<string, string> = { ...variables };
-  
-  const mappings: Record<string, string[]> = {
-    'Title': ['task_name', 'Title'],
-    'TaskID': ['task_id', 'TaskID'],
-    'Description': ['description', 'Description', 'task_description', 'TaskDescription'],
-    'Priority': ['priority', 'Priority'],
-    'DueDate': ['due_date', 'DueDate'],
-    'AssignedToEmail': ['assigned_to', 'AssignedToEmail'],
-    'AssignedByEmail': ['assigned_by', 'AssignedByEmail'],
-    'ReportContent': ['report_content', 'ReportContent'],
-    'AppUrl': ['app_url', 'AppUrl', 'AppURL']
-  };
 
-  for (const [standardKey, aliasKeys] of Object.entries(mappings)) {
-    let foundValue = '';
+  const mappings: Array<[string, string[]]> = [
+    ['Title',           ['task_name', 'Title']],
+    ['TaskID',          ['task_id', 'TaskID']],
+    ['Description',     ['description', 'Description', 'task_description', 'TaskDescription']],
+    ['Priority',        ['priority', 'Priority']],
+    ['DueDate',         ['due_date', 'DueDate']],
+    ['AssignedToEmail', ['assigned_to', 'AssignedToEmail']],
+    ['AssignedByEmail', ['assigned_by', 'AssignedByEmail']],
+    ['ReportContent',   ['report_content', 'ReportContent']],
+    ['AppUrl',          ['app_url', 'AppUrl', 'AppURL']],
+    ['close_remark',    ['close_remark', 'CloseRemark']],
+    ['closed_by',       ['closed_by', 'ClosedBy']],
+    ['completion_date', ['completion_date', 'CompletionDate']],
+    ['report_content',  ['report_content', 'ReportContent']],
+    ['task_name',       ['task_name', 'Title']],
+    ['task_id',         ['task_id', 'TaskID']],
+    ['due_date',        ['due_date', 'DueDate']],
+    ['priority',        ['priority', 'Priority']],
+    ['assigned_to',     ['assigned_to', 'AssignedToEmail']],
+  ];
+
+  for (const [standardKey, aliasKeys] of mappings) {
+    let foundValue: string | undefined;
     for (const key of aliasKeys) {
-      if (variables[key] !== undefined) {
+      if (variables[key] !== undefined && variables[key] !== '') {
         foundValue = variables[key];
         break;
       }
     }
-    if (foundValue) {
+    if (foundValue !== undefined) {
+      // Populate the standard key and all its aliases
       expandedVars[standardKey] = foundValue;
       for (const key of aliasKeys) {
         expandedVars[key] = foundValue;
@@ -264,10 +193,22 @@ export function replaceTemplateVariables(
     }
   }
 
-  for (const [key, value] of Object.entries(expandedVars)) {
-    const val = value || '';
-    result = result.split(`{${key}}`).join(val);
+  // Step 2: replace in longest-key-first order to avoid partial matches
+  // e.g. replace {AssignedByEmail} before {AssignedToEmail} or {assigned_to}
+  let result = template;
+  const sortedKeys = Object.keys(expandedVars).sort((a, b) => b.length - a.length);
+
+  for (const key of sortedKeys) {
+    const val = expandedVars[key] ?? '';
+    // Double-brace first, then single-brace
     result = result.split(`{{${key}}}`).join(val);
+    result = result.split(`{${key}}`).join(val);
+  }
+
+  // Step 3: warn about any remaining placeholders
+  const remaining = [...result.matchAll(/\{[^}]+\}/g)].map(m => m[0]);
+  if (remaining.length > 0) {
+    logger.warn(`replaceTemplateVariables: unreplaced placeholders: ${remaining.join(', ')}`);
   }
 
   return result;
