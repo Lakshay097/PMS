@@ -70,7 +70,14 @@ export async function exchangeCodeForTokens(code: string): Promise<GoogleOAuthTo
 
     if (!response.ok) {
       const errorText = await response.text();
-      logger.error('Failed to exchange code for tokens:', errorText);
+      const errorData = await response.json().catch(() => ({}));
+      logger.error('Failed to exchange code for tokens:', { 
+        status: response.status, 
+        errorText, 
+        errorData,
+        redirect_uri: config.GMAIL_REDIRECT_URI,
+        client_id: config.GOOGLE_CLIENT_ID?.substring(0, 20) + '...'
+      });
       return null;
     }
 

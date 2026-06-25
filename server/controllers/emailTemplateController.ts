@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { getEmailTemplates, saveEmailTemplate, getEmailTemplate } from '../services/emailTemplateStorage';
+import { getEmailTemplates, saveEmailTemplate, getEmailTemplate, resetTemplateToDefault } from '../services/emailTemplateStorage';
 import { logger } from '../utils/logger';
 
 /**
@@ -90,5 +90,35 @@ export async function updateEmailTemplateHandler(req: AuthRequest, res: Response
   } catch (err) {
     logger.error('Error updating email template:', err);
     res.status(500).json({ error: 'Failed to update email template' });
+  }
+}
+
+/**
+ * POST /api/email/templates/reset
+ * Reset a template to its default value
+ */
+export async function resetEmailTemplateHandler(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { templateName } = req.body;
+
+    if (!templateName) {
+      res.status(400).json({ error: 'Missing templateName' });
+      return;
+    }
+
+    const targetName = templateName.startsWith('template_') ? templateName : `template_${templateName}`;
+    const success = await resetTemplateToDefault(targetName);
+
+    if (success) {
+      res.json({
+        success: true,
+        message: 'Email template reset to default successfully',
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to reset email template' });
+    }
+  } catch (err) {
+    logger.error('Error resetting email template:', err);
+    res.status(500).json({ error: 'Failed to reset email template' });
   }
 }

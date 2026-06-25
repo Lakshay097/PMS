@@ -71,6 +71,7 @@ export interface Task {
   LastReportSummary: string;
   RequiresFollowUp: 'Yes' | 'No';
   FollowUpCount: number;
+  FollowUpReason?: string; // stores the reason for the latest follow-up
   CompletionDate: string | null;
   CloseRemark: string | null;
   AttachmentLink: string;
@@ -86,6 +87,7 @@ export interface Task {
 export interface TaskReport {
   ReportID: string;
   TaskID: string;
+  SubtaskID?: string;
   SubmittedByEmail: string;
   ReportDate: string;
   StatusUpdate: TaskStatus;
@@ -125,10 +127,12 @@ export interface Subtask {
   SubtaskID: string;
   TaskID: string;
   Title: string;
-  IsDone: boolean;
+  AssignedTo?: string;
+  DueDate?: string;
+  CreatedBy?: string;
+  LastReportSummary?: string;
+  Completed: boolean;
   CreatedAt: string;
-  CreatedBy: string;
-  UpdatedAt: string;
 }
 
 export interface Comment {

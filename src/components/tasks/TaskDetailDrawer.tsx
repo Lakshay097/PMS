@@ -31,6 +31,7 @@ export default function TaskDetailDrawer({
 }: TaskDetailDrawerProps) {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [newComment, setNewComment] = useState('');
+  const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
 
   if (!task) return null;
 
@@ -150,29 +151,71 @@ export default function TaskDetailDrawer({
             {reports.length === 0 ? (
               <p className="text-sm text-muted text-center py-8">No progress updates yet</p>
             ) : (
-              reports.map((report) => (
-                <div key={report.ReportID} className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <StatusBadge status={report.StatusUpdate} size="sm" />
+              reports.map((report) => {
+                const isExpanded = expandedReports.has(report.ReportID);
+                return (
+                  <div key={report.ReportID} className="p-4 bg-gray-50 rounded-lg">
+                    <div 
+                      className="flex items-start justify-between mb-2 cursor-pointer"
+                      onClick={() => {
+                        const newExpanded = new Set(expandedReports);
+                        if (isExpanded) {
+                          newExpanded.delete(report.ReportID);
+                        } else {
+                          newExpanded.add(report.ReportID);
+                        }
+                        setExpandedReports(newExpanded);
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={report.StatusUpdate} size="sm" />
+                        <span className="text-xs text-muted">
+                          {new Date(report.ReportDate).toLocaleString()}
+                        </span>
+                        <span className="text-xs text-muted">
+                          by {report.SubmittedByEmail}
+                        </span>
+                      </div>
                       <span className="text-xs text-muted">
-                        {new Date(report.ReportDate).toLocaleString()}
+                        {isExpanded ? '▼' : '▶'}
                       </span>
                     </div>
+                    {isExpanded && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-sm text-[#0f172a]">{report.WorkSummary}</p>
+                        {report.Blockers && (
+                          <div className="text-sm text-danger">
+                            <strong>Blocker:</strong> {report.Blockers}
+                          </div>
+                        )}
+                        {report.NextAction && (
+                          <div className="text-sm text-muted">
+                            <strong>Next action:</strong> {report.NextAction}
+                          </div>
+                        )}
+                        {report.AttachmentLink && (
+                          <div className="text-sm">
+                            <strong className="text-[#0f172a]">Attachments:</strong>
+                            <div className="mt-1 space-y-1">
+                              {report.AttachmentLink.split(',').map((link, idx) => (
+                                <a
+                                  key={idx}
+                                  href={link.trim()}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block text-xs text-[var(--color-accent)] hover:underline"
+                                >
+                                  {link.trim()}
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <p className="text-sm text-[#0f172a] mb-2">{report.WorkSummary}</p>
-                  {report.Blockers && (
-                    <div className="text-sm text-danger">
-                      <strong>Blocker:</strong> {report.Blockers}
-                    </div>
-                  )}
-                  {report.NextAction && (
-                    <div className="text-sm text-muted mt-1">
-                      <strong>Next action:</strong> {report.NextAction}
-                    </div>
-                  )}
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}
@@ -190,11 +233,11 @@ export default function TaskDetailDrawer({
                   >
                     <input
                       type="checkbox"
-                      checked={subtask.IsDone}
+                      checked={subtask.Completed}
                       readOnly
                       className="w-4 h-4 rounded border-[var(--color-border)]"
                     />
-                    <span className={`text-sm ${subtask.IsDone ? 'line-through text-muted' : 'text-[#0f172a]'}`}>
+                    <span className={`text-sm ${subtask.Completed ? 'line-through text-muted' : 'text-[#0f172a]'}`}>
                       {subtask.Title}
                     </span>
                   </div>

@@ -5,6 +5,7 @@ import tokenRoutes from './token';
 import sheetsRoutes from './sheets';
 import gmailAuthRoutes from './gmailAuth';
 import emailTriggerRoutes from './emailTrigger';
+import emailTemplateRoutes from './emailTemplate';
 
 const router = Router();
 
@@ -15,5 +16,6 @@ router.use('/', tokenRoutes);
 router.use('/sheets', sheetsRoutes);
 router.use('/auth', gmailAuthRoutes);
 router.use('/', emailTriggerRoutes);
+router.use('/', emailTemplateRoutes);
 
 export default router;

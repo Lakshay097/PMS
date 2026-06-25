@@ -9,6 +9,7 @@ interface UseTaskMetricsProps {
   filters: any;
   currentView: string;
   activeUser: any;
+  users?: any[];
 }
 
 export function useTaskMetrics({
@@ -17,14 +18,15 @@ export function useTaskMetrics({
   filters,
   currentView,
   activeUser,
+  users = [],
 }: UseTaskMetricsProps) {
   const visibleTasks = useMemo(() => {
     return getVisibleTasks(tasks, activeUser, currentView, filters);
   }, [tasks, activeUser, currentView, filters]);
 
   const { overdue, soon } = useMemo(() => {
-    return getOverdueAndSoonTasks(tasks, activeUser);
-  }, [tasks, activeUser]);
+    return getOverdueAndSoonTasks(tasks, activeUser, users);
+  }, [tasks, activeUser, users]);
 
   const metricActiveTasks = useMemo(() => {
     return (visibleTasks || []).filter(t => t.Status !== 'Closed' && t.Status !== 'Reviewed').length;

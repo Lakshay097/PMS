@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useAppModals } from './hooks/useAppModals';
 import { useAppEvents } from './hooks/useAppEvents';
 import { useDatabase } from './hooks/useDatabase';
@@ -7,6 +7,7 @@ import { useUserOperations } from './hooks/useUserOperations';
 import { useTeamOperations } from './hooks/useTeamOperations';
 import { useTemplateOperations } from './hooks/useTemplateOperations';
 import { useTaskMetrics } from './hooks/useTaskMetrics';
+import { getAllSubordinates } from './utils/userUtils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logger } from './utils/logger';
 import { ROLE } from './constants/status';
@@ -93,7 +94,7 @@ const AddTeamModal = lazy(() => import('./components/features/tasks/AddTeamModal
 type ActiveView = 'dashboard' | 'tasks' | 'templates' | 'admin';
 
 export default function App() {
-  // Real-time sync — invalidates React Query cache on SSE events
+  // Real-time sync â€” invalidates React Query cache on SSE events
   const { token } = useAuth();
   useRealtimeSync(token);
 
@@ -218,12 +219,13 @@ export default function App() {
 
   // Tasks Board Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterScope, setFilterScope] = useState<'all_visible' | 'assigned_to_me' | 'created_by_me'>('all_visible');
+  const [filterScope, setFilterScope] = useState<'all_visible' | 'assigned_to_me' | 'created_by_me' | 'assigned_by_me'>('all_visible');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [filterPriority, setFilterPriority] = useState<string>('All');
   const [filterCategory, setFilterCategory] = useState<string>('All');
   const [filterType, setFilterType] = useState<string>('All');
-  const [filterAssigneeName, setFilterAssigneeName] = useState<string>('All');
+  const [filterAssigneeNames, setFilterAssigneeNames] = useState<string[]>([]);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [simulationMessage, setSimulationMessage] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
   
   // Task view tabs
@@ -308,6 +310,26 @@ export default function App() {
     return cleanup;
   }, []);
 
+  // Migration trigger for Firestore seeding
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('migrate') === 'true') {
+      import('./lib/migrationScript').then(({ migrateFromSheets }) => {
+        migrateFromSheets().then(() => console.log('Migration complete'));
+      });
+    }
+  }, []);
+
+  // Firestore → Sheets sync worker (every 5 minutes)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      import('./lib/sheetsSyncWorker').then(({ syncFirestoreToSheets }) => {
+        syncFirestoreToSheets().catch(err => console.error('Sync worker error:', err));
+      });
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Reload database when auth initializes
   useEffect(() => {
     if (isAuthInitialized) {
@@ -334,6 +356,15 @@ export default function App() {
       timeout = setTimeout(later, wait);
     };
   }
+
+  // Debounce search query with 300ms delay
+  useEffect(() => {
+    const debounced = debounce(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    debounced();
+    return () => clearTimeout(debounced as any);
+  }, [searchQuery]);
 
   // Debounced version of loadDatabase for post-action syncs
   const debouncedLoadDatabase = useMemo(
@@ -407,6 +438,11 @@ export default function App() {
     const today = new Date();
     today.setHours(0,0,0,0);
 
+    // Get hierarchical subordinates for stakeholders
+    const subordinateEmails = activeUser.Role === ROLE.STAKEHOLDER 
+      ? getAllSubordinates(activeUser.Email, users)
+      : [];
+
     const visible = (tasks || []).map(task => {
       // Dynamically derive Overdue state
       if (task.Status !== 'Closed' && task.Status !== 'Reviewed') {
@@ -428,12 +464,11 @@ export default function App() {
       const isAssignee = assignees.includes(activeUser.Email?.toLowerCase() || '');
 
       if (activeUser.Role === ROLE.STAKEHOLDER) {
-        // Stakeholders see tasks assigned to them, by them, or to their subordinates
-        const hasManagedAssignee = assignees.some(email => {
-          const u = users.find(usr => usr.Email?.toLowerCase() === email);
-          return u && u.ManagerEmail?.toLowerCase() === activeUser.Email?.toLowerCase();
-        });
-        return isAssignee || task.AssignedByEmail?.toLowerCase() === activeUser.Email?.toLowerCase() || hasManagedAssignee;
+        // Stakeholders see tasks assigned to them, by them, or to their hierarchical subordinates
+        const hasSubordinateAssignee = assignees.some(email => 
+          subordinateEmails.includes(email)
+        );
+        return isAssignee || task.AssignedByEmail?.toLowerCase() === activeUser.Email?.toLowerCase() || hasSubordinateAssignee;
       }
       if (activeUser.Role === ROLE.SUB_STAKEHOLDER) {
         // Sub-stakeholders see tasks assigned to them
@@ -455,11 +490,18 @@ export default function App() {
       return found ? found.FullName : email;
     }).join(', ');
 
-    // Text search
-    const matchesSearch = (task.Title?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
-                          (task.TaskID?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
-                          (task.AssignedToEmail?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
-                          (assigneeNames.toLowerCase().includes(searchQuery.toLowerCase()) || false);
+    // Text search - case-insensitive across all required fields
+    const searchLower = debouncedSearchQuery.toLowerCase();
+    const matchesSearch = !debouncedSearchQuery || (
+      (task.Title?.toLowerCase().includes(searchLower) || false) ||
+      (task.TaskID?.toLowerCase().includes(searchLower) || false) ||
+      (task.AssignedToEmail?.toLowerCase().includes(searchLower) || false) ||
+      (task.AssignedByEmail?.toLowerCase().includes(searchLower) || false) ||
+      (task.Description?.toLowerCase().includes(searchLower) || false) ||
+      (task.TeamID?.toLowerCase().includes(searchLower) || false) ||
+      (task.TeamName?.toLowerCase().includes(searchLower) || false) ||
+      (assigneeNames.toLowerCase().includes(searchLower) || false)
+    );
 
     // Assignation Tab
     const isAssignee = assignees.map(e => e.toLowerCase()).includes(activeUser.Email?.toLowerCase() || '');
@@ -468,17 +510,20 @@ export default function App() {
       matchesScope = isAssignee;
     } else if (filterScope === 'created_by_me') {
       matchesScope = task.AssignedByEmail === activeUser.Email;
+    } else if (filterScope === 'assigned_by_me') {
+      matchesScope = task.AssignedByEmail === activeUser.Email;
     }
 
     // Secondary Dropdowns
     const matchesStatus = filterStatus === 'All' || task.Status === filterStatus;
     const matchesPriority = filterPriority === 'All' || task.Priority === filterPriority;
     const matchesType = filterType === 'All' || task.TaskType === filterType;
-    const matchesAssigneeSearch = filterAssigneeName === 'All' || assignees.includes(filterAssigneeName);
+    const matchesAssigneeSearch = filterAssigneeNames.length === 0 || 
+      filterAssigneeNames.some(email => assignees.includes(email));
 
     return matchesSearch && matchesScope && matchesStatus && matchesPriority && matchesType && matchesAssigneeSearch;
     });
-  }, [tasks, users, activeUser, searchQuery, filterScope, filterStatus, filterPriority, filterType, filterAssigneeName]);
+  }, [tasks, users, activeUser, debouncedSearchQuery, filterScope, filterStatus, filterPriority, filterType, filterAssigneeNames]);
 
   // Task operations hook
   const {
@@ -554,6 +599,7 @@ export default function App() {
     },
     currentView: filterScope === 'assigned_to_me' ? 'my-tasks' : filterScope === 'created_by_me' ? 'assigned-by-me' : 'all',
     activeUser: activeUser || { Role: '', Email: '', TeamIDs: [], TeamNames: [] },
+    users,
   });
 
   // useMemo: reports list can be large, filter and sort is O(n)
@@ -580,12 +626,16 @@ export default function App() {
     const propId = `RP-${Math.floor(1000 + Math.random() * 8999)}`;
     const nowStr = new Date().toISOString();
 
+    console.log('App.handleSubmitProgressReport: Received data:', data);
+    console.log('App.handleSubmitProgressReport: UploadedFiles:', data.UploadedFiles);
+
     // Handle file uploads to Google Drive
     const uploadedFiles = data.UploadedFiles || [];
     const uploadedFileUrls: string[] = [];
 
     for (const file of uploadedFiles) {
       try {
+        console.log(`App: Uploading file ${file.name}, data length: ${file.data?.length}`);
         const token = localStorage.getItem('PMS_auth_token');
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
@@ -601,8 +651,10 @@ export default function App() {
           taskId: data.TaskID,
           reportId: propId
         });
+        console.log(`App: File uploaded successfully: ${uploadData.webViewLink}`);
         uploadedFileUrls.push(uploadData.webViewLink);
       } catch (error) {
+        console.error('App: Error uploading file:', error);
         logger.error('Error uploading file:', error);
       }
     }
@@ -612,9 +664,12 @@ export default function App() {
       attachmentLinks.push(data.AttachmentLink);
     }
 
+    console.log('App: Final attachment links:', attachmentLinks);
+
     const newReport: TaskReport = {
       ReportID: propId,
       TaskID: data.TaskID,
+      SubtaskID: data.SubtaskID || '',
       SubmittedByEmail: activeUser.Email,
       ReportDate: nowStr.split('T')[0],
       StatusUpdate: data.StatusUpdate,
@@ -625,6 +680,8 @@ export default function App() {
       AttachmentLink: attachmentLinks.length > 0 ? attachmentLinks.join(', ') : '',
       CreatedAt: nowStr
     };
+
+    console.log('App: Saving report:', newReport);
 
     const targetTask = tasks.find(t => t.TaskID === data.TaskID);
     if (targetTask) {
@@ -639,6 +696,7 @@ export default function App() {
 
       await dbService.saveReport(newReport);
       await dbService.saveTask(updatedTask);
+      console.log('App: Report saved successfully');
 
       triggerNotification(
         'Progress Update',
@@ -940,7 +998,11 @@ export default function App() {
               setIsTaskModalOpen(false);
               setPreSelectedAssignee(undefined);
             }}
-            onSubmit={handleCreateTaskOrTemplate}
+            onSubmit={async (data) => {
+              setIsTaskModalOpen(false);
+              setPreSelectedAssignee(undefined);
+              await handleCreateTaskOrTemplate(data);
+            }}
             preSelectedAssignee={preSelectedAssignee}
           />
         )}
@@ -956,6 +1018,7 @@ export default function App() {
             }}
             currentUser={activeUser}
             reports={reports}
+            subtasks={subtasks}
             onOpenReportModal={() => setIsReportModalOpen(true)}
             onOpenFollowUpModal={() => setIsFollowUpModalOpen(true)}
            onCloseTask={async (taskId, remark) => {
@@ -964,6 +1027,9 @@ export default function App() {
                 handleCloseTask(taskId, remark);
               }}
             onUpdateTask={handleUpdateTask}
+            onAddSubtask={handleAddSubtask}
+            onToggleSubtask={handleToggleSubtask}
+            onDeleteSubtask={handleDeleteSubtask}
             usersList={users}
             teamsList={teams}
           />
@@ -976,6 +1042,8 @@ export default function App() {
             isOpen={isReportModalOpen}
             onClose={() => setIsReportModalOpen(false)}
             onSubmit={handleSubmitProgressReport}
+            currentUser={activeUser}
+            subtasks={subtasks.filter(s => s.TaskID === selectedTask.TaskID)}
           />
         )}
 
@@ -1096,5 +1164,7 @@ export default function App() {
     </div>
   );
 }
+
+
 
 

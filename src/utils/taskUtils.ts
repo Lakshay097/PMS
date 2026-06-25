@@ -1,5 +1,6 @@
 import { Task, TaskReport, FollowUp } from '../types';
 import { ROLE } from '../constants/status';
+import { getAllSubordinates } from './userUtils';
 
 export function parseSafely(value: string): any {
   try {
@@ -25,18 +26,16 @@ export function getVisibleTasks(tasks: Task[], activeUser: any, currentView: str
   
   const today = getCurrentLocalDate();
   
-  // Get sub-stakeholders for the current user (if they are a stakeholder)
-  const subStakeholders = activeUser.Role === ROLE.STAKEHOLDER 
-    ? users.filter(u => u.Role === ROLE.SUB_STAKEHOLDER && u.ManagerEmail?.toLowerCase() === activeUser.Email.toLowerCase())
+  // Get hierarchical subordinates for the current user (if they are a stakeholder)
+  const subStakeholderEmails = activeUser.Role === ROLE.STAKEHOLDER 
+    ? getAllSubordinates(activeUser.Email, users)
     : [];
-  
-  const subStakeholderEmails = subStakeholders.map(u => u.Email.toLowerCase());
   
   const afterRoleFilter = tasks.filter(task => {
     // Admin sees everything
     if (activeUser.Role === ROLE.ADMIN) return true;
     
-    // Stakeholders see their assigned tasks, tasks they assigned, and their sub-stakeholder tasks
+    // Stakeholders see their assigned tasks, tasks they assigned, and their hierarchical sub-stakeholder tasks
     if (activeUser.Role === ROLE.STAKEHOLDER) {
       const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(activeUser.Email.toLowerCase());
       const assignedByMe = task.AssignedByEmail?.toLowerCase() === activeUser.Email.toLowerCase();
@@ -110,7 +109,7 @@ export function getVisibleTasks(tasks: Task[], activeUser: any, currentView: str
   return afterSearchFilter;
 }
 
-export function getOverdueAndSoonTasks(tasks: Task[], activeUser: any) {
+export function getOverdueAndSoonTasks(tasks: Task[], activeUser: any, users: any[] = []) {
   if (!tasks) return { overdue: [], soon: [] };
   
   const today = getCurrentLocalDate();
@@ -118,12 +117,20 @@ export function getOverdueAndSoonTasks(tasks: Task[], activeUser: any) {
   threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
   const threeDaysFromNowStr = threeDaysFromNow.toISOString().split('T')[0];
   
+  // Get hierarchical subordinates for stakeholders
+  const subStakeholderEmails = activeUser.Role === ROLE.STAKEHOLDER 
+    ? getAllSubordinates(activeUser.Email, users)
+    : [];
+  
   const visibleTasks = tasks.filter(task => {
     if (activeUser.Role === ROLE.ADMIN) return true;
     if (activeUser.Role === ROLE.STAKEHOLDER) {
       const assignedToMe = task.AssignedToEmail?.includes(activeUser.Email);
       const assignedByMe = task.AssignedByEmail === activeUser.Email;
-      return assignedToMe || assignedByMe;
+      const assignedToSubordinate = task.AssignedToEmail?.toLowerCase().split(',').some(email => 
+        subStakeholderEmails.includes(email.trim().toLowerCase())
+      );
+      return assignedToMe || assignedByMe || assignedToSubordinate;
     }
     if (activeUser.Role === ROLE.SUB_STAKEHOLDER) {
       return task.AssignedToEmail?.includes(activeUser.Email);
