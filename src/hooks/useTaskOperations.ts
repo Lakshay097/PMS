@@ -217,92 +217,77 @@ export function useTaskOperations({
 
   const handleCreateFollowUp = useCallback(async (parentTaskId: string, reason: string) => {
     if (!currentUser) return;
-    
+
     const nowStr = new Date().toISOString();
     const parent = tasks.find(t => t.TaskID === parentTaskId);
     if (!parent) return;
 
     const nextFCount = parent.FollowUpCount + 1;
-    const updatedParent: Task = {
+
+    // Calculate new due date — 7 days from today
+    const newDue = new Date();
+    newDue.setDate(newDue.getDate() + 7);
+    const newDueStr = `${newDue.getFullYear()}-${String(newDue.getMonth() + 1).padStart(2, '0')}-${String(newDue.getDate()).padStart(2, '0')}`;
+
+    // Update the original task in place — reopen it
+    const updatedTask: Task = {
       ...parent,
-      RequiresFollowUp: 'Yes',
+      Status: 'Reopened',
       FollowUpCount: nextFCount,
-      UpdatedAt: nowStr
-    };
-
-    const newTaskId = `TSK-${Math.floor(1000 + Math.random() * 8999)}`;
-    const firstEmail = parent.AssignedToEmail.split(',')[0]?.trim() || '';
-    const recipient = users.find(u => u.Email === firstEmail);
-    const today = new Date();
-    const due = new Date();
-    due.setDate(today.getDate() + 7);
-    
-    const newFollowUpTask: Task = {
-      TaskID: newTaskId,
-      TemplateID: null,
-      ParentTaskID: parentTaskId,
-      Title: `Follow-up #${nextFCount}: ${parent.Title.replace(/\s-\s\[Cycle.*\]/g, "")}`,
-      Description: `REASON FOR FOLLOW-UP: ${reason}\n\nORIGINAL PARENT WORK SCOPE: ${parent.Description}`,
-      Priority: 'Medium',
-      TaskType: 'One-time',
-      RecurrenceType: 'One-time',
-      CycleKey: null,
-      StartDate: today.toISOString().split('T')[0],
-      DueDate: due.toISOString().split('T')[0],
-      AssignedByEmail: currentUser.Email,
-      AssignedToEmail: parent.AssignedToEmail,
-      AssignedToRole: recipient ? recipient.Role : 'Stakeholder',
-      AssignedToTeamIDs: parent.AssignedToTeamIDs,
-      Status: 'Not Started',
-      PercentComplete: 0,
-      LastReportSummary: '',
-      RequiresFollowUp: 'No',
-      FollowUpCount: 0,
-      CompletionDate: null,
-      CloseRemark: null,
-      AttachmentLink: '',
-      CreatedAt: nowStr,
+      RequiresFollowUp: 'Yes',
+      FollowUpReason: reason,           // store latest follow-up reason
+      CompletionDate: '',               // clear completion date
+      CloseRemark: '',                  // clear close remark
+      DueDate: newDueStr,               // reset due date
+      OriginalDueDate: parent.OriginalDueDate || parent.DueDate,
+      EtaRequestCount: 0,               // reset ETA count
+      LastReportSummary: '',            // clear last report
       UpdatedAt: nowStr,
-      Active: true,
-      DeletedAt: null
     };
 
-    const followId = `FLW-${Math.floor(100 + Math.random() * 899)}`;
+    await dbService.saveTask(updatedTask);
+
+    // Still create a FollowUp record for audit trail
+    const followId = `FLW-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
     const newFollowUpRecord: FollowUp = {
       FollowUpID: followId,
       ParentTaskID: parentTaskId,
-      NewTaskID: newTaskId,
+      NewTaskID: parentTaskId,          // same task — no new task created
       FollowUpNumber: nextFCount,
-      CreatedByEmail: currentUser.Email,
       Reason: reason,
       CreatedAt: nowStr,
+      CreatedByEmail: currentUser.Email,
       Status: 'Active'
     };
 
-    await dbService.saveTask(updatedParent);
-    await dbService.saveTask(newFollowUpTask);
     await dbService.saveFollowup(newFollowUpRecord);
 
     if (selectedTask && selectedTask.TaskID === parentTaskId) {
-      setSelectedTask(updatedParent);
+      setSelectedTask(updatedTask);
     }
 
-    await logAudit('FollowUp', followId, 'Follow-Up Sparked & Linked', '', JSON.stringify({ ParentID: parentTaskId, ChildID: newTaskId }));
-    // Trigger sync after action
-    silentSync();
-  }, [currentUser, tasks, users, selectedTask, setSelectedTask, logAudit, silentSync]);
+    await logAudit('FollowUp', followId, 'Follow-Up Applied In Place', '', JSON.stringify({
+      TaskID: parentTaskId,
+      FollowUpNumber: nextFCount,
+      Reason: reason,
+    }));
 
-  const handleAddSubtask = useCallback(async (taskId: string, title: string) => {
+    silentSync();
+  }, [tasks, currentUser, selectedTask, setSelectedTask, logAudit, silentSync]);
+
+  const handleAddSubtask = useCallback(async (taskId: string, data: { title: string; assignedTo?: string; dueDate?: string }) => {
     if (!currentUser) return;
     
     const newSubtask: Subtask = {
       SubtaskID: `SUB-${Math.floor(1000 + Math.random() * 8999)}`,
       TaskID: taskId,
-      Title: title,
-      IsDone: false,
-      CreatedAt: new Date().toISOString(),
+      Title: data.title,
+      AssignedTo: data.assignedTo,
+      DueDate: data.dueDate,
       CreatedBy: currentUser.Email,
-      UpdatedAt: new Date().toISOString()
+      LastReportSummary: '',
+      Completed: false,
+      CreatedAt: new Date().toISOString()
     };
     await dbService.saveSubtask(newSubtask);
     // Trigger sync after action
@@ -312,7 +297,7 @@ export function useTaskOperations({
   const handleToggleSubtask = useCallback(async (subtaskId: string, isDone: boolean) => {
     const subtask = subtasks.find(s => s.SubtaskID === subtaskId);
     if (subtask) {
-      await dbService.saveSubtask({ ...subtask, IsDone: isDone });
+      await dbService.saveSubtask({ ...subtask, Completed: isDone });
       // Trigger sync after action
       silentSync();
     }

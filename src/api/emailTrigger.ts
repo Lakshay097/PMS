@@ -24,6 +24,7 @@ export interface TaskDueSoonTriggerRequest {
   task: {
     TaskID: string;
     Title: string;
+    Description: string;
     DueDate: string;
     Priority: string;
   };
@@ -38,6 +39,7 @@ export interface TaskOverdueTriggerRequest {
   task: {
     TaskID: string;
     Title: string;
+    Description: string;
     DueDate: string;
     Priority: string;
   };
@@ -52,6 +54,7 @@ export interface ReportSubmissionTriggerRequest {
   task: {
     TaskID: string;
     Title: string;
+    Description: string;
   };
   reportContent: string;
 }
@@ -93,6 +96,7 @@ export interface TaskClosureTriggerRequest {
   task: {
     TaskID: string;
     Title: string;
+    Description: string;
     CompletionDate: string;
   };
   closeRemark: string;

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getAllSubordinates } from '../../../utils/userUtils';
 import {
   LayoutDashboard,
   ClipboardList,
@@ -128,12 +129,12 @@ export default function Dashboard({
   const [activeView, setActiveView] = useState<'overview' | 'tasks' | 'team' | 'reports' | 'admin' | 'settings'>('overview');
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
-  const [filterAssignee, setFilterAssignee] = useState('All');
+  const [filterAssignee, setFilterAssignee] = useState<string[]>([]);
   const [isSidebarVisible, setIsSidebarVisible] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     return localStorage.getItem('sidebarCollapsed') === 'true';
   });
-  const [taskSubView, setTaskSubView] = useState<'my-tasks' | 'team-tasks'>('my-tasks');
+  const [taskSubView, setTaskSubView] = useState<'my-tasks' | 'team-tasks' | 'assigned-by-me'>('my-tasks');
   const [taskContentType, setTaskContentType] = useState<'tasks' | 'schedules'>('tasks');
   const [lastActionTime, setLastActionTime] = useState(Date.now());
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
@@ -395,20 +396,20 @@ export default function Dashboard({
     return () => window.removeEventListener('popstate', handlePopState);
   }, [onViewChange]);
 
-  // Get team members based on user role
+  // Get team members based on user role with hierarchical visibility
   const getTeamMembers = () => {
     if (currentUser.Role === ROLE.ADMIN) {
       return users || [];
     } else if (currentUser.Role === ROLE.STAKEHOLDER) {
+      // Stakeholders see themselves and all hierarchical subordinates
+      const subordinateEmails = getAllSubordinates(currentUser.Email, users || []);
       return (users || []).filter(u =>
         u.Email === currentUser.Email ||
-        (u.Role === ROLE.SUB_STAKEHOLDER && u.ManagerEmail === currentUser.Email)
+        subordinateEmails.includes(u.Email)
       );
     } else {
-      return (users || []).filter(u =>
-        u.Email === currentUser.Email ||
-        u.Email === currentUser.ManagerEmail
-      );
+      // Sub-stakeholders see only themselves
+      return (users || []).filter(u => u.Email === currentUser.Email);
     }
   };
 
@@ -416,12 +417,10 @@ export default function Dashboard({
     // First apply role-based filtering using taskSubView
     const subView = currentUser.Role === ROLE.SUB_STAKEHOLDER ? 'my-tasks' : taskSubView;
     
-    // Get sub-stakeholders for the current user (if they are a stakeholder)
-    const subStakeholders = currentUser.Role === ROLE.STAKEHOLDER 
-      ? (users || []).filter(u => u.Role === ROLE.SUB_STAKEHOLDER && u.ManagerEmail?.toLowerCase() === currentUser.Email.toLowerCase())
+    // Get hierarchical subordinates for the current user (if they are a stakeholder)
+    const subStakeholderEmails = currentUser.Role === ROLE.STAKEHOLDER 
+      ? getAllSubordinates(currentUser.Email, users || [])
       : [];
-    
-    const subStakeholderEmails = subStakeholders.map(u => u.Email.toLowerCase());
     
     // Get team members for the current user
     const myTeamMembers = currentUser.TeamIDs && currentUser.TeamIDs.length > 0
@@ -431,16 +430,19 @@ export default function Dashboard({
     const teamMemberEmails = myTeamMembers.map(u => u.Email.toLowerCase());
     
     const roleFiltered = (tasks || []).filter(task => {
-      // Admin: My Tasks = assigned to me, Team Tasks = all tasks
+      // Admin: My Tasks = assigned to me, Team Tasks = all tasks, Assigned by Me = tasks I assigned
       if (currentUser.Role === ROLE.ADMIN) {
         if (subView === 'my-tasks') {
           return task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
+        }
+        if (subView === 'assigned-by-me') {
+          return task.AssignedByEmail?.toLowerCase() === currentUser.Email.toLowerCase();
         }
         // team-tasks - show all tasks
         return true;
       }
       
-      // Stakeholder: My Tasks = assigned to me, Team Tasks = sub-stakeholder tasks + team tasks
+      // Stakeholder: My Tasks = assigned to me, Team Tasks = hierarchical sub-stakeholder tasks
       if (currentUser.Role === ROLE.STAKEHOLDER) {
         const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
         const assignedByMe = task.AssignedByEmail?.toLowerCase() === currentUser.Email.toLowerCase();
@@ -454,7 +456,7 @@ export default function Dashboard({
         if (subView === 'my-tasks') {
           return assignedToMe;
         }
-        // team-tasks - show sub-stakeholder tasks and team tasks
+        // team-tasks / assigned-by-me - show hierarchical sub-stakeholder tasks
         return assignedToSubStakeholder || assignedToTeamMember;
       }
       
@@ -474,8 +476,10 @@ export default function Dashboard({
     if (filterPriority !== 'All') {
       filtered = filtered.filter(t => t.Priority === filterPriority);
     }
-    if (filterAssignee !== 'All') {
-      filtered = filtered.filter(t => t.AssignedToEmail === filterAssignee);
+    if (filterAssignee.length > 0) {
+      filtered = filtered.filter(t => 
+        filterAssignee.some(email => t.AssignedToEmail?.includes(email))
+      );
     }
     if (searchQuery) {
       filtered = filtered.filter(t =>
@@ -802,6 +806,21 @@ export default function Dashboard({
             >
               {currentUser.Role === ROLE.ADMIN ? 'Team Tasks' : 'Assigned by Me'}
             </button>
+            {/* Admin-only: Assigned by Me filter option */}
+            {currentUser.Role === ROLE.ADMIN && (
+              <button
+                onClick={() => setTaskSubView('assigned-by-me')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  taskSubView === 'assigned-by-me'
+                    ? 'bg-blue-500 text-white'
+                    : isDarkMode
+                    ? 'bg-[#1E293B] text-slate-400 hover:text-white'
+                    : 'bg-slate-100 text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Assigned by Me
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -812,13 +831,13 @@ export default function Dashboard({
           <TaskFilters
             filterStatus={filterStatus}
             filterPriority={filterPriority}
-            filterAssignee={filterAssignee}
+            filterAssigneeNames={filterAssignee}
             currentUser={currentUser}
             users={users}
             isDarkMode={isDarkMode}
             onFilterStatusChange={setFilterStatus}
             onFilterPriorityChange={setFilterPriority}
-            onFilterAssigneeChange={setFilterAssignee}
+            onFilterAssigneeNamesChange={setFilterAssignee}
           />
           <TaskList
             tasks={getFilteredTasks()}

@@ -34,14 +34,6 @@ export function useReportOperations({
 
     for (const file of uploadedFiles) {
       try {
-        const token = localStorage.getItem('PMS_auth_token');
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-        };
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-
         const uploadData = await uploadFile({
           fileName: file.name,
           fileData: file.data,

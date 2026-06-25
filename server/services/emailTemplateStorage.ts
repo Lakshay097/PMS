@@ -135,6 +135,27 @@ export async function saveEmailTemplate(template: EmailTemplate): Promise<boolea
 }
 
 /**
+ * Reset a specific template to its default value
+ */
+export async function resetTemplateToDefault(templateName: string): Promise<boolean> {
+  try {
+    const defaultTemplate = DEFAULT_TEMPLATES.find(t => t.templateName === templateName);
+    if (!defaultTemplate) {
+      logger.error(`Template ${templateName} not found in defaults`);
+      return false;
+    }
+
+    return await saveEmailTemplate({
+      ...defaultTemplate,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    logger.error('Error resetting template to default:', err);
+    return false;
+  }
+}
+
+/**
  * Replaces {variable} placeholders in a template string.
  *
  * FIX — two improvements:
@@ -148,9 +169,6 @@ export function replaceTemplateVariables(
   variables: Record<string, string>
 ): string {
   if (!template) return '';
-
-  // Normalize malformed {{var} (double-open, single-close) → {var}
-  template = template.replace(/\{\{([^}]+)\}/g, '{$1}');
 
   // Step 1: expand aliases so both snake_case and PascalCase keys are available
   const expandedVars: Record<string, string> = { ...variables };

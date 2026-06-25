@@ -143,9 +143,16 @@ export async function sendEmailAsUser(
       const template = await getEmailTemplate(templateName);
       logger.info(`Template loaded: ${templateName}, found=${!!template}`);
       if (template) {
+        logger.info(`Template body before replacement: ${template.body}`);
+        logger.info(`Template variables: ${JSON.stringify(templateVars)}`);
+        
         // FIX: Replace variables in body first, THEN convert newlines to <br>
         // (previously the join happened before replacement in some paths)
-        emailBody = replaceTemplateVariables(template.body, templateVars)
+        emailBody = replaceTemplateVariables(template.body, templateVars);
+        
+        logger.info(`Template body after replacement: ${emailBody}`);
+        
+        emailBody = emailBody
           .split('\n')
           .map(line => line.trim())
           .filter(line => line !== '')
@@ -153,7 +160,9 @@ export async function sendEmailAsUser(
 
         // Only override subject when caller didn't supply one
         if (!subject || subject.trim() === '') {
+          const originalSubject = template.subject;
           subject = replaceTemplateVariables(template.subject, templateVars);
+          logger.info(`Subject before: ${originalSubject}, after: ${subject}`);
         }
 
         // Warn if any placeholders remain unreplaced

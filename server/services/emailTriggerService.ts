@@ -77,6 +77,7 @@ export async function triggerTaskDueSoonEmail(
           task_name: task.Title,
           Title: task.Title,
           task_id: task.TaskID,
+          Description: task.Description || task.description || '',
           TaskID: task.TaskID,
           due_date: task.DueDate,
           DueDate: task.DueDate,
@@ -122,6 +123,7 @@ export async function triggerTaskOverdueEmail(
           task_name: task.Title,
           Title: task.Title,
           task_id: task.TaskID,
+          Description: task.Description || task.description || '',
           TaskID: task.TaskID,
           due_date: task.DueDate,
           DueDate: task.DueDate,
@@ -165,6 +167,7 @@ export async function triggerReportSubmissionEmail(
       {
         task_name: task.Title,
         task_id: task.TaskID,
+        Description: task.Description || task.description || '',
         assigned_to: submitterEmail,
         report_content: reportContent,
         app_url: appUrl,
@@ -204,6 +207,7 @@ export async function triggerTaskClosureEmail(
         {
           task_name: task.Title,
           task_id: task.TaskID,
+          Description: task.Description || task.description || '',
           closed_by: closedByEmail,
           close_remark: closeRemark,
           completion_date: task.CompletionDate || new Date().toISOString().split('T')[0],
