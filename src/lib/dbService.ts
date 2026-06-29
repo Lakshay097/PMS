@@ -1,13 +1,6 @@
 ﻿// Google Sheets Primary Database Layer
 // All data persistence goes directly to Google Sheets - no LocalStorage fallback
 
-// TECH-DEBT: All writes happen client-side via dbService directly to Google Sheets.
-// Ideal architecture would have server-side controllers handling writes and broadcasting SSE events.
-// Deferred — requires full API layer refactor.
-
-// TECH-DEBT: syncQueue.ts is implemented but not integrated.
-// Wire into dbService.ts write failures for retry on network errors.
-
 import {
   User,
   Team,

@@ -72,10 +72,6 @@ import Spinner from './components/ui/Spinner';
 import ErrorBoundary from './components/ErrorBoundary';
 import DashboardSkeleton from './components/DashboardSkeleton';
 
-// TECH-DEBT: Main bundle still 407kb (gzip 127kb). Run
-// npx vite-bundle-visualizer and inspect index chunk for
-// large deps that could be lazy loaded or replaced.
-
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const TasksPage = lazy(() => import('./pages/TasksPage'));
