@@ -53,60 +53,60 @@ export default function EditProfileModal({ isOpen, onClose, currentUser, onSave,
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-slate-900">Edit Profile</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+      <div className={`rounded-xl shadow-2xl w-full max-w-md ${isDarkMode ? 'bg-[#0F141F]' : 'bg-white'}`}>
+        <div className={`p-6 border-b flex items-center justify-between ${isDarkMode ? 'border-[#1E293B]' : 'border-[#E5E7EB]'}`}>
+          <h2 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Edit Profile</h2>
+          <button onClick={onClose} className={`transition-colors ${isDarkMode ? 'text-slate-400 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600'}`}>
             <X size={20} />
           </button>
         </div>
 
         <div className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Full Name</label>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Full Name</label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <User className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={18} />
               <input
                 type="text"
                 value={fullName}
                 readOnly
-                className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg bg-slate-50 text-slate-600 cursor-not-allowed"
+                className={`w-full pl-10 pr-4 py-2.5 border rounded-lg cursor-not-allowed ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-slate-400' : 'bg-slate-50 border-slate-300 text-slate-600'}`}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Email</label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <Mail className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={18} />
               <input
                 type="email"
                 value={email}
                 readOnly
-                className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg bg-slate-50 text-slate-600 cursor-not-allowed"
+                className={`w-full pl-10 pr-4 py-2.5 border rounded-lg cursor-not-allowed ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-slate-400' : 'bg-slate-50 border-slate-300 text-slate-600'}`}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Team Name</label>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Team Name</label>
             <div className="relative">
-              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <Building2 className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={18} />
               <input
                 type="text"
                 value={teamName}
                 readOnly
-                className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg bg-slate-50 text-slate-600 cursor-not-allowed"
+                className={`w-full pl-10 pr-4 py-2.5 border rounded-lg cursor-not-allowed ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-slate-400' : 'bg-slate-50 border-slate-300 text-slate-600'}`}
               />
             </div>
           </div>
 
           {/* Additional Options Section */}
-          <div className="pt-4 border-t border-slate-200 space-y-3">
+          <div className={`pt-4 border-t space-y-3 ${isDarkMode ? 'border-[#1E293B]' : 'border-[#E5E7EB]'}`}>
             <button
               type="button"
               onClick={handleChangePasswordClick}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition-colors"
+              className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 border rounded-lg font-medium transition-colors ${isDarkMode ? 'border-[#334155] text-slate-300 hover:bg-[#1E293B]/50' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}
             >
               <Lock size={18} />
               Change Password
@@ -115,7 +115,7 @@ export default function EditProfileModal({ isOpen, onClose, currentUser, onSave,
             <button
               type="button"
               onClick={handleToggleTheme}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition-colors"
+              className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 border rounded-lg font-medium transition-colors ${isDarkMode ? 'border-[#334155] text-slate-300 hover:bg-[#1E293B]/50' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}
             >
               {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
               {isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
@@ -139,6 +139,7 @@ export default function EditProfileModal({ isOpen, onClose, currentUser, onSave,
         isOpen={isChangePasswordModalOpen}
         onClose={() => setIsChangePasswordModalOpen(false)}
         onSave={handlePasswordChange}
+        isDarkMode={isDarkMode}
       />
     </div>
   );

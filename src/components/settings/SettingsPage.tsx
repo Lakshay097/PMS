@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import FormField from '../shared/FormField';
-import { User, Lock, Bell, Sun, Moon, HelpCircle, Save, LogOut, Monitor, Smartphone } from 'lucide-react';
+import { User, Lock, Bell, Sun, Moon, HelpCircle, Save, LogOut, Monitor, Smartphone, Mail, Link, Unlink, CheckCircle, AlertCircle } from 'lucide-react';
 import { logger } from '../../utils/logger';
 
 interface SettingsPageProps {
@@ -17,6 +17,9 @@ interface SettingsPageProps {
 export default function SettingsPage({ user, onLogout }: SettingsPageProps) {
   const [activeSection, setActiveSection] = useState('profile');
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [gmailConnected, setGmailConnected] = useState(false);
+  const [gmailLoading, setGmailLoading] = useState(false);
+  const [connectionMessage, setConnectionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [formData, setFormData] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -32,10 +35,115 @@ export default function SettingsPage({ user, onLogout }: SettingsPageProps) {
   const sections = [
     { id: 'profile', label: 'Profile', icon: <User size={18} /> },
     { id: 'security', label: 'Password & Security', icon: <Lock size={18} /> },
+    { id: 'email', label: 'Email Integration', icon: <Mail size={18} /> },
     { id: 'notifications', label: 'Notifications', icon: <Bell size={18} /> },
     { id: 'appearance', label: 'Appearance', icon: <Sun size={18} /> },
     { id: 'help', label: 'Help', icon: <HelpCircle size={18} /> },
   ];
+
+  // Check Gmail connection status on mount
+  useEffect(() => {
+    checkGmailStatus();
+    
+    // Check for OAuth callback in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const emailSuccess = urlParams.get('email_success');
+    const emailError = urlParams.get('email_error');
+    
+    if (emailSuccess === 'true') {
+      setConnectionMessage({ type: 'success', text: 'Gmail connected successfully!' });
+      checkGmailStatus();
+      // Clear URL params
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (emailError) {
+      const errorMessages: Record<string, string> = {
+        'access_denied': 'Authorization was denied',
+        'missing_code': 'Authorization code missing',
+        'token_exchange_failed': 'Failed to exchange authorization code',
+        'failed_to_get_email': 'Failed to retrieve email address',
+        'save_failed': 'Failed to save connection',
+        'unknown_error': 'An unknown error occurred',
+      };
+      setConnectionMessage({ 
+        type: 'error', 
+        text: errorMessages[emailError] || 'Connection failed' 
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  const checkGmailStatus = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
+
+      const response = await fetch('/api/auth/gmail/status', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setGmailConnected(data.connected);
+      }
+    } catch (err) {
+      logger.error('Error checking Gmail status:', err);
+    }
+  };
+
+  const handleConnectGmail = async () => {
+    setGmailLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
+
+      const response = await fetch('/api/auth/gmail/url', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        window.location.href = data.authUrl;
+      } else {
+        setConnectionMessage({ type: 'error', text: 'Failed to get authorization URL' });
+      }
+    } catch (err) {
+      logger.error('Error connecting Gmail:', err);
+      setConnectionMessage({ type: 'error', text: 'Failed to connect Gmail' });
+    } finally {
+      setGmailLoading(false);
+    }
+  };
+
+  const handleDisconnectGmail = async () => {
+    setGmailLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
+
+      const response = await fetch('/api/auth/gmail/disconnect', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        setGmailConnected(false);
+        setConnectionMessage({ type: 'success', text: 'Gmail disconnected successfully' });
+      } else {
+        setConnectionMessage({ type: 'error', text: 'Failed to disconnect Gmail' });
+      }
+    } catch (err) {
+      logger.error('Error disconnecting Gmail:', err);
+      setConnectionMessage({ type: 'error', text: 'Failed to disconnect Gmail' });
+    } finally {
+      setGmailLoading(false);
+    }
+  };
 
   const handleSave = () => {
     logger.log('Saving settings:', formData);
@@ -223,6 +331,106 @@ export default function SettingsPage({ user, onLogout }: SettingsPageProps) {
                     <button className="text-xs text-danger hover:underline">Revoke</button>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'email' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold text-[#0f172a] mb-1">Email Integration</h2>
+                <p className="text-sm text-muted">Connect your Gmail account to send notifications as yourself</p>
+              </div>
+
+              {connectionMessage && (
+                <div className={`p-4 rounded-md flex items-center gap-3 ${
+                  connectionMessage.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+                }`}>
+                  {connectionMessage.type === 'success' ? (
+                    <CheckCircle size={20} />
+                  ) : (
+                    <AlertCircle size={20} />
+                  )}
+                  <span className="text-sm">{connectionMessage.text}</span>
+                  <button
+                    onClick={() => setConnectionMessage(null)}
+                    className="ml-auto text-sm hover:underline"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
+              <div className="p-6 bg-gray-50 rounded-lg border border-[var(--color-border)]">
+                {gmailConnected ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                        <CheckCircle size={20} className="text-green-600" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-[#0f172a]">Gmail Connected</div>
+                        <div className="text-xs text-muted">Connected as: {user?.email}</div>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-gray-200">
+                      <button
+                        onClick={handleDisconnectGmail}
+                        disabled={gmailLoading}
+                        className="flex items-center gap-2 px-4 py-2 border border-[var(--color-border)] rounded-md text-sm text-[#0f172a] hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Unlink size={16} />
+                        <span>{gmailLoading ? 'Disconnecting...' : 'Disconnect Gmail'}</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                        <Mail size={20} className="text-gray-500" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-[#0f172a]">Gmail Not Connected</div>
+                        <div className="text-xs text-muted">Connect to send emails from your account</div>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-gray-200">
+                      <button
+                        onClick={handleConnectGmail}
+                        disabled={gmailLoading}
+                        className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-md text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Link size={16} />
+                        <span>{gmailLoading ? 'Connecting...' : 'Connect Your Gmail'}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium text-[#0f172a]">How it works</h3>
+                <ul className="text-sm text-muted space-y-2">
+                  <li className="flex items-start gap-2">
+                    <span className="text-[var(--color-accent)]">•</span>
+                    <span>When you connect Gmail, task notifications will be sent from your email address</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[var(--color-accent)]">•</span>
+                    <span>Recipients can reply directly to you instead of a generic system email</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[var(--color-accent)]">•</span>
+                    <span>Your OAuth tokens are stored securely in Google Sheets</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[var(--color-accent)]">•</span>
+                    <span>You can disconnect at any time from this page</span>
+                  </li>
+                </ul>
               </div>
             </div>
           )}

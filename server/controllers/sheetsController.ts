@@ -3,7 +3,11 @@ import { generateGoogleSheetsToken } from '../services/googleSheetsService';
 import { logger } from '../utils/logger';
 
 // Rate limiting: Queue to prevent too many concurrent requests
-const requestQueue: Array<() => Promise<any>> = [];
+interface QueueItem {
+  fn: () => Promise<any>;
+  delay: number;
+}
+const requestQueue: Array<QueueItem> = [];
 let isProcessingQueue = false;
 
 async function processQueue() {
@@ -12,30 +16,33 @@ async function processQueue() {
   isProcessingQueue = true;
   
   while (requestQueue.length > 0) {
-    const request = requestQueue.shift();
-    if (request) {
+    const item = requestQueue.shift();
+    if (item) {
       try {
-        await request();
+        await item.fn();
       } catch (error) {
         logger.error('Error processing queued request:', error);
       }
-      // Add delay between requests to avoid rate limiting (increased to 2.5s for Google Sheets API)
-      await new Promise(resolve => setTimeout(resolve, 2500));
+      // Add delay between requests to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, item.delay));
     }
   }
   
   isProcessingQueue = false;
 }
 
-function queueRequest<T>(requestFn: () => Promise<T>): Promise<T> {
+function queueRequest<T>(requestFn: () => Promise<T>, delay = 300): Promise<T> {
   return new Promise((resolve, reject) => {
-    requestQueue.push(async () => {
-      try {
-        const result = await requestFn();
-        resolve(result);
-      } catch (error) {
-        reject(error);
-      }
+    requestQueue.push({
+      fn: async () => {
+        try {
+          const result = await requestFn();
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        }
+      },
+      delay
     });
     
     if (!isProcessingQueue) {
@@ -102,7 +109,7 @@ export async function getSpreadsheetMetadataHandler(req: Request, res: Response)
       {
         headers: { Authorization: `Bearer ${tokenData.accessToken}` }
       }
-    ));
+    ), 300);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -142,7 +149,7 @@ export async function getOrCreateSpreadsheetHandler(req: Request, res: Response)
         {
           headers: { Authorization: `Bearer ${accessToken}` }
         }
-      ));
+      ), 300);
 
       if (metadataRes.ok) {
         const metadata = await metadataRes.json();
@@ -157,7 +164,7 @@ export async function getOrCreateSpreadsheetHandler(req: Request, res: Response)
 
     const searchRes = await queueRequest(() => fetchWithRetry(searchUrl, {
       headers: { Authorization: `Bearer ${accessToken}` }
-    }));
+    }), 300);
 
     if (searchRes.ok) {
       const searchData = await searchRes.json();
@@ -168,7 +175,7 @@ export async function getOrCreateSpreadsheetHandler(req: Request, res: Response)
           {
             headers: { Authorization: `Bearer ${accessToken}` }
           }
-        ));
+        ), 300);
         const metadata = await metadataRes.json();
         return res.json({ spreadsheetId: foundId, metadata });
       }
@@ -198,7 +205,7 @@ export async function getOrCreateSpreadsheetHandler(req: Request, res: Response)
           { properties: { title: 'comments' } }
         ]
       })
-    }));
+    }), 500);
 
     if (!createRes.ok) {
       const errorText = await createRes.text();
@@ -232,7 +239,7 @@ export async function getValuesHandler(req: Request, res: Response) {
     
     const response = await queueRequest(() => fetchWithRetry(url, {
       headers: { Authorization: `Bearer ${tokenData.accessToken}` }
-    }));
+    }), 300);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -272,7 +279,7 @@ export async function updateValuesHandler(req: Request, res: Response) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ values })
-    }));
+    }), 500);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -310,7 +317,7 @@ export async function clearValuesHandler(req: Request, res: Response) {
         Authorization: `Bearer ${tokenData.accessToken}`,
         'Content-Type': 'application/json'
       }
-    }));
+    }), 500);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -350,7 +357,7 @@ export async function appendValuesHandler(req: Request, res: Response) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ values })
-    }));
+    }), 500);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -390,7 +397,7 @@ export async function batchGetValuesHandler(req: Request, res: Response) {
     
     const response = await queueRequest(() => fetchWithRetry(url, {
       headers: { Authorization: `Bearer ${tokenData.accessToken}` }
-    }));
+    }), 300);
 
     if (!response.ok) {
       const errorText = await response.text();

@@ -3,6 +3,7 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
+import mime from 'mime-types';
 import { config, validateEnv } from './config';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/logger';
@@ -10,10 +11,14 @@ import apiRoutes from './routes';
 import { logger } from './utils/logger';
 import { sseService } from './services/sseService';
 import { authenticateToken, AuthRequest } from './middleware/auth';
+import { oauthRateLimiter, loginRateLimiter } from './middleware/rateLimiters';
+import * as gmailAuthController from './controllers/gmailAuthController';
 
 validateEnv();
 
 async function startServer() {
+  // Initialize email-related sheets
+  await gmailAuthController.initializeEmailSheets();
   const app = express();
 
   app.set('trust proxy', 1);
@@ -40,6 +45,10 @@ async function startServer() {
   app.use('/api', apiRoutes);
   app.get("/api/changes/stream", sseService.getSSEHandler());
   sseService.startAuditLoop();
+
+  // Gmail OAuth callback route (public, not under /api/)
+  // Rate limited: 20 failed requests per 15 minutes per IP
+  app.get('/api/auth/gmail/callback', oauthRateLimiter, gmailAuthController.gmailCallbackHandler);
 
   // POST /api/events/notify - immediate SSE broadcast endpoint
   app.post('/api/events/notify', authenticateToken, (req: AuthRequest, res) => {
@@ -69,18 +78,18 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
+    
+    // Serve static files with correct MIME types
     app.use(express.static(distPath, {
       index: false,
       setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.css')) res.setHeader('Content-Type', 'text/css; charset=utf-8');
-        else if (filePath.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-        else if (filePath.endsWith('.json')) res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        else if (filePath.endsWith('.png')) res.setHeader('Content-Type', 'image/png');
-        else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) res.setHeader('Content-Type', 'image/jpeg');
-        else if (filePath.endsWith('.svg')) res.setHeader('Content-Type', 'image/svg+xml');
-        else if (filePath.endsWith('.woff') || filePath.endsWith('.woff2')) res.setHeader('Content-Type', 'font/woff2');
+        const mimeType = mime.lookup(filePath);
+        if (mimeType) {
+          res.setHeader('Content-Type', mimeType);
+        }
       }
     }));
+    
     app.get("*", (req, res) => {
       if (req.path.startsWith('/api/')) {
         res.status(404).send('Not Found');

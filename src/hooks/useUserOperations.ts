@@ -8,6 +8,7 @@ interface UseUserOperationsProps {
   users: User[];
   teams: Team[];
   syncDatabase: () => Promise<void>;
+  silentSync: () => Promise<void>;
   logAudit: (entity: string, id: string, action: string, oldValue: string, newValue: string) => Promise<void>;
 }
 
@@ -15,22 +16,23 @@ export function useUserOperations({
   users,
   teams,
   syncDatabase,
+  silentSync,
   logAudit,
 }: UseUserOperationsProps) {
   const handleUpdateUserTeams = useCallback(async (email: string, teamIDs: string[], teamNames: string[]) => {
     const foundUser = users.find(u => u.Email === email);
     if (foundUser) {
-      const updatedUser = { 
-        ...foundUser, 
-        TeamIDs: teamIDs, 
-        TeamNames: teamNames, 
-        UpdatedAt: new Date().toISOString() 
+      const updatedUser = {
+        ...foundUser,
+        TeamIDs: teamIDs,
+        TeamNames: teamNames,
+        UpdatedAt: new Date().toISOString()
       };
       await dbService.saveUser(updatedUser);
       await logAudit('User', foundUser.UserID, `Updated Team memberships to: ${teamNames.join(', ')}`, JSON.stringify(foundUser.TeamIDs), JSON.stringify(teamIDs));
-      await syncDatabase();
+      await silentSync();
     }
-  }, [users, logAudit, syncDatabase]);
+  }, [users, logAudit, silentSync]);
 
   const handleAddUser = useCallback(async (newUser: User) => {
     await dbService.saveUser(newUser);

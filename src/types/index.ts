@@ -34,7 +34,6 @@ export interface TaskTemplate {
   TemplateID: string;
   Title: string;
   Description: string;
-  Category: string;
   Priority: 'Low' | 'Medium' | 'High' | 'Critical';
   RecurrenceType: 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Half-yearly';
   StartDate: string;
@@ -57,7 +56,6 @@ export interface Task {
   ParentTaskID: string | null;
   Title: string;
   Description: string;
-  Category: string;
   Priority: 'Low' | 'Medium' | 'High' | 'Critical';
   TaskType: 'One-time' | 'Recurring';
   RecurrenceType: 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Half-yearly' | 'One-time';
@@ -73,6 +71,7 @@ export interface Task {
   LastReportSummary: string;
   RequiresFollowUp: 'Yes' | 'No';
   FollowUpCount: number;
+  FollowUpReason?: string; // stores the reason for the latest follow-up
   CompletionDate: string | null;
   CloseRemark: string | null;
   AttachmentLink: string;
@@ -88,6 +87,7 @@ export interface Task {
 export interface TaskReport {
   ReportID: string;
   TaskID: string;
+  SubtaskID?: string;
   SubmittedByEmail: string;
   ReportDate: string;
   StatusUpdate: TaskStatus;
@@ -110,17 +110,6 @@ export interface FollowUp {
   Status: 'Pending' | 'Active' | 'Completed';
 }
 
-export interface AuditLog {
-  LogID: string;
-  EntityType: 'Task' | 'User' | 'Report' | 'FollowUp' | 'Template' | 'Settings' | 'System' | 'Team';
-  EntityID: string;
-  Action: string;
-  OldValueJSON: string; // stringified JSON metadata or null
-  NewValueJSON: string;
-  ActionByEmail: string;
-  ActionDateTime: string;
-}
-
 export interface AppSetting {
   Key: string;
   Value: string;
@@ -138,10 +127,12 @@ export interface Subtask {
   SubtaskID: string;
   TaskID: string;
   Title: string;
-  IsDone: boolean;
+  AssignedTo?: string;
+  DueDate?: string;
+  CreatedBy?: string;
+  LastReportSummary?: string;
+  Completed: boolean;
   CreatedAt: string;
-  CreatedBy: string;
-  UpdatedAt: string;
 }
 
 export interface Comment {
@@ -150,4 +141,15 @@ export interface Comment {
   Comment: string;
   CreatedAt: string;
   CreatedBy: string;
+}
+
+export interface AuditLog {
+  LogID: string;
+  EntityType: string;
+  EntityID: string;
+  Action: string;
+  OldValueJSON: string;
+  NewValueJSON: string;
+  ActionByEmail: string;
+  ActionDateTime: string;
 }

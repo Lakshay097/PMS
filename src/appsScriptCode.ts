@@ -253,7 +253,6 @@ function getTasks_(user, filters) {
         if (filters.status !== 'Overdue' && task.Status !== filters.status) continue;
       }
       if (filters.priority && filters.priority !== 'All' && task.Priority !== filters.priority) continue;
-      if (filters.category && filters.category !== 'All' && task.Category !== filters.category) continue;
     }
     
     outTasks.push(task);
@@ -294,7 +293,6 @@ function createTask_(user, taskData) {
       case 'ParentTaskID': return taskData.ParentTaskID || '';
       case 'Title': return taskData.Title;
       case 'Description': return taskData.Description;
-      case 'Category': return taskData.Category;
       case 'Priority': return taskData.Priority;
       case 'TaskType': return taskData.TaskType || 'One-time';
       case 'RecurrenceType': return taskData.RecurrenceType || 'One-time';
@@ -679,67 +677,37 @@ function createFollowUp_(user, followUpData) {
   const currentCount = Number(parentDetails.row[parentHeaders.indexOf("FollowUpCount")]) || 0;
   const newFollowUpCount = currentCount + 1;
   
-  updateTaskRowDetails_(taskSheet, parentDetails.rowNum, {
-    "RequiresFollowUp": "Yes",
-    "FollowUpCount": newFollowUpCount,
-    "UpdatedAt": new Date().toISOString()
-  });
-  
-  // 2. Spawn the new follow-up reference task
-  const newTaskId = "TSK-" + generateUUID_().substring(0, 8).toUpperCase();
-  const nowStr = new Date().toISOString();
-  
-  const dueDateOffset = 7; // default 7 day timeline
+  // Calculate new due date — 7 days from today
+  const dueDateOffset = 7;
   const today = new Date();
   const due = new Date();
   due.setDate(today.getDate() + dueDateOffset);
+  const dueDateStr = due.toISOString().split('T')[0];
+  const nowStr = new Date().toISOString();
   
-  const taskRecipientEmail = parentDetails.row[assignedToEmailIdx];
-  const activeRecipient = getUserByEmail_(taskRecipientEmail);
-  
-  const newTaskRow = parentHeaders.map(h => {
-    switch (h) {
-      case 'TaskID': return newTaskId;
-      case 'TemplateID': return '';
-      case 'ParentTaskID': return parentDetails.row[parentHeaders.indexOf("TaskID")];
-      case 'Title': return "Follow-up #" + newFollowUpCount + ": " + parentDetails.row[parentHeaders.indexOf("Title")].replace(/\\s-\\[Cycle.*\\]/g, "");
-      case 'Description': return "REASON FOR FOLLOW-UP: " + followUpData.Reason + "\\n\\nORIGINAL TASK: " + parentDetails.row[parentHeaders.indexOf("Description")];
-      case 'Category': return parentDetails.row[parentHeaders.indexOf("Category")];
-      case 'Priority': return "Medium";
-      case 'TaskType': return "One-time";
-      case 'RecurrenceType': return "One-time";
-      case 'CycleKey': return '';
-      case 'StartDate': return today.toISOString().split('T')[0];
-      case 'DueDate': return due.toISOString().split('T')[0];
-      case 'AssignedByEmail': return user.Email;
-      case 'AssignedToEmail': return taskRecipientEmail;
-      case 'AssignedToRole': return activeRecipient ? activeRecipient.Role : 'Sub-stakeholder';
-      case 'TeamID': return parentDetails.row[teamIdIdx];
-      case 'Status': return 'Not Started';
-      case 'PercentComplete': return 0;
-      case 'LastReportSummary': return '';
-      case 'RequiresFollowUp': return 'No';
-      case 'FollowUpCount': return 0;
-      case 'CompletionDate': return '';
-      case 'CloseRemark': return '';
-      case 'AttachmentLink': return '';
-      case 'CreatedAt': return nowStr;
-      case 'UpdatedAt': return nowStr;
-      case 'Active': return true;
-      default: return '';
-    }
+  // Update the original task in place — reopen it
+  updateTaskRowDetails_(taskSheet, parentDetails.rowNum, {
+    "Status": "Reopened",
+    "RequiresFollowUp": "Yes",
+    "FollowUpCount": newFollowUpCount,
+    "FollowUpReason": followUpData.Reason,
+    "CompletionDate": "",
+    "CloseRemark": "",
+    "DueDate": dueDateStr,
+    "OriginalDueDate": parentDetails.row[parentHeaders.indexOf("OriginalDueDate")] || parentDetails.row[parentHeaders.indexOf("DueDate")],
+    "EtaRequestCount": 0,
+    "LastReportSummary": "",
+    "UpdatedAt": nowStr
   });
   
-  taskSheet.appendRow(newTaskRow);
-  
-  // 3. Append to FollowUps sheet
+  // 2. Append to FollowUps sheet for audit trail
   const followUpId = "FLW-" + generateUUID_().substring(0, 8).toUpperCase();
   const followUpHeaders = followUpSheet.getDataRange().getValues()[0];
   const newFollowUpRow = followUpHeaders.map(h => {
     switch (h) {
       case 'FollowUpID': return followUpId;
       case 'ParentTaskID': return followUpData.ParentTaskID;
-      case 'NewTaskID': return newTaskId;
+      case 'NewTaskID': return followUpData.ParentTaskID;  // same task — no new task created
       case 'FollowUpNumber': return newFollowUpCount;
       case 'CreatedByEmail': return user.Email;
       case 'Reason': return followUpData.Reason;
@@ -751,8 +719,8 @@ function createFollowUp_(user, followUpData) {
   
   followUpSheet.appendRow(newFollowUpRow);
   
-  logAudit_("FollowUp", followUpId, "Follow-Up Sparked", "", JSON.stringify({ ParentID: followUpData.ParentTaskID, LinkTaskID: newTaskId }), user.Email);
-  return { success: true, message: "Follow-up successfully created and linked to task: " + newTaskId };
+  logAudit_("FollowUp", followUpId, "Follow-Up Applied In Place", "", JSON.stringify({ TaskID: followUpData.ParentTaskID, FollowUpNumber: newFollowUpCount, Reason: followUpData.Reason }), user.Email);
+  return { success: true, message: "Follow-up successfully applied to task: " + followUpData.ParentTaskID };
 }
 `
   },

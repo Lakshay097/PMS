@@ -157,7 +157,6 @@ export async function checkAndGenerateRecurringTasks(
         ParentTaskID: null,
         Title: `${template.Title} - [Cycle ${cycleKey}]`,
         Description: template.Description,
-        Category: template.Category,
         Priority: template.Priority,
         TaskType: 'Recurring',
         RecurrenceType: template.RecurrenceType,

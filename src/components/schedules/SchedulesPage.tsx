@@ -255,7 +255,6 @@ export default function SchedulesPage({
                   <h3 className="text-sm font-medium text-[#0f172a] mb-2">Generated Task Preview</h3>
                   <div className="p-3 bg-gray-50 rounded-md">
                     <div className="text-sm font-medium text-[#0f172a]">{selectedBlueprint.Title}</div>
-                    <div className="text-xs text-muted mt-1">Category: {selectedBlueprint.Category}</div>
                     <div className="text-xs text-muted">Priority: Medium</div>
                   </div>
                 </div>

@@ -5,12 +5,14 @@ import { dbService } from '../lib/dbService';
 interface UseTemplateOperationsProps {
   templates: TaskTemplate[];
   syncDatabase: () => Promise<void>;
+  silentSync: () => Promise<void>;
   logAudit: (entity: string, id: string, action: string, oldValue: string, newValue: string) => Promise<void>;
 }
 
 export function useTemplateOperations({
   templates,
   syncDatabase,
+  silentSync,
   logAudit,
 }: UseTemplateOperationsProps) {
   const handleAddTemplate = useCallback(async (newTemplate: TaskTemplate) => {

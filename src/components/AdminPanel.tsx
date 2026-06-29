@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { User as UserType, TaskTemplate, AuditLog, AppSetting, Team } from '../types';
+import { User as UserType, TaskTemplate, AppSetting, Team } from '../types';
 import { ROLE } from '../constants/status';
+import { generateUserId } from '../utils/userUtils';
 import { 
   Users, 
   Repeat, 
@@ -25,7 +26,6 @@ import {
 interface AdminPanelProps {
   users: UserType[];
   templates: TaskTemplate[];
-  audits: AuditLog[];
   settings: AppSetting[];
   teams: Team[];
   onAddUser: (user: UserType) => void;
@@ -45,7 +45,6 @@ interface AdminPanelProps {
 export default function AdminPanel({
   users,
   templates,
-  audits,
   settings,
   teams,
   onAddUser,
@@ -62,7 +61,7 @@ export default function AdminPanel({
   isDarkMode = false,
 }: AdminPanelProps) {
   // Master administrative tabs
-  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'teams' | 'templates' | 'email_templates' | 'audits' | 'settings'>('users');
+  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'teams' | 'templates' | 'email_templates' | 'settings'>('users');
   
   // Create User state
   const [fullName, setFullName] = useState('');
@@ -78,6 +77,7 @@ export default function AdminPanel({
   const [teamDescription, setTeamDescription] = useState('');
   const [teamSuccessMessage, setTeamSuccessMessage] = useState<string | null>(null);
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+
 
   const handleAddMember = (userEmail: string, teamId: string, teamName: string) => {
     const user = users.find(u => u.Email === userEmail);
@@ -103,13 +103,11 @@ export default function AdminPanel({
 
   // Search filter inputs
   const [userSearchText, setUserSearchText] = useState('');
-  const [auditSearchText, setAuditSearchText] = useState('');
   const [templateSearchText, setTemplateSearchText] = useState('');
 
   // Define template state
   const [tempTitle, setTempTitle] = useState('');
   const [tempDesc, setTempDesc] = useState('');
-  const [tempCategory, setTempCategory] = useState('Operations');
   const [tempPriority, setTempPriority] = useState<'Low' | 'Medium' | 'High' | 'Critical'>('Medium');
   const [tempRecurrence, setTempRecurrence] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Half-yearly'>('Monthly');
   const [tempAssignToEmail, setTempAssignToEmail] = useState('');
@@ -146,7 +144,7 @@ export default function AdminPanel({
     }
 
     const matchedTeams = teams.filter(t => teamSelections.includes(t.TeamID));
-    const newId = `USR-${Math.floor(100 + Math.random() * 899)}`;
+    const newId = generateUserId();
 
     onAddUser({
       UserID: newId,
@@ -211,7 +209,6 @@ export default function AdminPanel({
       TemplateID: newId,
       Title: tempTitle.trim(),
       Description: tempDesc.trim(),
-      Category: tempCategory,
       Priority: tempPriority,
       RecurrenceType: tempRecurrence,
       StartDate: tempStartDate || new Date().toISOString().split('T')[0],
@@ -235,6 +232,7 @@ export default function AdminPanel({
     setTempTitle('');
     setTempDesc('');
   };
+
 
   const handleSaveEmailTemplateValue = () => {
     onUpdateSetting(selectedEmailTemplateKey, tempEmailValue);
@@ -265,7 +263,7 @@ export default function AdminPanel({
     return tempEmailValue
       .replace(/{TaskID}/g, "TSK-0842-DEMO")
       .replace(/{Title}/g, "Prepare Staging Environment Backups")
-      .replace(/{Category}/g, "Engineering")
+      .replace(/{Description}/g, "Complete backup of staging environment before production deployment")
       .replace(/{Priority}/g, "Critical")
       .replace(/{DueDate}/g, "2026-06-25")
       .replace(/{AssignedToEmail}/g, "sales.lead@PMS.com")
@@ -337,19 +335,6 @@ export default function AdminPanel({
             >
               <Repeat size={14} />
               <span className="hidden sm:inline">Templates</span>
-            </button>
-            <button
-              onClick={() => setActiveAdminSubTab('audits')}
-              className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
-                activeAdminSubTab === 'audits'
-                  ? 'bg-blue-500 text-white'
-                  : isDarkMode
-                  ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-              }`}
-            >
-              <History size={14} />
-              <span className="hidden sm:inline">Audit Log</span>
             </button>
             <button
               onClick={() => setActiveAdminSubTab('email_templates')}
@@ -563,84 +548,85 @@ export default function AdminPanel({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {users
-                    .filter(u =>
-                      u.FullName.toLowerCase().includes(userSearchText.toLowerCase()) ||
-                      u.Email.toLowerCase().includes(userSearchText.toLowerCase()) ||
-                      u.Role.toLowerCase().includes(userSearchText.toLowerCase())
-                    )
-                    .map(user => {
-                      const isBanned = !user.Active;
-                      return (
-                        <div 
-                          key={user.UserID}
-                          className={`border rounded-xl p-5 flex flex-col justify-between gap-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${
-                            isBanned 
-                              ? isDarkMode ? 'border-red-500/20 bg-red-500/10' : 'border-red-200 bg-red-50/10'
-                              : isDarkMode ? 'border-[#334155] bg-[#1E293B]' : 'border-slate-200 bg-white'
-                          }`}
-                        >
-                          <div className="space-y-3">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <h5 className={`font-extrabold text-sm sm:text-base ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{user.FullName}</h5>
-                                <p className={`text-xs font-mono mt-0.5 ${isDarkMode ? 'text-blue-400' : 'text-[#2563EB]'}`}>{user.Email}</p>
-                              </div>
-                              <span className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{user.UserID}</span>
-                            </div>
-
-                            <div className="flex flex-wrap gap-1">
-                              {(user.TeamNames || []).map((tName, i) => (
-                                <span key={i} className={`inline-flex items-center border text-[10px] font-bold px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
-                                  {tName}
-                                </span>
-                              ))}
-                              {(user.TeamNames || []).length === 0 && (
-                                <span className={`inline-flex items-center border text-[10px] font-bold px-2 py-0.5 rounded-full italic ${isDarkMode ? 'bg-slate-500/10 border-slate-500/20 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
-                                  No Teams
-                                </span>
-                              )}
-                            </div>
-
-                            <div className={`pt-2 border-t flex justify-between items-center text-xs ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
-                              <span className={`font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Reporting Line:</span>
-                              {user.ManagerEmail ? (
-                                <span className={`px-1.5 py-0.5 rounded font-mono text-[10px] ${isDarkMode ? 'text-slate-300 bg-[#334155]' : 'text-slate-700 bg-slate-100'}`}>{user.ManagerEmail}</span>
-                              ) : (
-                                <span className={`italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>-- Direct Node --</span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className={`flex items-center justify-between gap-3 pt-3 border-t ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
-                            <div className="flex items-center gap-1.5 flex-grow">
-                              <span className={`text-[10px] font-bold uppercase font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>Role:</span>
-                              <select
-                                value={user.Role}
-                                onChange={(e) => onUpdateUserRole(user.Email, e.target.value as any)}
-                                className={`text-[10px] uppercase font-mono font-bold px-2 py-1 rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer ${isDarkMode ? 'bg-[#1E293B] text-white' : 'bg-white'} ${getRoleBadgeColor(user.Role, isDarkMode)}`}
-                              >
-                                <option value="Admin">Admin</option>
-                                <option value="Stakeholder">Stakeholder</option>
-                                <option value="Sub-stakeholder">Sub-stakeholder</option>
-                              </select>
-                            </div>
-
-                            <button
-                              onClick={() => onToggleUserStatus(user.Email)}
-                              className={`text-[10px] font-extrabold uppercase tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer ${
-                                user.Active
-                                  ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
-                                  : isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
-                              }`}
+                <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                  <table className="w-full text-sm">
+                    <thead className={`${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-50'}`}>
+                      <tr>
+                        <th className={`px-4 py-3 text-left font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>User</th>
+                        <th className={`px-4 py-3 text-left font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Teams</th>
+                        <th className={`px-4 py-3 text-left font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Manager</th>
+                        <th className={`px-4 py-3 text-left font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Role</th>
+                        <th className={`px-4 py-3 text-left font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${isDarkMode ? 'divide-[#334155]' : 'divide-slate-200'}`}>
+                      {users
+                        .filter(u =>
+                          u.FullName.toLowerCase().includes(userSearchText.toLowerCase()) ||
+                          u.Email.toLowerCase().includes(userSearchText.toLowerCase()) ||
+                          u.Role.toLowerCase().includes(userSearchText.toLowerCase())
+                        )
+                        .map(user => {
+                          const isBanned = !user.Active;
+                          return (
+                            <tr 
+                              key={user.UserID}
+                              className={`hover:bg-slate-50/50 transition-colors ${isBanned ? isDarkMode ? 'bg-red-500/5' : 'bg-red-50/30' : ''}`}
                             >
-                              {user.Active ? '● Active' : '■ Banned'}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
+                              <td className="px-4 py-3">
+                                <div>
+                                  <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{user.FullName}</div>
+                                  <div className={`text-xs font-mono ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{user.Email}</div>
+                                  <div className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{user.UserID}</div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex flex-wrap gap-1">
+                                  {(user.TeamNames || []).map((tName, i) => (
+                                    <span key={i} className={`inline-flex items-center border text-[10px] font-bold px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
+                                      {tName}
+                                    </span>
+                                  ))}
+                                  {(user.TeamNames || []).length === 0 && (
+                                    <span className={`text-xs italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>No Teams</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                {user.ManagerEmail ? (
+                                  <span className={`text-xs font-mono ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{user.ManagerEmail}</span>
+                                ) : (
+                                  <span className={`text-xs italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Direct</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                <select
+                                  value={user.Role}
+                                  onChange={(e) => onUpdateUserRole(user.Email, e.target.value as any)}
+                                  className={`text-xs uppercase font-bold px-2 py-1 rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer ${isDarkMode ? 'bg-[#1E293B] text-white' : 'bg-white'} ${getRoleBadgeColor(user.Role, isDarkMode)}`}
+                                >
+                                  <option value="Admin">Admin</option>
+                                  <option value="Stakeholder">Stakeholder</option>
+                                  <option value="Sub-stakeholder">Sub-stakeholder</option>
+                                </select>
+                              </td>
+                              <td className="px-4 py-3">
+                                <button
+                                  onClick={() => onToggleUserStatus(user.Email)}
+                                  className={`text-[10px] font-extrabold uppercase tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer ${
+                                    user.Active
+                                      ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
+                                      : isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
+                                  }`}
+                                >
+                                  {user.Active ? 'Active' : 'Banned'}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -705,131 +691,139 @@ export default function AdminPanel({
                   <h4 className={`font-extrabold text-sm uppercase tracking-wider font-mono ${isDarkMode ? 'text-white' : 'text-[#0F172A]'}`}>All Teams ({teams.length})</h4>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {teams.map(team => {
-                    const teamUsers = users.filter(u => u.TeamIDs.includes(team.TeamID));
-                    const isExpanded = expandedTeamId === team.TeamID;
-                    return (
-                      <div 
-                        key={team.TeamID}
-                        className={`border rounded-xl p-5 flex flex-col justify-between gap-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${
-                          isExpanded 
-                            ? isDarkMode ? 'border-blue-500/50 ring-1 ring-blue-500/20' : 'border-blue-300 ring-1 ring-blue-100'
-                            : isDarkMode ? 'border-[#334155] bg-[#1E293B]' : 'border-slate-200 bg-white'
-                        }`}
-                      >
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h5 className={`font-extrabold text-sm sm:text-base ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{team.TeamName}</h5>
-                              <p className={`text-[11px] mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{team.Description || 'No description provided'}</p>
-                            </div>
-                            <span className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{team.TeamID}</span>
-                          </div>
-
-                          <div className={`flex justify-between items-center text-xs pt-2 border-t ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
-                            <span className={`font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Active Members:</span>
-                            <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded-full ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-[#2563EB]/10 text-[#2563EB]'}`}>
-                              {teamUsers.length} members
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Inline Expandable Membership Editor */}
-                        {isExpanded && (
-                          <div className={`border rounded-xl p-3.5 space-y-3 shadow-inner ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
-                            <div className={`font-extrabold text-[9px] uppercase tracking-wider font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                              Manage {team.TeamName} Members
-                            </div>
-                            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                              {teamUsers.map(u => (
-                                <div key={u.UserID} className={`flex justify-between items-center border p-2 rounded-lg text-xs ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-white border-[#E2E8F0]'}`}>
-                                  <div className="truncate pr-2">
-                                    <div className={`font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{u.FullName}</div>
-                                    <div className={`text-[9.5px] font-mono truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{u.Email}</div>
-                                  </div>
+                <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                  <table className="w-full text-sm">
+                    <thead className={`${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-50'}`}>
+                      <tr>
+                        <th className={`px-4 py-3 text-left font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Team</th>
+                        <th className={`px-4 py-3 text-left font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Description</th>
+                        <th className={`px-4 py-3 text-left font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Members</th>
+                        <th className={`px-4 py-3 text-left font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Status</th>
+                        <th className={`px-4 py-3 text-left font-bold text-xs uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${isDarkMode ? 'divide-[#334155]' : 'divide-slate-200'}`}>
+                      {teams.map(team => {
+                        const teamUsers = users.filter(u => u.TeamIDs.includes(team.TeamID));
+                        const isExpanded = expandedTeamId === team.TeamID;
+                        return (
+                          <React.Fragment key={team.TeamID}>
+                            <tr className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-4 py-3">
+                                <div>
+                                  <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{team.TeamName}</div>
+                                  <div className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{team.TeamID}</div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{team.Description || 'No description'}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded-full ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-[#2563EB]/10 text-[#2563EB]'}`}>
+                                  {teamUsers.length} members
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <button
+                                  onClick={() => onToggleTeamStatus(team.TeamID)}
+                                  className={`text-[10px] font-extrabold uppercase tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer ${
+                                    team.Active
+                                    ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
+                                    : isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
+                                  }`}
+                                >
+                                  {team.Active ? 'Active' : 'Inactive'}
+                                </button>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex gap-1.5">
                                   <button
                                     type="button"
-                                    onClick={() => handleRemoveMember(u.Email, team.TeamID, team.TeamName)}
-                                    className={`p-1 rounded transition-colors border-none cursor-pointer bg-transparent ${isDarkMode ? 'text-red-400 hover:text-red-300 hover:bg-red-500/20' : 'text-red-500 hover:text-red-700 hover:bg-red-50'}`}
-                                    title="Remove from team"
+                                    onClick={() => setExpandedTeamId(isExpanded ? null : team.TeamID)}
+                                    className={`px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors border-none cursor-pointer ${isDarkMode ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400' : 'bg-blue-50 hover:bg-blue-100 text-blue-700'}`}
                                   >
-                                    <X size={13} />
+                                    {isExpanded ? 'Hide' : 'Members'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (confirm(`Are you sure you want to delete the team "${team.TeamName}"? This will remove all member assignments to this team.`)) {
+                                        onDeleteTeam(team.TeamID);
+                                      }
+                                    }}
+                                    className={`px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors border-none cursor-pointer ${isDarkMode ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400' : 'bg-red-50 hover:bg-red-100 text-red-700'}`}
+                                  >
+                                    Delete
                                   </button>
                                 </div>
-                              ))}
-                              {teamUsers.length === 0 && (
-                                <div className={`text-xs italic py-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>No members assigned to this team.</div>
-                              )}
-                            </div>
-                            
-                            {/* Add member select dropdown inside card */}
-                            <div className={`flex gap-1.5 pt-1.5 border-t ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
-                              <select
-                                id={`add-member-select-${team.TeamID}`}
-                                className={`rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 flex-grow ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-[#CBD5E1] text-slate-700'}`}
-                                defaultValue=""
-                              >
-                                <option value="" disabled>-- Add member --</option>
-                                {users.filter(u => u.Active && !u.TeamIDs.includes(team.TeamID)).map(u => (
-                                  <option key={u.UserID} value={u.Email}>{u.FullName}</option>
-                                ))}
-                              </select>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const select = document.getElementById(`add-member-select-${team.TeamID}`) as HTMLSelectElement;
-                                  if (select && select.value) {
-                                    handleAddMember(select.value, team.TeamID, team.TeamName);
-                                    select.value = ""; // reset select dropdown
-                                  }
-                                }}
-                                className="bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-[10px] uppercase px-3.5 py-2 rounded-lg border-none cursor-pointer shadow-sm"
-                              >
-                                Add
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className={`flex items-center justify-between gap-3 pt-3 border-t ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
-                          <button
-                            onClick={() => onToggleTeamStatus(team.TeamID)}
-                            className={`text-[10px] font-extrabold uppercase tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer ${
-                              team.Active
-                                ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
-                                : isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
-                            }`}
-                          >
-                            {team.Active ? '● Active' : '■ Inactive'}
-                          </button>
-
-                          <div className="flex gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => setExpandedTeamId(isExpanded ? null : team.TeamID)}
-                              className={`px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors border-none cursor-pointer ${isDarkMode ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400' : 'bg-blue-50 hover:bg-blue-100 text-blue-700'}`}
-                            >
-                              {isExpanded ? 'Hide' : 'Members'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (confirm(`Are you sure you want to delete the team "${team.TeamName}"? This will remove all member assignments to this team.`)) {
-                                  onDeleteTeam(team.TeamID);
-                                }
-                              }}
-                              className={`px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-colors border-none cursor-pointer ${isDarkMode ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400' : 'bg-red-50 hover:bg-red-100 text-red-700'}`}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                              </td>
+                            </tr>
+                            {isExpanded && (
+                              <tr>
+                                <td colSpan={5} className="px-4 py-3">
+                                  <div className={`border rounded-xl p-3.5 space-y-3 shadow-inner ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
+                                    <div className={`font-extrabold text-[9px] uppercase tracking-wider font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                      Manage {team.TeamName} Members
+                                    </div>
+                                    <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                                      {teamUsers.map(u => (
+                                        <div key={u.UserID} className={`flex justify-between items-center border p-2 rounded-lg text-xs ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-white border-[#E2E8F0]'}`}>
+                                          <div className="truncate pr-2">
+                                            <div className={`font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{u.FullName}</div>
+                                            <div className={`text-[9.5px] font-mono truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{u.Email}</div>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRemoveMember(u.Email, team.TeamID, team.TeamName)}
+                                            className={`p-1 rounded transition-colors border-none cursor-pointer bg-transparent ${isDarkMode ? 'text-red-400 hover:text-red-300 hover:bg-red-500/20' : 'text-red-500 hover:text-red-700 hover:bg-red-50'}`}
+                                            title="Remove from team"
+                                          >
+                                            <X size={13} />
+                                          </button>
+                                        </div>
+                                      ))}
+                                      {teamUsers.length === 0 && (
+                                        <div className={`text-xs italic py-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>No members assigned to this team.</div>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Add member select dropdown */}
+                                    <div className={`flex gap-1.5 pt-1.5 border-t ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                                      <select
+                                        id={`add-member-select-${team.TeamID}`}
+                                        className={`rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 flex-grow ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-[#CBD5E1] text-slate-700'}`}
+                                        defaultValue=""
+                                      >
+                                        <option value="" disabled>-- Add member --</option>
+                                        {users.filter(u => u.Active && !u.TeamIDs.includes(team.TeamID)).map(u => (
+                                          <option key={u.UserID} value={u.Email}>{u.FullName}</option>
+                                        ))}
+                                      </select>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const select = document.getElementById(`add-member-select-${team.TeamID}`) as HTMLSelectElement;
+                                          if (select && select.value) {
+                                            handleAddMember(select.value, team.TeamID, team.TeamName);
+                                            select.value = "";
+                                          }
+                                        }}
+                                        className="bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-[10px] uppercase px-3.5 py-2 rounded-lg border-none cursor-pointer shadow-sm"
+                                      >
+                                        Add
+                                      </button>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                   {teams.length === 0 && (
-                    <div className="col-span-2 text-center text-slate-500 text-xs py-8">
+                    <div className={`text-center text-xs py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                       No teams created yet. Create your first team to get started.
                     </div>
                   )}
@@ -839,7 +833,8 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* SUBTAB 3: Recurrence Blueprints Scheduler */}
+
+        {/* SUBTAB 4: Recurrence Blueprints Scheduler */}
         {activeAdminSubTab === 'templates' && (
           <div className="space-y-6">
             
@@ -904,20 +899,6 @@ export default function AdminPanel({
                         <option value="Monthly">Monthly</option>
                         <option value="Quarterly">Quarterly</option>
                         <option value="Half-yearly">Half-yearly</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className={`block text-[9.5px] font-bold uppercase tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Category</label>
-                      <select
-                        value={tempCategory}
-                        onChange={(e) => setTempCategory(e.target.value)}
-                        className={`w-full text-xs rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-[#E2E8F0] text-slate-800'}`}
-                      >
-                        <option value="Operations">Operations</option>
-                        <option value="Finance">Finance</option>
-                        <option value="Sales">Sales</option>
-                        <option value="Engineering">Engineering</option>
                       </select>
                     </div>
                   </div>
@@ -996,8 +977,7 @@ export default function AdminPanel({
                   {templates
                     .filter(t => 
                       t.Title.toLowerCase().includes(templateSearchText.toLowerCase()) ||
-                      t.AssignedToEmail.toLowerCase().includes(templateSearchText.toLowerCase()) ||
-                      t.Category.toLowerCase().includes(templateSearchText.toLowerCase())
+                      t.AssignedToEmail.toLowerCase().includes(templateSearchText.toLowerCase())
                     )
                     .map(template => {
                       const isActive = template.Active;
@@ -1014,7 +994,7 @@ export default function AdminPanel({
                             <div className="flex justify-between items-start">
                               <div>
                                 <h5 className={`font-extrabold text-sm sm:text-base ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{template.Title}</h5>
-                                <p className={`text-xs font-medium mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{template.Category} &bull; {template.RecurrenceType}</p>
+                                <p className={`text-xs font-medium mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{template.RecurrenceType}</p>
                               </div>
                               <span className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{template.TemplateID}</span>
                             </div>
@@ -1115,7 +1095,7 @@ export default function AdminPanel({
                     {[
                       { token: "{TaskID}", desc: "Task Identifier Code" },
                       { token: "{Title}", desc: "Checklist Title" },
-                      { token: "{Category}", desc: "Subject Domain" },
+                      { token: "{Description}", desc: "Task Description" },
                       { token: "{Priority}", desc: "Importance Rank" },
                       { token: "{DueDate}", desc: "Target Due Date" },
                       { token: "{AssignedToEmail}", desc: "Receiver Mail" },
@@ -1207,79 +1187,7 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* SUBTAB 4: Central Audit trail logs list */}
-        {activeAdminSubTab === 'audits' && (
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div>
-                <h4 className={`font-extrabold text-sm uppercase tracking-wider font-mono ${isDarkMode ? 'text-white' : 'text-[#0F172A]'}`}>Central Audit Trail Ledger</h4>
-                <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Append-only row registers tracking system state transitions.</p>
-              </div>
-              <div className="relative w-full sm:w-80">
-                <Search className={`absolute left-3 top-2.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={14} />
-                <input
-                  type="text"
-                  value={auditSearchText}
-                  onChange={(e) => setAuditSearchText(e.target.value)}
-                  placeholder="Filter logs by action, table, or actor..."
-                  className={`w-full text-xs rounded-lg pl-9 pr-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' : 'bg-white border-[#E2E8F0] text-slate-800 placeholder-slate-400'}`}
-                />
-              </div>
-            </div>
-
-            {/* Terminal themed display */}
-            <div className="bg-[#0F172A] border border-[#1E293B] rounded-2xl p-5 font-mono text-[11px] text-[#CBD5E1] max-h-[500px] overflow-y-auto space-y-3.5 shadow-2xl">
-              <div className="text-slate-500 border-b border-[#1E293B] pb-2 flex justify-between select-none">
-                <span>[TIMESTAMP] SYSTEM REGISTRY LOG ENTRY</span>
-                <span>SYSTEM LOG MONITOR</span>
-              </div>
-              {audits
-                .filter(log =>
-                  log.ActionByEmail.toLowerCase().includes(auditSearchText.toLowerCase()) ||
-                  log.Action.toLowerCase().includes(auditSearchText.toLowerCase()) ||
-                  log.EntityID.includes(auditSearchText) ||
-                  log.OldValueJSON.toLowerCase().includes(auditSearchText.toLowerCase()) ||
-                  log.NewValueJSON.toLowerCase().includes(auditSearchText.toLowerCase())
-                )
-                .map(log => (
-                  <div key={log.LogID} className="border-b border-[#1E293B]/40 pb-2.5 space-y-1 shadow-xs select-text">
-                    <div className="flex justify-between text-slate-400">
-                      <span className="text-emerald-400 font-extrabold">[{log.ActionDateTime}]</span>
-                      <span className="text-sky-400 font-semibold uppercase">ID: {log.LogID}</span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-slate-350">
-                      <span className="bg-slate-800 text-slate-200 px-2 py-0.5 rounded font-extrabold text-[10px] uppercase font-mono tracking-wider">
-                        {log.EntityType.toUpperCase()}
-                      </span>
-                      <span className="text-slate-500">ENTITY:</span>
-                      <span className="text-white font-extrabold font-mono">{log.EntityID}</span>
-                      <span className="text-slate-500">ACTION:</span>
-                      <span className="text-yellow-400 font-extrabold font-sans text-xs">{log.Action}</span>
-                      <span className="text-slate-500">BY:</span>
-                      <span className="text-amber-400 font-semibold">{log.ActionByEmail}</span>
-                    </div>
-                    {log.OldValueJSON && (
-                      <div className="text-rose-450 pl-4 text-xs font-mono leading-relaxed truncate">
-                        <span className="text-rose-500 font-black">&#8722; Old State Value:</span> {log.OldValueJSON}
-                      </div>
-                    )}
-                    {log.NewValueJSON && (
-                      <div className="text-emerald-450 pr-2 pl-4 text-xs font-mono leading-relaxed truncate">
-                        <span className="text-emerald-400 font-black">&#43; New State Value:</span> {log.NewValueJSON}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              {audits.length === 0 && (
-                <div className="text-center py-6 text-slate-500">
-                  No registry logs match search parameters.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* SUBTAB 5: Spreadsheets Global Configuration parameters */}
+        {/* SUBTAB 4: Spreadsheets Global Configuration parameters */}
         {activeAdminSubTab === 'settings' && (
           <div className="space-y-4">
             <div className={`border p-4.5 rounded-xl flex items-start gap-3 ${isDarkMode ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50/70 border-blue-200'}`}>

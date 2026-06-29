@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useAppModals } from './hooks/useAppModals';
 import { useAppEvents } from './hooks/useAppEvents';
 import { useDatabase } from './hooks/useDatabase';
@@ -7,6 +7,8 @@ import { useUserOperations } from './hooks/useUserOperations';
 import { useTeamOperations } from './hooks/useTeamOperations';
 import { useTemplateOperations } from './hooks/useTemplateOperations';
 import { useTaskMetrics } from './hooks/useTaskMetrics';
+import { getAllSubordinates, generateUserId } from './utils/userUtils';
+import { getStatusBadgeStyle, getCurrentLocalDate, getTomorrowDate } from './utils/taskUtils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logger } from './utils/logger';
 import { ROLE } from './constants/status';
@@ -17,15 +19,15 @@ import {
   INITIAL_TASKS,
   INITIAL_REPORTS,
   INITIAL_FOLLOWUPS,
-  INITIAL_AUDITS,
   INITIAL_SETTINGS
 } from './initialData';
-import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AuditLog, AppSetting, TaskStatus, SystemAlert, Subtask, Comment } from './types/index';
+import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AppSetting, TaskStatus, SystemAlert, Subtask, Comment, TeamSubmission } from './types/index';
 import { dbService, initializeDatabase } from './lib/dbService';
 import { initAuth, sheetsApi } from './lib/sheetsService';
 import { checkAndGenerateRecurringTasks, evaluateOverdueTasks } from './lib/taskEngine';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { useAuth } from './contexts/AuthContext';
+import { changePassword } from './api/auth';
 import InstallBanner from './components/InstallBanner';
 import OfflineBanner from './components/OfflineBanner';
 import UpdateBanner from './components/UpdateBanner';
@@ -68,10 +70,7 @@ import {
 // Components
 import Spinner from './components/ui/Spinner';
 import ErrorBoundary from './components/ErrorBoundary';
-
-// TECH-DEBT: Main bundle still 407kb (gzip 127kb). Run
-// npx vite-bundle-visualizer and inspect index chunk for
-// large deps that could be lazy loaded or replaced.
+import DashboardSkeleton from './components/DashboardSkeleton';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -92,11 +91,7 @@ const AddTeamModal = lazy(() => import('./components/features/tasks/AddTeamModal
 type ActiveView = 'dashboard' | 'tasks' | 'templates' | 'admin';
 
 export default function App() {
-  // Real-time sync — invalidates React Query cache on SSE events
-  const { token } = useAuth();
-  useRealtimeSync(token);
-
-  // Database States loaded from LocalStorage
+  // Database States loaded from LocalStorage - MUST be called before any conditional logic
   const {
     users,
     setUsers,
@@ -118,14 +113,24 @@ export default function App() {
     setSubtasks,
     comments,
     setComments,
+    emailTemplates,
+    setEmailTemplates,
+    teamSubmissions,
+    setTeamSubmissions,
     isLoading: dbIsLoading,
     dbConnectionStatus,
     isSyncing: dbIsSyncing,
     lastSyncTime,
+    syncStatus,
+    databaseSwitchMessage,
     loadDatabase,
     syncDatabase,
     silentSync,
   } = useDatabase(false); // Will be reloaded when auth initializes
+
+  // Real-time sync â€” invalidates React Query cache on SSE events
+  const { token } = useAuth();
+  useRealtimeSync(token);
 
   // Active Simulated Session email state
   const [activeUserEmail, setActiveUserEmail] = useState<string>(() => {
@@ -177,7 +182,7 @@ export default function App() {
     return rawTemplate
       .replace(/{TaskID}/g, task.TaskID || '')
       .replace(/{Title}/g, task.Title || '')
-      .replace(/{Category}/g, task.Category || '')
+      .replace(/{Description}/g, task.Description || '')
       .replace(/{Priority}/g, task.Priority || '')
       .replace(/{DueDate}/g, task.DueDate || '')
       .replace(/{AssignedToEmail}/g, task.AssignedToEmail || '')
@@ -217,35 +222,17 @@ export default function App() {
 
   // Tasks Board Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterScope, setFilterScope] = useState<'all_visible' | 'assigned_to_me' | 'created_by_me'>('all_visible');
+  const [filterScope, setFilterScope] = useState<'all_visible' | 'assigned_to_me' | 'created_by_me' | 'assigned_by_me'>('all_visible');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [filterPriority, setFilterPriority] = useState<string>('All');
   const [filterCategory, setFilterCategory] = useState<string>('All');
   const [filterType, setFilterType] = useState<string>('All');
-  const [filterAssigneeName, setFilterAssigneeName] = useState<string>('All');
+  const [filterAssigneeNames, setFilterAssigneeNames] = useState<string[]>([]);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [simulationMessage, setSimulationMessage] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
   
   // Task view tabs
   const [taskViewTab, setTaskViewTab] = useState<'active' | 'history'>('active');
-  
-  // Helper function to get current local date in YYYY-MM-DD format
-  const getCurrentLocalDate = (): string => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-  
-  // Helper function to get tomorrow's date in YYYY-MM-DD format
-  const getTomorrowDate = (): string => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const year = tomorrow.getFullYear();
-    const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
-    const day = String(tomorrow.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
   
   // Collapsible sidebar state using localStorage persistence
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -271,18 +258,6 @@ export default function App() {
   const [newProfilePassword, setNewProfilePassword] = useState('');
   const [passwordChangeSuccess, setPasswordChangeSuccess] = useState(false);
 
-  const handleUpdatePassword = async (newPass: string) => {
-    if (!activeUser) return;
-    const updatedUser = { ...activeUser, Password: newPass, UpdatedAt: new Date().toISOString() };
-    await dbService.saveUser(updatedUser);
-    await dbService.logAction('User', activeUser.UserID, 'Password/Security Code changed by User via Profile', activeUser.Email, null, { email: activeUser.Email });
-    setPasswordChangeSuccess(true);
-    setTimeout(() => {
-      setPasswordChangeSuccess(false);
-      setIsEditingPassword(false);
-    }, 2500);
-    debouncedLoadDatabase();
-  };
 
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
   const [isAuthInitialized, setIsAuthInitialized] = useState<boolean>(false);
@@ -307,6 +282,26 @@ export default function App() {
     return cleanup;
   }, []);
 
+  // Migration trigger for Firestore seeding
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('migrate') === 'true') {
+      import('./lib/migrationScript').then(({ migrateFromSheets }) => {
+        migrateFromSheets().then(() => logger.debug('Migration complete'));
+      });
+    }
+  }, []);
+
+  // Firestore → Sheets sync worker (every 5 minutes)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      import('./lib/sheetsSyncWorker').then(({ syncFirestoreToSheets }) => {
+        syncFirestoreToSheets().catch(err => logger.error('Sync worker error:', err));
+      });
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Reload database when auth initializes
   useEffect(() => {
     if (isAuthInitialized) {
@@ -314,15 +309,8 @@ export default function App() {
     }
   }, [isAuthInitialized]);
 
-  // Debug logging to identify email mismatches
-  useEffect(() => {
-    if (tasks.length > 0 && activeUser) {
-      // Debug logging removed
-    }
-  }, [tasks, activeUser]);
-
   // Simple debounce function
-  function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
+  function debounceFn<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
     let timeout: NodeJS.Timeout | null = null;
     return function executedFunction(...args: Parameters<T>) {
       const later = () => {
@@ -334,16 +322,20 @@ export default function App() {
     };
   }
 
+  // Debounce search query with 300ms delay
+  useEffect(() => {
+    const debounced = debounceFn(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    debounced();
+    return () => clearTimeout(debounced as any);
+  }, [searchQuery]);
+
   // Debounced version of loadDatabase for post-action syncs
   const debouncedLoadDatabase = useMemo(
-    () => debounce(() => loadDatabase(), 2000),
+    () => debounceFn(() => loadDatabase(), 2000),
     [loadDatabase]
   );
-
-  // Manual sync function for AdminPanel - use silent sync to avoid blocking UI
-  const handleManualSync = async () => {
-    await silentSync();
-  };
 
   // Handle mobile back button and keyboard shortcuts
   useAppEvents(activeView, setActiveView);
@@ -388,31 +380,8 @@ export default function App() {
   // (Early returns moved to the bottom of the hooks section to satisfy Rules of Hooks)
 
   // Helpers to push state updates safely with durable persistence
-  const logAudit = async (entityType: AuditLog['EntityType'], entityId: string, action: string, oldVal = '', newVal = '') => {
-    // Safely parse JSON values with guard for plain strings
-    const parseSafely = (value: string): any => {
-      if (!value) return null;
-      if (typeof value !== 'string') return value;
-      // Check if it looks like JSON
-      if (value.startsWith('{') || value.startsWith('[')) {
-        try {
-          return JSON.parse(value);
-        } catch {
-          return value; // Return as string if parse fails
-        }
-      }
-      return value; // Return plain string as-is
-    };
-
-    await dbService.logAction(
-      entityType,
-      entityId,
-      action,
-      activeUser.Email,
-      parseSafely(oldVal),
-      parseSafely(newVal)
-    );
-    // SSE will handle sync automatically - no need to reload database
+  const logAudit = async (entityType: string, entityId: string, action: string, oldVal = '', newVal = '') => {
+    // Audit logging disabled
   };
 
   // Rule 1: Task visibility filters depending on Role
@@ -428,6 +397,11 @@ export default function App() {
     if (!activeUser) return [];
     const today = new Date();
     today.setHours(0,0,0,0);
+
+    // Get hierarchical subordinates for stakeholders
+    const subordinateEmails = activeUser.Role === ROLE.STAKEHOLDER 
+      ? getAllSubordinates(activeUser.Email, users)
+      : [];
 
     const visible = (tasks || []).map(task => {
       // Dynamically derive Overdue state
@@ -450,12 +424,11 @@ export default function App() {
       const isAssignee = assignees.includes(activeUser.Email?.toLowerCase() || '');
 
       if (activeUser.Role === ROLE.STAKEHOLDER) {
-        // Stakeholders see tasks assigned to them, by them, or to their subordinates
-        const hasManagedAssignee = assignees.some(email => {
-          const u = users.find(usr => usr.Email?.toLowerCase() === email);
-          return u && u.ManagerEmail?.toLowerCase() === activeUser.Email?.toLowerCase();
-        });
-        return isAssignee || task.AssignedByEmail?.toLowerCase() === activeUser.Email?.toLowerCase() || hasManagedAssignee;
+        // Stakeholders see tasks assigned to them, by them, or to their hierarchical subordinates
+        const hasSubordinateAssignee = assignees.some(email => 
+          subordinateEmails.includes(email)
+        );
+        return isAssignee || task.AssignedByEmail?.toLowerCase() === activeUser.Email?.toLowerCase() || hasSubordinateAssignee;
       }
       if (activeUser.Role === ROLE.SUB_STAKEHOLDER) {
         // Sub-stakeholders see tasks assigned to them
@@ -477,11 +450,18 @@ export default function App() {
       return found ? found.FullName : email;
     }).join(', ');
 
-    // Text search
-    const matchesSearch = (task.Title?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
-                          (task.TaskID?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
-                          (task.AssignedToEmail?.toLowerCase().includes(searchQuery.toLowerCase()) || false) ||
-                          (assigneeNames.toLowerCase().includes(searchQuery.toLowerCase()) || false);
+    // Text search - case-insensitive across all required fields
+    const searchLower = debouncedSearchQuery.toLowerCase();
+    const matchesSearch = !debouncedSearchQuery || (
+      (task.Title?.toLowerCase().includes(searchLower) || false) ||
+      (task.TaskID?.toLowerCase().includes(searchLower) || false) ||
+      (task.AssignedToEmail?.toLowerCase().includes(searchLower) || false) ||
+      (task.AssignedByEmail?.toLowerCase().includes(searchLower) || false) ||
+      (task.Description?.toLowerCase().includes(searchLower) || false) ||
+      (task.TeamID?.toLowerCase().includes(searchLower) || false) ||
+      (task.TeamName?.toLowerCase().includes(searchLower) || false) ||
+      (assigneeNames.toLowerCase().includes(searchLower) || false)
+    );
 
     // Assignation Tab
     const isAssignee = assignees.map(e => e.toLowerCase()).includes(activeUser.Email?.toLowerCase() || '');
@@ -490,17 +470,20 @@ export default function App() {
       matchesScope = isAssignee;
     } else if (filterScope === 'created_by_me') {
       matchesScope = task.AssignedByEmail === activeUser.Email;
+    } else if (filterScope === 'assigned_by_me') {
+      matchesScope = task.AssignedByEmail === activeUser.Email;
     }
 
     // Secondary Dropdowns
     const matchesStatus = filterStatus === 'All' || task.Status === filterStatus;
     const matchesPriority = filterPriority === 'All' || task.Priority === filterPriority;
     const matchesType = filterType === 'All' || task.TaskType === filterType;
-    const matchesAssigneeSearch = filterAssigneeName === 'All' || assignees.includes(filterAssigneeName);
+    const matchesAssigneeSearch = filterAssigneeNames.length === 0 || 
+      filterAssigneeNames.some(email => assignees.includes(email));
 
     return matchesSearch && matchesScope && matchesStatus && matchesPriority && matchesType && matchesAssigneeSearch;
     });
-  }, [tasks, users, activeUser, searchQuery, filterScope, filterStatus, filterPriority, filterType, filterAssigneeName]);
+  }, [tasks, users, activeUser, debouncedSearchQuery, filterScope, filterStatus, filterPriority, filterType, filterAssigneeNames]);
 
   // Task operations hook
   const {
@@ -519,6 +502,7 @@ export default function App() {
     users,
     currentUser: activeUser,
     syncDatabase: loadDatabase,
+    silentSync,
     selectedTask,
     setSelectedTask,
     triggerNotification,
@@ -541,6 +525,7 @@ export default function App() {
     users,
     teams,
     syncDatabase: loadDatabase,
+    silentSync,
     logAudit,
   });
 
@@ -549,6 +534,7 @@ export default function App() {
     teams,
     users,
     syncDatabase: loadDatabase,
+    silentSync,
     logAudit,
   });
 
@@ -573,6 +559,7 @@ export default function App() {
     },
     currentView: filterScope === 'assigned_to_me' ? 'my-tasks' : filterScope === 'created_by_me' ? 'assigned-by-me' : 'all',
     activeUser: activeUser || { Role: '', Email: '', TeamIDs: [], TeamNames: [] },
+    users,
   });
 
   // useMemo: reports list can be large, filter and sort is O(n)
@@ -591,6 +578,7 @@ export default function App() {
   } = useTemplateOperations({
     templates,
     syncDatabase: loadDatabase,
+    silentSync,
     logAudit,
   });
 
@@ -598,12 +586,16 @@ export default function App() {
     const propId = `RP-${Math.floor(1000 + Math.random() * 8999)}`;
     const nowStr = new Date().toISOString();
 
+    logger.debug('App.handleSubmitProgressReport: Received data:', data);
+    logger.debug('App.handleSubmitProgressReport: UploadedFiles:', data.UploadedFiles);
+
     // Handle file uploads to Google Drive
     const uploadedFiles = data.UploadedFiles || [];
     const uploadedFileUrls: string[] = [];
 
     for (const file of uploadedFiles) {
       try {
+        logger.debug(`App: Uploading file ${file.name}, data length: ${file.data?.length}`);
         const token = localStorage.getItem('PMS_auth_token');
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
@@ -619,9 +611,10 @@ export default function App() {
           taskId: data.TaskID,
           reportId: propId
         });
+        logger.debug(`App: File uploaded successfully: ${uploadData.webViewLink}`);
         uploadedFileUrls.push(uploadData.webViewLink);
       } catch (error) {
-        logger.error('Error uploading file:', error);
+        logger.error('App: Error uploading file:', error);
       }
     }
 
@@ -630,9 +623,12 @@ export default function App() {
       attachmentLinks.push(data.AttachmentLink);
     }
 
+    logger.debug('App: Final attachment links:', attachmentLinks);
+
     const newReport: TaskReport = {
       ReportID: propId,
       TaskID: data.TaskID,
+      SubtaskID: data.SubtaskID || '',
       SubmittedByEmail: activeUser.Email,
       ReportDate: nowStr.split('T')[0],
       StatusUpdate: data.StatusUpdate,
@@ -644,6 +640,8 @@ export default function App() {
       CreatedAt: nowStr
     };
 
+    logger.debug('App: Saving report:', newReport);
+
     const targetTask = tasks.find(t => t.TaskID === data.TaskID);
     if (targetTask) {
       const updatedTask: Task = {
@@ -651,18 +649,39 @@ export default function App() {
         Status: data.StatusUpdate,
         PercentComplete: Number(data.PercentComplete),
         LastReportSummary: data.WorkSummary,
-        AttachmentLink: data.AttachmentLink || targetTask.AttachmentLink,
+        AttachmentLink: attachmentLinks.length > 0 ? attachmentLinks.join(', ') : targetTask.AttachmentLink,
+        CompletionDate: data.StatusUpdate === 'Closed' ? nowStr.split('T')[0] : targetTask.CompletionDate,
         UpdatedAt: nowStr
       };
 
       await dbService.saveReport(newReport);
       await dbService.saveTask(updatedTask);
+      logger.debug('App: Report saved successfully');
 
       triggerNotification(
         'Progress Update',
         `PROGRESS REGISTERED: Task ${targetTask.TaskID} ("${targetTask.Title}") progress report submitted. Status: "${data.StatusUpdate}".`,
         `${targetTask.AssignedByEmail}, ${targetTask.AssignedToEmail}`
       );
+
+      try {
+        const token = localStorage.getItem('PMS_auth_token');
+        await fetch('/api/email/trigger/report-submission', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            submitterEmail: activeUser.Email,
+            allocatorEmail: targetTask.AssignedByEmail,
+            task: targetTask,
+            reportContent: data.WorkSummary,
+          }),
+        });
+      } catch (err) {
+        logger.error('Email trigger FAILED:', err);
+      }
 
       if (selectedTask && selectedTask.TaskID === data.TaskID) {
         setSelectedTask(updatedTask);
@@ -671,43 +690,16 @@ export default function App() {
 
     await logAudit('Report', propId, 'Published Progress Report', '', JSON.stringify({ TaskID: data.TaskID, Status: data.StatusUpdate }));
     // Trigger sync after action
-    handleManualSync();
+    silentSync();
+    setIsReportModalOpen(false);
+    setIsDrawerOpen(false);
+    setSelectedTask(null);
   };
 
-  const handleUpdateSetting = async (key: string, value: string) => {
-    const updated = settings.map(s => {
-      if (s.Key === key) {
-        return { ...s, Value: value };
-      }
-      return s;
-    });
-    setSettings(updated);
-    await dbService.saveSettings(updated);
-    await logAudit('Settings', key, `Update Config Parameter`, '', value);
-    // SSE will handle sync automatically - no need to reload database
-  };
 
-  const getStatusBadgeStyle = (status: string) => {
-    switch (status) {
-      case 'Not Started': return 'bg-[#F1F5F9] text-[#475569] border-[#E2E8F0]';
-      case 'In Progress': return 'bg-[#DBEAFE] text-[#1E40AF] border-[#BFDBFE]';
-      case 'Submitted': return 'bg-[#F3E8FF] text-[#6B21A7] border-[#E9D5FF]';
-      case 'Closed': return 'bg-[#F1F5F9] text-[#475569] border-[#E2E8F0]';
-      case 'Overdue': return 'bg-[#FEF2F2] border-[#FCA5A5] text-[#B91C1C] animate-pulse font-bold';
-      default: return 'bg-[#F1F5F9] text-[#475569] border-[#E2E8F0]';
-    }
-  };
 
   if (dbIsLoading) {
-    return (
-      <div className="min-h-screen bg-[#0F172A] flex items-center justify-center font-sans px-4">
-        <div className="text-center space-y-4 text-white">
-          <RefreshCw className="animate-spin text-blue-500 mx-auto" size={40} />
-          <p className="text-sm font-semibold text-slate-300">Syncing PMS Platform State...</p>
-          <div className="text-[10px] text-slate-500 font-mono">Verifying Cloud Database Connections &amp; Security Roles</div>
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton isDarkMode={isDarkMode} />;
   }
 
   if (!activeUser) {
@@ -742,12 +734,12 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans antialiased text-slate-800">
+    <div className={`min-h-screen flex flex-col font-sans antialiased ${isDarkMode ? 'bg-[#0A0E1A] text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
       
       {/* PWA Banners */}
       <InstallBanner />
       <OfflineBanner />
-      <UpdateBanner />
+      <UpdateBanner isDarkMode={isDarkMode} />
 
       {/* Dynamic Toast Notification (Non-blocking alert replacement) */}
       <AnimatePresence>
@@ -757,7 +749,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="fixed top-5 right-5 z-[9999] max-w-sm w-full bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 flex gap-3 text-xs font-semibold leading-relaxed"
+            className={`fixed top-5 right-5 z-[9999] max-w-sm w-full border shadow-2xl rounded-2xl p-4 flex gap-3 text-xs font-semibold leading-relaxed ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}
           >
             <div className={`mt-0.5 h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 ${
               simulationMessage.type === 'success' ? 'bg-emerald-100 text-emerald-800' :
@@ -767,15 +759,41 @@ export default function App() {
                simulationMessage.type === 'error' ? <AlertTriangle size={14} /> : <Info size={14} />}
             </div>
             <div className="flex-1 space-y-1">
-              <div className="text-slate-900 font-bold">
+              <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                 {simulationMessage.type === 'success' ? 'Success Alert' :
                  simulationMessage.type === 'error' ? 'System Error' : 'System Information'}
               </div>
-              <p className="text-slate-600 leading-snug">{simulationMessage.text}</p>
+              <p className={`leading-snug ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{simulationMessage.text}</p>
             </div>
             <button
               onClick={() => setSimulationMessage(null)}
-              className="text-slate-400 hover:text-slate-600 ml-1 hover:bg-slate-100 p-1 rounded-lg transition-all h-6 w-6 flex items-center justify-center shrink-0 border-none cursor-pointer"
+              className={`ml-1 p-1 rounded-lg transition-all h-6 w-6 flex items-center justify-center shrink-0 border-none cursor-pointer ${isDarkMode ? 'text-slate-400 hover:text-slate-300 hover:bg-[#1E293B]/50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+            >
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+        {databaseSwitchMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className={`fixed top-5 right-5 z-[9999] max-w-sm w-full border shadow-2xl rounded-2xl p-4 flex gap-3 text-xs font-semibold leading-relaxed ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}
+          >
+            <div className={`mt-0.5 h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 ${isDarkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-800'}`}>
+              <AlertTriangle size={14} />
+            </div>
+            <div className="flex-1 space-y-1">
+              <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Database Status</div>
+              <p className={`leading-snug ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>{databaseSwitchMessage}</p>
+            </div>
+            <button
+              onClick={() => {
+                // Clear the message by forcing a re-render
+                // The hook will auto-clear after timeout
+              }}
+              className={`ml-1 p-1 rounded-lg transition-all h-6 w-6 flex items-center justify-center shrink-0 border-none cursor-pointer ${isDarkMode ? 'text-slate-400 hover:text-slate-300 hover:bg-[#1E293B]/50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
             >
               <X size={14} />
             </button>
@@ -817,12 +835,25 @@ export default function App() {
         users={users}
         audits={audits}
         settings={settings}
+        emailTemplates={emailTemplates}
         teams={teams}
+        reports={reports}
+        teamSubmissions={teamSubmissions}
+        syncStatus={syncStatus}
+        isDrawerOpen={isDrawerOpen}
+        isTaskModalOpen={isTaskModalOpen}
+        isReportModalOpen={isReportModalOpen}
+        isFollowUpModalOpen={isFollowUpModalOpen}
+        isEditProfileModalOpen={isEditProfileModalOpen}
+        isChangePasswordModalOpen={isChangePasswordModalOpen}
+        isConfigureNotificationsModalOpen={isConfigureNotificationsModalOpen}
+        isAddUserModalOpen={isAddUserModalOpen}
+        isAddTeamModalOpen={isAddTeamModalOpen}
         onAddUser={async (userData) => {
           try {
             await dbService.saveUser(userData);
             // Trigger sync after action
-            handleManualSync();
+            silentSync();
           } catch (error) {
             throw error;
           }
@@ -831,7 +862,7 @@ export default function App() {
           try {
             await dbService.saveTemplate(templateData);
             // Trigger sync after action
-            handleManualSync();
+            silentSync();
           } catch (error) {
             throw error;
           }
@@ -842,7 +873,7 @@ export default function App() {
             if (template) {
               await dbService.saveTemplate({ ...template, Active: !template.Active });
               // Trigger sync after action
-              handleManualSync();
+              silentSync();
             }
           } catch (error) {
             throw error;
@@ -853,7 +884,7 @@ export default function App() {
             await dbService.saveTeam(teamData);
             await logAudit('Team', teamData.TeamID, 'Created Team', '', JSON.stringify(teamData));
             // Trigger sync after action
-            handleManualSync();
+            silentSync();
           } catch (error) {
             throw error;
           }
@@ -862,19 +893,40 @@ export default function App() {
           try {
             await dbService.toggleTeamStatus(teamId);
             // Trigger sync after action
-            handleManualSync();
+            silentSync();
           } catch (error) {
             throw error;
           }
         }}
         onUpdateSetting={async (key, value) => {
           try {
-            const updatedSettings = settings.map(s => 
+            const updatedSettings = settings.map(s =>
               s.Key === key ? { ...s, Value: value } : s
             );
+            setSettings(updatedSettings); 
             await dbService.saveSettings(updatedSettings);
+
+            // If this is an email template setting, also update the email_templates sheet
+            if (key.startsWith('template_')) {
+              try {
+                await fetch('/api/auth/email/templates/update', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('PMS_auth_token')}`,
+                  },
+                  body: JSON.stringify({
+                    templateName: key.replace('template_', ''),
+                    body: value,
+                  }),
+                });
+              } catch (emailError) {
+                logger.error('Failed to sync email template to sheet:', emailError);
+              }
+            }
+
             // Trigger sync after action
-            handleManualSync();
+            silentSync();
           } catch (error) {
             throw error;
           }
@@ -891,9 +943,18 @@ export default function App() {
         onUpdateUserTeams={handleUpdateUserTeams}
         onDeleteTeam={handleDeleteTeam}
         onDeleteTask={handleDeleteTask}
+        onAddTeamSubmission={async (submission) => {
+          try {
+            await dbService.saveTeamSubmission(submission);
+            setTeamSubmissions(prev => [...prev, submission]);
+            silentSync();
+          } catch (error) {
+            throw error;
+          }
+        }}
         isDarkMode={isDarkMode}
         onToggleTheme={() => setIsDarkMode(!isDarkMode)}
-        onSyncDatabase={handleManualSync}
+        onSyncDatabase={silentSync}
         isSyncing={dbIsSyncing}
         lastSyncTime={lastSyncTime}
         dbConnectionStatus={dbConnectionStatus}
@@ -909,33 +970,18 @@ export default function App() {
             <CreateTaskModal
             currentUser={activeUser}
             usersList={users}
+            teamsList={teams}
             isOpen={isTaskModalOpen}
             onClose={() => {
               setIsTaskModalOpen(false);
               setPreSelectedAssignee(undefined);
             }}
-            onSubmit={handleCreateTaskOrTemplate}
+            onSubmit={async (data) => {
+              setIsTaskModalOpen(false);
+              setPreSelectedAssignee(undefined);
+              await handleCreateTaskOrTemplate(data);
+            }}
             preSelectedAssignee={preSelectedAssignee}
-          />
-        )}
-
-        {/* Create Report modal */}
-        {isReportModalOpen && selectedTask && (
-          <CreateReportModal
-            task={selectedTask}
-            isOpen={isReportModalOpen}
-            onClose={() => setIsReportModalOpen(false)}
-            onSubmit={handleSubmitProgressReport}
-          />
-        )}
-
-        {/* Follow Up modal */}
-        {isFollowUpModalOpen && selectedTask && (
-          <FollowUpModal
-            task={selectedTask}
-            isOpen={isFollowUpModalOpen}
-            onClose={() => setIsFollowUpModalOpen(false)}
-            onSubmit={handleCreateFollowUp}
           />
         )}
 
@@ -950,12 +996,47 @@ export default function App() {
             }}
             currentUser={activeUser}
             reports={reports}
+            subtasks={subtasks}
             onOpenReportModal={() => setIsReportModalOpen(true)}
             onOpenFollowUpModal={() => setIsFollowUpModalOpen(true)}
-            onCloseTask={handleCloseTask}
+           onCloseTask={async (taskId, remark) => {
+                setIsDrawerOpen(false);
+                setSelectedTask(null);
+                handleCloseTask(taskId, remark);
+              }}
             onUpdateTask={handleUpdateTask}
+            onAddSubtask={handleAddSubtask}
+            onToggleSubtask={handleToggleSubtask}
+            onDeleteSubtask={handleDeleteSubtask}
             usersList={users}
             teamsList={teams}
+          />
+        )}
+
+        {/* Create Report modal */}
+        {isReportModalOpen && selectedTask && (
+          <CreateReportModal
+            task={selectedTask}
+            isOpen={isReportModalOpen}
+            onClose={() => setIsReportModalOpen(false)}
+            onSubmit={handleSubmitProgressReport}
+            currentUser={activeUser}
+            subtasks={subtasks.filter(s => s.TaskID === selectedTask.TaskID)}
+          />
+        )}
+
+        {/* Follow Up modal */}
+        {isFollowUpModalOpen && selectedTask && (
+          <FollowUpModal
+            task={selectedTask}
+            isOpen={isFollowUpModalOpen}
+            onClose={() => setIsFollowUpModalOpen(false)}
+            onSubmit={async (parentTaskId, reason) => {
+              await handleCreateFollowUp(parentTaskId, reason);
+              setIsFollowUpModalOpen(false);
+              setIsDrawerOpen(false);
+              setSelectedTask(null);
+            }}
           />
         )}
 
@@ -980,9 +1061,19 @@ export default function App() {
           <ChangePasswordModal
             isOpen={isChangePasswordModalOpen}
             onClose={() => setIsChangePasswordModalOpen(false)}
-            onSave={(oldPassword, newPassword) => {
-              // In a real implementation, this would call an API to change the password
-              console.log('Password change:', { oldPassword, newPassword });
+            onSave={async (oldPassword, newPassword) => {
+              try {
+                const result = await changePassword({ oldPassword, newPassword });
+                if (result.success) {
+                  logger.log('Password changed successfully');
+                  setSimulationMessage({ type: 'success', text: 'Password changed successfully' });
+                } else {
+                  setSimulationMessage({ type: 'error', text: result.message || 'Failed to change password' });
+                }
+              } catch (error) {
+                logger.error('Password change error:', error);
+                setSimulationMessage({ type: 'error', text: 'Failed to change password. Please try again.' });
+              }
             }}
           />
         )}
@@ -994,7 +1085,7 @@ export default function App() {
             onClose={() => setIsConfigureNotificationsModalOpen(false)}
             onSave={(settings) => {
               // In a real implementation, this would save the notification settings
-              console.log('Notification settings:', settings);
+              logger.debug('Notification settings:', settings);
             }}
           />
         )}
@@ -1006,7 +1097,7 @@ export default function App() {
             onClose={() => setIsAddUserModalOpen(false)}
             onSave={(userData) => {
               const newUser: User = {
-                UserID: `USR-${Date.now()}`,
+                UserID: generateUserId(),
                 FullName: userData.FullName,
                 Email: userData.Email,
                 Role: userData.Role,
@@ -1051,5 +1142,7 @@ export default function App() {
     </div>
   );
 }
+
+
 
 

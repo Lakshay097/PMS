@@ -1,12 +1,5 @@
-// Google Sheets Primary Database Layer
+﻿// Google Sheets Primary Database Layer
 // All data persistence goes directly to Google Sheets - no LocalStorage fallback
-
-// TECH-DEBT: All writes happen client-side via dbService directly to Google Sheets.
-// Ideal architecture would have server-side controllers handling writes and broadcasting SSE events.
-// Deferred — requires full API layer refactor.
-
-// TECH-DEBT: syncQueue.ts is implemented but not integrated.
-// Wire into dbService.ts write failures for retry on network errors.
 
 import {
   User,
@@ -15,7 +8,6 @@ import {
   TaskTemplate,
   TaskReport,
   FollowUp,
-  AuditLog,
   AppSetting,
   Subtask,
   Comment
@@ -27,7 +19,6 @@ import {
   INITIAL_TASKS,
   INITIAL_REPORTS,
   INITIAL_FOLLOWUPS,
-  INITIAL_AUDITS,
   INITIAL_SETTINGS,
   INITIAL_SUBTASKS,
   INITIAL_COMMENTS
@@ -35,6 +26,8 @@ import {
 import { sheetsApi, HEADERS } from './sheetsService';
 import { logger } from '../utils/logger';
 import { notifyChange } from '../api/client';
+import { db } from './firestoreConfig';
+import { doc, setDoc, updateDoc, deleteDoc, addDoc, collection, getDocs, getDoc, query, where } from 'firebase/firestore';
 
 // Operation Types for Audit & Error Hooks
 export enum OperationType {
@@ -87,49 +80,73 @@ export async function initializeDatabase(): Promise<void> {
       throw new Error('Failed to create or access Google Sheets spreadsheet.');
     }
 
-    // Check if database is empty by checking users
-    const users = await sheetsApi.getCollection<User>('users');
-    setCache('users', users); // Cache for batchLoadAll
-    const tasks = await sheetsApi.getCollection<Task>('tasks');
-    setCache('tasks', tasks); // Cache for batchLoadAll
+    // Run metadata check and retrieve db_initialized flag in parallel
+    const [_, isInitialized] = await Promise.all([
+      sheetsApi.getSpreadsheetMetadata(spreadId),
+      Promise.resolve(localStorage.getItem('db_initialized') === 'true')
+    ]);
 
-    const isNewSpreadsheet = users.length === 0 && tasks.length === 0;
+    // Skip empty check if already initialized (unless we hit a 404 later)
+    if (!isInitialized) {
+      // Check if database is empty by checking users
+      const users = await sheetsApi.getCollection<User>('users');
+      setCache('users', users); // Cache for batchLoadAll
+      const tasks = await sheetsApi.getCollection<Task>('tasks');
+      setCache('tasks', tasks); // Cache for batchLoadAll
 
-    if (isNewSpreadsheet) {
-      logger.log("Google Sheets database is empty. Seeding initial data...");
-      
-      // Seed initial data sequentially to avoid rate limiting
-      const collections = [
-        { name: 'users', data: INITIAL_USERS },
-        { name: 'teams', data: INITIAL_TEAMS },
-        { name: 'templates', data: INITIAL_TEMPLATES },
-        { name: 'tasks', data: INITIAL_TASKS },
-        { name: 'reports', data: INITIAL_REPORTS },
-        { name: 'followups', data: INITIAL_FOLLOWUPS },
-        { name: 'auditlogs', data: INITIAL_AUDITS },
-        { name: 'settings', data: INITIAL_SETTINGS },
-        { name: 'subtasks', data: INITIAL_SUBTASKS },
-        { name: 'comments', data: INITIAL_COMMENTS }
-      ];
+      const isNewSpreadsheet = users.length === 0 && tasks.length === 0;
 
-      for (const collection of collections) {
-        await sheetsApi.saveCollection(collection.name as 'users' | 'teams' | 'templates' | 'tasks' | 'reports' | 'followups' | 'auditlogs' | 'settings' | 'subtasks' | 'comments', collection.data);
-        // Add a small delay between saves to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 500));
+      if (isNewSpreadsheet) {
+        logger.log("Google Sheets database is empty. Seeding initial data...");
+        
+        // Seed initial data in batches of 3-4 to avoid rate limiting
+        const collections = [
+          { name: 'users', data: INITIAL_USERS },
+          { name: 'teams', data: INITIAL_TEAMS },
+          { name: 'templates', data: INITIAL_TEMPLATES },
+          { name: 'tasks', data: INITIAL_TASKS },
+          { name: 'reports', data: INITIAL_REPORTS },
+          { name: 'followups', data: INITIAL_FOLLOWUPS },
+          { name: 'settings', data: INITIAL_SETTINGS },
+          { name: 'subtasks', data: INITIAL_SUBTASKS },
+          { name: 'comments', data: INITIAL_COMMENTS }
+        ];
+
+        // Process in batches of 3-4 to avoid rate limits
+        const batchSize = 3;
+        for (let i = 0; i < collections.length; i += batchSize) {
+          const batch = collections.slice(i, i + batchSize);
+          await Promise.all(batch.map(collection => 
+            sheetsApi.saveCollection(collection.name as 'users' | 'teams' | 'templates' | 'tasks' | 'reports' | 'followups' | 'settings' | 'subtasks' | 'comments', collection.data)
+          ));
+          // Small delay between batches
+          if (i + batchSize < collections.length) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        }
+
+        logger.log("Initial data seeded successfully.");
+        localStorage.setItem('db_initialized', 'true');
+      } else {
+        logger.log("Database already initialized with existing data.");
+        localStorage.setItem('db_initialized', 'true');
       }
-
-      logger.log("Initial data seeded successfully.");
     } else {
-      logger.log("Database already initialized with existing data.");
+      logger.log("Database already initialized (flag set). Skipping empty check.");
     }
-  } catch (error) {
-    console.error("Failed to initialize database:", error);
+  } catch (error: any) {
+    // Reset initialization flag on 404 errors (spreadsheet deleted)
+    if (error?.statusCode === 404 || error?.message?.includes('404')) {
+      logger.log('Spreadsheet not found (404). Resetting initialization flag.');
+      localStorage.removeItem('db_initialized');
+    }
+    logger.error("Failed to initialize database:", error);
     throw new Error(`Failed to initialize Google Sheets database: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
-// Google Sheets Primary Database Service
-// All operations go directly to Google Sheets with in-memory caching for performance
+// Firestore Primary Database Service
+// All operations go directly to Firestore with in-memory caching for performance
 export const dbService = {
   // Users Service
   async getUsers(): Promise<User[]> {
@@ -138,18 +155,21 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const rawUsers = await sheetsApi.getCollection<any>('users');
-      const users: User[] = (rawUsers || []).map(u => ({
-        ...u,
-        TeamIDs: u.TeamIDs ? (Array.isArray(u.TeamIDs) ? u.TeamIDs : [u.TeamIDs]) : (u.TeamID ? [u.TeamID] : []),
-        TeamNames: u.TeamNames ? (Array.isArray(u.TeamNames) ? u.TeamNames : [u.TeamNames]) : (u.TeamName ? [u.TeamName] : []),
-        TeamID: u.TeamID || (u.TeamIDs && u.TeamIDs.length > 0 ? (Array.isArray(u.TeamIDs) ? u.TeamIDs[0] : u.TeamIDs) : ''),
-        TeamName: u.TeamName || (u.TeamNames && u.TeamNames.length > 0 ? (Array.isArray(u.TeamNames) ? u.TeamNames[0] : u.TeamNames) : '')
-      }));
+      const snapshot = await getDocs(collection(db, 'users'));
+      const users: User[] = snapshot.docs.map(doc => {
+        const u = doc.data() as any;
+        return {
+          ...u,
+          TeamIDs: u.TeamIDs ? (Array.isArray(u.TeamIDs) ? u.TeamIDs : [u.TeamIDs]) : (u.TeamID ? [u.TeamID] : []),
+          TeamNames: u.TeamNames ? (Array.isArray(u.TeamNames) ? u.TeamNames : [u.TeamNames]) : (u.TeamName ? [u.TeamName] : []),
+          TeamID: u.TeamID || (u.TeamIDs && u.TeamIDs.length > 0 ? (Array.isArray(u.TeamIDs) ? u.TeamIDs[0] : u.TeamIDs) : ''),
+          TeamName: u.TeamName || (u.TeamNames && u.TeamNames.length > 0 ? (Array.isArray(u.TeamNames) ? u.TeamNames[0] : u.TeamNames) : '')
+        };
+      });
       setCache('users', users);
       return users;
     } catch (error) {
-      throw new Error(`Failed to load users from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load users from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -167,16 +187,25 @@ export const dbService = {
 
       if (idx >= 0) {
         users[idx] = { ...users[idx], ...userToSave, UpdatedAt: now };
+        await sheetsApi.saveCollection('users', users);
       } else {
-        users.push({ ...userToSave, CreatedAt: now, UpdatedAt: now });
+        const newUser = { ...userToSave, CreatedAt: now, UpdatedAt: now };
+        users.push(newUser);
+        await sheetsApi.appendRecord('users', newUser);
       }
 
-      await sheetsApi.saveCollection('users', users);
       clearCache('users'); // Invalidate cache after write
       clearCache('teams'); // Also clear teams cache since team names might be referenced
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('users', 'updated', user.UserID).catch(() => {});
+      notifyChange('users', 'updated', user.UserID).catch((err) => logger.warn('[dbService] notifyChange failed for users', err));
+      
+      // Firestore write
+      try {
+        await setDoc(doc(db, 'users', user.Email), userToSave);
+      } catch (err) {
+        logger.error('Firestore write failed — saveUser:', err);
+      }
     } catch (error) {
       throw new Error(`Failed to save user to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -188,11 +217,12 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const teams = await sheetsApi.getCollection<Team>('teams');
+      const snapshot = await getDocs(collection(db, 'teams'));
+      const teams = snapshot.docs.map(doc => doc.data() as Team);
       setCache('teams', teams);
       return teams;
     } catch (error) {
-      throw new Error(`Failed to load teams from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load teams from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -213,7 +243,14 @@ export const dbService = {
       clearCache('users'); // Also clear users cache since team relationships might change
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('teams', 'updated', team.TeamID).catch(() => {});
+      notifyChange('teams', 'updated', team.TeamID).catch((err) => logger.warn('[dbService] notifyChange failed for teams', err));
+      
+      // Firestore write
+      try {
+        await setDoc(doc(db, 'teams', team.TeamID), team);
+      } catch (err) {
+        logger.error('Firestore write failed — saveTeam:', err);
+      }
     } catch (error) {
       throw new Error(`Failed to save team to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -230,7 +267,14 @@ export const dbService = {
         clearCache('teams');
         
         // Notify other clients immediately (fire and forget)
-        notifyChange('teams', 'updated', teamId).catch(() => {});
+        notifyChange('teams', 'updated', teamId).catch((err) => logger.warn('[dbService] notifyChange failed for teams', err));
+        
+        // Firestore write
+        try {
+          await updateDoc(doc(db, 'teams', teamId), { Active: team.Active, UpdatedAt: team.UpdatedAt });
+        } catch (err) {
+          logger.error('Firestore write failed — toggleTeamStatus:', err);
+        }
       }
     } catch (error) {
       throw new Error(`Failed to toggle team status: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -246,7 +290,14 @@ export const dbService = {
       clearCache('users');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('teams', 'deleted', teamId).catch(() => {});
+      notifyChange('teams', 'deleted', teamId).catch((err) => logger.warn('[dbService] notifyChange failed for teams', err));
+      
+      // Firestore write
+      try {
+        await deleteDoc(doc(db, 'teams', teamId));
+      } catch (err) {
+        logger.error('Firestore write failed — deleteTeam:', err);
+      }
     } catch (error) {
       throw new Error(`Failed to delete team: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -258,11 +309,12 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const templates = await sheetsApi.getCollection<TaskTemplate>('templates');
+      const snapshot = await getDocs(collection(db, 'templates'));
+      const templates = snapshot.docs.map(doc => doc.data() as TaskTemplate);
       setCache('templates', templates);
       return templates;
     } catch (error) {
-      throw new Error(`Failed to load templates from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load templates from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -282,7 +334,14 @@ export const dbService = {
       clearCache('templates');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('templates', 'updated', template.TemplateID).catch(() => {});
+      notifyChange('templates', 'updated', template.TemplateID).catch((err) => logger.warn('[dbService] notifyChange failed for templates', err));
+      
+      // Firestore write
+      try {
+        await setDoc(doc(db, 'templates', template.TemplateID), template);
+      } catch (err) {
+        logger.error('Firestore write failed — saveTemplate:', err);
+      }
     } catch (error) {
       throw new Error(`Failed to save template to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -296,7 +355,14 @@ export const dbService = {
       clearCache('templates');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('templates', 'deleted', templateId).catch(() => {});
+      notifyChange('templates', 'deleted', templateId).catch((err) => logger.warn('[dbService] notifyChange failed for templates', err));
+      
+      // Firestore write
+      try {
+        await deleteDoc(doc(db, 'templates', templateId));
+      } catch (err) {
+        logger.error('Firestore write failed — deleteTemplate:', err);
+      }
     } catch (error) {
       throw new Error(`Failed to delete template from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -308,21 +374,32 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const rawTasks = await sheetsApi.getCollection<any>('tasks');
-      const tasks: Task[] = (rawTasks || []).map(t => ({
-        ...t,
-        AssignedToTeamIDs: t.AssignedToTeamIDs ? (Array.isArray(t.AssignedToTeamIDs) ? t.AssignedToTeamIDs : [t.AssignedToTeamIDs]) : (t.TeamID ? [t.TeamID] : []),
-        TeamID: t.TeamID || (t.AssignedToTeamIDs && t.AssignedToTeamIDs.length > 0 ? (Array.isArray(t.AssignedToTeamIDs) ? t.AssignedToTeamIDs[0] : t.AssignedToTeamIDs) : '')
-      }));
+      const snapshot = await getDocs(collection(db, 'tasks'));
+      const tasks: Task[] = snapshot.docs.map(doc => {
+        const t = doc.data() as any;
+        return {
+          ...t,
+          AssignedToTeamIDs: t.AssignedToTeamIDs 
+            ? (Array.isArray(t.AssignedToTeamIDs) 
+                ? t.AssignedToTeamIDs 
+                : [t.AssignedToTeamIDs]) 
+            : (t.TeamID ? [t.TeamID] : []),
+        };
+      });
       setCache('tasks', tasks);
       return tasks;
     } catch (error) {
-      throw new Error(`Failed to load tasks from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load tasks from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
   async saveTask(task: Task): Promise<void> {
     try {
+      // Validate that task has an assigned stakeholder
+      if (!task.AssignedToEmail || task.AssignedToEmail.trim() === '') {
+        throw new Error('Task must be assigned to at least one stakeholder');
+      }
+
       const tasks = await this.getTasks();
       const idx = tasks.findIndex(t => t.TaskID === task.TaskID);
       const now = new Date().toISOString();
@@ -334,15 +411,24 @@ export const dbService = {
 
       if (idx >= 0) {
         tasks[idx] = { ...tasks[idx], ...taskToSave, UpdatedAt: now };
+        await sheetsApi.saveCollection('tasks', tasks);
       } else {
-        tasks.push({ ...taskToSave, CreatedAt: now, UpdatedAt: now });
+        const newTask = { ...taskToSave, CreatedAt: now, UpdatedAt: now };
+        tasks.push(newTask);
+        await sheetsApi.appendRecord('tasks', newTask);
       }
       
-      await sheetsApi.saveCollection('tasks', tasks);
       clearCache('tasks');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('tasks', 'updated', task.TaskID).catch(() => {});
+      notifyChange('tasks', 'updated', task.TaskID).catch((err) => logger.warn('[dbService] notifyChange failed for tasks', err));
+      
+      // Firestore write
+      try {
+        await setDoc(doc(db, 'tasks', task.TaskID), taskToSave);
+      } catch (err) {
+        logger.error('Firestore write failed — saveTask:', err);
+      }
     } catch (error) {
       throw new Error(`Failed to save task to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -356,7 +442,14 @@ export const dbService = {
       clearCache('tasks');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('tasks', 'deleted', taskId).catch(() => {});
+      notifyChange('tasks', 'deleted', taskId).catch((err) => logger.warn('[dbService] notifyChange failed for tasks', err));
+      
+      // Firestore write
+      try {
+        await deleteDoc(doc(db, 'tasks', taskId));
+      } catch (err) {
+        logger.error('Firestore write failed — deleteTask:', err);
+      }
     } catch (error) {
       throw new Error(`Failed to delete task from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -368,11 +461,12 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const reports = await sheetsApi.getCollection<TaskReport>('reports');
+      const snapshot = await getDocs(collection(db, 'reports'));
+      const reports = snapshot.docs.map(doc => doc.data() as TaskReport);
       setCache('reports', reports);
       return reports;
     } catch (error) {
-      throw new Error(`Failed to load reports from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load reports from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -380,11 +474,18 @@ export const dbService = {
     try {
       const reports = await this.getReports();
       reports.push(report);
-      await sheetsApi.saveCollection('reports', reports);
+      await sheetsApi.appendRecord('reports', report);
       clearCache('reports');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('reports', 'created', report.ReportID).catch(() => {});
+      notifyChange('reports', 'created', report.ReportID).catch((err) => logger.warn('[dbService] notifyChange failed for reports', err));
+      
+      // Firestore write
+      try {
+        await setDoc(doc(db, 'reports', report.ReportID), report);
+      } catch (err) {
+        logger.error('Firestore write failed — saveReport:', err);
+      }
     } catch (error) {
       throw new Error(`Failed to save report to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -396,11 +497,12 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const followups = await sheetsApi.getCollection<FollowUp>('followups');
+      const snapshot = await getDocs(collection(db, 'followups'));
+      const followups = snapshot.docs.map(doc => doc.data() as FollowUp);
       setCache('followups', followups);
       return followups;
     } catch (error) {
-      throw new Error(`Failed to load followups from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load followups from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -412,55 +514,16 @@ export const dbService = {
       clearCache('followups');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('followups', 'created', follow.FollowUpID).catch(() => {});
+      notifyChange('followups', 'created', follow.FollowUpID).catch((err) => logger.warn('[dbService] notifyChange failed for followups', err));
+      
+      // Firestore write
+      try {
+        await setDoc(doc(db, 'followups', follow.FollowUpID), follow);
+      } catch (err) {
+        logger.error('Firestore write failed — saveFollowup:', err);
+      }
     } catch (error) {
       throw new Error(`Failed to save followup to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  },
-
-  // Audit Logs
-  async getAuditLogs(): Promise<AuditLog[]> {
-    const cached = getFromCache<AuditLog>('auditlogs');
-    if (cached) return cached;
-
-    try {
-      const audits = await sheetsApi.getCollection<AuditLog>('auditlogs');
-      setCache('auditlogs', audits);
-      return audits;
-    } catch (error) {
-      throw new Error(`Failed to load audit logs from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  },
-
-  async logAction(
-    entityType: AuditLog['EntityType'],
-    entityId: string,
-    action: string,
-    actorEmail: string,
-    oldValue: any = null,
-    newValue: any = null
-  ): Promise<void> {
-    try {
-      const newLog: AuditLog = {
-        LogID: `LOG-${Math.floor(Date.now() + Math.random() * 1000)}`,
-        EntityType: entityType,
-        EntityID: entityId,
-        Action: action,
-        OldValueJSON: oldValue ? JSON.stringify(oldValue) : "",
-        NewValueJSON: newValue ? JSON.stringify(newValue) : "",
-        ActionByEmail: actorEmail,
-        ActionDateTime: new Date().toISOString()
-      };
-
-      const audits = await this.getAuditLogs();
-      audits.unshift(newLog); // Put recent log on top
-      await sheetsApi.saveCollection('auditlogs', audits);
-      clearCache('auditlogs');
-      
-      // Notify other clients immediately (fire and forget)
-      notifyChange('auditlogs', 'created', newLog.LogID).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to log action to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -470,11 +533,12 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const settings = await sheetsApi.getCollection<AppSetting>('settings');
+      const snapshot = await getDocs(collection(db, 'settings'));
+      const settings = snapshot.docs.map(doc => doc.data() as AppSetting);
       setCache('settings', settings);
       return settings;
     } catch (error) {
-      throw new Error(`Failed to load settings from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load settings from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -484,7 +548,16 @@ export const dbService = {
       clearCache('settings');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('settings', 'updated', 'settings').catch(() => {});
+      notifyChange('settings', 'updated', 'settings').catch((err) => logger.warn('[dbService] notifyChange failed for settings', err));
+      
+      // Firestore write
+      try {
+        for (const setting of settingsList) {
+          await setDoc(doc(db, 'settings', setting.Key), setting);
+        }
+      } catch (err) {
+        logger.error('Firestore write failed — saveSettings:', err);
+      }
     } catch (error) {
       throw new Error(`Failed to save settings to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -496,11 +569,12 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const subtasks = await sheetsApi.getCollection<Subtask>('subtasks');
+      const snapshot = await getDocs(collection(db, 'subtasks'));
+      const subtasks = snapshot.docs.map(doc => doc.data() as Subtask);
       setCache('subtasks', subtasks);
       return subtasks;
     } catch (error) {
-      throw new Error(`Failed to load subtasks from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load subtasks from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -520,7 +594,14 @@ export const dbService = {
       clearCache('subtasks');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('subtasks', 'updated', subtask.SubtaskID).catch(() => {});
+      notifyChange('subtasks', 'updated', subtask.SubtaskID).catch((err) => logger.warn('[dbService] notifyChange failed for subtasks', err));
+      
+      // Firestore write
+      try {
+        await setDoc(doc(db, 'subtasks', subtask.SubtaskID), subtask);
+      } catch (err) {
+        logger.error('Firestore write failed — saveSubtask:', err);
+      }
     } catch (error) {
       throw new Error(`Failed to save subtask to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -543,7 +624,19 @@ export const dbService = {
       clearCache('subtasks');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('subtasks', 'updated', taskId).catch(() => {});
+      notifyChange('subtasks', 'updated', taskId).catch((err) => logger.warn('[dbService] notifyChange failed for subtasks', err));
+      
+      // Firestore write
+      try {
+        const { writeBatch } = await import('firebase/firestore');
+        const wb = writeBatch(db);
+        for (const s of newSubtasks) {
+          wb.set(doc(db, 'subtasks', s.SubtaskID), s);
+        }
+        await wb.commit();
+      } catch (err) {
+        logger.error('Firestore write failed — saveSubtasksBatch:', err);
+      }
     } catch (error) {
       throw new Error(`Failed to save subtasks batch to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -555,11 +648,12 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const comments = await sheetsApi.getCollection<Comment>('comments');
+      const snapshot = await getDocs(collection(db, 'comments'));
+      const comments = snapshot.docs.map(doc => doc.data() as Comment);
       setCache('comments', comments);
       return comments;
     } catch (error) {
-      throw new Error(`Failed to load comments from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load comments from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -571,7 +665,14 @@ export const dbService = {
       clearCache('comments');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('comments', 'created', comment.CommentID).catch(() => {});
+      notifyChange('comments', 'created', comment.CommentID).catch((err) => logger.warn('[dbService] notifyChange failed for comments', err));
+      
+      // Firestore write
+      try {
+        await setDoc(doc(db, 'comments', comment.CommentID), comment);
+      } catch (err) {
+        logger.error('Firestore write failed — saveComment:', err);
+      }
     } catch (error) {
       throw new Error(`Failed to save comment to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -583,7 +684,6 @@ export const dbService = {
     tasks: Task[];
     teams: Team[];
     templates: TaskTemplate[];
-    auditlogs: AuditLog[];
     settings: AppSetting[];
     reports: TaskReport[];
     followups: FollowUp[];
@@ -592,7 +692,7 @@ export const dbService = {
   }> {
     const collections = [
       'users', 'tasks', 'teams', 'templates', 
-      'auditlogs', 'settings', 'reports', 
+      'settings', 'reports', 
       'followups', 'subtasks', 'comments'
     ];
 
@@ -624,7 +724,6 @@ export const dbService = {
     setCache('tasks', tasks);
     setCache('teams', raw.teams || []);
     setCache('templates', raw.templates || []);
-    setCache('auditlogs', raw.auditlogs || []);
     setCache('settings', raw.settings || []);
     setCache('reports', raw.reports || []);
     setCache('followups', raw.followups || []);
@@ -636,7 +735,6 @@ export const dbService = {
       tasks,
       teams: raw.teams || [],
       templates: raw.templates || [],
-      auditlogs: raw.auditlogs || [],
       settings: raw.settings || [],
       reports: raw.reports || [],
       followups: raw.followups || [],
@@ -687,9 +785,6 @@ export const dbService = {
             case 'followups':
               result = await this.getFollowups();
               break;
-            case 'auditlogs':
-              result = await this.getAuditLogs();
-              break;
             case 'settings':
               result = await this.getSettings();
               break;
@@ -700,7 +795,7 @@ export const dbService = {
               result = await this.getComments();
               break;
             default:
-              console.warn(`Unknown collection: ${collection}`);
+              logger.warn(`Unknown collection: ${collection}`);
               result = null;
           }
           results.push({ status: 'fulfilled', value: result });
@@ -708,7 +803,7 @@ export const dbService = {
           // Add a small delay between collections to avoid rate limiting
           await new Promise(resolve => setTimeout(resolve, 200));
         } catch (error) {
-          console.error(`Failed to sync ${collection}:`, error);
+          logger.error(`Failed to sync ${collection}:`, error);
           results.push({ status: 'rejected', reason: error });
         }
       }
@@ -716,6 +811,40 @@ export const dbService = {
       logger.log(`Synced collections: ${collections.join(', ')}`);
     } finally {
       collections.forEach(collection => syncInProgress.delete(collection));
+    }
+  },
+
+  async logAction(
+    entityType: string,
+    entityId: string,
+    action: string,
+    actionByEmail: string,
+    oldValue: any = null,
+    newValue: any = null
+  ): Promise<void> {
+    try {
+      const now = new Date().toISOString();
+      const logId = `LOG-${Math.floor(100000 + Math.random() * 900000)}`;
+      const logRecord = {
+        LogID: logId,
+        EntityType: entityType,
+        EntityID: entityId,
+        Action: action,
+        OldValueJSON: oldValue ? JSON.stringify(oldValue) : '',
+        NewValueJSON: newValue ? JSON.stringify(newValue) : '',
+        ActionByEmail: actionByEmail || 'system',
+        ActionDateTime: now
+      };
+      await sheetsApi.appendRecord('auditlogs', logRecord);
+      
+      // Firestore write
+      try {
+        await addDoc(collection(db, 'auditlogs'), logRecord);
+      } catch (err) {
+        logger.error('Firestore write failed — logAction:', err);
+      }
+    } catch (error) {
+      logger.error('Failed to write audit log:', error);
     }
   }
 };

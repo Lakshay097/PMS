@@ -36,6 +36,15 @@ interface DashboardPageProps {
   onUpdateUserTeams?: (email: string, teamIDs: string[], teamNames: string[]) => Promise<void>;
   onDeleteTeam?: (teamId: string) => Promise<void>;
   onDeleteTask?: (taskId: string) => void;
+  isDrawerOpen?: boolean;
+  isTaskModalOpen?: boolean;
+  isReportModalOpen?: boolean;
+  isFollowUpModalOpen?: boolean;
+  isEditProfileModalOpen?: boolean;
+  isChangePasswordModalOpen?: boolean;
+  isConfigureNotificationsModalOpen?: boolean;
+  isAddUserModalOpen?: boolean;
+  isAddTeamModalOpen?: boolean;
 }
 
 export default function DashboardPage(props: DashboardPageProps) {

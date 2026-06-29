@@ -19,12 +19,12 @@ export const HEADERS = {
   users: ['UserID', 'FullName', 'Email', 'Role', 'ManagerEmail', 'TeamID', 'TeamName', 'Active', 'CanCreateFollowUp', 'CanCloseTask', 'CreatedAt', 'UpdatedAt', 'Password'],
   teams: ['TeamID', 'TeamName', 'StakeholderEmail', 'Active'],
   templates: ['TemplateID', 'Title', 'Description', 'Category', 'Priority', 'RecurrenceType', 'StartDate', 'NextGenerationDate', 'LastGeneratedDate', 'AssignedByEmail', 'AssignedToEmail', 'AssignedToRole', 'TeamID', 'Active', 'CreatedAt', 'UpdatedAt'],
-  tasks: ['TaskID', 'TemplateID', 'ParentTaskID', 'Title', 'Description', 'Category', 'Priority', 'TaskType', 'RecurrenceType', 'CycleKey', 'StartDate', 'DueDate', 'AssignedByEmail', 'AssignedToEmail', 'AssignedToRole', 'TeamID', 'Status', 'PercentComplete', 'LastReportSummary', 'RequiresFollowUp', 'FollowUpCount', 'CompletionDate', 'CloseRemark', 'AttachmentLink', 'CreatedAt', 'UpdatedAt', 'Active'],
-  reports: ['ReportID', 'TaskID', 'SubmittedByEmail', 'ReportDate', 'StatusUpdate', 'WorkSummary', 'PercentComplete', 'Blockers', 'NextAction', 'AttachmentLink', 'CreatedAt'],
+  tasks: ['TaskID', 'TemplateID', 'ParentTaskID', 'Title', 'Description', 'Category', 'Priority', 'TaskType', 'RecurrenceType', 'CycleKey', 'StartDate', 'DueDate', 'AssignedByEmail', 'AssignedToEmail', 'AssignedToRole', 'TeamID', 'Status', 'PercentComplete', 'LastReportSummary', 'RequiresFollowUp', 'FollowUpCount', 'FollowUpReason', 'CompletionDate', 'CloseRemark', 'AttachmentLink', 'CreatedAt', 'UpdatedAt', 'Active'],
+  reports: ['ReportID', 'TaskID', 'SubtaskID', 'SubmittedByEmail', 'ReportDate', 'StatusUpdate', 'WorkSummary', 'PercentComplete', 'Blockers', 'NextAction', 'AttachmentLink', 'CreatedAt'],
   followups: ['FollowUpID', 'ParentTaskID', 'NewTaskID', 'FollowUpNumber', 'CreatedByEmail', 'Reason', 'CreatedAt', 'Status'],
   auditlogs: ['LogID', 'EntityType', 'EntityID', 'Action', 'OldValueJSON', 'NewValueJSON', 'ActionByEmail', 'ActionDateTime'],
   settings: ['Key', 'Value'],
-  subtasks: ['SubtaskID', 'TaskID', 'Title', 'IsDone', 'CreatedAt', 'CreatedBy', 'UpdatedAt'],
+  subtasks: ['SubtaskID', 'TaskID', 'Title', 'AssignedTo', 'DueDate', 'CreatedBy', 'LastReportSummary', 'Completed', 'CreatedAt'],
   comments: ['CommentID', 'TaskID', 'Comment', 'CreatedAt', 'CreatedBy']
 };
 
@@ -81,6 +81,8 @@ export const getSpreadsheetId = (): string | null => {
 
 export const logout = async () => {
   cachedSpreadsheetId = null;
+  // Clear the db_initialized flag on logout to force fresh check on next login
+  localStorage.removeItem('db_initialized');
 };
 
 // Clear cached spreadsheet ID to force re-search
@@ -172,7 +174,7 @@ const sheetsApiInternal = {
     return data.spreadsheetId;
   },
 
-  // Save full collection to Google Sheets with atomic clear-then-write
+  // Save full collection to Google Sheets with atomic write-then-clear-trailing to avoid data loss
   async saveCollection(sheetName: keyof typeof HEADERS, data: any[]): Promise<void> {
     const spreadsheetId = await sheetsApiInternal.getOrCreateSpreadsheet();
     if (!spreadsheetId) {
@@ -184,13 +186,34 @@ const sheetsApiInternal = {
 
     logger.log(`Writing collection [${sheetName}] containing ${data.length} records to Google Sheets...`);
 
-    // First Clear the existing sheet content to prevent dangling old rows
-    await api.post(`/sheets/${spreadsheetId}/values/${sheetName}!A1:Z9999/clear`, {}, { skipAuth: true });
-
-    // Write new content
+    // Write new content first (safeguard against data loss)
     await api.put(`/sheets/${spreadsheetId}/values/${sheetName}!A1`, { values: rows }, { skipAuth: true });
+
+    // Clear any trailing rows from the previous dataset
+    const clearStartRow = rows.length + 1;
+    await api.post(`/sheets/${spreadsheetId}/values/${sheetName}!A${clearStartRow}:Z9999/clear`, {}, { skipAuth: true });
     
     logger.log(`Successfully saved collection [${sheetName}] to Google Sheets.`);
+  },
+
+  // Append a single record to Google Sheets using the append endpoint
+  async appendRecord(sheetName: keyof typeof HEADERS, record: any): Promise<void> {
+    const spreadsheetId = await sheetsApiInternal.getOrCreateSpreadsheet();
+    if (!spreadsheetId) {
+      throw new Error('Failed to get spreadsheet ID.');
+    }
+
+    const headers = HEADERS[sheetName];
+    const row = headers.map(header => {
+      const val = record[header];
+      if (val === undefined || val === null) return '';
+      if (typeof val === 'object') return JSON.stringify(val);
+      return String(val);
+    });
+
+    logger.log(`Appending 1 record to collection [${sheetName}] in Google Sheets...`);
+    await api.post(`/sheets/${spreadsheetId}/values/${sheetName}!A1/append`, { values: [row] }, { skipAuth: true });
+    logger.log(`Successfully appended record to [${sheetName}] in Google Sheets.`);
   },
 
   // Fetch concrete sheet collection of records
@@ -269,6 +292,9 @@ export const sheetsApi = {
   },
   saveCollection(sheetName: keyof typeof HEADERS, data: any[]): Promise<void> {
     return queueRequest(() => sheetsApiInternal.saveCollection(sheetName, data));
+  },
+  appendRecord(sheetName: keyof typeof HEADERS, record: any): Promise<void> {
+    return queueRequest(() => sheetsApiInternal.appendRecord(sheetName, record));
   },
   getCollection<T>(sheetName: keyof typeof HEADERS): Promise<T[]> {
     return queueRequest(() => sheetsApiInternal.getCollection<T>(sheetName));

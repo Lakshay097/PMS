@@ -10,21 +10,45 @@ interface OverviewDashboardProps {
   tasks: Task[];
   onTaskClick?: (taskId: string) => void;
   onViewAllTasks?: () => void;
+  onViewChange?: (view: 'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings') => void;
+  onFilterChange?: (filterType: 'status' | 'priority' | 'assignee' | 'dueDate', value: string) => void;
+  isDarkMode?: boolean;
 }
 
-export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks }: OverviewDashboardProps) {
+export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks, onViewChange, onFilterChange, isDarkMode = false }: OverviewDashboardProps) {
   // Calculate KPI metrics
   const activeTasks = tasks.filter(t => t.Status === 'In Progress' || t.Status === 'Submitted').length;
   const overdueTasks = tasks.filter(t => t.Status === 'Overdue').length;
+  const today = new Date().toISOString().split('T')[0];
   const dueTodayTasks = tasks.filter(t => {
-    const today = new Date().toISOString().split('T')[0];
     return t.DueDate === today && t.Status !== 'Closed';
   }).length;
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
   const completedThisWeek = tasks.filter(t => {
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    return t.Status === 'Closed' && new Date(t.CompletionDate || '') > weekAgo;
+    return t.Status === 'Closed' && new Date(t.CompletionDate || '') > oneWeekAgo;
   }).length;
+
+  // Handle card clicks to navigate with filters
+  const handleActiveTasksClick = () => {
+    if (onViewChange) onViewChange('tasks');
+    if (onFilterChange) onFilterChange('status', 'In Progress,Submitted');
+  };
+
+  const handleOverdueClick = () => {
+    if (onViewChange) onViewChange('tasks');
+    if (onFilterChange) onFilterChange('status', 'Overdue');
+  };
+
+  const handleDueTodayClick = () => {
+    if (onViewChange) onViewChange('tasks');
+    if (onFilterChange) onFilterChange('dueDate', 'today');
+  };
+
+  const handleCompletedThisWeekClick = () => {
+    if (onViewChange) onViewChange('tasks');
+    if (onFilterChange) onFilterChange('status', 'Closed');
+  };
 
   // Get urgent tasks (needs attention)
   const urgentTasks = tasks
@@ -55,23 +79,27 @@ export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks }
           value={activeTasks}
           note="Currently in progress"
           trend={{ value: '+12%', positive: true }}
+          onClick={handleActiveTasksClick}
         />
         <KPICard
           label="Overdue"
           value={overdueTasks}
           note="Require immediate attention"
           trend={{ value: '+2', positive: false }}
+          onClick={handleOverdueClick}
         />
         <KPICard
           label="Due today"
           value={dueTodayTasks}
           note="Tasks due by end of day"
+          onClick={handleDueTodayClick}
         />
         <KPICard
           label="Completed this week"
           value={completedThisWeek}
           note="Tasks closed in last 7 days"
           trend={{ value: '+8%', positive: true }}
+          onClick={handleCompletedThisWeekClick}
         />
       </div>
 
@@ -81,7 +109,7 @@ export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks }
         <div className="lg:col-span-2">
           <div className="bg-surface rounded-lg border border-[var(--color-border)]">
             <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-[#0f172a]">Needs attention</h2>
+              <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">Needs attention</h2>
               <span className="text-sm text-muted">{urgentTasks.length} urgent tasks</span>
             </div>
             
@@ -98,12 +126,12 @@ export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks }
                     <div
                       key={task.TaskID}
                       onClick={() => onTaskClick?.(task.TaskID)}
-                      className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                      className={`p-4 cursor-pointer transition-colors ${isDarkMode ? 'hover:bg-[#1E293B]/30' : 'hover:bg-gray-50'}`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <h3 className="text-sm font-medium text-[#0f172a] truncate">{task.Title}</h3>
+                            <h3 className="text-sm font-medium text-[var(--color-text-primary)] truncate">{task.Title}</h3>
                             <PriorityBadge priority={task.Priority} size="sm" />
                           </div>
                           <div className="flex items-center gap-3 text-xs text-muted">
@@ -146,7 +174,7 @@ export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks }
           {/* Recent updates timeline */}
           <div className="bg-surface rounded-lg border border-[var(--color-border)]">
             <div className="px-6 py-4 border-b border-[var(--color-border)]">
-              <h2 className="text-lg font-semibold text-[#0f172a]">Recent updates</h2>
+              <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">Recent updates</h2>
             </div>
             <div className="p-4">
               <div className="space-y-0">
@@ -167,7 +195,7 @@ export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks }
           {/* Upcoming deadlines */}
           <div className="bg-surface rounded-lg border border-[var(--color-border)]">
             <div className="px-6 py-4 border-b border-[var(--color-border)]">
-              <h2 className="text-lg font-semibold text-[#0f172a]">Upcoming deadlines</h2>
+              <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">Upcoming deadlines</h2>
             </div>
             <div className="p-4 space-y-3">
               {upcomingDeadlines.length === 0 ? (
@@ -177,11 +205,11 @@ export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks }
                   <div
                     key={task.TaskID}
                     onClick={() => onTaskClick?.(task.TaskID)}
-                    className="p-3 bg-gray-50 rounded-md hover:bg-gray-100 cursor-pointer transition-colors"
+                    className={`p-3 rounded-md cursor-pointer transition-colors ${isDarkMode ? 'bg-[#1E293B]/20 hover:bg-[#1E293B]/40' : 'bg-gray-50 hover:bg-gray-100'}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
-                        <h4 className="text-sm font-medium text-[#0f172a] truncate">{task.Title}</h4>
+                        <h4 className="text-sm font-medium text-[var(--color-text-primary)] truncate">{task.Title}</h4>
                         <div className="flex items-center gap-1 text-xs text-muted mt-1">
                           <Clock size={12} />
                           {new Date(task.DueDate).toLocaleDateString()}
@@ -198,7 +226,7 @@ export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks }
           {/* Pending approvals (role-based) */}
           <div className="bg-surface rounded-lg border border-[var(--color-border)]">
             <div className="px-6 py-4 border-b border-[var(--color-border)]">
-              <h2 className="text-lg font-semibold text-[#0f172a]">Pending approvals</h2>
+              <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">Pending approvals</h2>
             </div>
             <div className="p-4 text-center">
               <AlertCircle size={32} className="text-muted mx-auto mb-2" />
@@ -212,57 +240,57 @@ export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks }
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* My tasks by status */}
         <div className="bg-surface rounded-lg border border-[var(--color-border)] p-6">
-          <h3 className="text-base font-semibold text-[#0f172a] mb-4">My tasks by status</h3>
+          <h3 className="text-base font-semibold text-[var(--color-text-primary)] mb-4">My tasks by status</h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted">Not Started</span>
-              <span className="text-sm font-medium text-[#0f172a]">3</span>
+              <span className="text-sm font-medium text-[var(--color-text-primary)]">3</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted">In Progress</span>
-              <span className="text-sm font-medium text-[#0f172a]">5</span>
+              <span className="text-sm font-medium text-[var(--color-text-primary)]">5</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted">Submitted</span>
-              <span className="text-sm font-medium text-[#0f172a]">2</span>
+              <span className="text-sm font-medium text-[var(--color-text-primary)]">2</span>
             </div>
           </div>
         </div>
 
         {/* Team workload snapshot */}
         <div className="bg-surface rounded-lg border border-[var(--color-border)] p-6">
-          <h3 className="text-base font-semibold text-[#0f172a] mb-4">Team workload</h3>
+          <h3 className="text-base font-semibold text-[var(--color-text-primary)] mb-4">Team workload</h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted">John Doe</span>
-              <span className="text-sm font-medium text-[#0f172a]">8 tasks</span>
+              <span className="text-sm font-medium text-[var(--color-text-primary)]">8 tasks</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted">Jane Smith</span>
-              <span className="text-sm font-medium text-[#0f172a]">6 tasks</span>
+              <span className="text-sm font-medium text-[var(--color-text-primary)]">6 tasks</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted">Bob Johnson</span>
-              <span className="text-sm font-medium text-[#0f172a]">4 tasks</span>
+              <span className="text-sm font-medium text-[var(--color-text-primary)]">4 tasks</span>
             </div>
           </div>
         </div>
 
         {/* Scheduler health */}
         <div className="bg-surface rounded-lg border border-[var(--color-border)] p-6">
-          <h3 className="text-base font-semibold text-[#0f172a] mb-4">Scheduler health</h3>
+          <h3 className="text-base font-semibold text-[var(--color-text-primary)] mb-4">Scheduler health</h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted">Active blueprints</span>
-              <span className="text-sm font-medium text-[#0f172a]">12</span>
+              <span className="text-sm font-medium text-[var(--color-text-primary)]">12</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted">Next run</span>
-              <span className="text-sm font-medium text-[#0f172a]">In 2 hours</span>
+              <span className="text-sm font-medium text-[var(--color-text-primary)]">In 2 hours</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted">Failed runs</span>
-              <span className="text-sm font-medium text-[#0f172a]">0</span>
+              <span className="text-sm font-medium text-[var(--color-text-primary)]">0</span>
             </div>
           </div>
         </div>

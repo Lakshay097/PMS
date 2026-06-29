@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { User, Task, Team, TaskTemplate, AuditLog, AppSetting } from '../types';
+import { User, Task, Team, TaskTemplate, AppSetting } from '../types';
 
 export function useSSE(
   setUsers: (users: User[]) => void,
   setTasks: (tasks: Task[]) => void,
   setTeams: (teams: Team[]) => void,
   setTemplates: (templates: TaskTemplate[]) => void,
-  setAudits: (audits: AuditLog[]) => void,
   setSettings: (settings: AppSetting[]) => void
 ) {
   const [sseConnectionStatus, setSseConnectionStatus] = useState<'connected' | 'connecting' | 'error' | 'offline'>('offline');
@@ -61,14 +60,6 @@ export function useSSE(
       setLastSyncTime(new Date().toISOString());
     });
 
-    eventSource.addEventListener('audits', (e) => {
-      const data = JSON.parse(e.data);
-      setAudits(data);
-      setIsSyncingSheets(true);
-      setTimeout(() => setIsSyncingSheets(false), 500);
-      setLastSyncTime(new Date().toISOString());
-    });
-
     eventSource.addEventListener('settings', (e) => {
       const data = JSON.parse(e.data);
       setSettings(data);
@@ -80,7 +71,7 @@ export function useSSE(
     return () => {
       eventSource.close();
     };
-  }, [setUsers, setTasks, setTeams, setTemplates, setAudits, setSettings]);
+  }, [setUsers, setTasks, setTeams, setTemplates, setSettings]);
 
   return {
     sseConnectionStatus,

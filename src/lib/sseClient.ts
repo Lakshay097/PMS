@@ -65,7 +65,7 @@ export class SSEClient {
             if (serverTime > localTime) {
               logger.log('Server ahead, syncing all collections');
               this.handlers.onChange?.(
-                ['users', 'teams', 'templates', 'tasks', 'reports', 'followups', 'auditlogs', 'settings', 'subtasks', 'comments'],
+                ['users', 'teams', 'templates', 'tasks', 'reports', 'followups', 'settings', 'subtasks', 'comments'],
                 data.lastModified
               );
             }

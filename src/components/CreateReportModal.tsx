@@ -1,31 +1,47 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Send, AlertTriangle, Link as LinkIcon, Sparkles, Upload, File, Image as ImageIcon } from 'lucide-react';
-import { Task, TaskStatus } from '../types';
+import { Task, TaskStatus, User as UserType, Subtask } from '../types';
+import { logger } from '../utils/logger';
 
 interface CreateReportModalProps {
   task: Task;
   isOpen: boolean;
   onClose: () => void;
+  currentUser: UserType;
+  subtasks: Subtask[];
   onSubmit: (reportData: {
     TaskID: string;
+    SubtaskID?: string;
     StatusUpdate: TaskStatus;
     WorkSummary: string;
     PercentComplete: number;
     Blockers: string;
     NextAction: string;
     AttachmentLink: string;
-    UploadedFiles: File[];
+    UploadedFiles: Array<{ name: string; type: string; data: string }>;
   }) => void;
 }
 
-export default function CreateReportModal({ task, isOpen, onClose, onSubmit }: CreateReportModalProps) {
+export default function CreateReportModal({ task, isOpen, onClose, onSubmit, currentUser, subtasks }: CreateReportModalProps) {
   const [workSummary, setWorkSummary] = useState('');
   const [statusUpdate, setStatusUpdate] = useState<TaskStatus>(task.Status);
   const [blockers, setBlockers] = useState('');
   const [nextAction, setNextAction] = useState('');
   const [attachmentLink, setAttachmentLink] = useState('');
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; type: string; data: string }>>([]);
+  const [selectedSubtaskId, setSelectedSubtaskId] = useState<string>('');
+
+  // Check if user is assigned to any subtasks
+  const userSubtasks = subtasks.filter(s => s.AssignedTo === currentUser.Email);
+  const showSubtaskSelector = subtasks.length > 0 && userSubtasks.length > 0;
+
+  // Pre-select subtask if user is assigned to exactly one
+  React.useEffect(() => {
+    if (userSubtasks.length === 1) {
+      setSelectedSubtaskId(userSubtasks[0].SubtaskID);
+    }
+  }, [userSubtasks]);
 
   if (!isOpen) return null;
 
@@ -36,8 +52,12 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit }: C
     // Simulate completion percentage mapping behind the scenes to preserve database schemas
     const simulatedPercent = statusUpdate === 'Closed' ? 100 : (statusUpdate === 'Submitted' ? 90 : (statusUpdate === 'Not Started' ? 0 : 50));
 
+    logger.debug('CreateReportModal: Submitting report with files:', uploadedFiles);
+    logger.debug('CreateReportModal: File data lengths:', uploadedFiles.map(f => ({ name: f.name, dataLength: f.data?.length })));
+
     onSubmit({
       TaskID: task.TaskID,
+      SubtaskID: selectedSubtaskId || '',
       StatusUpdate: statusUpdate,
       WorkSummary: workSummary,
       PercentComplete: simulatedPercent,
@@ -53,12 +73,28 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit }: C
     setNextAction('');
     setAttachmentLink('');
     setUploadedFiles([]);
+    setSelectedSubtaskId('');
     onClose();
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    setUploadedFiles(prev => [...prev, ...files]);
+    const files = Array.from(e.target.files || []) as File[];
+    
+    // Convert each file to base64 for upload
+    files.forEach((file: File) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64Data = event.target?.result as string;
+        // Create a simple object with the needed properties
+        const fileWithData = {
+          name: file.name,
+          type: file.type,
+          data: base64Data
+        };
+        setUploadedFiles(prev => [...prev, fileWithData]);
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
   const removeFile = (index: number) => {
@@ -66,7 +102,7 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit }: C
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -91,6 +127,40 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit }: C
             <span className="font-bold text-[#0F172A] text-sm mt-0.5 block">{task.Title}</span>
             <span className="text-xs text-slate-500 font-medium">{task.TaskID}</span>
           </div>
+
+          {showSubtaskSelector && (
+            <div>
+              <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
+                Reporting against
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-center space-x-2 p-2 bg-white border border-[#E2E8F0] rounded-lg cursor-pointer hover:bg-slate-50">
+                  <input
+                    type="radio"
+                    name="subtaskSelector"
+                    value=""
+                    checked={selectedSubtaskId === ''}
+                    onChange={() => setSelectedSubtaskId('')}
+                    className="h-4 w-4 text-[#2563EB] focus:ring-[#2563EB]"
+                  />
+                  <span className="text-xs text-slate-800 font-medium">Parent Task ({task.TaskID})</span>
+                </label>
+                {userSubtasks.map((subtask) => (
+                  <label key={subtask.SubtaskID} className="flex items-center space-x-2 p-2 bg-white border border-[#E2E8F0] rounded-lg cursor-pointer hover:bg-slate-50">
+                    <input
+                      type="radio"
+                      name="subtaskSelector"
+                      value={subtask.SubtaskID}
+                      checked={selectedSubtaskId === subtask.SubtaskID}
+                      onChange={() => setSelectedSubtaskId(subtask.SubtaskID)}
+                      className="h-4 w-4 text-[#2563EB] focus:ring-[#2563EB]"
+                    />
+                    <span className="text-xs text-slate-800 font-medium">Subtask: {subtask.Title}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">

@@ -3,11 +3,11 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy package files first for better layer caching
+COPY package.json package-lock.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies with cache
+RUN npm ci --prefer-offline --no-audit
 
 # Copy source files
 COPY . .
@@ -21,10 +21,10 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package.json package-lock.json ./
 
-# Install only production dependencies
-RUN npm ci --only=production
+# Install only production dependencies with cache
+RUN npm ci --only=production --prefer-offline --no-audit
 
 # Copy built files from builder stage
 COPY --from=builder /app/dist ./dist

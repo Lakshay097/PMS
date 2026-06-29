@@ -27,11 +27,13 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   handleReset = () => {
+    // TODO: fix React 19 class component types properly
     // @ts-ignore - React 19 class component type definitions issue
     this.setState({ hasError: false, error: null });
   };
 
   render() {
+    // TODO: fix React 19 class component types properly
     // @ts-ignore - React 19 class component type definitions issue
     if (this.state.hasError) {
       // @ts-ignore - React 19 class component type definitions issue

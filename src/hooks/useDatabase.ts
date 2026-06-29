@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
-import { User, Task, Team, TaskTemplate, AuditLog, AppSetting, TaskReport, FollowUp, Subtask, Comment } from '../types';
+import { User, Task, Team, TaskTemplate, AppSetting, TaskReport, FollowUp, Subtask, Comment } from '../types';
 import { dbService, initializeDatabase, forceClearAllCaches } from '../lib/dbService';
-import { clearCachedSpreadsheetId } from '../lib/sheetsService';
 
 export function useDatabase(isAuthInitialized: boolean = false) {
   const [users, setUsers] = useState<User[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
-  const [audits, setAudits] = useState<AuditLog[]>([]);
+  const [audits, setAudits] = useState<AppSetting[]>([]);
   const [settings, setSettings] = useState<AppSetting[]>([]);
   const [reports, setReports] = useState<TaskReport[]>([]);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
@@ -25,9 +24,6 @@ export function useDatabase(isAuthInitialized: boolean = false) {
       setIsSyncing(true);
       setDbConnectionStatus('connected');
 
-      forceClearAllCaches();
-      clearCachedSpreadsheetId(); // Force re-search for spreadsheet instead of using cached ID
-
       await initializeDatabase();
 
       // ONE request fetches everything
@@ -37,7 +33,7 @@ export function useDatabase(isAuthInitialized: boolean = false) {
       setTasks(data.tasks);
       setTeams(data.teams);
       setTemplates(data.templates);
-      setAudits(data.auditlogs);
+      setAudits(data.settings);
       setSettings(data.settings);
       setReports(data.reports);
       setFollowUps(data.followups);
@@ -47,7 +43,8 @@ export function useDatabase(isAuthInitialized: boolean = false) {
     } catch (error) {
       console.error('Error loading database:', error);
       setDbConnectionStatus('error');
-      alert(`Failed to load database: ${error instanceof Error ? error.message : 'Unknown error'}. Please refresh the page or contact support.`);
+      // Note: Can't use toast here as it's outside React component context
+      // The UI will show the error status via dbConnectionStatus
     } finally {
       setIsLoading(false);
       setIsSyncing(false);
@@ -63,9 +60,6 @@ export function useDatabase(isAuthInitialized: boolean = false) {
       setIsSyncing(true);
       setDbConnectionStatus('connected');
 
-      forceClearAllCaches();
-      clearCachedSpreadsheetId(); // Force re-search for spreadsheet instead of using cached ID
-
       await initializeDatabase();
 
       // ONE request fetches everything
@@ -75,7 +69,7 @@ export function useDatabase(isAuthInitialized: boolean = false) {
       setTasks(data.tasks);
       setTeams(data.teams);
       setTemplates(data.templates);
-      setAudits(data.auditlogs);
+      setAudits(data.settings);
       setSettings(data.settings);
       setReports(data.reports);
       setFollowUps(data.followups);

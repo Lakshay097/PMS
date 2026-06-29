@@ -129,7 +129,7 @@ export async function appendSheetValues(
 ): Promise<boolean> {
   try {
     const res = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=RAW`,
       {
         method: 'POST',
         headers: {
@@ -137,8 +137,7 @@ export async function appendSheetValues(
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          values,
-          valueInputOption: 'RAW'
+          values
         })
       }
     );
@@ -171,7 +170,7 @@ export async function updateSheetValues(
 ): Promise<boolean> {
   try {
     const res = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=RAW`,
       {
         method: 'PUT',
         headers: {
@@ -179,8 +178,7 @@ export async function updateSheetValues(
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          values,
-          valueInputOption: 'RAW'
+          values
         })
       }
     );
@@ -194,5 +192,98 @@ export async function updateSheetValues(
   } catch (err) {
     logger.error(`Error updating sheet range ${range}:`, err);
     return false;
+  }
+}
+
+/**
+ * Creates a new sheet in the spreadsheet
+ * @param accessToken - Google OAuth access token
+ * @param spreadsheetId - Google Sheets spreadsheet ID
+ * @param sheetName - Name of the sheet to create
+ * @returns true if successful, false otherwise
+ */
+export async function createSheet(
+  accessToken: string,
+  spreadsheetId: string,
+  sheetName: string
+): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          requests: [
+            {
+              addSheet: {
+                properties: {
+                  title: sheetName
+                }
+              }
+            }
+          ]
+        })
+      }
+    );
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      // Sheet might already exist, check for that specific error
+      if (errorText.includes('already exists')) {
+        return true;
+      }
+      logger.error(`Failed to create sheet ${sheetName}:`, errorText);
+      return false;
+    }
+
+    // Wait for sheet to be created
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    return true;
+  } catch (err) {
+    logger.error(`Error creating sheet ${sheetName}:`, err);
+    return false;
+  }
+}
+
+/**
+ * Fetches a single row from a sheet based on a filter
+ * @param accessToken - Google OAuth access token
+ * @param spreadsheetId - Google Sheets spreadsheet ID
+ * @param sheetName - Name of the sheet
+ * @param filterColumn - Column to filter on (0-indexed)
+ * @param filterValue - Value to match
+ * @returns The matching row or null
+ */
+export async function fetchRowByFilter(
+  accessToken: string,
+  spreadsheetId: string,
+  sheetName: string,
+  filterColumn: number,
+  filterValue: string
+): Promise<string[] | null> {
+  try {
+    const values = await fetchSheetValues(accessToken, spreadsheetId, `${sheetName}!A:Z`);
+    
+    if (!values || values.length < 2) {
+      return null;
+    }
+
+    // Skip header row, find matching row
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+      if (row[filterColumn] === filterValue) {
+        return row;
+      }
+    }
+
+    return null;
+  } catch (err) {
+    logger.error(`Error fetching row by filter from ${sheetName}:`, err);
+    return null;
   }
 }

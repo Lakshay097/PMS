@@ -9,7 +9,6 @@ const COLLECTION_TO_QUERY_KEY: Record<string, string> = {
   templates: 'templates',
   reports: 'reports',
   followups: 'followups',
-  auditlogs: 'auditlogs',
   settings: 'settings',
   subtasks: 'subtasks',
   comments: 'comments',

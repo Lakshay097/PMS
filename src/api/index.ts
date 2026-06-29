@@ -7,3 +7,4 @@ export * from './users';
 export * from './teams';
 export * from './templates';
 export * from './reports';
+export * from './emailTrigger';

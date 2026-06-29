@@ -3,6 +3,9 @@ import { login, generateUserId } from '../services/authService';
 import { generateGoogleSheetsToken, fetchSheetValues, appendSheetValues, updateSheetValues } from '../services/googleSheetsService';
 import { BadRequestError, NotFoundError, InternalServerError } from '../utils/AppError';
 import { AuthRequest } from '../middleware/auth';
+import bcrypt from 'bcrypt';
+import { logger } from '../utils/logger';
+import { config } from '../config';
 
 /**
  * Login request body
@@ -20,6 +23,14 @@ interface AccountRequestRequestBody {
   email: string;
   password: string;
   managerEmail: string;
+}
+
+/**
+ * Change password request body
+ */
+interface ChangePasswordRequestBody {
+  oldPassword: string;
+  newPassword: string;
 }
 
 /**
@@ -76,7 +87,7 @@ export async function accountRequestHandler(req: Request, res: Response): Promis
 
   // Check if email already exists
   for (const row of existingUsers) {
-    if (row[3] === normalizedEmail) { // Email is in column 4 (index 3)
+    if (row[2] === normalizedEmail) { // Email is in column 3 (index 2)
       throw new BadRequestError("An account with this email already exists");
     }
   }
@@ -85,7 +96,7 @@ export async function accountRequestHandler(req: Request, res: Response): Promis
   // If manager is Admin, role is Stakeholder, otherwise Sub-stakeholder
   let role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder' = 'Sub-stakeholder';
   for (const row of existingUsers) {
-    if (row[3] === normalizedManagerEmail && row[4] === 'Admin') { // Email (index 3) and Role (index 4)
+    if (row[2] === normalizedManagerEmail && row[3] === 'Admin') { // Email (index 2) and Role (index 3)
       role = 'Stakeholder';
       break;
     }
@@ -170,7 +181,7 @@ export async function approveUserHandler(req: AuthRequest, res: Response): Promi
 
   for (let i = 0; i < users.length; i++) {
     const row = users[i];
-    if (row[3] === normalizedEmail) { // Email is in column 4 (index 3)
+    if (row[2] === normalizedEmail) { // Email is in column 3 (index 2)
       userRowIndex = i;
       userRow = row;
       break;
@@ -203,5 +214,117 @@ export async function approveUserHandler(req: AuthRequest, res: Response): Promi
   res.json({
     success: true,
     message: "User approved successfully"
+  });
+}
+
+/**
+ * POST /api/change-password
+ * Protected endpoint to change user password
+ */
+export async function changePasswordHandler(req: AuthRequest, res: Response): Promise<void> {
+  const { oldPassword, newPassword } = req.body as ChangePasswordRequestBody;
+
+  logger.debug('Password change attempt for user:', req.user?.email);
+
+  if (!oldPassword || !newPassword) {
+    throw new BadRequestError("Old password and new password are required");
+  }
+
+  if (newPassword.length < 6) {
+    throw new BadRequestError("New password must be at least 6 characters");
+  }
+
+  // Get Google Sheets access token
+  const tokenData = await generateGoogleSheetsToken();
+  if (!tokenData) {
+    throw new InternalServerError("Failed to authenticate with Google Sheets");
+  }
+
+  const spreadsheetId = tokenData.spreadsheetId;
+  if (!spreadsheetId) {
+    throw new InternalServerError("Spreadsheet ID not found");
+  }
+
+  // Fetch all users
+  const usersRange = 'users!A:R';
+  const users = await fetchSheetValues(tokenData.accessToken, spreadsheetId, usersRange);
+
+  if (!users) {
+    throw new InternalServerError("Failed to fetch users");
+  }
+
+  logger.debug('Total users fetched:', users.length);
+
+  const userEmail = req.user?.email;
+  if (!userEmail) {
+    throw new BadRequestError("User email not found in token");
+  }
+
+  const normalizedEmail = userEmail.toLowerCase();
+  logger.debug('Looking for user with email:', normalizedEmail);
+
+  // Find the user - skip header row (index 0), email is at index 2
+  let userRowIndex = -1;
+  let userRow: any[] | null = null;
+
+  for (let i = 1; i < users.length; i++) {
+    const row = users[i];
+    logger.debug(`Row ${i} email:`, row[2]);
+    if (row[2] === normalizedEmail) { // Email is in column 3 (index 2)
+      userRowIndex = i;
+      userRow = row;
+      break;
+    }
+  }
+
+  if (!userRow) {
+    logger.debug('User not found');
+    throw new NotFoundError("User not found");
+  }
+
+  logger.debug('User found at row:', userRowIndex);
+
+  // Verify old password
+  const storedPassword = userRow[12]; // Password is in column 13 (index 12)
+  const isBcryptHash = storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2a$');
+  
+  let passwordMatches = false;
+  let needsMigration = false;
+  
+  if (isBcryptHash) {
+    passwordMatches = await bcrypt.compare(oldPassword, storedPassword);
+  } else {
+    // Migration: detect plaintext password and verify
+    passwordMatches = oldPassword === storedPassword;
+    if (passwordMatches) {
+      needsMigration = true;
+    }
+  }
+
+  if (!passwordMatches) {
+    throw new BadRequestError("Old password is incorrect");
+  }
+
+  // Update password - hash it with bcrypt
+  const now = new Date().toISOString();
+  const hashedPassword = await bcrypt.hash(newPassword, config.BCRYPT_ROUNDS);
+  userRow[12] = hashedPassword; // Password (M)
+  userRow[11] = now; // UpdatedAt (L)
+
+  // Update the user row in Google Sheets
+  const success = await updateSheetValues(
+    tokenData.accessToken,
+    spreadsheetId,
+    `users!A${userRowIndex + 1}:R${userRowIndex + 1}`,
+    [userRow]
+  );
+
+  if (!success) {
+    throw new InternalServerError("Failed to update password");
+  }
+
+  res.json({
+    success: true,
+    message: "Password changed successfully"
   });
 }

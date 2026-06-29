@@ -1,4 +1,4 @@
-import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AuditLog, AppSetting, Subtask, Comment } from './types';
+import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AppSetting, Subtask, Comment } from './types';
 
 export const INITIAL_USERS: User[] = [
   {
@@ -35,8 +35,6 @@ export const INITIAL_TASKS: Task[] = [];
 export const INITIAL_REPORTS: TaskReport[] = [];
 
 export const INITIAL_FOLLOWUPS: FollowUp[] = [];
-
-export const INITIAL_AUDITS: AuditLog[] = [];
 
 export const INITIAL_SETTINGS: AppSetting[] = [
   { Key: "lock_timeout_ms", Value: "10000" },

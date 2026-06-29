@@ -3,14 +3,17 @@ import Drawer from '../shared/Drawer';
 import FilterChip from '../shared/FilterChip';
 import { Plus, Search, MoreVertical, Mail, User as UserIcon, Briefcase, Users, Shield, Clock } from 'lucide-react';
 import { User } from '../../types';
+import { ROLE } from '../../constants/status';
+import { getAllSubordinates } from '../../utils/userUtils';
 
 interface TeamDirectoryProps {
   users: User[];
+  currentUser?: User;
   onInviteUser?: () => void;
   onUserClick?: (userId: string) => void;
 }
 
-export default function TeamDirectory({ users, onInviteUser, onUserClick }: TeamDirectoryProps) {
+export default function TeamDirectory({ users, currentUser, onInviteUser, onUserClick }: TeamDirectoryProps) {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'Admin' | 'Stakeholder' | 'Sub-stakeholder'>('all');
@@ -20,8 +23,15 @@ export default function TeamDirectory({ users, onInviteUser, onUserClick }: Team
   // Get unique teams
   const teams = Array.from(new Set((users || []).flatMap(u => u.TeamNames || [])));
 
-  // Filter users
+  // Filter users - apply hierarchical visibility for stakeholders
   const filteredUsers = (users || []).filter(user => {
+    // Apply hierarchical visibility for stakeholders
+    if (currentUser && currentUser.Role === ROLE.STAKEHOLDER) {
+      const subordinateEmails = getAllSubordinates(currentUser.Email, users || []);
+      const isVisible = user.Email === currentUser.Email || subordinateEmails.includes(user.Email);
+      if (!isVisible) return false;
+    }
+    // Apply other filters
     if (searchQuery && !user.FullName?.toLowerCase().includes(searchQuery.toLowerCase()) && !user.Email?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (roleFilter !== 'all' && user.Role !== roleFilter) return false;
     if (teamFilter !== 'all' && !user.TeamIDs?.includes(teamFilter)) return false;

@@ -3,12 +3,14 @@ import { Task, User, TaskTemplate, Subtask, Comment, FollowUp, TaskStatus } from
 import { dbService } from '../lib/dbService';
 import { checkAndGenerateRecurringTasks } from '../lib/taskEngine';
 import { ROLE } from '../constants/status';
+import { triggerTaskAssignmentEmail, triggerTaskClosureEmail } from '../api/emailTrigger';
 
 interface UseTaskOperationsProps {
   tasks: Task[];
   users: User[];
   currentUser: User | null;
   syncDatabase: () => Promise<void>;
+  silentSync: () => Promise<void>;
   selectedTask: Task | null;
   setSelectedTask: (task: Task | null) => void;
   triggerNotification: (type: string, message: string, emailSentTo: string) => void;
@@ -25,6 +27,7 @@ export function useTaskOperations({
   users,
   currentUser,
   syncDatabase,
+  silentSync,
   selectedTask,
   setSelectedTask,
   triggerNotification,
@@ -50,7 +53,6 @@ export function useTaskOperations({
           TemplateID: tempId,
           Title: data.Title,
           Description: data.Description,
-          Category: 'Operations', // Default category for templates
           Priority: data.Priority,
           RecurrenceType: data.RecurrenceType,
           StartDate: data.StartDate,
@@ -77,13 +79,17 @@ export function useTaskOperations({
         const firstEmail = data.AssignedToEmail.split(',')[0]?.trim() || '';
         const recipient = users.find(u => u.Email === firstEmail);
         
+        // Use provided team IDs or fallback to recipient's team IDs
+        const assignedTeamIDs = data.AssignedToTeamIDs && data.AssignedToTeamIDs.length > 0 
+          ? data.AssignedToTeamIDs 
+          : (recipient ? recipient.TeamIDs : currentUser.TeamIDs);
+        
         const newTask: Task = {
           TaskID: newId,
           TemplateID: null,
           ParentTaskID: null,
           Title: data.Title,
           Description: data.Description,
-          Category: 'Operations', // Default category for tasks
           Priority: data.Priority,
           TaskType: 'One-time',
           RecurrenceType: 'One-time',
@@ -93,7 +99,7 @@ export function useTaskOperations({
           AssignedByEmail: currentUser.Email,
           AssignedToEmail: data.AssignedToEmail,
           AssignedToRole: recipient ? recipient.Role as any : 'Stakeholder',
-          AssignedToTeamIDs: recipient ? recipient.TeamIDs : currentUser.TeamIDs,
+          AssignedToTeamIDs: assignedTeamIDs,
           Status: 'Not Started',
           PercentComplete: 0,
           LastReportSummary: '',
@@ -110,6 +116,24 @@ export function useTaskOperations({
 
         await dbService.saveTask(newTask);
         await logAudit('Task', newId, 'Created One-time Task Allocation', '', JSON.stringify(data));
+        
+        // Trigger email notification
+        try {
+          await triggerTaskAssignmentEmail({
+            assignerEmail: currentUser.Email,
+            assignedToEmail: newTask.AssignedToEmail,
+            task: {
+              TaskID: newTask.TaskID,
+              Title: newTask.Title,
+              Description: newTask.Description,
+              DueDate: newTask.DueDate,
+              Priority: newTask.Priority,
+            },
+          });
+        } catch (emailError) {
+          console.error('Failed to trigger task assignment email:', emailError);
+        }
+        
         const alertMsg = formatEmailTemplate('template_assigned_email', newTask);
         triggerNotification(
           'Task Assignment',
@@ -117,12 +141,12 @@ export function useTaskOperations({
           `${newTask.AssignedToEmail}`
         );
         // Trigger sync after action
-        syncDatabase();
+        silentSync();
       }
     } catch (error) {
       throw error;
     }
-  }, [currentUser, users, triggerNotification, formatEmailTemplate, logAudit]);
+  }, [currentUser, users, triggerNotification, formatEmailTemplate, logAudit, silentSync]);
 
   const handleCloseTask = useCallback(async (taskId: string, remark: string) => {
     const nowStr = new Date().toISOString();
@@ -143,12 +167,22 @@ export function useTaskOperations({
       if (selectedTask && selectedTask.TaskID === taskId) {
         setSelectedTask(updatedTask);
       }
+      try {
+        await triggerTaskClosureEmail({
+          closedByEmail: currentUser.Email,
+          assignedToEmail: targetTask.AssignedToEmail,
+          task: updatedTask,
+          closeRemark: remark,
+        });
+      } catch (err) {
+        console.error('Failed to trigger closure email:', err);
+      }
     }
 
     await logAudit('Task', taskId, 'Task Cleared & Closed', '', JSON.stringify({ Remark: remark }));
     // Trigger sync after action
-    syncDatabase();
-  }, [tasks, selectedTask, setSelectedTask, logAudit, syncDatabase]);
+    silentSync();
+  }, [tasks, selectedTask, setSelectedTask, logAudit, silentSync]);
 
   const handleUpdateTask = useCallback(async (taskId: string, fields: Partial<Task>) => {
     const nowStr = new Date().toISOString();
@@ -177,113 +211,97 @@ export function useTaskOperations({
       
       await logAudit('Task', taskId, 'Updated Task Properties', '', JSON.stringify(fields));
       // Trigger sync after action
-      syncDatabase();
+      silentSync();
     }
-  }, [tasks, selectedTask, setSelectedTask, triggerNotification, logAudit]);
+  }, [tasks, selectedTask, setSelectedTask, triggerNotification, logAudit, silentSync]);
 
   const handleCreateFollowUp = useCallback(async (parentTaskId: string, reason: string) => {
     if (!currentUser) return;
-    
+
     const nowStr = new Date().toISOString();
     const parent = tasks.find(t => t.TaskID === parentTaskId);
     if (!parent) return;
 
     const nextFCount = parent.FollowUpCount + 1;
-    const updatedParent: Task = {
+
+    // Calculate new due date — 7 days from today
+    const newDue = new Date();
+    newDue.setDate(newDue.getDate() + 7);
+    const newDueStr = `${newDue.getFullYear()}-${String(newDue.getMonth() + 1).padStart(2, '0')}-${String(newDue.getDate()).padStart(2, '0')}`;
+
+    // Update the original task in place — reopen it
+    const updatedTask: Task = {
       ...parent,
-      RequiresFollowUp: 'Yes',
+      Status: 'Reopened',
       FollowUpCount: nextFCount,
-      UpdatedAt: nowStr
-    };
-
-    const newTaskId = `TSK-${Math.floor(1000 + Math.random() * 8999)}`;
-    const firstEmail = parent.AssignedToEmail.split(',')[0]?.trim() || '';
-    const recipient = users.find(u => u.Email === firstEmail);
-    const today = new Date();
-    const due = new Date();
-    due.setDate(today.getDate() + 7);
-    
-    const newFollowUpTask: Task = {
-      TaskID: newTaskId,
-      TemplateID: null,
-      ParentTaskID: parentTaskId,
-      Title: `Follow-up #${nextFCount}: ${parent.Title.replace(/\s-\s\[Cycle.*\]/g, "")}`,
-      Description: `REASON FOR FOLLOW-UP: ${reason}\n\nORIGINAL PARENT WORK SCOPE: ${parent.Description}`,
-      Category: parent.Category,
-      Priority: 'Medium',
-      TaskType: 'One-time',
-      RecurrenceType: 'One-time',
-      CycleKey: null,
-      StartDate: today.toISOString().split('T')[0],
-      DueDate: due.toISOString().split('T')[0],
-      AssignedByEmail: currentUser.Email,
-      AssignedToEmail: parent.AssignedToEmail,
-      AssignedToRole: recipient ? recipient.Role : 'Stakeholder',
-      AssignedToTeamIDs: parent.AssignedToTeamIDs,
-      Status: 'Not Started',
-      PercentComplete: 0,
-      LastReportSummary: '',
-      RequiresFollowUp: 'No',
-      FollowUpCount: 0,
-      CompletionDate: null,
-      CloseRemark: null,
-      AttachmentLink: '',
-      CreatedAt: nowStr,
+      RequiresFollowUp: 'Yes',
+      FollowUpReason: reason,           // store latest follow-up reason
+      CompletionDate: '',               // clear completion date
+      CloseRemark: '',                  // clear close remark
+      DueDate: newDueStr,               // reset due date
+      OriginalDueDate: parent.OriginalDueDate || parent.DueDate,
+      EtaRequestCount: 0,               // reset ETA count
+      LastReportSummary: '',            // clear last report
       UpdatedAt: nowStr,
-      Active: true,
-      DeletedAt: null
     };
 
-    const followId = `FLW-${Math.floor(100 + Math.random() * 899)}`;
+    await dbService.saveTask(updatedTask);
+
+    // Still create a FollowUp record for audit trail
+    const followId = `FLW-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
     const newFollowUpRecord: FollowUp = {
       FollowUpID: followId,
       ParentTaskID: parentTaskId,
-      NewTaskID: newTaskId,
+      NewTaskID: parentTaskId,          // same task — no new task created
       FollowUpNumber: nextFCount,
-      CreatedByEmail: currentUser.Email,
       Reason: reason,
       CreatedAt: nowStr,
+      CreatedByEmail: currentUser.Email,
       Status: 'Active'
     };
 
-    await dbService.saveTask(updatedParent);
-    await dbService.saveTask(newFollowUpTask);
     await dbService.saveFollowup(newFollowUpRecord);
 
     if (selectedTask && selectedTask.TaskID === parentTaskId) {
-      setSelectedTask(updatedParent);
+      setSelectedTask(updatedTask);
     }
 
-    await logAudit('FollowUp', followId, 'Follow-Up Sparked & Linked', '', JSON.stringify({ ParentID: parentTaskId, ChildID: newTaskId }));
-    // Trigger sync after action
-    syncDatabase();
-  }, [currentUser, tasks, users, selectedTask, setSelectedTask, logAudit, syncDatabase]);
+    await logAudit('FollowUp', followId, 'Follow-Up Applied In Place', '', JSON.stringify({
+      TaskID: parentTaskId,
+      FollowUpNumber: nextFCount,
+      Reason: reason,
+    }));
 
-  const handleAddSubtask = useCallback(async (taskId: string, title: string) => {
+    silentSync();
+  }, [tasks, currentUser, selectedTask, setSelectedTask, logAudit, silentSync]);
+
+  const handleAddSubtask = useCallback(async (taskId: string, data: { title: string; assignedTo?: string; dueDate?: string }) => {
     if (!currentUser) return;
     
     const newSubtask: Subtask = {
       SubtaskID: `SUB-${Math.floor(1000 + Math.random() * 8999)}`,
       TaskID: taskId,
-      Title: title,
-      IsDone: false,
-      CreatedAt: new Date().toISOString(),
+      Title: data.title,
+      AssignedTo: data.assignedTo,
+      DueDate: data.dueDate,
       CreatedBy: currentUser.Email,
-      UpdatedAt: new Date().toISOString()
+      LastReportSummary: '',
+      Completed: false,
+      CreatedAt: new Date().toISOString()
     };
     await dbService.saveSubtask(newSubtask);
     // Trigger sync after action
-    syncDatabase();
-  }, [currentUser, syncDatabase]);
+    silentSync();
+  }, [currentUser, silentSync]);
 
   const handleToggleSubtask = useCallback(async (subtaskId: string, isDone: boolean) => {
     const subtask = subtasks.find(s => s.SubtaskID === subtaskId);
     if (subtask) {
-      await dbService.saveSubtask({ ...subtask, IsDone: isDone });
+      await dbService.saveSubtask({ ...subtask, Completed: isDone });
       // Trigger sync after action
-      syncDatabase();
+      silentSync();
     }
-  }, [subtasks, syncDatabase]);
+  }, [subtasks, silentSync]);
 
   const handleDeleteSubtask = useCallback(async (subtaskId: string) => {
     const updated = subtasks.filter(s => s.SubtaskID !== subtaskId);
@@ -291,9 +309,9 @@ export function useTaskOperations({
     // Delete subtask by updating the subtasks list in the database
     // Note: deleteSubtask may not exist, so we handle it differently
     // Trigger sync after action
-    syncDatabase();
+    silentSync();
     // Note: Google Sheets sync removed as it's handled by SSE
-  }, [subtasks, setSubtasks, syncDatabase]);
+  }, [subtasks, setSubtasks, silentSync]);
 
   const handleAddComment = useCallback(async (taskId: string, comment: string) => {
     if (!currentUser) return;
@@ -307,8 +325,8 @@ export function useTaskOperations({
     };
     await dbService.saveComment(newComment);
     // Trigger sync after action
-    syncDatabase();
-  }, [currentUser, syncDatabase]);
+    silentSync();
+  }, [currentUser, silentSync]);
 
   const handleDeleteTask = useCallback(async (taskId: string) => {
     if (!currentUser) return;
@@ -317,7 +335,7 @@ export function useTaskOperations({
       await dbService.deleteTask(taskId);
       await logAudit('Task', taskId, 'Deleted Task', '', '');
       // Trigger sync after action
-      syncDatabase();
+      silentSync();
       
       // Clear selected task if it's the deleted one
       if (selectedTask && selectedTask.TaskID === taskId) {
@@ -326,7 +344,7 @@ export function useTaskOperations({
     } catch (error) {
       throw error;
     }
-  }, [currentUser, selectedTask, setSelectedTask, logAudit, syncDatabase]);
+  }, [currentUser, selectedTask, setSelectedTask, logAudit, silentSync]);
 
   const runSimulatedRecurrenceEngine = useCallback(async () => {
     setIsSimulatingRecurrence(true);
