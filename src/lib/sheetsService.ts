@@ -24,6 +24,7 @@ export const HEADERS = {
   followups: ['FollowUpID', 'ParentTaskID', 'NewTaskID', 'FollowUpNumber', 'CreatedByEmail', 'Reason', 'CreatedAt', 'Status'],
   auditlogs: ['LogID', 'EntityType', 'EntityID', 'Action', 'OldValueJSON', 'NewValueJSON', 'ActionByEmail', 'ActionDateTime'],
   settings: ['Key', 'Value'],
+  email_templates: ['Key', 'Value', 'Subject', 'Description'],
   subtasks: ['SubtaskID', 'TaskID', 'Title', 'AssignedTo', 'DueDate', 'CreatedBy', 'LastReportSummary', 'Completed', 'CreatedAt'],
   comments: ['CommentID', 'TaskID', 'Comment', 'CreatedAt', 'CreatedBy']
 };
@@ -145,7 +146,7 @@ export function rowsToObjects<T>(rows: any[][], headers: string[]): T[] {
 // Internal, unqueued Sheets API operations to avoid deadlock on cross-calls
 const sheetsApiInternal = {
   async getSpreadsheetMetadata(spreadsheetId: string): Promise<any> {
-    const res = await api.get(`/sheets/${spreadsheetId}/metadata`, { skipAuth: true });
+    const res = await api.get(`/sheets/${spreadsheetId}/metadata`, { skipAuth: true, timeout: 15000 });
     return res;
   },
 
@@ -167,8 +168,8 @@ const sheetsApiInternal = {
 
     // 2. Get or create spreadsheet via backend proxy
     logger.log('Getting or creating spreadsheet via backend proxy...');
-    const data = await api.get<{ spreadsheetId: string; metadata: any }>('/sheets/spreadsheet', { skipAuth: true });
-    
+    const data = await api.get<{ spreadsheetId: string; metadata: any }>('/sheets/spreadsheet', { skipAuth: true, timeout: 15000 });
+
     cachedSpreadsheetId = data.spreadsheetId;
     logger.log('Successfully obtained spreadsheet ID:', data.spreadsheetId);
     return data.spreadsheetId;

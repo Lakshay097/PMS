@@ -20,7 +20,7 @@ import {
   INITIAL_FOLLOWUPS,
   INITIAL_SETTINGS
 } from './initialData';
-import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AppSetting, TaskStatus, SystemAlert, Subtask, Comment } from './types/index';
+import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AppSetting, TaskStatus, SystemAlert, Subtask, Comment, TeamSubmission } from './types/index';
 import { dbService, initializeDatabase } from './lib/dbService';
 import { initAuth, sheetsApi } from './lib/sheetsService';
 import { checkAndGenerateRecurringTasks, evaluateOverdueTasks } from './lib/taskEngine';
@@ -94,11 +94,7 @@ const AddTeamModal = lazy(() => import('./components/features/tasks/AddTeamModal
 type ActiveView = 'dashboard' | 'tasks' | 'templates' | 'admin';
 
 export default function App() {
-  // Real-time sync â€” invalidates React Query cache on SSE events
-  const { token } = useAuth();
-  useRealtimeSync(token);
-
-  // Database States loaded from LocalStorage
+  // Database States loaded from LocalStorage - MUST be called before any conditional logic
   const {
     users,
     setUsers,
@@ -120,14 +116,24 @@ export default function App() {
     setSubtasks,
     comments,
     setComments,
+    emailTemplates,
+    setEmailTemplates,
+    teamSubmissions,
+    setTeamSubmissions,
     isLoading: dbIsLoading,
     dbConnectionStatus,
     isSyncing: dbIsSyncing,
     lastSyncTime,
+    syncStatus,
+    databaseSwitchMessage,
     loadDatabase,
     syncDatabase,
     silentSync,
   } = useDatabase(false); // Will be reloaded when auth initializes
+
+  // Real-time sync â€” invalidates React Query cache on SSE events
+  const { token } = useAuth();
+  useRealtimeSync(token);
 
   // Active Simulated Session email state
   const [activeUserEmail, setActiveUserEmail] = useState<string>(() => {
@@ -159,6 +165,12 @@ export default function App() {
       if (prev.some(p => p.Message === message)) return prev;
       return [alert, ...prev];
     });
+  };
+
+  // Send invite email for new user accounts
+  const handleSendInviteEmail = (email: string, fullName: string, role: string) => {
+    const inviteMessage = `Welcome to PMS! Your account has been created as ${role}. You can now log in with your credentials.`;
+    triggerNotification('Task Assignment', inviteMessage, email);
   };
 
   // Replaces email template tokens with actual task details
@@ -690,7 +702,8 @@ export default function App() {
         Status: data.StatusUpdate,
         PercentComplete: Number(data.PercentComplete),
         LastReportSummary: data.WorkSummary,
-        AttachmentLink: data.AttachmentLink || targetTask.AttachmentLink,
+        AttachmentLink: attachmentLinks.length > 0 ? attachmentLinks.join(', ') : targetTask.AttachmentLink,
+        CompletionDate: data.StatusUpdate === 'Closed' ? nowStr.split('T')[0] : targetTask.CompletionDate,
         UpdatedAt: nowStr
       };
 
@@ -720,6 +733,7 @@ export default function App() {
           }),
         });
       } catch (err) {
+        console.error('Email trigger FAILED:', err); 
         logger.error('Failed to trigger report email:', err);
       }
 
@@ -796,7 +810,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans antialiased text-slate-800">
+    <div className={`min-h-screen flex flex-col font-sans antialiased ${isDarkMode ? 'bg-[#0F141F] text-slate-200' : 'bg-slate-50 text-slate-800'}`}>
       
       {/* PWA Banners */}
       <InstallBanner />
@@ -811,25 +825,51 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="fixed top-5 right-5 z-[9999] max-w-sm w-full bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 flex gap-3 text-xs font-semibold leading-relaxed"
+            className={`fixed top-5 right-5 z-[9999] max-w-sm w-full border shadow-2xl rounded-2xl p-4 flex gap-3 text-xs font-semibold leading-relaxed ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}
           >
             <div className={`mt-0.5 h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-              simulationMessage.type === 'success' ? 'bg-emerald-100 text-emerald-800' :
-              simulationMessage.type === 'error' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+              simulationMessage.type === 'success' ? (isDarkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-800') :
+              simulationMessage.type === 'error' ? (isDarkMode ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-800') : (isDarkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-800')
             }`}>
               {simulationMessage.type === 'success' ? <CheckCircle size={14} /> :
                simulationMessage.type === 'error' ? <AlertTriangle size={14} /> : <Info size={14} />}
             </div>
             <div className="flex-1 space-y-1">
-              <div className="text-slate-900 font-bold">
+              <div className={`font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
                 {simulationMessage.type === 'success' ? 'Success Alert' :
                  simulationMessage.type === 'error' ? 'System Error' : 'System Information'}
               </div>
-              <p className="text-slate-600 leading-snug">{simulationMessage.text}</p>
+              <p className={`leading-snug ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{simulationMessage.text}</p>
             </div>
             <button
               onClick={() => setSimulationMessage(null)}
-              className="text-slate-400 hover:text-slate-600 ml-1 hover:bg-slate-100 p-1 rounded-lg transition-all h-6 w-6 flex items-center justify-center shrink-0 border-none cursor-pointer"
+              className={`ml-1 p-1 rounded-lg transition-all h-6 w-6 flex items-center justify-center shrink-0 border-none cursor-pointer ${isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+            >
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+        {databaseSwitchMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className={`fixed top-5 right-5 z-[9999] max-w-sm w-full border shadow-2xl rounded-2xl p-4 flex gap-3 text-xs font-semibold leading-relaxed ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}
+          >
+            <div className={`mt-0.5 h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 ${isDarkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-800'}`}>
+              <AlertTriangle size={14} />
+            </div>
+            <div className="flex-1 space-y-1">
+              <div className={`font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Database Status</div>
+              <p className={`leading-snug ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{databaseSwitchMessage}</p>
+            </div>
+            <button
+              onClick={() => {
+                // Clear the message by forcing a re-render
+                // The hook will auto-clear after timeout
+              }}
+              className={`ml-1 p-1 rounded-lg transition-all h-6 w-6 flex items-center justify-center shrink-0 border-none cursor-pointer ${isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
             >
               <X size={14} />
             </button>
@@ -871,7 +911,11 @@ export default function App() {
         users={users}
         audits={audits}
         settings={settings}
+        emailTemplates={emailTemplates}
         teams={teams}
+        reports={reports}
+        teamSubmissions={teamSubmissions}
+        syncStatus={syncStatus}
         isDrawerOpen={isDrawerOpen}
         isTaskModalOpen={isTaskModalOpen}
         isReportModalOpen={isReportModalOpen}
@@ -935,6 +979,7 @@ export default function App() {
             const updatedSettings = settings.map(s =>
               s.Key === key ? { ...s, Value: value } : s
             );
+            setSettings(updatedSettings); 
             await dbService.saveSettings(updatedSettings);
 
             // If this is an email template setting, also update the email_templates sheet
@@ -944,7 +989,7 @@ export default function App() {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                    'Authorization': `Bearer ${localStorage.getItem('PMS_auth_token')}`,
                   },
                   body: JSON.stringify({
                     templateName: key.replace('template_', ''),
@@ -974,6 +1019,15 @@ export default function App() {
         onUpdateUserTeams={handleUpdateUserTeams}
         onDeleteTeam={handleDeleteTeam}
         onDeleteTask={handleDeleteTask}
+        onAddTeamSubmission={async (submission) => {
+          try {
+            await dbService.saveTeamSubmission(submission);
+            setTeamSubmissions(prev => [...prev, submission]);
+            handleManualSync();
+          } catch (error) {
+            throw error;
+          }
+        }}
         isDarkMode={isDarkMode}
         onToggleTheme={() => setIsDarkMode(!isDarkMode)}
         onSyncDatabase={handleManualSync}
@@ -1032,6 +1086,7 @@ export default function App() {
             onDeleteSubtask={handleDeleteSubtask}
             usersList={users}
             teamsList={teams}
+            isDarkMode={isDarkMode}
           />
         )}
 
@@ -1059,6 +1114,7 @@ export default function App() {
               setIsDrawerOpen(false);
               setSelectedTask(null);
             }}
+            isDarkMode={isDarkMode}
           />
         )}
 

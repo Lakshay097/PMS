@@ -150,25 +150,25 @@ export default function TeamDirectory({ users, currentUser, onInviteUser, onUser
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--color-border)] bg-gray-50">
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Name
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Email
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Role
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Team
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Reports to
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-muted">
                     Actions
                   </th>
                 </tr>

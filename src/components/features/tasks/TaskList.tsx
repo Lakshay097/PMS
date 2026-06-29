@@ -1,5 +1,5 @@
-import React from 'react';
-import { Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trash2, Search } from 'lucide-react';
 import { Task, User as UserType } from '../../../types';
 import { ROLE } from '../../../constants/status';
 
@@ -26,11 +26,39 @@ export default function TaskList({
   taskSubView = 'my-tasks',
   onDeleteTask,
 }: TaskListProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredTasks = tasks.filter(task => {
+    const searchLower = searchQuery.toLowerCase();
+    return (
+      task.Title?.toLowerCase().includes(searchLower) ||
+      task.TaskID?.toLowerCase().includes(searchLower) ||
+      task.AssignedToEmail?.toLowerCase().includes(searchLower)
+    );
+  });
+
   return (
-    <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-slate-200'}`}>
+    <div className={`border border-[#E5E7EB] bg-white rounded-xl overflow-hidden ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : ''}`}>
+      {/* Search bar */}
+      <div className={`p-4 border-b border-[#E5E7EB] ${isDarkMode ? 'border-[#1E293B]' : ''}`}>
+        <div className="relative">
+          <Search size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} />
+          <input
+            type="text"
+            placeholder="Search by title, ID, or assignee..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className={`w-full pl-9 pr-4 py-2 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              isDarkMode 
+                ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' 
+                : 'bg-slate-50 border-[#E5E7EB] text-slate-800 placeholder-slate-400'
+            }`}
+          />
+        </div>
+      </div>
       <div className={`divide-y ${isDarkMode ? 'divide-[#1E293B]' : 'divide-slate-200'}`}>
         {/* PERF-CHECK: if list exceeds 50 items, add @tanstack/react-virtual */}
-        {tasks.map((task) => {
+        {filteredTasks.map((task) => {
           const taskIsSubStakeholder = currentUser && currentUser.Role === 'Stakeholder' && taskSubView === 'team-tasks' && 
             !task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase()) &&
             !task.AssignedByEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
@@ -98,8 +126,10 @@ export default function TaskList({
             </div>
           );
         })}
-        {tasks.length === 0 && (
-          <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{emptyMessage}</div>
+        {filteredTasks.length === 0 && (
+          <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            {searchQuery ? 'No tasks match your search' : emptyMessage}
+          </div>
         )}
       </div>
     </div>

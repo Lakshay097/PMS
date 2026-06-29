@@ -134,7 +134,7 @@ export default function TaskCreationForm({
             </FormField>
 
 
-            <FormField label="Task Type">
+            <FormField label="Task type">
               <select
                 value={formData.taskType}
                 onChange={(e) => setFormData({ ...formData, taskType: e.target.value as any })}
@@ -146,7 +146,7 @@ export default function TaskCreationForm({
             </FormField>
 
             {formData.taskType === 'Recurring' && (
-              <FormField label="Recurrence Type">
+              <FormField label="Recurrence type">
                 <select
                   value={formData.recurrenceType}
                   onChange={(e) => setFormData({ ...formData, recurrenceType: e.target.value as any })}
@@ -174,7 +174,7 @@ export default function TaskCreationForm({
               </select>
             </FormField>
 
-            <FormField label="Attachment Link (optional)">
+            <FormField label="Attachment link (optional)">
               <input
                 type="url"
                 value={formData.attachmentLink}
@@ -187,7 +187,7 @@ export default function TaskCreationForm({
 
           {/* Right Column */}
           <div className="space-y-4">
-            <FormField label="Start Date">
+            <FormField label="Start date">
               <div className="relative">
                 <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
                 <input
@@ -199,7 +199,7 @@ export default function TaskCreationForm({
               </div>
             </FormField>
 
-            <FormField label="Due Date" required error={errors.dueDate}>
+            <FormField label="Due date" required error={errors.dueDate}>
               <div className="relative">
                 <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
                 <input
@@ -226,7 +226,7 @@ export default function TaskCreationForm({
               </select>
             </FormField>
 
-            <FormField label="Assigned By">
+            <FormField label="Assigned by">
               <select
                 value={formData.assignedByEmail}
                 onChange={(e) => setFormData({ ...formData, assignedByEmail: e.target.value })}

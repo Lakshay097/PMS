@@ -1,5 +1,5 @@
 import React from 'react';
-import { Task, User as UserType, TaskTemplate, AuditLog, AppSetting, Team } from '../types';
+import { Task, User as UserType, TaskTemplate, AuditLog, AppSetting, Team, EmailTemplate } from '../types';
 import Dashboard from '../components/features/dashboard/Dashboard';
 
 interface DashboardPageProps {
@@ -27,6 +27,7 @@ interface DashboardPageProps {
   dbConnectionStatus?: 'connected' | 'disconnected' | 'error';
   audits?: AuditLog[];
   settings?: AppSetting[];
+  emailTemplates?: EmailTemplate[];
   teams?: Team[];
   onToggleUserStatus?: (email: string) => void;
   onUpdateUserRole?: (email: string, role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder') => void;
@@ -45,6 +46,7 @@ interface DashboardPageProps {
   isConfigureNotificationsModalOpen?: boolean;
   isAddUserModalOpen?: boolean;
   isAddTeamModalOpen?: boolean;
+  syncStatus?: 'synced' | 'syncing' | 'error';
 }
 
 export default function DashboardPage(props: DashboardPageProps) {

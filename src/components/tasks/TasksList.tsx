@@ -2,7 +2,9 @@ import React, { useState, useMemo } from 'react';
 import StatusBadge from '../shared/StatusBadge';
 import PriorityBadge from '../shared/PriorityBadge';
 import FilterChip from '../shared/FilterChip';
-import { Plus, MoreVertical, Search, Filter as FilterIcon, X } from 'lucide-react';
+import BulkActionBar from '../shared/BulkActionBar';
+import { useRowSelection } from '../../hooks/useRowSelection';
+import { Plus, MoreVertical, Search, Filter as FilterIcon, X, CheckSquare, Trash2, Download } from 'lucide-react';
 import { Task, TaskStatus } from '../../types';
 
 interface TasksListProps {
@@ -10,11 +12,13 @@ interface TasksListProps {
   onTaskClick?: (taskId: string) => void;
   onCreateTask?: () => void;
   currentUserId?: string;
+  onDeleteTask?: (taskId: string) => void;
+  onUpdateTaskStatus?: (taskId: string, status: TaskStatus) => void;
 }
 
 type SavedView = 'all' | 'assigned-to-me' | 'assigned-by-me' | 'overdue' | 'due-today' | 'active' | 'history';
 
-export default function TasksList({ tasks, onTaskClick, onCreateTask, currentUserId }: TasksListProps) {
+export default function TasksList({ tasks, onTaskClick, onCreateTask, currentUserId, onDeleteTask, onUpdateTaskStatus }: TasksListProps) {
   const [savedView, setSavedView] = useState<SavedView>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'all'>('all');
@@ -54,6 +58,36 @@ export default function TasksList({ tasks, onTaskClick, onCreateTask, currentUse
   };
 
   const hasActiveFilters = statusFilter !== 'all' || priorityFilter !== 'all' || searchQuery !== '';
+
+  // Row selection hook
+  const {
+    selectedIds,
+    selectedCount,
+    allSelected,
+    someSelected,
+    toggleSelection,
+    toggleSelectAll,
+    clearSelection,
+    isSelected,
+  } = useRowSelection<Task>({
+    items: filteredTasks,
+    getItemId: (task) => task.TaskID,
+  });
+
+  // Bulk action handlers
+  const handleBulkDelete = () => {
+    selectedIds.forEach(taskId => {
+      onDeleteTask?.(taskId as string);
+    });
+    clearSelection();
+  };
+
+  const handleBulkMarkComplete = () => {
+    selectedIds.forEach(taskId => {
+      onUpdateTaskStatus?.(taskId as string, 'Closed');
+    });
+    clearSelection();
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -204,25 +238,36 @@ export default function TasksList({ tasks, onTaskClick, onCreateTask, currentUse
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--color-border)] bg-gray-50">
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted w-10">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={input => {
+                        if (input) input.indeterminate = someSelected;
+                      }}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500 cursor-pointer"
+                    />
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Title
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Priority
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Assignee
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Due date
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Last update
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-muted">
                     Action
                   </th>
                 </tr>
@@ -235,6 +280,17 @@ export default function TasksList({ tasks, onTaskClick, onCreateTask, currentUse
                     onClick={() => onTaskClick?.(task.TaskID)}
                     className="hover:bg-gray-50 cursor-pointer transition-colors"
                   >
+                    <td className="px-6 py-4">
+                      <input
+                        type="checkbox"
+                        checked={isSelected(task.TaskID)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleSelection(task.TaskID);
+                        }}
+                        className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500 cursor-pointer"
+                      />
+                    </td>
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-[#0f172a]">{task.Title}</div>
                     </td>
@@ -275,6 +331,26 @@ export default function TasksList({ tasks, onTaskClick, onCreateTask, currentUse
           </div>
         )}
       </div>
+
+      {/* Bulk Action Bar */}
+      <BulkActionBar
+        selectedCount={selectedCount}
+        actions={[
+          {
+            label: 'Delete',
+            icon: <Trash2 size={16} />,
+            onClick: handleBulkDelete,
+            variant: 'danger',
+          },
+          {
+            label: 'Mark Complete',
+            icon: <CheckSquare size={16} />,
+            onClick: handleBulkMarkComplete,
+            variant: 'primary',
+          },
+        ]}
+        onClear={clearSelection}
+      />
     </div>
   );
 }

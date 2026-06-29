@@ -1,6 +1,6 @@
 import React from 'react';
 
-type StatusType = 'Not Started' | 'In Progress' | 'Submitted' | 'Reviewed' | 'Closed' | 'Reopened' | 'Overdue';
+type StatusType = 'Not Started' | 'In Progress' | 'Submitted' | 'Reviewed' | 'Closed' | 'Reopened' | 'Overdue' | 'On Hold' | 'Dropped';
 
 interface StatusBadgeProps {
   status: StatusType;
@@ -15,6 +15,8 @@ const statusConfig: Record<StatusType, { color: string; bgColor: string }> = {
   'Closed': { color: '#16a34a', bgColor: '#dcfce7' },
   'Reopened': { color: '#ea580c', bgColor: '#ffedd5' },
   'Overdue': { color: '#dc2626', bgColor: '#fee2e2' },
+  'On Hold': { color: '#6b7280', bgColor: '#e5e7eb' },
+  'Dropped': { color: '#9ca3af', bgColor: '#f3f4f6' },
 };
 
 export default function StatusBadge({ status, size = 'md' }: StatusBadgeProps) {

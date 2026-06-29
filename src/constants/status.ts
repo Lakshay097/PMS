@@ -35,6 +35,7 @@ export const ROLE = {
   ADMIN: 'Admin',
   STAKEHOLDER: 'Stakeholder',
   SUB_STAKEHOLDER: 'Sub-stakeholder',
+  TEAM_LEADER: 'Team Leader',
 } as const;
 
 export type Role = typeof ROLE[keyof typeof ROLE];

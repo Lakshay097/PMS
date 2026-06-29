@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Calendar, ClipboardList, Repeat, UserPlus, Info, Users, CheckCircle } from 'lucide-react';
+import { X, Calendar, ClipboardList, Repeat, UserPlus, Info, Users, CheckCircle, Upload, File, X as XIcon } from 'lucide-react';
 import { User, TaskTemplate, Task, TaskStatus, Team } from '../types';
 import { ROLE } from '../constants/status';
+import { uploadFile } from '../api/upload';
 
 interface CreateTaskModalProps {
   currentUser: User;
@@ -72,6 +73,8 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
   const [searchQuery, setSearchQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [attachmentLink, setAttachmentLink] = useState('');
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; type: string; data: string }>>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const [validationError, setValidationError] = useState('');
 
   // Auto-generate title from priority, description and date
@@ -115,9 +118,44 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
     };
   }, [showDropdown]);
 
+  // Handle file upload
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []) as File[];
+    if (files.length === 0) return;
+
+    setIsUploading(true);
+    const newUploadedFiles: Array<{ name: string; type: string; data: string }> = [];
+
+    for (const file of files) {
+      try {
+        const reader = new FileReader();
+        const data = await new Promise<string>((resolve, reject) => {
+          reader.onload = (event) => resolve(event.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        newUploadedFiles.push({
+          name: file.name,
+          type: file.type,
+          data
+        });
+      } catch (error) {
+        console.error('Error reading file:', error);
+      }
+    }
+
+    setUploadedFiles(prev => [...prev, ...newUploadedFiles]);
+    setIsUploading(false);
+  };
+
+  const removeUploadedFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !description.trim()) {
       setValidationError('Title and description are required');
@@ -130,6 +168,34 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
       return;
     }
 
+    // Upload files if any
+    let combinedAttachmentLinks = attachmentLink;
+    if (uploadedFiles.length > 0) {
+      setIsUploading(true);
+      const uploadedUrls: string[] = [];
+
+      for (const file of uploadedFiles) {
+        try {
+          const uploadResult = await uploadFile({
+            fileName: file.name,
+            fileData: file.data,
+            mimeType: file.type,
+          });
+          uploadedUrls.push(uploadResult.webViewLink);
+        } catch (error) {
+          console.error('Error uploading file:', error);
+        }
+      }
+
+      if (uploadedUrls.length > 0) {
+        combinedAttachmentLinks = attachmentLink
+          ? `${attachmentLink},${uploadedUrls.join(',')}`
+          : uploadedUrls.join(',');
+      }
+
+      setIsUploading(false);
+    }
+
     onSubmit({
       Title: title,
       Description: description,
@@ -140,7 +206,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
       DueDate: taskType === 'One-time' ? dueDate : startDate,
       AssignedToEmail: selectedEmails.join(', '),
       AssignedToTeamIDs: selectedTeamIDs,
-      AttachmentLink: attachmentLink
+      AttachmentLink: combinedAttachmentLinks
     });
 
     // Reset fields
@@ -150,6 +216,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
     setStartDate(todayStr);
     setDueDate(nextWeekStr);
     setAttachmentLink('');
+    setUploadedFiles([]);
     setSelectedEmails([]);
     setSelectedTeamIDs([]);
     setValidationError('');
@@ -162,19 +229,19 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
-        className="bg-white rounded-xl shadow-xl border border-[#E2E8F0] w-full max-w-2xl overflow-hidden font-sans"
+        className="bg-white rounded-xl shadow-xl border border-[#E5E7EB] w-full max-w-2xl overflow-hidden font-sans flex flex-col max-h-[90vh]"
       >
-        <div className="bg-[#0F172A] px-6 py-4.5 flex items-center justify-between border-b border-[#1E293B]">
+        <div className="px-6 py-4.5 flex items-center justify-between border-b border-[#E5E7EB] bg-white">
           <div className="flex items-center space-x-2.5">
-            <ClipboardList className="text-[#3B82F6]" size={20} />
-            <h3 className="text-white font-bold text-base tracking-tight font-sans">Configure New Task Allocation</h3>
+            <ClipboardList className="text-[#2563EB]" size={20} />
+            <h3 className="font-bold text-base tracking-tight font-sans text-slate-900">Configure New Task Allocation</h3>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors cursor-pointer">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer">
             <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 flex-1 overflow-y-auto">
           {validationError && (
             <div className="bg-red-50 border border-red-200 text-red-600 text-xs px-4 py-3 rounded-lg">
               {validationError}
@@ -182,17 +249,17 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
           )}
           {/* Task Type Switcher */}
           <div>
-            <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-2">
-              Task Scheduling Type
+            <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-2">
+              Task scheduling type
             </label>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setTaskType('One-time')}
-                className={`py-2 px-3 rounded-lg border text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+                className={`py-2 px-3 rounded-lg border text-xs font-bold tracking-wider transition-all flex items-center justify-center space-x-2 cursor-pointer ${
                   taskType === 'One-time'
                     ? 'bg-[#2563EB]/10 border-[#2563EB] text-[#2563EB]'
-                    : 'bg-white border-[#E2E8F0] text-slate-700 hover:bg-slate-50'
+                    : 'bg-white border-[#E5E7EB] text-slate-700 hover:bg-slate-50'
                 }`}
               >
                 <Calendar size={15} />
@@ -202,10 +269,10 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
               <button
                 type="button"
                 onClick={() => setTaskType('Recurring')}
-                className={`py-2 px-3 rounded-lg border text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+                className={`py-2 px-3 rounded-lg border text-xs font-bold tracking-wider transition-all flex items-center justify-center space-x-2 cursor-pointer ${
                   taskType === 'Recurring'
                     ? 'bg-[#2563EB]/10 border-[#2563EB] text-[#2563EB]'
-                    : 'bg-white border-[#E2E8F0] text-slate-700 hover:bg-slate-50'
+                    : 'bg-white border-[#E5E7EB] text-slate-700 hover:bg-slate-50'
                 }`}
               >
                 <Repeat size={15} />
@@ -215,8 +282,8 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
-              Aesthetic Title <span className="text-red-500">*</span>
+            <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+              Aesthetic title <span className="text-red-500">*</span>
               <span className="text-blue-500 ml-1">(Auto-generated from description & date)</span>
             </label>
             <input
@@ -225,14 +292,14 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Q3 Financial Ledger Verification"
-              className="w-full text-xs bg-slate-50 border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+              className="w-full text-xs bg-slate-50 border border-[#E5E7EB] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
               readOnly
             />
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
-              Detailed Scope / Instructions <span className="text-red-500">*</span>
+            <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+              Detailed scope / instructions <span className="text-red-500">*</span>
             </label>
             <textarea
               required
@@ -246,9 +313,9 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
 
           <div className="grid grid-cols-1 gap-4">
             <div>
-              <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5 flex items-center space-x-1">
+              <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1.5 flex items-center space-x-1">
                 <UserPlus size={12} />
-                <span>Assigned Recipients {selectedTeamIDs.length > 0 ? '(Auto-filled from team)' : '(Multiple Allowed)'}</span>
+                <span>Assigned recipients {selectedTeamIDs.length > 0 ? '(Auto-filled from team)' : '(Multiple allowed)'}</span>
               </label>
               <div className="relative search-dropdown-container">
                 <input
@@ -320,43 +387,62 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
             {/* Team Assignment */}
             {teamsList && teamsList.length > 0 && (
               <div>
-                <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5 flex items-center space-x-1">
+                <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1.5 flex items-center space-x-1">
                   <Users size={12} />
-                  <span>Assign to Team (Optional)</span>
+                  <span>Assign to teams (optional, multiple allowed)</span>
                 </label>
-                <select
-                  value={selectedTeamIDs.length > 0 ? selectedTeamIDs[0] : ''}
-                  onChange={(e) => {
-                    const teamId = e.target.value;
-                    if (teamId) {
-                      setSelectedTeamIDs([teamId]);
-                      // Auto-select all team members
-                      const team = teamsList.find(t => t.TeamID === teamId);
-                      if (team) {
-                        const teamMemberEmails = usersList
-                          .filter(u => u.TeamIDs.includes(teamId) && u.Active)
-                          .map(u => u.Email);
-                        setSelectedEmails(teamMemberEmails);
-                      }
-                    } else {
-                      setSelectedTeamIDs([]);
-                      setSelectedEmails([]);
-                    }
-                  }}
-                  className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
-                >
-                  <option value="">Select a team...</option>
-                  {teamsList.filter(t => t.Active).map(team => {
-                    const teamUsers = usersList.filter(u => u.TeamIDs.includes(team.TeamID) && u.Active);
-                    return (
-                      <option key={team.TeamID} value={team.TeamID}>
-                        {team.TeamName} ({teamUsers.length} members)
-                      </option>
-                    );
-                  })}
-                </select>
+                <div className="relative search-dropdown-container">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setShowDropdown(true);
+                    }}
+                    onFocus={() => setShowDropdown(true)}
+                    placeholder="Search teams by name..."
+                    className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                  />
+                  {showDropdown && searchQuery && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-[#E2E8F0] rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {teamsList.filter(t => t.Active && t.TeamName.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
+                        <div className="p-3 text-slate-400 text-xs italic">No teams found.</div>
+                      ) : (
+                        teamsList.filter(t => t.Active && t.TeamName.toLowerCase().includes(searchQuery.toLowerCase())).map(team => {
+                          const isSelected = selectedTeamIDs.includes(team.TeamID);
+                          const teamUsers = usersList.filter(u => u.TeamIDs.includes(team.TeamID) && u.Active);
+                          return (
+                            <div
+                              key={team.TeamID}
+                              onClick={() => {
+                                if (!isSelected) {
+                                  setSelectedTeamIDs([...selectedTeamIDs, team.TeamID]);
+                                  // Auto-select all team members
+                                  const teamMemberEmails = teamUsers.map(u => u.Email);
+                                  setSelectedEmails([...new Set([...selectedEmails, ...teamMemberEmails])]);
+                                }
+                                setSearchQuery('');
+                                setShowDropdown(false);
+                              }}
+                              className={`p-2.5 cursor-pointer text-xs hover:bg-slate-50 transition-colors ${
+                                isSelected ? 'bg-slate-100 opacity-50' : ''
+                              }`}
+                            >
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-slate-900">{team.TeamName}</span>
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  {teamUsers.length} members
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
                 {selectedTeamIDs.length > 0 && (
-                  <div className="mt-2 flex items-center gap-1">
+                  <div className="mt-2 flex flex-wrap gap-1">
                     {selectedTeamIDs.map(teamId => {
                       const team = teamsList.find(t => t.TeamID === teamId);
                       return (
@@ -365,8 +451,15 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedTeamIDs([]);
-                              setSelectedEmails([]);
+                              setSelectedTeamIDs(selectedTeamIDs.filter(id => id !== teamId));
+                              // Remove team members from selected emails
+                              const team = teamsList.find(t => t.TeamID === teamId);
+                              if (team) {
+                                const teamMemberEmails = usersList
+                                  .filter(u => u.TeamIDs.includes(teamId) && u.Active)
+                                  .map(u => u.Email);
+                                setSelectedEmails(selectedEmails.filter(email => !teamMemberEmails.includes(email)));
+                              }
                             }}
                             className="text-emerald-500 hover:text-emerald-800 p-0.5 hover:bg-transparent inline-flex items-center border-none"
                           >
@@ -381,8 +474,8 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
             )}
 
             <div>
-              <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
-                Priority Ranking
+              <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+                Priority ranking
               </label>
               <select
                 value={priority}
@@ -401,8 +494,8 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
           {taskType === 'One-time' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
-                  Start Date
+                <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+                  Start date
                 </label>
                 <input
                   type="date"
@@ -413,8 +506,8 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
-                  Due Date
+                <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+                  Due date
                 </label>
                 <input
                   type="date"
@@ -428,13 +521,13 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
             <div className="bg-slate-50 border border-[#E2E8F0] rounded-lg p-4 space-y-3 shadow-inner">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
-                    Recurrence Schedule Frequency
+                  <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+                    Recurrence schedule frequency
                   </label>
                   <select
                     value={recurrenceType}
                     onChange={(e) => setRecurrenceType(e.target.value as any)}
-                    className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    className="w-full text-xs bg-white border border-[#E5E7EB] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                   >
                     <option value="Daily">Daily Interval</option>
                     <option value="Weekly">Weekly (Every Monday)</option>
@@ -445,14 +538,14 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
-                    First Generation Start Date
+                  <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+                    First generation start date
                   </label>
                   <input
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    className="w-full text-xs bg-white border border-[#E5E7EB] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                   />
                 </div>
               </div>
@@ -463,32 +556,87 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
           )}
 
           <div>
-            <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
-              Focal Reference Asset URL (Optional)
+            <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+              Attachments (optional)
             </label>
-            <input
-              type="url"
-              value={attachmentLink}
-              onChange={(e) => setAttachmentLink(e.target.value)}
-              placeholder="https://example.com/your-assets-folder"
-              className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
-            />
+            <div className="space-y-3">
+              {/* File Upload */}
+              <div className="border-2 border-dashed border-[#E5E7EB] rounded-lg p-4 hover:border-[#2563EB] transition-colors">
+                <input
+                  type="file"
+                  multiple
+                  onChange={handleFileUpload}
+                  accept="*/*"
+                  className="hidden"
+                  id="task-file-upload"
+                />
+                <label
+                  htmlFor="task-file-upload"
+                  className="flex flex-col items-center justify-center cursor-pointer"
+                >
+                  <Upload size={24} className="text-[#64748B] mb-2" />
+                  <p className="text-xs text-[#64748B] font-medium">
+                    Click to upload files or drag and drop
+                  </p>
+                  <p className="text-[10px] text-[#94A3B8] text-center mt-1">
+                    All file types accepted (Max 10MB each)
+                  </p>
+                </label>
+              </div>
+
+              {/* Uploaded Files List */}
+              {uploadedFiles.length > 0 && (
+                <div className="space-y-2">
+                  {uploadedFiles.map((file, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between bg-slate-50 border border-[#E5E7EB] rounded-lg px-3 py-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <File size={14} className="text-[#64748B]" />
+                        <span className="text-xs text-slate-700 truncate max-w-[200px]">{file.name}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeUploadedFile(index)}
+                        className="text-[#EF4444] hover:text-[#DC2626] transition-colors"
+                      >
+                        <XIcon size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* URL Input */}
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <input
+                    type="url"
+                    value={attachmentLink}
+                    onChange={(e) => setAttachmentLink(e.target.value)}
+                    placeholder="Or paste a URL"
+                    className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="pt-4 border-t border-[#E2E8F0] flex items-center justify-end space-x-3">
+          <div className="pt-4 border-t border-[#E5E7EB] flex items-center justify-end space-x-3 sticky bottom-0 bg-white pb-0">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-[#E2E8F0] text-slate-700 hover:bg-slate-50 transition-all rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer"
+              className="px-4 py-2 border border-[#E5E7EB] text-slate-700 hover:bg-slate-50 transition-all rounded-lg text-xs font-bold cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={selectedEmails.length === 0 && selectedTeamIDs.length === 0}
-              className="px-5 py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="px-5 py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-xs font-bold transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
-              Allocate Task
+              Allocate task
             </button>
           </div>
         </form>

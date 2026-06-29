@@ -9,10 +9,11 @@ interface AppShellProps {
   pageTitle: string;
   breadcrumb?: string;
   onQuickCreate?: () => void;
-  onSearch?: (query: string) => void;
   onSignOut?: () => void;
   isDarkMode?: boolean;
   onToggleTheme?: () => void;
+  syncStatus?: 'synced' | 'syncing' | 'error';
+  onManualSync?: () => void;
 }
 
 export default function AppShell({
@@ -22,10 +23,11 @@ export default function AppShell({
   pageTitle,
   breadcrumb,
   onQuickCreate,
-  onSearch,
   onSignOut,
   isDarkMode = false,
   onToggleTheme,
+  syncStatus,
+  onManualSync,
 }: AppShellProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
@@ -47,10 +49,9 @@ export default function AppShell({
         <TopBar
           title={pageTitle}
           breadcrumb={breadcrumb}
-          onQuickCreate={onQuickCreate}
-          onSearch={onSearch}
-          isDarkMode={isDarkMode}
-          onToggleTheme={onToggleTheme}
+          onLogout={onSignOut}
+          syncStatus={syncStatus}
+          onManualSync={onManualSync}
         />
         
         <div className="flex-1 overflow-y-auto">

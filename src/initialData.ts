@@ -41,6 +41,9 @@ export const INITIAL_SETTINGS: AppSetting[] = [
   { Key: "alert_overdue_tasks", Value: "true" },
   { Key: "require_attachment_for_closing", Value: "false" },
   { Key: "deployment_web_app_version", Value: "v1.0.4" },
+  { Key: "DUE_SOON_DAYS", Value: "3" },
+  { Key: "MAX_FILE_SIZE_MB", Value: "10" },
+  { Key: "DEFAULT_TASK_PRIORITY", Value: "Medium" },
   { Key: "template_assigned_email", Value: "NEW TASK ALLOCATION ALERT!\nTask ID: {TaskID}\nTitle: {Title}\nCategory: {Category}\nPriority: {Priority}\nDue Date: {DueDate}\n\nPlease click to compile your update sheets on time." },
   { Key: "template_delayed_email", Value: "URGENT OVERDUE COMPLIANCE WARNING!\nTask ID: {TaskID}\nTitle: {Title}\nDue Date: {DueDate}\n\nThis task is delayed. Submit your active progress reports and revised ETA immediately." }
 ];

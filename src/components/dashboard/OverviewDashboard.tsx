@@ -10,21 +10,44 @@ interface OverviewDashboardProps {
   tasks: Task[];
   onTaskClick?: (taskId: string) => void;
   onViewAllTasks?: () => void;
+  onViewChange?: (view: 'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings') => void;
+  onFilterChange?: (filterType: 'status' | 'priority' | 'assignee' | 'dueDate', value: string) => void;
 }
 
-export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks }: OverviewDashboardProps) {
+export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks, onViewChange, onFilterChange }: OverviewDashboardProps) {
   // Calculate KPI metrics
   const activeTasks = tasks.filter(t => t.Status === 'In Progress' || t.Status === 'Submitted').length;
   const overdueTasks = tasks.filter(t => t.Status === 'Overdue').length;
+  const today = new Date().toISOString().split('T')[0];
   const dueTodayTasks = tasks.filter(t => {
-    const today = new Date().toISOString().split('T')[0];
     return t.DueDate === today && t.Status !== 'Closed';
   }).length;
+  const oneWeekAgo = new Date();
+  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
   const completedThisWeek = tasks.filter(t => {
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    return t.Status === 'Closed' && new Date(t.CompletionDate || '') > weekAgo;
+    return t.Status === 'Closed' && new Date(t.CompletionDate || '') > oneWeekAgo;
   }).length;
+
+  // Handle card clicks to navigate with filters
+  const handleActiveTasksClick = () => {
+    if (onViewChange) onViewChange('tasks');
+    if (onFilterChange) onFilterChange('status', 'In Progress,Submitted');
+  };
+
+  const handleOverdueClick = () => {
+    if (onViewChange) onViewChange('tasks');
+    if (onFilterChange) onFilterChange('status', 'Overdue');
+  };
+
+  const handleDueTodayClick = () => {
+    if (onViewChange) onViewChange('tasks');
+    if (onFilterChange) onFilterChange('dueDate', 'today');
+  };
+
+  const handleCompletedThisWeekClick = () => {
+    if (onViewChange) onViewChange('tasks');
+    if (onFilterChange) onFilterChange('status', 'Closed');
+  };
 
   // Get urgent tasks (needs attention)
   const urgentTasks = tasks
@@ -55,23 +78,27 @@ export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks }
           value={activeTasks}
           note="Currently in progress"
           trend={{ value: '+12%', positive: true }}
+          onClick={handleActiveTasksClick}
         />
         <KPICard
           label="Overdue"
           value={overdueTasks}
           note="Require immediate attention"
           trend={{ value: '+2', positive: false }}
+          onClick={handleOverdueClick}
         />
         <KPICard
           label="Due today"
           value={dueTodayTasks}
           note="Tasks due by end of day"
+          onClick={handleDueTodayClick}
         />
         <KPICard
           label="Completed this week"
           value={completedThisWeek}
           note="Tasks closed in last 7 days"
           trend={{ value: '+8%', positive: true }}
+          onClick={handleCompletedThisWeekClick}
         />
       </div>
 

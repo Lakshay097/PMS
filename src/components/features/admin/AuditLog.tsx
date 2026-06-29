@@ -247,25 +247,25 @@ export default function AuditLogPage({ auditLogs, onExport }: AuditLogProps) {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[var(--color-border)] bg-gray-50">
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Timestamp
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Actor
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Entity
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Action
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Summary
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted">
                     Severity
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-muted uppercase tracking-wider">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-muted">
                     Open
                   </th>
                 </tr>

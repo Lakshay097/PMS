@@ -1,96 +1,50 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Plus, Bell, Sun, Moon, User, MoreVertical, LogOut } from 'lucide-react';
+import React, { useState } from 'react';
+import { User, MoreVertical, LogOut, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface TopBarProps {
   title: string;
   breadcrumb?: string;
-  onQuickCreate?: () => void;
-  onSearch?: (query: string) => void;
   onLogout?: () => void;
-  isDarkMode?: boolean;
-  onToggleTheme?: () => void;
+  syncStatus?: 'synced' | 'syncing' | 'error';
+  onManualSync?: () => void;
 }
 
-export default function TopBar({ title, breadcrumb, onQuickCreate, onSearch, onLogout, isDarkMode = false, onToggleTheme }: TopBarProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showNotifications, setShowNotifications] = useState(false);
+export default function TopBar({ title, breadcrumb, onLogout, syncStatus = 'synced', onManualSync }: TopBarProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
-
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const query = e.target.value;
-    setSearchQuery(query);
-    onSearch?.(query);
-  };
 
   return (
     <header className="h-16 bg-surface border-b border-[var(--color-border)] flex items-center justify-between px-6 sticky top-0 z-20">
       {/* Left: Page title and breadcrumb */}
-      <div className="flex items-center gap-3 flex-1">
+      <div className="flex items-center gap-3">
         {breadcrumb && (
           <span className="text-sm text-muted">{breadcrumb}</span>
         )}
         <h1 className="text-xl font-semibold text-[#0f172a]">{title}</h1>
       </div>
 
-      {/* Center: Global search */}
-      <div className="flex-1 max-w-md mx-4">
-        <div className="relative">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-          <input
-            type="text"
-            placeholder="Search tasks, people, schedules..."
-            value={searchQuery}
-            onChange={handleSearch}
-            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-[var(--color-border)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
-          />
-        </div>
-      </div>
-
-      {/* Right: Quick actions */}
-      <div className="flex items-center gap-2 flex-1 justify-end">
-        {/* Quick create */}
-        {onQuickCreate && (
-          <button
-            onClick={onQuickCreate}
-            className="flex items-center gap-2 px-3 py-2 bg-[var(--color-accent)] text-white rounded-md text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors"
-          >
-            <Plus size={18} />
-            <span className="hidden sm:inline">Quick Create</span>
-          </button>
-        )}
-
-        {/* Notifications */}
-        <div className="relative">
-          <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="p-2 hover:bg-gray-100 rounded-md transition-colors relative"
-          >
-            <Bell size={20} className="text-muted" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-[var(--color-danger)] rounded-full" />
-          </button>
-          
-          {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-surface border border-[var(--color-border)] rounded-lg shadow-lg z-50">
-              <div className="p-3 border-b border-[var(--color-border)]">
-                <h3 className="text-sm font-semibold text-[#0f172a]">Notifications</h3>
-              </div>
-              <div className="p-3 text-sm text-muted text-center">
-                No new notifications
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Theme toggle */}
+      {/* Right: Sync status + Profile */}
+      <div className="flex items-center gap-3">
+        {/* Sync status indicator */}
         <button
-          onClick={() => onToggleTheme && onToggleTheme()}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors"
-          title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+          onClick={onManualSync}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity ${
+            syncStatus === 'synced'
+              ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+              : syncStatus === 'syncing'
+              ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+              : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+          }`}
+          title={`Sync status: ${syncStatus}`}
         >
-          {isDarkMode ? <Sun size={20} className="text-muted" /> : <Moon size={20} className="text-muted" />}
+          {syncStatus === 'synced' && <CheckCircle2 size={14} />}
+          {syncStatus === 'syncing' && <RefreshCw size={14} className="animate-spin" />}
+          {syncStatus === 'error' && <AlertCircle size={14} />}
+          <span className="hidden sm:inline">
+            {syncStatus === 'synced' ? 'Synced' : syncStatus === 'syncing' ? 'Syncing...' : 'Sync Failed'}
+          </span>
         </button>
 
-        {/* User menu */}
+        {/* User menu - positioned at far right */}
         <div className="relative">
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}

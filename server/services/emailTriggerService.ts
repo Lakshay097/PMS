@@ -188,6 +188,20 @@ export async function triggerTaskClosureEmail(
   closeRemark: string
 ): Promise<void> {
   try {
+    // Validate required fields before proceeding
+    if (!closedByEmail) {
+      logger.error('Task closure email FAILED: closedByEmail is undefined or empty');
+      return;
+    }
+    if (!assignedToEmail) {
+      logger.error('Task closure email FAILED: assignedToEmail is undefined or empty');
+      return;
+    }
+    if (!task || !task.TaskID) {
+      logger.error('Task closure email FAILED: task or task.TaskID is undefined');
+      return;
+    }
+
     const recipients = assignedToEmail.split(',').map((e: string) => e.trim()).filter(Boolean);
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
     const threadTaskId = task.ParentTaskID || task.TaskID;
@@ -219,6 +233,7 @@ export async function triggerTaskClosureEmail(
       );
     }
   } catch (err) {
+    console.error('Task closure email FAILED:', err);
     logger.error('Error triggering task closure email:', err);
   }
 }

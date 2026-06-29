@@ -6,7 +6,8 @@
 import { logger } from '../utils/logger';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
-const DEFAULT_TIMEOUT = 10000; // 10 seconds
+const DEFAULT_TIMEOUT = 15000; // 15 seconds (increased from 10s)
+const MAX_RETRIES = 3; // Maximum number of retries
 
 /**
  * Custom error class for API errors
@@ -41,7 +42,7 @@ function getAuthToken(): string | null {
 }
 
 /**
- * Make an API request with error handling and authentication
+ * Make an API request with error handling, authentication, and retry logic
  */
 export async function apiRequest<T = any>(
   endpoint: string,
@@ -71,59 +72,88 @@ export async function apiRequest<T = any>(
     }
   }
 
-  // Prepare request
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  // Retry logic with exponential backoff
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      // Prepare request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-  const requestOptions: RequestInit = {
-    method,
-    headers: requestHeaders,
-    signal: controller.signal,
-  };
+      const requestOptions: RequestInit = {
+        method,
+        headers: requestHeaders,
+        signal: controller.signal,
+      };
 
-  if (body) {
-    requestOptions.body = JSON.stringify(body);
+      if (body) {
+        requestOptions.body = JSON.stringify(body);
+      }
+
+      const response = await fetch(url, requestOptions);
+      clearTimeout(timeoutId);
+
+      // Handle non-JSON responses
+      const contentType = response.headers.get('content-type');
+      const isJson = contentType?.includes('application/json');
+
+      let data: any;
+      if (isJson) {
+        data = await response.json();
+      } else {
+        data = await response.text();
+      }
+
+      // Handle error responses
+      if (!response.ok) {
+        // Don't retry on client errors (4xx) except 408 (timeout) and 429 (rate limit)
+        if (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) {
+          throw new ApiError(
+            data?.error || data || 'Request failed',
+            response.status,
+            data
+          );
+        }
+        // Retry on server errors (5xx), timeout (408), and rate limit (429)
+        throw new ApiError(
+          data?.error || data || 'Request failed',
+          response.status,
+          data
+        );
+      }
+
+      return data as T;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('Unknown error');
+
+      // Don't retry on the last attempt
+      if (attempt === MAX_RETRIES) {
+        break;
+      }
+
+      // Don't retry on client errors (except timeout and rate limit)
+      if (error instanceof ApiError && error.statusCode >= 400 && error.statusCode < 500 && error.statusCode !== 408 && error.statusCode !== 429) {
+        break;
+      }
+
+      // Exponential backoff: 1s, 2s, 4s
+      const delay = Math.pow(2, attempt) * 1000;
+      logger.warn(`Request failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}), retrying in ${delay}ms...`, error);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
   }
 
-  try {
-    const response = await fetch(url, requestOptions);
-    clearTimeout(timeoutId);
-
-    // Handle non-JSON responses
-    const contentType = response.headers.get('content-type');
-    const isJson = contentType?.includes('application/json');
-
-    let data: any;
-    if (isJson) {
-      data = await response.json();
-    } else {
-      data = await response.text();
+  // All retries failed
+  if (lastError instanceof Error) {
+    if (lastError.name === 'AbortError') {
+      throw new ApiError('Request timeout after retries', 408);
     }
-
-    // Handle error responses
-    if (!response.ok) {
-      throw new ApiError(
-        data?.error || data || 'Request failed',
-        response.status,
-        data
-      );
+    if (lastError instanceof ApiError) {
+      throw lastError;
     }
-
-    return data as T;
-  } catch (error) {
-    clearTimeout(timeoutId);
-
-    if (error instanceof Error) {
-      if (error.name === 'AbortError') {
-        throw new ApiError('Request timeout', 408);
-      }
-      if (error instanceof ApiError) {
-        throw error;
-      }
-    }
-
-    throw new ApiError('Network error or server unavailable', 0);
   }
+
+  throw new ApiError('Network error or server unavailable after retries', 0);
 }
 
 /**

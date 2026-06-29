@@ -68,12 +68,12 @@ export default function Sidebar({ currentView, onViewChange, isCollapsed = false
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-full bg-surface border-r border-[var(--color-border)] flex flex-col transition-all duration-300 z-30 ${
+      className={`fixed left-0 top-0 h-screen bg-surface border-r border-[var(--color-border)] flex flex-col transition-all duration-300 z-30 ${
         isCollapsed ? 'w-[72px]' : 'w-[240px]'
       }`}
     >
       {/* Logo and workspace */}
-      <div className="p-4 border-b border-[var(--color-border)]">
+      <div className="p-4 border-b border-[var(--color-border)] flex-shrink-0">
         <div className="flex items-center gap-2">
           <img src="/pw-logo.jpg" alt="PW Logo" className="w-8 h-8 object-contain" />
           {!isCollapsed && (
@@ -86,7 +86,7 @@ export default function Sidebar({ currentView, onViewChange, isCollapsed = false
       </div>
 
       {/* Primary navigation */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto overflow-x-hidden">
         <div className="space-y-1">
           {primaryNavItems.map(renderNavItem)}
         </div>
@@ -98,8 +98,8 @@ export default function Sidebar({ currentView, onViewChange, isCollapsed = false
         </div>
       </nav>
 
-      {/* User identity */}
-      <div className="p-3 border-t border-[var(--color-border)]">
+      {/* Bottom: user + sign out - pinned to bottom */}
+      <div className="border-t border-[var(--color-border)] p-3 space-y-1 flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
             <span className="text-xs font-medium text-[#0f172a]">JD</span>
@@ -111,26 +111,28 @@ export default function Sidebar({ currentView, onViewChange, isCollapsed = false
             </div>
           )}
         </div>
-      </div>
-
-      {/* Sign out button */}
-      <div className="p-3">
-        <button
-          onClick={onSignOut}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-red-600 hover:bg-red-50 ${
-            isCollapsed ? 'justify-center' : ''
-          }`}
-          title="Sign out"
-        >
-          <LogOut size={20} />
-          {!isCollapsed && <span className="text-sm font-medium">Sign out</span>}
-        </button>
+        <div className="relative group">
+          <button
+            onClick={onSignOut}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-red-600 hover:bg-red-50 ${
+              isCollapsed ? 'justify-center' : ''
+            }`}
+          >
+            <LogOut size={20} />
+            {!isCollapsed && <span className="text-sm font-medium">Sign out</span>}
+          </button>
+          {isCollapsed && (
+            <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap z-50 delay-150 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+              Sign out
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Collapse toggle */}
       <button
         onClick={onToggleCollapse}
-        className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-surface border border-[var(--color-border)] rounded-full flex items-center justify-center shadow-sm hover:shadow-md transition-shadow"
+        className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-surface border border-[var(--color-border)] rounded-full flex items-center justify-center shadow-sm hover:shadow-md transition-shadow z-40"
       >
         {isCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
       </button>

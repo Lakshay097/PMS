@@ -2,7 +2,7 @@ export interface User {
   UserID: string;
   FullName: string;
   Email: string;
-  Role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder';
+  Role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder' | 'Team Leader';
   ManagerEmail: string; // empty if Admin or Stakeholder (unless Stakeholder is mapped to someone)
   TeamIDs: string[]; // Multiple teams support
   TeamNames: string[]; // Multiple team names for display
@@ -28,6 +28,16 @@ export interface Team {
   Active: boolean;
   CreatedAt: string;
   UpdatedAt: string;
+  TeamLeaderEmails?: string[]; // Emails of team leaders assigned to this team
+}
+
+export interface TeamSubmission {
+  SubmissionID: string;
+  TeamID: string;
+  SubmittedBy: string;
+  SubmittedAt: string;
+  Note?: string;
+  AttachmentLinks?: string; // Comma-separated Google Drive links
 }
 
 export interface TaskTemplate {
@@ -48,7 +58,7 @@ export interface TaskTemplate {
   UpdatedAt: string;
 }
 
-export type TaskStatus = 'Not Started' | 'In Progress' | 'Submitted' | 'Reviewed' | 'Closed' | 'Reopened' | 'Overdue';
+export type TaskStatus = 'Not Started' | 'In Progress' | 'Submitted' | 'Reviewed' | 'Closed' | 'Reopened' | 'Overdue' | 'On Hold' | 'Dropped';
 
 export interface Task {
   TaskID: string;
@@ -113,6 +123,17 @@ export interface FollowUp {
 export interface AppSetting {
   Key: string;
   Value: string;
+}
+
+export interface EmailTemplate {
+  Key: string;
+  Value: string;
+  Subject?: string;
+  Description?: string;
+  Frequency?: 'daily' | 'weekly' | 'monthly' | 'on_event';
+  SendTime?: string; // HH:MM format
+  TriggerCondition?: 'schedule' | 'event' | 'both';
+  Active?: boolean;
 }
 
 export interface SystemAlert {

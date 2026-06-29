@@ -6,7 +6,7 @@ export default function InstallBanner() {
   if (!canInstall) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 p-4 pb-safe">
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-slate-900 border-t border-[#E5E7EB] dark:border-slate-700 p-4 pb-safe">
       <div className="max-w-4xl mx-auto flex items-center justify-between">
         <p className="text-sm text-slate-700 dark:text-slate-300">
           Add TaskFlow to your home screen for the best experience

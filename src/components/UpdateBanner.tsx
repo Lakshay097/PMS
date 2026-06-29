@@ -23,7 +23,7 @@ export default function UpdateBanner() {
         <p className="text-sm font-medium">A new version is available</p>
         <button
           onClick={() => window.location.reload()}
-          className="min-h-[44px] min-w-[44px] px-4 py-2 bg-white text-blue-500 rounded-lg font-medium text-sm hover:bg-blue-50 transition-colors"
+          className="min-h-[44px] min-w-[44px] px-4 py-2 bg-[#0F141F] text-blue-400 rounded-lg font-medium text-sm hover:bg-[#1a1f2e] transition-colors"
         >
           Reload
         </button>

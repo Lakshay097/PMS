@@ -24,12 +24,15 @@ interface CreateReportModalProps {
 
 export default function CreateReportModal({ task, isOpen, onClose, onSubmit, currentUser, subtasks }: CreateReportModalProps) {
   const [workSummary, setWorkSummary] = useState('');
-  const [statusUpdate, setStatusUpdate] = useState<TaskStatus>(task.Status);
+  const [statusUpdate, setStatusUpdate] = useState<TaskStatus>(
+    task.Status === 'Not Started' || task.Status === 'Closed' ? 'In Progress' : task.Status
+  );
   const [blockers, setBlockers] = useState('');
   const [nextAction, setNextAction] = useState('');
   const [attachmentLink, setAttachmentLink] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; type: string; data: string }>>([]);
   const [selectedSubtaskId, setSelectedSubtaskId] = useState<string>('');
+  const [statusReason, setStatusReason] = useState('');
 
   // Check if user is assigned to any subtasks
   const userSubtasks = subtasks.filter(s => s.AssignedTo === currentUser.Email);
@@ -47,6 +50,12 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!workSummary.trim()) return;
+
+    // Require reason for On Hold and Dropped statuses
+    if ((statusUpdate === 'On Hold' || statusUpdate === 'Dropped') && !statusReason.trim()) {
+      alert('Please provide a reason for this status change.');
+      return;
+    }
 
     // Simulate completion percentage mapping behind the scenes to preserve database schemas
     const simulatedPercent = statusUpdate === 'Closed' ? 100 : (statusUpdate === 'Submitted' ? 90 : (statusUpdate === 'Not Started' ? 0 : 50));
@@ -73,6 +82,7 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
     setAttachmentLink('');
     setUploadedFiles([]);
     setSelectedSubtaskId('');
+    setStatusReason('');
     onClose();
   };
 
@@ -110,7 +120,7 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
       >
         <div className="bg-[#0F172A] px-6 py-4.5 flex items-center justify-between border-b border-[#1E293B]">
           <div>
-            <span className="text-[9px] bg-[#2563EB]/10 text-[#3B82F6] font-bold font-mono px-2.5 py-1 rounded-full border border-[#2563EB]/25 uppercase tracking-wider">
+            <span className="text-[9px] bg-[#2563EB]/10 text-[#3B82F6] font-bold font-mono px-2.5 py-1 rounded-full border border-[#2563EB]/25 tracking-wider">
               Append-Only Report
             </span>
             <h3 className="text-white font-bold text-base tracking-tight mt-1.5 font-sans">Submit Progress Report</h3>
@@ -122,14 +132,14 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
           <div className="bg-slate-50 border border-[#E2E8F0] rounded-lg p-3">
-            <span className="text-[10px] font-mono text-[#64748B] tracking-wider block uppercase font-bold">Active Task</span>
+            <span className="text-[10px] font-mono text-[#64748B] tracking-wider block font-bold">Active task</span>
             <span className="font-bold text-[#0F172A] text-sm mt-0.5 block">{task.Title}</span>
             <span className="text-xs text-slate-500 font-medium">{task.TaskID}</span>
           </div>
 
           {showSubtaskSelector && (
             <div>
-              <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
+              <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
                 Reporting against
               </label>
               <div className="space-y-2">
@@ -162,25 +172,40 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
           )}
 
           <div>
-            <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
-              New Task Status
+            <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+              New task status
             </label>
             <select
               value={statusUpdate}
               onChange={(e) => setStatusUpdate(e.target.value as TaskStatus)}
               className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
             >
-              <option value="Not Started">Not Started</option>
               <option value="In Progress">In Progress</option>
               <option value="Submitted">Submitted (Review Request)</option>
-              <option value="Closed">Closed</option>
-              <option value="Reopened">Reopened</option>
+              <option value="On Hold">On Hold</option>
+              <option value="Dropped">Dropped</option>
             </select>
           </div>
 
+          {(statusUpdate === 'On Hold' || statusUpdate === 'Dropped') && (
+            <div>
+              <label className="block text-[10px] font-bold text-red-600 tracking-wider mb-1">
+                Reason for Status Change <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                required
+                rows={2}
+                value={statusReason}
+                onChange={(e) => setStatusReason(e.target.value)}
+                placeholder="Please explain why this task is being put on hold or dropped..."
+                className="w-full text-xs bg-white border border-red-200 rounded-lg p-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-red-500"
+              ></textarea>
+            </div>
+          )}
+
           <div>
-            <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
-              Work Summary <span className="text-red-500">*</span>
+            <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+              Work summary <span className="text-red-500">*</span>
             </label>
             <textarea
               required
@@ -194,9 +219,9 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1 flex items-center space-x-1">
+              <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1 flex items-center space-x-1">
                 <AlertTriangle size={12} className="text-amber-500" />
-                <span>Active Blockers (Optional)</span>
+                <span>Active blockers (optional)</span>
               </label>
               <input
                 type="text"
@@ -208,7 +233,7 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1">
+              <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
                 Next Immediate Action
               </label>
               <input
@@ -222,9 +247,9 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1 flex items-center space-x-1">
+            <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1 flex items-center space-x-1">
               <LinkIcon size={12} />
-              <span>Attachment / Deliverable URI (Optional)</span>
+              <span>Attachment / deliverable URI (optional)</span>
             </label>
             <input
               type="url"
@@ -236,9 +261,9 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1 flex items-center space-x-1">
+            <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1 flex items-center space-x-1">
               <Upload size={12} />
-              <span>Upload Files / Photos (Optional)</span>
+              <span>Upload files / photos (optional)</span>
             </label>
             <div className="border-2 border-dashed border-[#E2E8F0] rounded-lg p-4">
               <input
@@ -264,7 +289,7 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
             </div>
             {uploadedFiles.length > 0 && (
               <div className="mt-3 space-y-2">
-                <p className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider">Uploaded Files:</p>
+                <p className="text-[10px] font-bold text-[#64748B] tracking-wider">Uploaded files:</p>
                 {uploadedFiles.map((file, index) => (
                   <div key={index} className="flex items-center justify-between bg-slate-50 border border-[#E2E8F0] rounded-lg p-2">
                     <div className="flex items-center space-x-2">
@@ -295,16 +320,16 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-[#E2E8F0] text-slate-700 hover:bg-slate-50 transition-all rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer"
+              className="px-4 py-2 border border-[#E2E8F0] text-slate-700 hover:bg-slate-50 transition-all rounded-lg text-xs font-bold tracking-wider cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-all shadow-sm flex items-center space-x-2 cursor-pointer border-none"
+              className="px-5 py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-xs font-bold tracking-wider transition-all shadow-sm flex items-center space-x-2 cursor-pointer border-none"
             >
               <Send size={13} />
-              <span>Publish Report</span>
+              <span>Publish report</span>
             </button>
           </div>
         </form>

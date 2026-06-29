@@ -54,7 +54,7 @@ export default function EditProfileModal({ isOpen, onClose, currentUser, onSave,
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
-        <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+        <div className="p-6 border-b border-[#E5E7EB] flex items-center justify-between">
           <h2 className="text-xl font-bold text-slate-900">Edit Profile</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
             <X size={20} />
@@ -102,7 +102,7 @@ export default function EditProfileModal({ isOpen, onClose, currentUser, onSave,
           </div>
 
           {/* Additional Options Section */}
-          <div className="pt-4 border-t border-slate-200 space-y-3">
+          <div className="pt-4 border-t border-[#E5E7EB] space-y-3">
             <button
               type="button"
               onClick={handleChangePasswordClick}
