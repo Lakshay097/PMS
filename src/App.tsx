@@ -7,7 +7,7 @@ import { useUserOperations } from './hooks/useUserOperations';
 import { useTeamOperations } from './hooks/useTeamOperations';
 import { useTemplateOperations } from './hooks/useTemplateOperations';
 import { useTaskMetrics } from './hooks/useTaskMetrics';
-import { getAllSubordinates } from './utils/userUtils';
+import { getAllSubordinates, generateUserId } from './utils/userUtils';
 import { getStatusBadgeStyle, getCurrentLocalDate, getTomorrowDate } from './utils/taskUtils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logger } from './utils/logger';
@@ -1145,7 +1145,7 @@ export default function App() {
             onClose={() => setIsAddUserModalOpen(false)}
             onSave={(userData) => {
               const newUser: User = {
-                UserID: `USR-${Date.now()}`,
+                UserID: generateUserId(),
                 FullName: userData.FullName,
                 Email: userData.Email,
                 Role: userData.Role,

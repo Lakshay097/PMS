@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { User as UserType, TaskTemplate, AppSetting, Team } from '../types';
 import { ROLE } from '../constants/status';
+import { generateUserId } from '../utils/userUtils';
 import { 
   Users, 
   Repeat, 
@@ -143,7 +144,7 @@ export default function AdminPanel({
     }
 
     const matchedTeams = teams.filter(t => teamSelections.includes(t.TeamID));
-    const newId = `USR-${Math.floor(100 + Math.random() * 899)}`;
+    const newId = generateUserId();
 
     onAddUser({
       UserID: newId,
