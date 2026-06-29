@@ -287,11 +287,16 @@ export async function changePasswordHandler(req: AuthRequest, res: Response): Pr
   const isBcryptHash = storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2a$');
   
   let passwordMatches = false;
+  let needsMigration = false;
+  
   if (isBcryptHash) {
     passwordMatches = await bcrypt.compare(oldPassword, storedPassword);
   } else {
-    // Legacy plaintext fallback
+    // Migration: detect plaintext password and verify
     passwordMatches = oldPassword === storedPassword;
+    if (passwordMatches) {
+      needsMigration = true;
+    }
   }
 
   if (!passwordMatches) {

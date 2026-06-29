@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { config } from '../config';
 import { InternalServerError, UnauthorizedError } from '../utils/AppError';
-import { generateGoogleSheetsToken, fetchSheetValues } from './googleSheetsService';
+import { generateGoogleSheetsToken, fetchSheetValues, updateSheetValues } from './googleSheetsService';
 
 /**
  * User response interface
@@ -117,15 +117,42 @@ export async function login(email: string, password: string): Promise<LoginRespo
   const isBcryptHash = storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2a$');
   
   let passwordMatches = false;
+  let needsMigration = false;
+  
   if (isBcryptHash) {
     passwordMatches = await bcrypt.compare(password, storedPassword);
   } else {
-    // Legacy plaintext fallback
+    // Migration: detect plaintext password and verify
     passwordMatches = password === storedPassword;
+    if (passwordMatches) {
+      needsMigration = true;
+    }
   }
 
   if (!passwordMatches) {
     throw new UnauthorizedError("Invalid email or password");
+  }
+
+  // One-time migration: re-hash plaintext passwords
+  if (needsMigration) {
+    const bcryptRounds = parseInt(process.env.BCRYPT_ROUNDS || '12');
+    const hashedPassword = await bcrypt.hash(password, bcryptRounds);
+    
+    // Update the password in Google Sheets
+    const rowIndex = users.indexOf(foundUser);
+    foundUser[12] = hashedPassword; // Password column (M)
+    
+    const updateSuccess = await updateSheetValues(
+      tokenData.accessToken,
+      spreadsheetId,
+      `users!A${rowIndex + 1}:R${rowIndex + 1}`,
+      [foundUser]
+    );
+    
+    if (!updateSuccess) {
+      // Log warning but don't fail login
+      console.error('Failed to migrate password to bcrypt for user:', normalizedEmail);
+    }
   }
 
   // Extract user data from the row
