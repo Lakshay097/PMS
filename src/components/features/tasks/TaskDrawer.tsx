@@ -4,6 +4,7 @@ import { X, Calendar, User, FileText, Link as LinkIcon, History, AlertCircle, Ch
 import { Task, TaskReport, User as UserType, Team, Subtask } from '../../../types/index';
 import { ROLE } from '../../../constants/status';
 import { getCurrentLocalDate, getTomorrowDate } from '../../../utils/taskUtils';
+import { logger } from '../../../utils/logger';
 
 interface TaskDrawerProps {
   task: Task | null;
@@ -92,8 +93,8 @@ export default function TaskDrawer({
   const taskSubtaskIds = taskSubtasks.map(s => s.SubtaskID);
   const taskReports = reports.filter(r => r.TaskID === task.TaskID || (r.SubtaskID && taskSubtaskIds.includes(r.SubtaskID)));
 
-  console.log(`TaskDrawer: task.TaskID=${task.TaskID}, total reports=${reports.length}, filtered reports=${taskReports.length}`);
-  console.log(`TaskDrawer: taskReports=`, taskReports);
+  logger.debug(`TaskDrawer: task.TaskID=${task.TaskID}, total reports=${reports.length}, filtered reports=${taskReports.length}`);
+  logger.debug(`TaskDrawer: taskReports=`, taskReports);
 
   // Styling helpers
   const getStatusStyle = (status: string) => {
@@ -1040,7 +1041,7 @@ export default function TaskDrawer({
                         onClick={(e) => {
                           e.stopPropagation();
                           // Prevent opening task modal - reports are already fully displayed
-                          console.log('Report clicked:', report.ReportID);
+                          logger.debug('Report clicked:', report.ReportID);
                         }}
                       >
                         {/* Timeline Dot */}

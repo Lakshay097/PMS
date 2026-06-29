@@ -1,6 +1,7 @@
 import { db } from './firestoreConfig';
 import { sheetsApi } from './sheetsService';
 import { getDocs, collection, writeBatch, doc } from 'firebase/firestore';
+import { logger } from '../utils/logger';
 
 const COLLECTIONS = ['users', 'teams', 'templates', 'tasks', 'reports', 'followups', 'settings', 'subtasks', 'comments'];
 
@@ -13,9 +14,9 @@ export async function syncFirestoreToSheets(): Promise<void> {
       if (docs.length === 0) continue;
       
       await sheetsApi.saveCollection(collectionName as any, docs);
-      console.log(`Synced ${docs.length} docs from Firestore → ${collectionName}`);
+      logger.info(`Synced ${docs.length} docs from Firestore → ${collectionName}`);
     } catch (err) {
-      console.error(`Failed to sync ${collectionName}:`, err);
+      logger.error(`Failed to sync ${collectionName}:`, err);
     }
   }
 }

@@ -147,7 +147,7 @@ export async function initializeDatabase(): Promise<void> {
       logger.log('Spreadsheet not found (404). Resetting initialization flag.');
       localStorage.removeItem('db_initialized');
     }
-    console.error("Failed to initialize database:", error);
+    logger.error("Failed to initialize database:", error);
     throw new Error(`Failed to initialize Google Sheets database: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
@@ -211,7 +211,7 @@ export const dbService = {
       try {
         await setDoc(doc(db, 'users', user.Email), userToSave);
       } catch (err) {
-        console.error('Firestore write failed — saveUser:', err);
+        logger.error('Firestore write failed — saveUser:', err);
       }
     } catch (error) {
       throw new Error(`Failed to save user to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -256,7 +256,7 @@ export const dbService = {
       try {
         await setDoc(doc(db, 'teams', team.TeamID), team);
       } catch (err) {
-        console.error('Firestore write failed — saveTeam:', err);
+        logger.error('Firestore write failed — saveTeam:', err);
       }
     } catch (error) {
       throw new Error(`Failed to save team to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -280,7 +280,7 @@ export const dbService = {
         try {
           await updateDoc(doc(db, 'teams', teamId), { Active: team.Active, UpdatedAt: team.UpdatedAt });
         } catch (err) {
-          console.error('Firestore write failed — toggleTeamStatus:', err);
+          logger.error('Firestore write failed — toggleTeamStatus:', err);
         }
       }
     } catch (error) {
@@ -303,7 +303,7 @@ export const dbService = {
       try {
         await deleteDoc(doc(db, 'teams', teamId));
       } catch (err) {
-        console.error('Firestore write failed — deleteTeam:', err);
+        logger.error('Firestore write failed — deleteTeam:', err);
       }
     } catch (error) {
       throw new Error(`Failed to delete team: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -347,7 +347,7 @@ export const dbService = {
       try {
         await setDoc(doc(db, 'templates', template.TemplateID), template);
       } catch (err) {
-        console.error('Firestore write failed — saveTemplate:', err);
+        logger.error('Firestore write failed — saveTemplate:', err);
       }
     } catch (error) {
       throw new Error(`Failed to save template to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -368,7 +368,7 @@ export const dbService = {
       try {
         await deleteDoc(doc(db, 'templates', templateId));
       } catch (err) {
-        console.error('Firestore write failed — deleteTemplate:', err);
+        logger.error('Firestore write failed — deleteTemplate:', err);
       }
     } catch (error) {
       throw new Error(`Failed to delete template from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -434,7 +434,7 @@ export const dbService = {
       try {
         await setDoc(doc(db, 'tasks', task.TaskID), taskToSave);
       } catch (err) {
-        console.error('Firestore write failed — saveTask:', err);
+        logger.error('Firestore write failed — saveTask:', err);
       }
     } catch (error) {
       throw new Error(`Failed to save task to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -455,7 +455,7 @@ export const dbService = {
       try {
         await deleteDoc(doc(db, 'tasks', taskId));
       } catch (err) {
-        console.error('Firestore write failed — deleteTask:', err);
+        logger.error('Firestore write failed — deleteTask:', err);
       }
     } catch (error) {
       throw new Error(`Failed to delete task from Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -491,7 +491,7 @@ export const dbService = {
       try {
         await setDoc(doc(db, 'reports', report.ReportID), report);
       } catch (err) {
-        console.error('Firestore write failed — saveReport:', err);
+        logger.error('Firestore write failed — saveReport:', err);
       }
     } catch (error) {
       throw new Error(`Failed to save report to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -527,7 +527,7 @@ export const dbService = {
       try {
         await setDoc(doc(db, 'followups', follow.FollowUpID), follow);
       } catch (err) {
-        console.error('Firestore write failed — saveFollowup:', err);
+        logger.error('Firestore write failed — saveFollowup:', err);
       }
     } catch (error) {
       throw new Error(`Failed to save followup to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -563,7 +563,7 @@ export const dbService = {
           await setDoc(doc(db, 'settings', setting.Key), setting);
         }
       } catch (err) {
-        console.error('Firestore write failed — saveSettings:', err);
+        logger.error('Firestore write failed — saveSettings:', err);
       }
     } catch (error) {
       throw new Error(`Failed to save settings to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -607,7 +607,7 @@ export const dbService = {
       try {
         await setDoc(doc(db, 'subtasks', subtask.SubtaskID), subtask);
       } catch (err) {
-        console.error('Firestore write failed — saveSubtask:', err);
+        logger.error('Firestore write failed — saveSubtask:', err);
       }
     } catch (error) {
       throw new Error(`Failed to save subtask to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -642,7 +642,7 @@ export const dbService = {
         }
         await wb.commit();
       } catch (err) {
-        console.error('Firestore write failed — saveSubtasksBatch:', err);
+        logger.error('Firestore write failed — saveSubtasksBatch:', err);
       }
     } catch (error) {
       throw new Error(`Failed to save subtasks batch to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -678,7 +678,7 @@ export const dbService = {
       try {
         await setDoc(doc(db, 'comments', comment.CommentID), comment);
       } catch (err) {
-        console.error('Firestore write failed — saveComment:', err);
+        logger.error('Firestore write failed — saveComment:', err);
       }
     } catch (error) {
       throw new Error(`Failed to save comment to Google Sheets: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -802,7 +802,7 @@ export const dbService = {
               result = await this.getComments();
               break;
             default:
-              console.warn(`Unknown collection: ${collection}`);
+              logger.warn(`Unknown collection: ${collection}`);
               result = null;
           }
           results.push({ status: 'fulfilled', value: result });
@@ -810,7 +810,7 @@ export const dbService = {
           // Add a small delay between collections to avoid rate limiting
           await new Promise(resolve => setTimeout(resolve, 200));
         } catch (error) {
-          console.error(`Failed to sync ${collection}:`, error);
+          logger.error(`Failed to sync ${collection}:`, error);
           results.push({ status: 'rejected', reason: error });
         }
       }
@@ -848,10 +848,10 @@ export const dbService = {
       try {
         await addDoc(collection(db, 'auditlogs'), logRecord);
       } catch (err) {
-        console.error('Firestore write failed — logAction:', err);
+        logger.error('Firestore write failed — logAction:', err);
       }
     } catch (error) {
-      console.error('Failed to write audit log:', error);
+      logger.error('Failed to write audit log:', error);
     }
   }
 };

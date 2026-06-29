@@ -1,6 +1,7 @@
 import { db } from './firestoreConfig';
 import { dbService } from './dbService';
 import { writeBatch, doc } from 'firebase/firestore';
+import { logger } from '../utils/logger';
 
 const COLLECTIONS = {
   tasks:     { fetch: () => dbService.getTasks(),     idField: 'TaskID' },
@@ -30,9 +31,9 @@ export async function migrateFromSheets(): Promise<void> {
         }
         await wb.commit();
       }
-      console.log(`Migrated ${records.length} records → ${collectionName}`);
+      logger.info(`Migrated ${records.length} records → ${collectionName}`);
     } catch (err) {
-      console.error(`Failed to migrate ${collectionName}:`, err);
+      logger.error(`Failed to migrate ${collectionName}:`, err);
     }
   }
 }

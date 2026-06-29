@@ -290,7 +290,7 @@ export default function App() {
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('migrate') === 'true') {
       import('./lib/migrationScript').then(({ migrateFromSheets }) => {
-        migrateFromSheets().then(() => console.log('Migration complete'));
+        migrateFromSheets().then(() => logger.debug('Migration complete'));
       });
     }
   }, []);
@@ -299,7 +299,7 @@ export default function App() {
   useEffect(() => {
     const interval = setInterval(() => {
       import('./lib/sheetsSyncWorker').then(({ syncFirestoreToSheets }) => {
-        syncFirestoreToSheets().catch(err => console.error('Sync worker error:', err));
+        syncFirestoreToSheets().catch(err => logger.error('Sync worker error:', err));
       });
     }, 5 * 60 * 1000);
 
@@ -590,8 +590,8 @@ export default function App() {
     const propId = `RP-${Math.floor(1000 + Math.random() * 8999)}`;
     const nowStr = new Date().toISOString();
 
-    console.log('App.handleSubmitProgressReport: Received data:', data);
-    console.log('App.handleSubmitProgressReport: UploadedFiles:', data.UploadedFiles);
+    logger.debug('App.handleSubmitProgressReport: Received data:', data);
+    logger.debug('App.handleSubmitProgressReport: UploadedFiles:', data.UploadedFiles);
 
     // Handle file uploads to Google Drive
     const uploadedFiles = data.UploadedFiles || [];
@@ -599,7 +599,7 @@ export default function App() {
 
     for (const file of uploadedFiles) {
       try {
-        console.log(`App: Uploading file ${file.name}, data length: ${file.data?.length}`);
+        logger.debug(`App: Uploading file ${file.name}, data length: ${file.data?.length}`);
         const token = localStorage.getItem('PMS_auth_token');
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
@@ -615,11 +615,10 @@ export default function App() {
           taskId: data.TaskID,
           reportId: propId
         });
-        console.log(`App: File uploaded successfully: ${uploadData.webViewLink}`);
+        logger.debug(`App: File uploaded successfully: ${uploadData.webViewLink}`);
         uploadedFileUrls.push(uploadData.webViewLink);
       } catch (error) {
-        console.error('App: Error uploading file:', error);
-        logger.error('Error uploading file:', error);
+        logger.error('App: Error uploading file:', error);
       }
     }
 
@@ -628,7 +627,7 @@ export default function App() {
       attachmentLinks.push(data.AttachmentLink);
     }
 
-    console.log('App: Final attachment links:', attachmentLinks);
+    logger.debug('App: Final attachment links:', attachmentLinks);
 
     const newReport: TaskReport = {
       ReportID: propId,
@@ -645,7 +644,7 @@ export default function App() {
       CreatedAt: nowStr
     };
 
-    console.log('App: Saving report:', newReport);
+    logger.debug('App: Saving report:', newReport);
 
     const targetTask = tasks.find(t => t.TaskID === data.TaskID);
     if (targetTask) {
@@ -661,7 +660,7 @@ export default function App() {
 
       await dbService.saveReport(newReport);
       await dbService.saveTask(updatedTask);
-      console.log('App: Report saved successfully');
+      logger.debug('App: Report saved successfully');
 
       triggerNotification(
         'Progress Update',
@@ -685,8 +684,7 @@ export default function App() {
           }),
         });
       } catch (err) {
-        console.error('Email trigger FAILED:', err); 
-        logger.error('Failed to trigger report email:', err);
+        logger.error('Email trigger FAILED:', err);
       }
 
       if (selectedTask && selectedTask.TaskID === data.TaskID) {
@@ -927,7 +925,7 @@ export default function App() {
                   }),
                 });
               } catch (emailError) {
-                console.error('Failed to sync email template to sheet:', emailError);
+                logger.error('Failed to sync email template to sheet:', emailError);
               }
             }
 
@@ -1091,7 +1089,7 @@ export default function App() {
             onClose={() => setIsConfigureNotificationsModalOpen(false)}
             onSave={(settings) => {
               // In a real implementation, this would save the notification settings
-              console.log('Notification settings:', settings);
+              logger.debug('Notification settings:', settings);
             }}
           />
         )}

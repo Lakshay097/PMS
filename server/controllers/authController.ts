@@ -4,6 +4,7 @@ import { generateGoogleSheetsToken, fetchSheetValues, appendSheetValues, updateS
 import { BadRequestError, NotFoundError, InternalServerError } from '../utils/AppError';
 import { AuthRequest } from '../middleware/auth';
 import bcrypt from 'bcrypt';
+import { logger } from '../utils/logger';
 
 /**
  * Login request body
@@ -222,7 +223,7 @@ export async function approveUserHandler(req: AuthRequest, res: Response): Promi
 export async function changePasswordHandler(req: AuthRequest, res: Response): Promise<void> {
   const { oldPassword, newPassword } = req.body as ChangePasswordRequestBody;
 
-  console.log('Password change attempt for user:', req.user?.email);
+  logger.debug('Password change attempt for user:', req.user?.email);
 
   if (!oldPassword || !newPassword) {
     throw new BadRequestError("Old password and new password are required");
@@ -251,7 +252,7 @@ export async function changePasswordHandler(req: AuthRequest, res: Response): Pr
     throw new InternalServerError("Failed to fetch users");
   }
 
-  console.log('Total users fetched:', users.length);
+  logger.debug('Total users fetched:', users.length);
 
   const userEmail = req.user?.email;
   if (!userEmail) {
@@ -259,7 +260,7 @@ export async function changePasswordHandler(req: AuthRequest, res: Response): Pr
   }
 
   const normalizedEmail = userEmail.toLowerCase();
-  console.log('Looking for user with email:', normalizedEmail);
+  logger.debug('Looking for user with email:', normalizedEmail);
 
   // Find the user - skip header row (index 0), email is at index 2
   let userRowIndex = -1;
@@ -267,7 +268,7 @@ export async function changePasswordHandler(req: AuthRequest, res: Response): Pr
 
   for (let i = 1; i < users.length; i++) {
     const row = users[i];
-    console.log(`Row ${i} email:`, row[2]);
+    logger.debug(`Row ${i} email:`, row[2]);
     if (row[2] === normalizedEmail) { // Email is in column 3 (index 2)
       userRowIndex = i;
       userRow = row;
@@ -276,11 +277,11 @@ export async function changePasswordHandler(req: AuthRequest, res: Response): Pr
   }
 
   if (!userRow) {
-    console.log('User not found');
+    logger.debug('User not found');
     throw new NotFoundError("User not found");
   }
 
-  console.log('User found at row:', userRowIndex);
+  logger.debug('User found at row:', userRowIndex);
 
   // Verify old password
   const storedPassword = userRow[12]; // Password is in column 13 (index 12)

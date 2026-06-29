@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Send, AlertTriangle, Link as LinkIcon, Sparkles, Upload, File, Image as ImageIcon } from 'lucide-react';
 import { Task, TaskStatus, User as UserType, Subtask } from '../types';
+import { logger } from '../utils/logger';
 
 interface CreateReportModalProps {
   task: Task;
@@ -51,8 +52,8 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
     // Simulate completion percentage mapping behind the scenes to preserve database schemas
     const simulatedPercent = statusUpdate === 'Closed' ? 100 : (statusUpdate === 'Submitted' ? 90 : (statusUpdate === 'Not Started' ? 0 : 50));
 
-    console.log('CreateReportModal: Submitting report with files:', uploadedFiles);
-    console.log('CreateReportModal: File data lengths:', uploadedFiles.map(f => ({ name: f.name, dataLength: f.data?.length })));
+    logger.debug('CreateReportModal: Submitting report with files:', uploadedFiles);
+    logger.debug('CreateReportModal: File data lengths:', uploadedFiles.map(f => ({ name: f.name, dataLength: f.data?.length })));
 
     onSubmit({
       TaskID: task.TaskID,
