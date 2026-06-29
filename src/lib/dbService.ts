@@ -205,7 +205,7 @@ export const dbService = {
       clearCache('teams'); // Also clear teams cache since team names might be referenced
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('users', 'updated', user.UserID).catch(() => {});
+      notifyChange('users', 'updated', user.UserID).catch((err) => logger.warn('[dbService] notifyChange failed for users', err));
       
       // Firestore write
       try {
@@ -250,7 +250,7 @@ export const dbService = {
       clearCache('users'); // Also clear users cache since team relationships might change
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('teams', 'updated', team.TeamID).catch(() => {});
+      notifyChange('teams', 'updated', team.TeamID).catch((err) => logger.warn('[dbService] notifyChange failed for teams', err));
       
       // Firestore write
       try {
@@ -274,7 +274,7 @@ export const dbService = {
         clearCache('teams');
         
         // Notify other clients immediately (fire and forget)
-        notifyChange('teams', 'updated', teamId).catch(() => {});
+        notifyChange('teams', 'updated', teamId).catch((err) => logger.warn('[dbService] notifyChange failed for teams', err));
         
         // Firestore write
         try {
@@ -297,7 +297,7 @@ export const dbService = {
       clearCache('users');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('teams', 'deleted', teamId).catch(() => {});
+      notifyChange('teams', 'deleted', teamId).catch((err) => logger.warn('[dbService] notifyChange failed for teams', err));
       
       // Firestore write
       try {
@@ -341,7 +341,7 @@ export const dbService = {
       clearCache('templates');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('templates', 'updated', template.TemplateID).catch(() => {});
+      notifyChange('templates', 'updated', template.TemplateID).catch((err) => logger.warn('[dbService] notifyChange failed for templates', err));
       
       // Firestore write
       try {
@@ -362,7 +362,7 @@ export const dbService = {
       clearCache('templates');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('templates', 'deleted', templateId).catch(() => {});
+      notifyChange('templates', 'deleted', templateId).catch((err) => logger.warn('[dbService] notifyChange failed for templates', err));
       
       // Firestore write
       try {
@@ -428,7 +428,7 @@ export const dbService = {
       clearCache('tasks');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('tasks', 'updated', task.TaskID).catch(() => {});
+      notifyChange('tasks', 'updated', task.TaskID).catch((err) => logger.warn('[dbService] notifyChange failed for tasks', err));
       
       // Firestore write
       try {
@@ -449,7 +449,7 @@ export const dbService = {
       clearCache('tasks');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('tasks', 'deleted', taskId).catch(() => {});
+      notifyChange('tasks', 'deleted', taskId).catch((err) => logger.warn('[dbService] notifyChange failed for tasks', err));
       
       // Firestore write
       try {
@@ -485,7 +485,7 @@ export const dbService = {
       clearCache('reports');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('reports', 'created', report.ReportID).catch(() => {});
+      notifyChange('reports', 'created', report.ReportID).catch((err) => logger.warn('[dbService] notifyChange failed for reports', err));
       
       // Firestore write
       try {
@@ -521,7 +521,7 @@ export const dbService = {
       clearCache('followups');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('followups', 'created', follow.FollowUpID).catch(() => {});
+      notifyChange('followups', 'created', follow.FollowUpID).catch((err) => logger.warn('[dbService] notifyChange failed for followups', err));
       
       // Firestore write
       try {
@@ -555,7 +555,7 @@ export const dbService = {
       clearCache('settings');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('settings', 'updated', 'settings').catch(() => {});
+      notifyChange('settings', 'updated', 'settings').catch((err) => logger.warn('[dbService] notifyChange failed for settings', err));
       
       // Firestore write
       try {
@@ -601,7 +601,7 @@ export const dbService = {
       clearCache('subtasks');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('subtasks', 'updated', subtask.SubtaskID).catch(() => {});
+      notifyChange('subtasks', 'updated', subtask.SubtaskID).catch((err) => logger.warn('[dbService] notifyChange failed for subtasks', err));
       
       // Firestore write
       try {
@@ -631,7 +631,7 @@ export const dbService = {
       clearCache('subtasks');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('subtasks', 'updated', taskId).catch(() => {});
+      notifyChange('subtasks', 'updated', taskId).catch((err) => logger.warn('[dbService] notifyChange failed for subtasks', err));
       
       // Firestore write
       try {
@@ -672,7 +672,7 @@ export const dbService = {
       clearCache('comments');
       
       // Notify other clients immediately (fire and forget)
-      notifyChange('comments', 'created', comment.CommentID).catch(() => {});
+      notifyChange('comments', 'created', comment.CommentID).catch((err) => logger.warn('[dbService] notifyChange failed for comments', err));
       
       // Firestore write
       try {

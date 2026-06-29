@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAllSubordinates } from '../../../utils/userUtils';
+import { logger } from '../../../utils/logger';
 import {
   LayoutDashboard,
   ClipboardList,
@@ -226,7 +227,10 @@ export default function Dashboard({
           setConnectionMessage({ type: 'error', text: 'No authorization URL returned' });
         }
       } else {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData = await response.json().catch((err) => {
+          logger.warn('[Dashboard] Failed to parse error response JSON', err);
+          return {};
+        });
         setConnectionMessage({ type: 'error', text: errorData.error || 'Failed to get authorization URL' });
       }
     } catch (err) {
