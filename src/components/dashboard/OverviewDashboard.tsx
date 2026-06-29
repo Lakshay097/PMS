@@ -12,9 +12,10 @@ interface OverviewDashboardProps {
   onViewAllTasks?: () => void;
   onViewChange?: (view: 'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings') => void;
   onFilterChange?: (filterType: 'status' | 'priority' | 'assignee' | 'dueDate', value: string) => void;
+  isDarkMode?: boolean;
 }
 
-export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks, onViewChange, onFilterChange }: OverviewDashboardProps) {
+export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks, onViewChange, onFilterChange, isDarkMode = false }: OverviewDashboardProps) {
   // Calculate KPI metrics
   const activeTasks = tasks.filter(t => t.Status === 'In Progress' || t.Status === 'Submitted').length;
   const overdueTasks = tasks.filter(t => t.Status === 'Overdue').length;
@@ -125,7 +126,7 @@ export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks, 
                     <div
                       key={task.TaskID}
                       onClick={() => onTaskClick?.(task.TaskID)}
-                      className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                      className={`p-4 cursor-pointer transition-colors ${isDarkMode ? 'hover:bg-[#1E293B]/30' : 'hover:bg-gray-50'}`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
@@ -204,7 +205,7 @@ export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks, 
                   <div
                     key={task.TaskID}
                     onClick={() => onTaskClick?.(task.TaskID)}
-                    className="p-3 bg-gray-50 rounded-md hover:bg-gray-100 cursor-pointer transition-colors"
+                    className={`p-3 rounded-md cursor-pointer transition-colors ${isDarkMode ? 'bg-[#1E293B]/20 hover:bg-[#1E293B]/40' : 'bg-gray-50 hover:bg-gray-100'}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
