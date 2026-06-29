@@ -1,0 +1,4 @@
+_GOOGLE_SERVICE_ACCOUNT_EMAIL=your-service-account@project.iam.gserviceaccount.com
+_GOOGLE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nYOUR_PRIVATE_KEY_HERE\n-----END PRIVATE KEY-----
+_GOOGLE_SPREADSHEET_ID=your-spreadsheet-id
+_JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
