@@ -168,12 +168,6 @@ export default function App() {
     });
   };
 
-  // Send invite email for new user accounts
-  const handleSendInviteEmail = (email: string, fullName: string, role: string) => {
-    const inviteMessage = `Welcome to PMS! Your account has been created as ${role}. You can now log in with your credentials.`;
-    triggerNotification('Task Assignment', inviteMessage, email);
-  };
-
   // Replaces email template tokens with actual task details
   const formatEmailTemplate = (
     key: 'template_assigned_email' | 'template_delayed_email',
@@ -268,18 +262,6 @@ export default function App() {
   const [newProfilePassword, setNewProfilePassword] = useState('');
   const [passwordChangeSuccess, setPasswordChangeSuccess] = useState(false);
 
-  const handleUpdatePassword = async (newPass: string) => {
-    if (!activeUser) return;
-    const updatedUser = { ...activeUser, Password: newPass, UpdatedAt: new Date().toISOString() };
-    await dbService.saveUser(updatedUser);
-    await dbService.logAction('User', activeUser.UserID, 'Password/Security Code changed by User via Profile', activeUser.Email, null, { email: activeUser.Email });
-    setPasswordChangeSuccess(true);
-    setTimeout(() => {
-      setPasswordChangeSuccess(false);
-      setIsEditingPassword(false);
-    }, 2500);
-    debouncedLoadDatabase();
-  };
 
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
   const [isAuthInitialized, setIsAuthInitialized] = useState<boolean>(false);
@@ -365,11 +347,6 @@ export default function App() {
     () => debounce(() => loadDatabase(), 2000),
     [loadDatabase]
   );
-
-  // Manual sync function for AdminPanel - use silent sync to avoid blocking UI
-  const handleManualSync = async () => {
-    await silentSync();
-  };
 
   // Handle mobile back button and keyboard shortcuts
   useAppEvents(activeView, setActiveView);
@@ -726,24 +703,12 @@ export default function App() {
 
     await logAudit('Report', propId, 'Published Progress Report', '', JSON.stringify({ TaskID: data.TaskID, Status: data.StatusUpdate }));
     // Trigger sync after action
-    handleManualSync();
+    silentSync();
     setIsReportModalOpen(false);
     setIsDrawerOpen(false);
     setSelectedTask(null);
   };
 
-  const handleUpdateSetting = async (key: string, value: string) => {
-    const updated = settings.map(s => {
-      if (s.Key === key) {
-        return { ...s, Value: value };
-      }
-      return s;
-    });
-    setSettings(updated);
-    await dbService.saveSettings(updated);
-    await logAudit('Settings', key, `Update Config Parameter`, '', value);
-    // SSE will handle sync automatically - no need to reload database
-  };
 
 
   if (dbIsLoading) {
@@ -901,7 +866,7 @@ export default function App() {
           try {
             await dbService.saveUser(userData);
             // Trigger sync after action
-            handleManualSync();
+            silentSync();
           } catch (error) {
             throw error;
           }
@@ -910,7 +875,7 @@ export default function App() {
           try {
             await dbService.saveTemplate(templateData);
             // Trigger sync after action
-            handleManualSync();
+            silentSync();
           } catch (error) {
             throw error;
           }
@@ -921,7 +886,7 @@ export default function App() {
             if (template) {
               await dbService.saveTemplate({ ...template, Active: !template.Active });
               // Trigger sync after action
-              handleManualSync();
+              silentSync();
             }
           } catch (error) {
             throw error;
@@ -932,7 +897,7 @@ export default function App() {
             await dbService.saveTeam(teamData);
             await logAudit('Team', teamData.TeamID, 'Created Team', '', JSON.stringify(teamData));
             // Trigger sync after action
-            handleManualSync();
+            silentSync();
           } catch (error) {
             throw error;
           }
@@ -941,7 +906,7 @@ export default function App() {
           try {
             await dbService.toggleTeamStatus(teamId);
             // Trigger sync after action
-            handleManualSync();
+            silentSync();
           } catch (error) {
             throw error;
           }
@@ -974,7 +939,7 @@ export default function App() {
             }
 
             // Trigger sync after action
-            handleManualSync();
+            silentSync();
           } catch (error) {
             throw error;
           }
@@ -995,14 +960,14 @@ export default function App() {
           try {
             await dbService.saveTeamSubmission(submission);
             setTeamSubmissions(prev => [...prev, submission]);
-            handleManualSync();
+            silentSync();
           } catch (error) {
             throw error;
           }
         }}
         isDarkMode={isDarkMode}
         onToggleTheme={() => setIsDarkMode(!isDarkMode)}
-        onSyncDatabase={handleManualSync}
+        onSyncDatabase={silentSync}
         isSyncing={dbIsSyncing}
         lastSyncTime={lastSyncTime}
         dbConnectionStatus={dbConnectionStatus}
