@@ -310,7 +310,7 @@ export default function App() {
   }, [isAuthInitialized]);
 
   // Simple debounce function
-  function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
+  function debounceFn<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
     let timeout: NodeJS.Timeout | null = null;
     return function executedFunction(...args: Parameters<T>) {
       const later = () => {
@@ -324,7 +324,7 @@ export default function App() {
 
   // Debounce search query with 300ms delay
   useEffect(() => {
-    const debounced = debounce(() => {
+    const debounced = debounceFn(() => {
       setDebouncedSearchQuery(searchQuery);
     }, 300);
     debounced();
@@ -333,7 +333,7 @@ export default function App() {
 
   // Debounced version of loadDatabase for post-action syncs
   const debouncedLoadDatabase = useMemo(
-    () => debounce(() => loadDatabase(), 2000),
+    () => debounceFn(() => loadDatabase(), 2000),
     [loadDatabase]
   );
 
