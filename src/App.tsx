@@ -313,13 +313,6 @@ export default function App() {
     }
   }, [isAuthInitialized]);
 
-  // Debug logging to identify email mismatches
-  useEffect(() => {
-    if (tasks.length > 0 && activeUser) {
-      // Debug logging removed
-    }
-  }, [tasks, activeUser]);
-
   // Simple debounce function
   function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
     let timeout: NodeJS.Timeout | null = null;
