@@ -8,6 +8,7 @@ import { useTeamOperations } from './hooks/useTeamOperations';
 import { useTemplateOperations } from './hooks/useTemplateOperations';
 import { useTaskMetrics } from './hooks/useTaskMetrics';
 import { getAllSubordinates } from './utils/userUtils';
+import { getStatusBadgeStyle } from './utils/taskUtils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logger } from './utils/logger';
 import { ROLE } from './constants/status';
@@ -763,16 +764,6 @@ export default function App() {
     // SSE will handle sync automatically - no need to reload database
   };
 
-  const getStatusBadgeStyle = (status: string) => {
-    switch (status) {
-      case 'Not Started': return 'bg-[#F1F5F9] text-[#475569] border-[#E2E8F0]';
-      case 'In Progress': return 'bg-[#DBEAFE] text-[#1E40AF] border-[#BFDBFE]';
-      case 'Submitted': return 'bg-[#F3E8FF] text-[#6B21A7] border-[#E9D5FF]';
-      case 'Closed': return 'bg-[#F1F5F9] text-[#475569] border-[#E2E8F0]';
-      case 'Overdue': return 'bg-[#FEF2F2] border-[#FCA5A5] text-[#B91C1C] animate-pulse font-bold';
-      default: return 'bg-[#F1F5F9] text-[#475569] border-[#E2E8F0]';
-    }
-  };
 
   if (dbIsLoading) {
     return <DashboardSkeleton isDarkMode={isDarkMode} />;
