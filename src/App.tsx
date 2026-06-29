@@ -8,7 +8,7 @@ import { useTeamOperations } from './hooks/useTeamOperations';
 import { useTemplateOperations } from './hooks/useTemplateOperations';
 import { useTaskMetrics } from './hooks/useTaskMetrics';
 import { getAllSubordinates } from './utils/userUtils';
-import { getStatusBadgeStyle, getCurrentLocalDate } from './utils/taskUtils';
+import { getStatusBadgeStyle, getCurrentLocalDate, getTomorrowDate } from './utils/taskUtils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logger } from './utils/logger';
 import { ROLE } from './constants/status';
@@ -243,16 +243,6 @@ export default function App() {
   
   // Task view tabs
   const [taskViewTab, setTaskViewTab] = useState<'active' | 'history'>('active');
-  
-  // Helper function to get tomorrow's date in YYYY-MM-DD format
-  const getTomorrowDate = (): string => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const year = tomorrow.getFullYear();
-    const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
-    const day = String(tomorrow.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
   
   // Collapsible sidebar state using localStorage persistence
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {

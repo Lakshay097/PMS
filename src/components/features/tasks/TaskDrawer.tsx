@@ -3,17 +3,7 @@ import { motion } from 'framer-motion';
 import { X, Calendar, User, FileText, Link as LinkIcon, History, AlertCircle, CheckCircle, TrendingUp, Edit2, Save, Trash, ShieldAlert, CornerRightDown } from 'lucide-react';
 import { Task, TaskReport, User as UserType, Team, Subtask } from '../../../types/index';
 import { ROLE } from '../../../constants/status';
-import { getCurrentLocalDate } from '../../../utils/taskUtils';
-
-// Helper function to get tomorrow's date in YYYY-MM-DD format
-const getTomorrowDate = (): string => {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const year = tomorrow.getFullYear();
-  const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
-  const day = String(tomorrow.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+import { getCurrentLocalDate, getTomorrowDate } from '../../../utils/taskUtils';
 
 interface TaskDrawerProps {
   task: Task | null;
