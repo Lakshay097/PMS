@@ -76,6 +76,7 @@ export interface Task {
   AssignedToEmail: string;
   AssignedToRole: 'Admin' | 'Stakeholder' | 'Sub-stakeholder';
   AssignedToTeamIDs: string[]; // Can be assigned to multiple teams
+  StakeholderEmails?: string[]; // Additional stakeholders who can view the task
   Status: TaskStatus;
   PercentComplete: number;
   LastReportSummary: string;
