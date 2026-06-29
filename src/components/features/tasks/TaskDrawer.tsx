@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { X, Calendar, User, FileText, Link as LinkIcon, History, AlertCircle, CheckCircle, TrendingUp, Edit2, Save, Trash, ShieldAlert, CornerRightDown } from 'lucide-react';
 import { Task, TaskReport, User as UserType, Team, Subtask } from '../../../types/index';
 import { ROLE } from '../../../constants/status';
+import { getCurrentLocalDate } from '../../../utils/taskUtils';
 
 // Helper function to get tomorrow's date in YYYY-MM-DD format
 const getTomorrowDate = (): string => {
@@ -11,15 +12,6 @@ const getTomorrowDate = (): string => {
   const year = tomorrow.getFullYear();
   const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
   const day = String(tomorrow.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-// Helper function to get current local date in YYYY-MM-DD format
-const getCurrentLocalDate = (): string => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 

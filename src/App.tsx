@@ -8,7 +8,7 @@ import { useTeamOperations } from './hooks/useTeamOperations';
 import { useTemplateOperations } from './hooks/useTemplateOperations';
 import { useTaskMetrics } from './hooks/useTaskMetrics';
 import { getAllSubordinates } from './utils/userUtils';
-import { getStatusBadgeStyle } from './utils/taskUtils';
+import { getStatusBadgeStyle, getCurrentLocalDate } from './utils/taskUtils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logger } from './utils/logger';
 import { ROLE } from './constants/status';
@@ -243,15 +243,6 @@ export default function App() {
   
   // Task view tabs
   const [taskViewTab, setTaskViewTab] = useState<'active' | 'history'>('active');
-  
-  // Helper function to get current local date in YYYY-MM-DD format
-  const getCurrentLocalDate = (): string => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
   
   // Helper function to get tomorrow's date in YYYY-MM-DD format
   const getTomorrowDate = (): string => {
