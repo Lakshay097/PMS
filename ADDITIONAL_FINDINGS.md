@@ -25,4 +25,23 @@ The proper fix requires:
 This is a delicate fix that requires deeper investigation into React 19 type changes. Flagged for human review.
 
 ## Phase 3E - Repeated Logic (ID-030, ID-031, ID-033, ID-034, ID-037)
-These items are being processed in Phase 3E.
+
+### ID-034 - Unified role-based task filtering
+**Status: SKIPPED - Flagged for human review (HIGH RISK)**
+
+Per previous analysis, there are two getFilteredTasks implementations:
+- src/utils/taskUtils.ts: Simple filter by status, priority, search
+- src/App.tsx: Complex role-based visibility filter with overdue state derivation, active/deleted status checks, and hierarchical subordinate logic
+
+These serve different purposes and should NOT be consolidated without careful human review. This is a high-risk refactoring that could break role-based access control.
+
+### ID-030, ID-037 - Centralize Google Sheets token error handling
+**Status: SKIPPED - Flagged for human review (MEDIUM RISK)**
+
+The `generateGoogleSheetsToken()` function is called in 15+ locations across the codebase. Each location has slightly different error handling:
+- Some return false
+- Some return null
+- Some throw InternalServerError
+- Some return early with no value
+
+Centralizing this would require creating a wrapper function that can handle all these different error scenarios, which could introduce subtle bugs. The current pattern, while repetitive, is explicit and context-appropriate. This refactoring should be done with careful human review to ensure all error cases are handled correctly.

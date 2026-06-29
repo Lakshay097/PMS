@@ -5,6 +5,7 @@ import { BadRequestError, NotFoundError, InternalServerError } from '../utils/Ap
 import { AuthRequest } from '../middleware/auth';
 import bcrypt from 'bcrypt';
 import { logger } from '../utils/logger';
+import { config } from '../config';
 
 /**
  * Login request body
@@ -306,7 +307,7 @@ export async function changePasswordHandler(req: AuthRequest, res: Response): Pr
 
   // Update password - hash it with bcrypt
   const now = new Date().toISOString();
-  const hashedPassword = await bcrypt.hash(newPassword, parseInt(process.env.BCRYPT_ROUNDS || '12'));
+  const hashedPassword = await bcrypt.hash(newPassword, config.BCRYPT_ROUNDS);
   userRow[12] = hashedPassword; // Password (M)
   userRow[11] = now; // UpdatedAt (L)
 

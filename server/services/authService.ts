@@ -135,7 +135,7 @@ export async function login(email: string, password: string): Promise<LoginRespo
 
   // One-time migration: re-hash plaintext passwords
   if (needsMigration) {
-    const bcryptRounds = parseInt(process.env.BCRYPT_ROUNDS || '12');
+    const bcryptRounds = config.BCRYPT_ROUNDS;
     const hashedPassword = await bcrypt.hash(password, bcryptRounds);
     
     // Update the password in Google Sheets
