@@ -38,7 +38,7 @@ export const config = {
   NODE_ENV: process.env.NODE_ENV || 'development',
 
   // JWT
-  JWT_SECRET: process.env.JWT_SECRET || 'change-this-secret-in-production',
+  JWT_SECRET: process.env.JWT_SECRET as string,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   JWT_EXPIRATION_SECONDS: 3600,
 

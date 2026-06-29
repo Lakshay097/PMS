@@ -168,7 +168,7 @@ async function startServer() {
   const app = express();
   // Support both Cloud Run 3000, Hugging Face 7860, or any environment port
   const PORT = process.env.PORT || 3000;
-  const JWT_SECRET = (process.env.JWT_SECRET as string) || 'change-this-secret-in-production';
+  const JWT_SECRET = process.env.JWT_SECRET as string;
   const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '12');
 
   // Initialize email-related sheets
