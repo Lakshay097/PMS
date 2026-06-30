@@ -538,7 +538,7 @@ export default function AdminPanel({
   };
 
   return (
-    <div className={`rounded-xl border border-[#E5E7EB] bg-white overflow-hidden font-sans ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : ''}`}>
+    <div className={`rounded-xl border overflow-hidden font-sans ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
       
       {/* Integrated Header - matches Dashboard style */}
       <div className={`px-4 md:px-6 py-4 border-b border-[#E5E7EB] ${isDarkMode ? 'border-[#1E293B]' : ''}`}>
@@ -633,7 +633,7 @@ export default function AdminPanel({
                   </div>
                   <div className="grid grid-cols-1 gap-4">
                     {pendingApprovals.map(req => (
-                      <div key={req.UserID} className={`border border-[#E5E7EB] bg-white rounded-xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:shadow-md transition-all ${isDarkMode ? 'bg-[#1E293B] border-amber-500/20' : ''}`}>
+                      <div key={req.UserID} className={`border rounded-xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:shadow-md transition-all ${isDarkMode ? 'bg-[#1E293B] border-amber-500/20' : 'bg-white border-[#E5E7EB]'}`}>
                         <div>
                           <div className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{req.FullName}</div>
                           <div className={`text-xs font-mono mt-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{req.Email}</div>
@@ -689,7 +689,7 @@ export default function AdminPanel({
                       <div className={`text-xs font-bold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                         Preview ({csvPreview.length} rows):
                       </div>
-                      <div className={`max-h-32 overflow-y-auto text-xs ${isDarkMode ? 'bg-[#0F141F]' : 'bg-white'} p-2 rounded border ${isDarkMode ? 'border-[#475569]' : 'border-slate-200'}`}>
+                      <div className={`max-h-32 overflow-y-auto text-xs p-2 rounded border ${isDarkMode ? 'bg-[#0F141F] border-[#475569]' : 'bg-white border-slate-200'}`}>
                         {csvPreview.slice(0, 5).map((row, i) => (
                           <div key={i} className={`py-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                             {row['Full Name']} ({row['Email']})

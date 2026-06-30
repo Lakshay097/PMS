@@ -123,7 +123,7 @@ export default function TaskFilters({
     }
   };
   return (
-    <div className={`border border-[#E5E7EB] bg-white rounded-xl p-4 flex flex-wrap gap-4 items-center ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : ''}`}>
+    <div className={`border rounded-xl p-4 flex flex-wrap gap-4 items-center ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
       <div className={`flex items-center space-x-2 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
         <Filter size={16} />
         <span>Filters:</span>

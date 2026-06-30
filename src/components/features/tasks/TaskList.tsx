@@ -38,7 +38,7 @@ export default function TaskList({
   });
 
   return (
-    <div className={`border border-[#E5E7EB] bg-white rounded-xl overflow-hidden ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : ''}`}>
+    <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
       {/* Search bar */}
       <div className={`p-4 border-b border-[#E5E7EB] ${isDarkMode ? 'border-[#1E293B]' : ''}`}>
         <div className="relative">
