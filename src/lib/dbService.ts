@@ -329,7 +329,7 @@ export async function initializeDatabaseWithRace(): Promise<{
   data: Awaited<ReturnType<typeof dbService.batchLoadAll>>;
   primary: DatabaseType;
 }> {
-  const TIMEOUT_MS = 5000; // 5 second timeout per database
+  const TIMEOUT_MS = 15000; // 15 second timeout per database (increased from 5s)
 
   // Create timeout promise
   const timeoutPromise = (ms: number, dbType: DatabaseType) =>
