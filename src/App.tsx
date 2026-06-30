@@ -1200,11 +1200,13 @@ export default function App() {
           <AddTeamModal
             isOpen={isAddTeamModalOpen}
             onClose={() => setIsAddTeamModalOpen(false)}
+            users={users}
             onSave={async (teamData) => {
               const newTeam: Team = {
                 TeamID: `T-${Date.now()}`,
                 TeamName: teamData.TeamName,
                 Description: teamData.Description,
+                StakeholderEmails: teamData.StakeholderEmails,
                 Active: true,
                 CreatedAt: new Date().toISOString(),
                 UpdatedAt: new Date().toISOString(),

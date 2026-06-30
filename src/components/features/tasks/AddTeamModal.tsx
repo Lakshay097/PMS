@@ -5,17 +5,20 @@ interface AddTeamModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (teamData: TeamData) => void;
+  users?: any[];
 }
 
 interface TeamData {
   TeamName: string;
   Description: string;
+  StakeholderEmails?: string[];
 }
 
-export default function AddTeamModal({ isOpen, onClose, onSave }: AddTeamModalProps) {
+export default function AddTeamModal({ isOpen, onClose, onSave, users = [] }: AddTeamModalProps) {
   const [teamName, setTeamName] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState('');
+  const [selectedStakeholders, setSelectedStakeholders] = useState<string[]>([]);
 
   if (!isOpen) return null;
 
@@ -31,11 +34,13 @@ export default function AddTeamModal({ isOpen, onClose, onSave }: AddTeamModalPr
     onSave({
       TeamName: teamName.trim(),
       Description: description.trim(),
+      StakeholderEmails: selectedStakeholders
     });
     onClose();
     // Reset form
     setTeamName('');
     setDescription('');
+    setSelectedStakeholders([]);
   };
 
   return (
@@ -79,6 +84,33 @@ export default function AddTeamModal({ isOpen, onClose, onSave }: AddTeamModalPr
                 className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 resize-none"
                 rows={3}
               />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Assign Stakeholders (Optional)</label>
+            <div className="border border-slate-300 rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
+              {users.filter(u => u.Active && u.Role === 'Stakeholder').length === 0 ? (
+                <div className="text-slate-400 text-xs italic py-1">No stakeholders available</div>
+              ) : (
+                users.filter(u => u.Active && u.Role === 'Stakeholder').map(user => (
+                  <label key={user.UserID} className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedStakeholders.includes(user.Email)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedStakeholders([...selectedStakeholders, user.Email]);
+                        } else {
+                          setSelectedStakeholders(selectedStakeholders.filter(email => email !== user.Email));
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-slate-700">{user.FullName}</span>
+                  </label>
+                ))
+              )}
             </div>
           </div>
 

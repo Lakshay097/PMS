@@ -89,8 +89,10 @@ export default function AdminPanel({
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
   const [selectedUsersToAdd, setSelectedUsersToAdd] = useState<Set<string>>(new Set());
   const [selectedTeamLeaders, setSelectedTeamLeaders] = useState<Set<string>>(new Set());
+  const [selectedTeamStakeholders, setSelectedTeamStakeholders] = useState<Set<string>>(new Set());
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [currentTeamLeaders, setCurrentTeamLeaders] = useState<string[]>([]);
+  const [currentTeamStakeholders, setCurrentTeamStakeholders] = useState<string[]>([]);
 
 
   const handleAddMember = (userEmail: string, teamId: string, teamName: string) => {
@@ -141,6 +143,39 @@ export default function AdminPanel({
       const updatedLeaders = currentLeaders.filter(email => email !== userEmail);
       onUpdateSetting(`team_${teamId}_leaders`, updatedLeaders.join(','));
       setCurrentTeamLeaders(updatedLeaders);
+    }
+  };
+
+  const handleAssignTeamStakeholder = (userEmail: string, teamId: string) => {
+    const team = teams.find(t => t.TeamID === teamId);
+    if (team) {
+      const currentStakeholders = team.StakeholderEmails || [];
+      if (!currentStakeholders.includes(userEmail)) {
+        const updatedStakeholders = [...currentStakeholders, userEmail];
+        onUpdateSetting(`team_${teamId}_stakeholders`, updatedStakeholders.join(','));
+        setCurrentTeamStakeholders(updatedStakeholders);
+      }
+    }
+  };
+
+  const handleRemoveTeamStakeholder = (userEmail: string, teamId: string) => {
+    const team = teams.find(t => t.TeamID === teamId);
+    if (team) {
+      const currentStakeholders = team.StakeholderEmails || [];
+      const updatedStakeholders = currentStakeholders.filter(email => email !== userEmail);
+      onUpdateSetting(`team_${teamId}_stakeholders`, updatedStakeholders.join(','));
+      setCurrentTeamStakeholders(updatedStakeholders);
+    }
+  };
+
+  const handleAssignMultipleTeamStakeholders = (teamId: string) => {
+    const team = teams.find(t => t.TeamID === teamId);
+    if (team) {
+      const currentStakeholders = team.StakeholderEmails || [];
+      const newStakeholders = [...currentStakeholders, ...Array.from(selectedTeamStakeholders)];
+      onUpdateSetting(`team_${teamId}_stakeholders`, newStakeholders.join(','));
+      setCurrentTeamStakeholders(newStakeholders);
+      setSelectedTeamStakeholders(new Set());
     }
   };
 
@@ -1014,11 +1049,16 @@ export default function AdminPanel({
                                     setExpandedTeamId(team.TeamID);
                                     setSelectedUsersToAdd(new Set());
                                     setSelectedTeamLeaders(new Set());
+                                    setSelectedTeamStakeholders(new Set());
                                     setMemberSearchQuery('');
                                     // Load team leaders from settings
                                     const leadersSetting = settings.find(s => s.Key === `team_${team.TeamID}_leaders`);
                                     const leadersFromSettings = leadersSetting?.Value ? leadersSetting.Value.split(',').map(e => e.trim()).filter(Boolean) : [];
                                     setCurrentTeamLeaders(leadersFromSettings.length > 0 ? leadersFromSettings : (team.TeamLeaderEmails || []));
+                                    // Load team stakeholders from settings
+                                    const stakeholdersSetting = settings.find(s => s.Key === `team_${team.TeamID}_stakeholders`);
+                                    const stakeholdersFromSettings = stakeholdersSetting?.Value ? stakeholdersSetting.Value.split(',').map(e => e.trim()).filter(Boolean) : [];
+                                    setCurrentTeamStakeholders(stakeholdersFromSettings.length > 0 ? stakeholdersFromSettings : (team.StakeholderEmails || []));
                                   }}
                                   className={`px-2.5 py-1.5 text-[10px] font-bold tracking-wider rounded-lg transition-colors border-none cursor-pointer ${isDarkMode ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400' : 'bg-blue-50 hover:bg-blue-100 text-blue-700'}`}
                                 >

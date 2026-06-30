@@ -29,6 +29,7 @@ export interface Team {
   CreatedAt: string;
   UpdatedAt: string;
   TeamLeaderEmails?: string[]; // Emails of team leaders assigned to this team
+  StakeholderEmails?: string[]; // Emails of stakeholders who can view this team's scheduled tasks
 }
 
 export interface TeamSubmission {

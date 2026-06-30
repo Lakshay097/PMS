@@ -1932,10 +1932,13 @@ export default function Dashboard({
   );
 
   const renderScheduledTasks = () => {
-    // Filter teams based on user role
+    // Filter teams based on user role - Admin, Team Leader, or Stakeholder assigned to team
     const visibleTeams = currentUser.Role === ROLE.ADMIN
       ? teams.filter(t => t.Active)
-      : teams.filter(t => t.TeamLeaderEmails?.includes(currentUser.Email) && t.Active);
+      : teams.filter(t => 
+          (t.TeamLeaderEmails?.includes(currentUser.Email) && t.Active) ||
+          (t.StakeholderEmails?.includes(currentUser.Email) && t.Active)
+        );
 
     return (
       <div className="space-y-6">

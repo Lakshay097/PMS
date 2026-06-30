@@ -69,6 +69,7 @@ export default function TaskDrawer({
   const [isEditing, setIsEditing] = useState(false);
   const [editDescription, setEditDescription] = useState('');
   const [editEmails, setEditEmails] = useState<string[]>([]);
+  const [stakeholderEmails, setStakeholderEmails] = useState<string[]>([]);
   
   // Reassignment states for Admin
   const [reassignUser, setReassignUser] = useState('');
@@ -93,6 +94,7 @@ export default function TaskDrawer({
     if (task) {
       setEditDescription(task.Description);
       setEditEmails((task.AssignedToEmail || '').split(',').map(e => e.trim()).filter(Boolean));
+      setStakeholderEmails(task.StakeholderEmails || []);
       setIsEditing(false);
       setReassignUser('');
       setReassignTeam('');
@@ -167,7 +169,6 @@ export default function TaskDrawer({
     ));
 
   // Determine follow-up credentials
-  // Rule: Admins can create follow-ups on any task, assignees can create follow-ups on their assigned tasks
   const canCreateFollowUp = currentUser.Role === ROLE.ADMIN || isCurrentUserAssignee;
 
   // Determine task editing credentials (Admins only)
@@ -190,7 +191,8 @@ export default function TaskDrawer({
         AssignedToEmail: editEmails.join(', '),
         AssignedToRole: assignedRole as any,
         AssignedToTeamIDs: assignedTeamIDs,
-        TeamID: primaryTeamID
+        TeamID: primaryTeamID,
+        StakeholderEmails: stakeholderEmails
       });
     }
     setIsEditing(false);
@@ -305,8 +307,8 @@ export default function TaskDrawer({
                       {usersList.length === 0 ? (
                         <div className={`${isDarkMode ? 'text-slate-500' : 'text-slate-400'} text-xs italic py-1`}>No stakeholders registered.</div>
                       ) : (
-                        usersList.filter(u => u.Active).map(user => {
-                          const isChecked = editEmails.includes(user.Email);
+                        usersList.filter(u => u.Active && u.Role === ROLE.STAKEHOLDER).map(user => {
+                          const isChecked = stakeholderEmails.includes(user.Email);
                           return (
                             <label key={user.UserID} className={`flex items-center space-x-2.5 p-1.5 rounded-md cursor-pointer text-xs transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-200' : 'hover:bg-slate-100 text-slate-800'}`}>
                               <input
@@ -314,9 +316,9 @@ export default function TaskDrawer({
                                 checked={isChecked}
                                 onChange={() => {
                                   if (isChecked) {
-                                    setEditEmails(editEmails.filter(e => e !== user.Email));
+                                    setStakeholderEmails(stakeholderEmails.filter(e => e !== user.Email));
                                   } else {
-                                    setEditEmails([...editEmails, user.Email]);
+                                    setStakeholderEmails([...stakeholderEmails, user.Email]);
                                   }
                                 }}
                                 className={`h-4 w-4 rounded transition-colors ${isDarkMode ? 'border-slate-600 text-[#2563EB] focus:ring-[#2563EB]' : 'border-[#CBD5E1] text-[#2563EB] focus:ring-[#2563EB]'}`}
@@ -324,7 +326,7 @@ export default function TaskDrawer({
                               <div className="flex flex-col">
                                 <span className={`font-semibold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{user.FullName}</span>
                                 <span className={`text-[9.5px] font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                                  {currentUser.Role === 'Admin' ? `${user.Role} • ` : ''}{user.Email}
+                                  {user.Email}
                                 </span>
                               </div>
                             </label>
@@ -355,7 +357,6 @@ export default function TaskDrawer({
                         type="button"
                         onClick={() => setIsEditing(true)}
                         className={`flex items-center space-x-1.5 text-[10px] font-bold tracking-wider py-1.5 px-3 rounded-lg shadow-2xs transition-all cursor-pointer ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300' : 'bg-white hover:bg-slate-50 border-[#CBD5E1] text-slate-700'}`}>
-                      >
                         <Edit2 size={11} className="text-[#2563EB]" />
                         <span>Edit task settings</span>
                       </button>
@@ -673,7 +674,7 @@ export default function TaskDrawer({
                               </div>
                               
                               {lastReport && (
-                                <div className={`border rounded px-2 py-1.5 mt-2 ${isDarkMode ? 'bg-blue-900/20 border-blue-800' : 'bg-blue-50 border-blue-100'`}>
+                                <div className={`border rounded px-2 py-1.5 mt-2 ${isDarkMode ? 'bg-blue-900/20 border-blue-800' : 'bg-blue-50 border-blue-100'}`}>
                                   <div className={`text-[9px] font-medium mb-0.5 ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>Last update:</div>
                                   <div className={`text-[10px] italic ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>"{lastReport.WorkSummary}"</div>
                                 </div>
@@ -808,7 +809,7 @@ export default function TaskDrawer({
                             const firstUser = usersList.find(u => u.Email === newAssignees[0]);
                             onUpdateTask(task.TaskID, {
                               AssignedToEmail: newAssignees.join(', '),
-                              AssignedToRole: firstUser ? firstUser.Role : 'Stakeholder',
+                              AssignedToRole: (firstUser ? firstUser.Role : 'Stakeholder') as 'Admin' | 'Stakeholder' | 'Sub-stakeholder',
                               AssignedToTeamIDs: firstUser ? firstUser.TeamIDs : [],
                               TeamID: firstUser && firstUser.TeamIDs.length > 0 ? firstUser.TeamIDs[0] : ''
                             });
@@ -836,7 +837,7 @@ export default function TaskDrawer({
                           value={reassignTeam}
                           onChange={(e) => {
                             setReassignTeam(e.target.value);
-                            setReassignUser(''); // clear user select
+                            setReassignUser('');
                           }}
                           className={`rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#D97706] flex-grow ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-[#CBD5E1] text-slate-700'}`}
                         >
@@ -857,7 +858,7 @@ export default function TaskDrawer({
                                 const commaEmails = teamMembers.map(u => u.Email).join(', ');
                                 onUpdateTask(task.TaskID, {
                                   AssignedToEmail: commaEmails || 'unassigned@PMS.com',
-                                  AssignedToRole: teamMembers.length > 0 ? teamMembers[0].Role : 'Stakeholder',
+                                  AssignedToRole: (teamMembers.length > 0 ? teamMembers[0].Role : 'Stakeholder') as 'Admin' | 'Stakeholder' | 'Sub-stakeholder',
                                   AssignedToTeamIDs: [reassignTeam],
                                   TeamID: reassignTeam
                                 });
@@ -917,7 +918,7 @@ export default function TaskDrawer({
 
                   {((task.EtaRequestCount || 0) < 3) ? (
                     <div className="space-y-2">
-                      <p className={`text-[11px] leading-relaxed font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'`}>
+                      <p className={`text-[11px] leading-relaxed font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                         Need extra time? Propose a new estimated date. These updates notify system administrators and teammates automatically.
                       </p>
                       {etaError && (
@@ -940,7 +941,6 @@ export default function TaskDrawer({
                               const newEta = inputEl.value;
                               const today = getCurrentLocalDate();
                               
-                              // Validate that new ETA is strictly greater than today
                               if (newEta <= today) {
                                 setEtaError('ETA must be set to a date after today. Please select a future date.');
                                 setTimeout(() => setEtaError(''), 3000);
@@ -1007,7 +1007,7 @@ export default function TaskDrawer({
                     href={task.AttachmentLink}
                     target="_blank"
                     rel="noreferrer"
-                    className={`flex items-center space-x-2 text-xs border rounded-lg p-3 transition ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700'}`}>
+                    className={`flex items-center space-x-2 text-xs border rounded-lg p-3 transition ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 border-slate-600 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700'}`}
                   >
                     <LinkIcon size={14} className={isDarkMode ? 'text-slate-500' : 'text-slate-400'} />
                     <span className={`truncate flex-1 font-mono text-[11px] underline ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
@@ -1024,7 +1024,7 @@ export default function TaskDrawer({
                     <CornerRightDown size={14} className={isDarkMode ? 'text-amber-500' : 'text-amber-600'} />
                     <span>Follow-up reason</span>
                   </div>
-                  <p className={`text-xs italic leading-relaxed ${isDarkMode ? 'text-amber-400' : 'text-amber-700'`}>
+                  <p className={`text-xs italic leading-relaxed ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>
                     &ldquo;{task.FollowUpReason}&rdquo;
                   </p>
                 </div>
@@ -1037,7 +1037,7 @@ export default function TaskDrawer({
                     <CheckCircle size={14} className={isDarkMode ? 'text-emerald-500' : 'text-emerald-600'} />
                     <span>Audit close remarks</span>
                   </div>
-                  <p className={`text-xs italic leading-relaxed ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`}
+                  <p className={`text-xs italic leading-relaxed ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>
                     &ldquo;{task.CloseRemark}&rdquo;
                   </p>
                 </div>
@@ -1054,12 +1054,11 @@ export default function TaskDrawer({
                   {taskReports.map((report, rIdx) => {
                     const subtask = report.SubtaskID ? taskSubtasks.find(s => s.SubtaskID === report.SubtaskID) : null;
                     return (
-                      <div 
-                        key={report.ReportID} 
-                        className={`relative border rounded-lg p-3.5 shadow-xs cursor-pointer hover:shadow-sm transition-shadow ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-[#E2E8F0]'}`}>
+                      <div
+                        key={report.ReportID}
+                        className={`relative border rounded-lg p-3.5 shadow-xs cursor-pointer hover:shadow-sm transition-shadow ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-[#E2E8F0]'}`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          // Prevent opening task modal - reports are already fully displayed
                           console.log('Report clicked:', report.ReportID);
                         }}
                       >
@@ -1070,11 +1069,11 @@ export default function TaskDrawer({
                           <div className="flex items-center space-x-2">
                             <span className={`text-[10px] font-mono font-bold ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{report.ReportDate}</span>
                             {subtask ? (
-                              <span className={`text-[9px] border px-2 py-0.5 rounded font-bold tracking-wider ${isDarkMode ? 'bg-purple-900/30 text-purple-400 border-purple-700' : 'bg-purple-50 text-purple-700 border-purple-200'`}>
+                              <span className={`text-[9px] border px-2 py-0.5 rounded font-bold tracking-wider ${isDarkMode ? 'bg-purple-900/30 text-purple-400 border-purple-700' : 'bg-purple-50 text-purple-700 border-purple-200'}`}>
                                 Subtask: {subtask.Title}
                               </span>
                             ) : (
-                              <span className={`text-[9px] border px-2 py-0.5 rounded font-bold tracking-wider ${isDarkMode ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-600 border-[#E5E7EB]'`}>
+                              <span className={`text-[9px] border px-2 py-0.5 rounded font-bold tracking-wider ${isDarkMode ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-600 border-[#E5E7EB]'}`}>
                                 Parent task
                               </span>
                             )}
@@ -1088,48 +1087,48 @@ export default function TaskDrawer({
                           {report.WorkSummary}
                         </div>
 
-                      {report.Blockers && (
-                        <div className={`mt-2 text-[11px] p-2 rounded border flex items-start space-x-1.5 ${isDarkMode ? 'bg-amber-900/20 text-amber-400 border-amber-800' : 'bg-amber-50 text-amber-800 border-amber-200/50'}`}>
-                          <AlertCircle size={12} className={`mt-0.5 flex-shrink-0 ${isDarkMode ? 'text-amber-500' : 'text-amber-600'}`}
-                          <div>
-                            <strong className="font-semibold text-xs block mb-0.5">BLOCKERS IDENTIFIED:</strong> {report.Blockers}
+                        {report.Blockers && (
+                          <div className={`mt-2 text-[11px] p-2 rounded border flex items-start space-x-1.5 ${isDarkMode ? 'bg-amber-900/20 text-amber-400 border-amber-800' : 'bg-amber-50 text-amber-800 border-amber-200/50'}`}>
+                            <AlertCircle size={12} className={`mt-0.5 flex-shrink-0 ${isDarkMode ? 'text-amber-500' : 'text-amber-600'}`} />
+                            <div>
+                              <strong className="font-semibold text-xs block mb-0.5">BLOCKERS IDENTIFIED:</strong> {report.Blockers}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      {report.NextAction && (
-                        <div className={`mt-2 text-[11px] font-medium ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>
-                          &bull; <strong>Next Immediate step:</strong> {report.NextAction}
-                        </div>
-                      )}
+                        {report.NextAction && (
+                          <div className={`mt-2 text-[11px] font-medium ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>
+                            &bull; <strong>Next Immediate step:</strong> {report.NextAction}
+                          </div>
+                        )}
 
-                      {report.AttachmentLink ? (
-                        <div className="mt-2.5 space-y-1">
-                          {report.AttachmentLink.split(',').map((url, idx) => (
-                            <a
-                              key={idx}
-                              href={url.trim()}
-                              target="_blank"
-                              rel="noreferrer"
-                              className={`flex items-center space-x-1.5 text-[10px] hover:underline font-bold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <LinkIcon size={11} className={isDarkMode ? 'text-blue-500' : 'text-blue-500'} />
-                              <span>Attachment {idx + 1}</span>
-                            </a>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className={`mt-2.5 text-[10px] italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                          No attachment
-                        </div>
-                      )}
+                        {report.AttachmentLink ? (
+                          <div className="mt-2.5 space-y-1">
+                            {report.AttachmentLink.split(',').map((url, idx) => (
+                              <a
+                                key={idx}
+                                href={url.trim()}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className={`flex items-center space-x-1.5 text-[10px] hover:underline font-bold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}
+                              >
+                                <LinkIcon size={11} className={isDarkMode ? 'text-blue-500' : 'text-blue-500'} />
+                                <span>Attachment {idx + 1}</span>
+                              </a>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className={`mt-2.5 text-[10px] italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                            No attachment
+                          </div>
+                        )}
 
-                      <div className={`mt-3 pt-2.5 border-t flex items-center justify-between text-[9px] font-mono ${isDarkMode ? 'border-slate-700 text-slate-400' : 'border-slate-100 text-[#64748B]'}`}
-                        <span>LODGED BY: {report.SubmittedByEmail}</span>
-                        <span>ID: {report.ReportID}</span>
+                        <div className={`mt-3 pt-2.5 border-t flex items-center justify-between text-[9px] font-mono ${isDarkMode ? 'border-slate-700 text-slate-400' : 'border-slate-100 text-[#64748B]'}`}>
+                          <span>LODGED BY: {report.SubmittedByEmail}</span>
+                          <span>ID: {report.ReportID}</span>
+                        </div>
                       </div>
-                    </div>
                     );
                   })}
                 </div>
@@ -1139,11 +1138,11 @@ export default function TaskDrawer({
         </div>
 
         {/* Footer actions panel */}
-        <div className={`p-4 border-t flex flex-col space-y-2 ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-[#E2E8F0] bg-slate-50'`}>
+        <div className={`p-4 border-t flex flex-col space-y-2 ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-[#E2E8F0] bg-slate-50'}`}>
           {/* Close Task form */}
           {showCloseForm && (
             <form onSubmit={handleCloseSubmit} className={`rounded-xl p-4.5 space-y-3 mb-2 shadow-sm ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-[#E2E8F0]'}`}>
-              <label className={`block text-[10px] font-bold tracking-wider block ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>
+              <label className={`block text-[10px] font-bold tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>
                 Close notes / audit findings
               </label>
               <textarea
@@ -1208,4 +1207,3 @@ export default function TaskDrawer({
     </div>
   );
 }
-
