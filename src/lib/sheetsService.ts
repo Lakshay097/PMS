@@ -146,7 +146,7 @@ export function rowsToObjects<T>(rows: any[][], headers: string[]): T[] {
 // Internal, unqueued Sheets API operations to avoid deadlock on cross-calls
 const sheetsApiInternal = {
   async getSpreadsheetMetadata(spreadsheetId: string): Promise<any> {
-    const res = await api.get(`/sheets/${spreadsheetId}/metadata`, { skipAuth: true, timeout: 15000 });
+    const res = await api.get(`/sheets/${spreadsheetId}/metadata`, { skipAuth: true, timeout: 20000 });
     return res;
   },
 
@@ -168,7 +168,7 @@ const sheetsApiInternal = {
 
     // 2. Get or create spreadsheet via backend proxy
     logger.log('Getting or creating spreadsheet via backend proxy...');
-    const data = await api.get<{ spreadsheetId: string; metadata: any }>('/sheets/spreadsheet', { skipAuth: true, timeout: 15000 });
+    const data = await api.get<{ spreadsheetId: string; metadata: any }>('/sheets/spreadsheet', { skipAuth: true, timeout: 20000 });
 
     cachedSpreadsheetId = data.spreadsheetId;
     logger.log('Successfully obtained spreadsheet ID:', data.spreadsheetId);

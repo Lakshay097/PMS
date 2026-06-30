@@ -329,7 +329,8 @@ export async function initializeDatabaseWithRace(): Promise<{
   data: Awaited<ReturnType<typeof dbService.batchLoadAll>>;
   primary: DatabaseType;
 }> {
-  const TIMEOUT_MS = 15000; // 15 second timeout per database (increased from 5s)
+  const FIRESTORE_TIMEOUT_MS = 10000; // 10 second timeout for Firestore (fast primary)
+  const SHEETS_TIMEOUT_MS = 20000; // 20 second timeout for Sheets (slower fallback)
 
   // Create timeout promise
   const timeoutPromise = (ms: number, dbType: DatabaseType) =>
@@ -337,76 +338,34 @@ export async function initializeDatabaseWithRace(): Promise<{
       setTimeout(() => reject(new Error(`${dbType} timeout after ${ms}ms`)), ms)
     );
 
-  // Firestore load function with timeout
-  const loadFirestore = async () => {
-    try {
-      logger.log("Loading from Firestore...");
-      const data = await Promise.race([
-        dbService.batchLoadAll(),
-        timeoutPromise(TIMEOUT_MS, 'firestore')
-      ]);
-      logger.log("Firestore loaded successfully");
-      return { data, primary: 'firestore' as DatabaseType };
-    } catch (error) {
-      logger.error("Firestore failed:", error);
-      throw error;
-    }
-  };
-
-  // Sheets load function with timeout
-  const loadSheets = async () => {
-    try {
-      logger.log("Loading from Sheets...");
-      await initializeDatabase();
-      const data = await Promise.race([
-        dbService.batchLoadAll(),
-        timeoutPromise(TIMEOUT_MS, 'sheets')
-      ]);
-      logger.log("Sheets loaded successfully");
-      return { data, primary: 'sheets' as DatabaseType };
-    } catch (error) {
-      logger.error("Sheets failed:", error);
-      throw error;
-    }
-  };
-
+  // Try Firestore first (primary, faster)
   try {
-    // Race both databases
-    const result = await Promise.race([
-      loadFirestore(),
-      loadSheets()
+    logger.log("Loading from Firestore (primary)...");
+    const data = await Promise.race([
+      dbService.batchLoadAll(),
+      timeoutPromise(FIRESTORE_TIMEOUT_MS, 'firestore')
     ]);
+    logger.log("Firestore loaded successfully");
+    localStorage.setItem('primary_database', 'firestore');
+    return { data, primary: 'firestore' };
+  } catch (firestoreError) {
+    logger.error("Firestore failed:", firestoreError);
+  }
 
-    // Store the primary database for this session
-    localStorage.setItem('primary_database', result.primary);
-    logger.log(`Primary database set to: ${result.primary}`);
-
-    return result;
-  } catch (error) {
-    // If both fail, try the other one as fallback
-    logger.error("Both databases failed in race, trying fallback...");
-
-    try {
-      // Try Firestore as fallback
-      logger.log("Trying Firestore as fallback...");
-      const data = await dbService.batchLoadAll();
-      localStorage.setItem('primary_database', 'firestore');
-      logger.log("Fallback to Firestore successful");
-      return { data, primary: 'firestore' };
-    } catch (firestoreError) {
-      try {
-        // Try Sheets as fallback
-        logger.log("Trying Sheets as fallback...");
-        await initializeDatabase();
-        const data = await dbService.batchLoadAll();
-        localStorage.setItem('primary_database', 'sheets');
-        logger.log("Fallback to Sheets successful");
-        return { data, primary: 'sheets' };
-      } catch (sheetsError) {
-        logger.error("Both databases failed completely");
-        throw new Error("Unable to connect to any database. Please check your connection and refresh.");
-      }
-    }
+  // Fallback to Sheets
+  try {
+    logger.log("Firestore failed, trying Sheets as fallback...");
+    await initializeDatabase();
+    const data = await Promise.race([
+      dbService.batchLoadAll(),
+      timeoutPromise(SHEETS_TIMEOUT_MS, 'sheets')
+    ]);
+    logger.log("Sheets loaded successfully");
+    localStorage.setItem('primary_database', 'sheets');
+    return { data, primary: 'sheets' };
+  } catch (sheetsError) {
+    logger.error("Sheets failed:", sheetsError);
+    throw new Error("Unable to connect to any database. Please check your connection and refresh.");
   }
 }
 
