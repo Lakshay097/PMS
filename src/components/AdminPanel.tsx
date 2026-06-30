@@ -130,10 +130,14 @@ export default function AdminPanel({
   };
 
   const handleAssignMultipleTeamLeaders = (teamId: string) => {
-    selectedTeamLeaders.forEach(email => {
-      handleAssignTeamLeader(email, teamId);
-    });
-    setSelectedTeamLeaders(new Set());
+    const team = teams.find(t => t.TeamID === teamId);
+    if (team) {
+      const currentLeaders = team.TeamLeaderEmails || [];
+      const newLeaders = [...new Set([...currentLeaders, ...Array.from(selectedTeamLeaders)])];
+      onUpdateSetting(`team_${teamId}_leaders`, newLeaders.join(','));
+      setCurrentTeamLeaders(newLeaders);
+      setSelectedTeamLeaders(new Set());
+    }
   };
 
   const handleRemoveTeamLeader = (userEmail: string, teamId: string) => {
@@ -525,7 +529,9 @@ export default function AdminPanel({
       .replace(/{Priority}/g, "Critical")
       .replace(/{DueDate}/g, "2026-06-25")
       .replace(/{AssignedToEmail}/g, "sales.lead@PMS.com")
-      .replace(/{AssignedByEmail}/g, "admin@PMS.com");
+      .replace(/{AssignedByEmail}/g, "admin@PMS.com")
+      .replace(/{AssignedToName}/g, "John Smith")
+      .replace(/{AssignedByName}/g, "Admin User");
   };
 
   const getRoleBadgeColor = (role: string, isDarkMode: boolean) => {
@@ -1589,7 +1595,9 @@ export default function AdminPanel({
                       { token: "{Priority}", desc: "Importance Rank" },
                       { token: "{DueDate}", desc: "Target Due Date" },
                       { token: "{AssignedToEmail}", desc: "Receiver Mail" },
-                      { token: "{AssignedByEmail}", desc: "Sender Mail" }
+                      { token: "{AssignedByEmail}", desc: "Sender Mail" },
+                      { token: "{AssignedToName}", desc: "Receiver Name" },
+                      { token: "{AssignedByName}", desc: "Sender Name" }
                     ].map(tok => (
                       <button
                         key={tok.token}

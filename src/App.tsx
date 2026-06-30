@@ -188,6 +188,13 @@ export default function App() {
       }
     }
 
+    // Helper to get user name from email
+    const getUserName = (email: string | undefined): string => {
+      if (!email) return '';
+      const user = users.find(u => u.Email === email);
+      return user?.FullName || email;
+    };
+
     return rawTemplate
       .replace(/{TaskID}/g, task.TaskID || '')
       .replace(/{Title}/g, task.Title || '')
@@ -195,7 +202,9 @@ export default function App() {
       .replace(/{Priority}/g, task.Priority || '')
       .replace(/{DueDate}/g, task.DueDate || '')
       .replace(/{AssignedToEmail}/g, task.AssignedToEmail || '')
-      .replace(/{AssignedByEmail}/g, task.AssignedByEmail || '');
+      .replace(/{AssignedByEmail}/g, task.AssignedByEmail || '')
+      .replace(/{AssignedToName}/g, getUserName(task.AssignedToEmail))
+      .replace(/{AssignedByName}/g, getUserName(task.AssignedByEmail));
   };
 
   // Trigger Local Recurrence simulated load state

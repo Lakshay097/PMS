@@ -6,7 +6,7 @@
 import { logger } from '../utils/logger';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
-const DEFAULT_TIMEOUT = 10000; // 10 seconds (optimized for fast Firestore primary path)
+const DEFAULT_TIMEOUT = 15000; // 15 seconds (was working before)
 const MAX_RETRIES = 3; // Maximum number of retries
 
 /**

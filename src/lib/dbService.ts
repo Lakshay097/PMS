@@ -329,7 +329,7 @@ export async function initializeDatabaseWithRace(): Promise<{
   data: Awaited<ReturnType<typeof dbService.batchLoadAll>>;
   primary: DatabaseType;
 }> {
-  const FIRESTORE_TIMEOUT_MS = 10000; // 10 second timeout for Firestore (fast primary)
+  const FIRESTORE_TIMEOUT_MS = 15000; // 15 second timeout for Firestore (was working before)
   const SHEETS_TIMEOUT_MS = 20000; // 20 second timeout for Sheets (slower fallback)
 
   // Create timeout promise
