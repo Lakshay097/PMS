@@ -36,7 +36,7 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
   {
     templateName: 'template_scheduled_reminder',
     subject: 'Scheduled Document Reminder: Weekly Report for {TeamName}',
-    body: 'Hello,\n\nThis is a reminder for team leaders of team "{TeamName}" to submit the weekly report (scheduled document) due tomorrow.\n\nPlease log in and submit the document:\n\nApp URL: {AppURL}\n\nBest regards,\nPMS Team',
+    body: 'Hello,\n\nThis is a reminder for team leaders of team "{TeamName}" to submit the weekly report (scheduled document) due tomorrow.\n\nPlease log in and submit the document:\n\nApp URL: <a href="{AppURL}" style="color: #3b82f6; text-decoration: underline;">{AppURL}</a>\n\nBest regards,\nPMS Team',
     updatedAt: new Date().toISOString(),
   },
 ];

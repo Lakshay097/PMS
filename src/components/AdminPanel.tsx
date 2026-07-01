@@ -244,7 +244,7 @@ export default function AdminPanel({
       'template_assigned_email': 'Hello {AssignedToEmail},\n\nYou have been assigned a new task:\n\nTask ID: {TaskID}\nTitle: {Title}\nDescription: {Description}\nPriority: {Priority}\nDue Date: {DueDate}\n\nPlease review and start working on this task.\n\nBest regards,\nPMS Team',
       'template_completion_email': 'Hello {AssignedToEmail},\n\nThe following task has been completed:\n\nTask ID: {TaskID}\nTitle: {Title}\n\nGreat job! The task has been marked as complete.\n\nBest regards,\nPMS Team',
       'template_delayed_email': 'URGENT: Task Overdue Alert\n\nHello {AssignedToEmail},\n\nThe following task is now overdue:\n\nTask ID: {TaskID}\nTitle: {Title}\nDue Date: {DueDate}\nPriority: {Priority}\n\nPlease address this immediately.\n\nBest regards,\nPMS Team',
-      'template_scheduled_reminder': 'Scheduled Task Reminder\n\nHello {AssignedToEmail},\n\nThis is a reminder for your scheduled task:\n\nTask ID: {TaskID}\nTitle: {Title}\nDue Date: {DueDate}\nPriority: {Priority}\n\nPlease ensure you complete this task on time.\n\nBest regards,\nPMS Team',
+      'template_scheduled_reminder': 'Hello,\n\nThis is a reminder for team leaders of team "{TeamName}" to submit the weekly report (scheduled document) due tomorrow.\n\nPlease log in and submit the document:\n\nApp URL: <a href="{AppURL}" style="color: #3b82f6; text-decoration: underline;">{AppURL}</a>\n\nBest regards,\nPMS Team',
       'report_submitted': 'Hello,\n\nA progress report has been submitted for the following task:\n\nTask: {Title}\nTask ID: {TaskID}\nReported By: {assigned_by}\nReported By Email: {assigned_by}\n\nReport Content:\n{report_content}\n\nBest regards,\nPMS Team',
       'task_closed': 'Hello,\n\nThe following task has been marked as closed:\n\nTask: {Title}\nTask ID: {TaskID}\nClosed By: {AssignedByEmail}\nCompletion Date: {DueDate}\n\nClose Remarks:\n{ReportContent}\n\nBest regards,\nPMS Team'
     };
@@ -1635,7 +1635,7 @@ export default function AdminPanel({
                   <option value="template_assigned_email">Task Assignment</option>
                   <option value="template_completion_email">Task Completion</option>
                   <option value="template_delayed_email">Overdue Alert</option>
-                  <option value="template_scheduled_reminder">Scheduled Task Reminder</option>
+                  <option value="template_scheduled_reminder">Scheduled Report Reminder</option>
                   <option value="report_submitted">Report Submitted</option>
                   <option value="task_closed">Task Closed</option>
                 </select>
