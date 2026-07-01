@@ -70,9 +70,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Bypass Google API domains (Firestore, Firebase, etc.) - these should never be cached
+  if (url.hostname.includes('googleapis.com') ||
+      url.hostname.includes('firestore.googleapis.com') ||
+      url.hostname.includes('firebaseio.com') ||
+      url.hostname.includes('gstatic.com')) {
+    return; // Let the browser handle it normally, don't intercept
+  }
+
   // Bypass Vite/dev paths to prevent intercepting development server requests
-  if (url.pathname.includes('/@vite') || 
-      url.pathname.includes('/@react-refresh') || 
+  if (url.pathname.includes('/@vite') ||
+      url.pathname.includes('/@react-refresh') ||
       url.pathname.includes('/src/') ||
       url.pathname.includes('.tsx') ||
       url.pathname.includes('.ts')) {
