@@ -1144,11 +1144,15 @@ export const dbService = {
     }
   },
  
-  async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
+async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
     try {
+      // Strip undefined fields — Firestore setDoc() rejects undefined values
+      const sanitizedSubmission = Object.fromEntries(
+        Object.entries(submission).filter(([, v]) => v !== undefined)
+      ) as TeamSubmission;
       // Write to Firestore immediately
       try {
-        await setDoc(doc(db, 'team_submissions', submission.SubmissionID), submission);
+        await setDoc(doc(db, 'team_submissions', submission.SubmissionID), sanitizedSubmission);
       } catch (err) {
         console.error('Firestore write failed — saveTeamSubmission:', err);
         throw err;

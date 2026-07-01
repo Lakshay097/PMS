@@ -1091,7 +1091,7 @@ export default function TaskDrawer({
                     const subtask = report.SubtaskID ? taskSubtasks.find(s => s.SubtaskID === report.SubtaskID) : null;
                     return (
                       <div
-                        key={report.ReportID}
+                        key={report.ReportID || `report-fallback-${rIdx}`}
                         className={`relative border rounded-lg p-3.5 shadow-xs cursor-pointer hover:shadow-sm transition-shadow ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-[#E2E8F0]'}`}
                         onClick={(e) => {
                           e.stopPropagation();
