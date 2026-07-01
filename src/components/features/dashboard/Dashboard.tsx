@@ -1499,6 +1499,51 @@ export default function Dashboard({
     return 'application/octet-stream';
   };
 
+  const handleDownloadTeamSubmission = async (submission: TeamSubmission, teamName: string) => {
+    setIsGeneratingPdf(true);
+    try {
+      const submitter = users.find(u => u.Email === submission.SubmittedBy);
+      let reportContent = `Team: ${teamName}\n`;
+      reportContent += `Submitted By: ${submitter?.FullName || submission.SubmittedBy}\n`;
+      reportContent += `Email: ${submission.SubmittedBy}\n`;
+      reportContent += `Date: ${new Date(submission.SubmittedAt).toLocaleString()}\n\n`;
+      if (submission.Note) {
+        reportContent += `Note:\n${submission.Note}\n\n`;
+      }
+
+      const attachments: AttachmentInfo[] = [];
+      if (submission.AttachmentLinks) {
+        submission.AttachmentLinks.split(',').map(l => l.trim()).filter(l => l).forEach((link, idx) => {
+          attachments.push({
+            url: link,
+            name: `attachment-${idx + 1}`,
+            type: getFileTypeFromUrl(link),
+          });
+        });
+      }
+
+      const safeTeamName = teamName.replace(/[^a-zA-Z0-9]/g, '-');
+      const pdfBlob = await generateReportWithAttachments(
+        reportContent,
+        attachments,
+        `TeamReport-${safeTeamName}`
+      );
+
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `TeamReport-${safeTeamName}-${submission.SubmissionID.slice(0, 8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error generating team submission PDF:', error);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   const renderReports = () => {
     if (!reports || reports.length === 0) {
       return (
@@ -1943,28 +1988,28 @@ export default function Dashboard({
         );
 
     return (
-      <div className="space-y-6">
-        <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
-          <div className="flex items-center justify-between mb-6">
+      <div className="space-y-4 sm:space-y-6">
+        <div className={`border rounded-xl p-4 sm:p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
             <div>
-              <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Scheduled Tasks</h3>
-              <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+              <h3 className={`font-semibold text-base sm:text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Scheduled Tasks</h3>
+              <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                 Weekly report submissions by team
               </p>
             </div>
             {submissionSuccess && (
-              <div className={`px-4 py-2 rounded-lg text-sm font-medium ${isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700'}`}>
+              <div className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium ${isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700'}`}>
                 Report submitted successfully!
               </div>
             )}
           </div>
 
           {visibleTeams.length === 0 ? (
-            <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            <div className={`p-8 sm:p-12 text-center text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
               {currentUser.Role === ROLE.ADMIN ? 'No teams available' : 'You are not assigned as a team leader to any team'}
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {visibleTeams.map(team => {
                 const teamMembers = users.filter(u => u.TeamIDs.includes(team.TeamID));
                 const isTeamLeader = team.TeamLeaderEmails?.includes(currentUser.Email);
@@ -1972,15 +2017,15 @@ export default function Dashboard({
                 const filteredSubmissions = teamSubmissions.filter(s => s.TeamID === team.TeamID);
 
                 return (
-                  <div key={team.TeamID} className={`border rounded-xl p-4 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
-                          <Users size={20} className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} />
+                  <div key={team.TeamID} className={`border rounded-xl p-3 sm:p-4 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
+                      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                        <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
+                          <Users size={14} className={`shrink-0 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
                         </div>
-                        <div>
-                          <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{team.TeamName}</h4>
-                          <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                        <div className="min-w-0">
+                          <h4 className={`font-medium text-sm sm:text-base truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{team.TeamName}</h4>
+                          <p className={`text-[10px] sm:text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                             {teamMembers.length} member{teamMembers.length !== 1 ? 's' : ''}
                           </p>
                         </div>
@@ -1991,59 +2036,71 @@ export default function Dashboard({
                             setSubmissionTeamId(team.TeamID);
                             setSubmissionModalOpen(true);
                           }}
-                          className="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
+                          className="bg-emerald-500 hover:bg-emerald-600 text-white px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-medium transition-colors flex items-center gap-1 shrink-0"
                         >
-                          <Plus size={14} />
+                          <Plus size={12} className="shrink-0" />
                           <span>Submit report</span>
                         </button>
                       )}
                     </div>
 
                     {/* Thread */}
-                    <div className={`border-t pt-4 ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                    <div className={`border-t pt-3 sm:pt-4 ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
                       {filteredSubmissions.length === 0 ? (
-                        <div className={`p-4 rounded-lg ${isDarkMode ? 'bg-[#0F141F]' : 'bg-white'}`}>
-                          <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-center`}>
+                        <div className={`p-3 sm:p-4 rounded-lg ${isDarkMode ? 'bg-[#0F141F]' : 'bg-white'}`}>
+                          <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-center`}>
                             No submissions yet for this team
                           </p>
                         </div>
                       ) : (
-                        <div className="space-y-3">
+                        <div className="space-y-2 sm:space-y-3">
                           {filteredSubmissions.map(submission => {
                             const submitter = users.find(u => u.Email === submission.SubmittedBy);
                             return (
-                              <div key={submission.SubmissionID} className={`p-4 rounded-lg ${isDarkMode ? 'bg-[#0F141F]' : 'bg-white'}`}>
-                                <div className="flex items-start justify-between mb-2">
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
-                                      <User size={16} className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} />
+                              <div key={submission.SubmissionID} className={`p-3 sm:p-4 rounded-lg ${isDarkMode ? 'bg-[#0F141F]' : 'bg-white'}`}>
+                                <div className="flex items-start justify-between gap-2 mb-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
+                                      <User size={12} className={`shrink-0 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
                                     </div>
-                                    <div>
-                                      <p className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                    <div className="min-w-0">
+                                      <p className={`text-xs sm:text-sm font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                                         {submitter?.FullName || submission.SubmittedBy}
                                       </p>
-                                      <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                      <p className={`text-[10px] sm:text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                                         {new Date(submission.SubmittedAt).toLocaleString()}
                                       </p>
                                     </div>
                                   </div>
+                                  <button
+                                    onClick={() => handleDownloadTeamSubmission(submission, team.TeamName)}
+                                    disabled={isGeneratingPdf}
+                                    title="Download report"
+                                    className={`p-1.5 rounded-lg transition-colors shrink-0 ${isDarkMode ? 'hover:bg-[#1E293B] text-slate-400 hover:text-blue-400' : 'hover:bg-slate-100 text-slate-500 hover:text-blue-600'} disabled:opacity-50`}
+                                  >
+                                    {isGeneratingPdf ? (
+                                      <Loader2 size={14} className="animate-spin shrink-0" />
+                                    ) : (
+                                      <Download size={14} className="shrink-0" />
+                                    )}
+                                  </button>
                                 </div>
                                 {submission.Note && (
-                                  <p className={`text-sm mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                                  <p className={`text-xs sm:text-sm mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                                     {submission.Note}
                                   </p>
                                 )}
                                 {submission.AttachmentLinks && (
-                                  <div className="flex flex-wrap gap-2">
+                                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
                                     {submission.AttachmentLinks.split(',').map((link, idx) => (
                                       <a
                                         key={idx}
                                         href={link.trim()}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className={`text-xs px-2 py-1 rounded border flex items-center gap-1 ${isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'}`}
+                                        className={`inline-link-pill text-[10px] sm:text-xs px-2 py-0.5 sm:py-1 rounded border flex items-center gap-1 ${isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'}`}
                                       >
-                                        <Link size={12} />
+                                        <Link size={10} className="shrink-0" />
                                         <span>Attachment {idx + 1}</span>
                                       </a>
                                     ))}
@@ -2064,16 +2121,16 @@ export default function Dashboard({
 
         {/* Submission Modal */}
         {submissionModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ duration: 0.2 }}
-              className={`w-full max-w-lg rounded-xl p-6 shadow-2xl border border-[#E5E7EB] bg-white ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : ''}`}
+              className={`w-full max-w-lg rounded-xl p-4 sm:p-6 shadow-2xl border max-h-[90vh] overflow-y-auto ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}
             >
-              <div className="flex items-center justify-between mb-6">
-                <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+              <div className="flex items-center justify-between mb-4 sm:mb-6">
+                <h3 className={`font-semibold text-base sm:text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                   Submit Weekly Report
                 </h3>
                 <button
@@ -2084,21 +2141,21 @@ export default function Dashboard({
                     setSubmissionTeamId(null);
                     setSubmissionError(null);
                   }}
-                  className={`p-1 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-[#1E293B] text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}
+                  className={`p-1 rounded-lg transition-colors shrink-0 ${isDarkMode ? 'hover:bg-[#1E293B] text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}
                 >
-                  <X size={20} />
+                  <X size={16} className="shrink-0" />
                 </button>
               </div>
 
               <form onSubmit={handleTeamSubmission} className="space-y-4">
                 {submissionError && (
-                  <div className={`p-3 rounded-lg text-sm ${isDarkMode ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-700'}`}>
+                  <div className={`p-3 rounded-lg text-xs sm:text-sm ${isDarkMode ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-700'}`}>
                     {submissionError}
                   </div>
                 )}
 
                 <div>
-                  <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                  <label className={`block text-xs sm:text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                     Note (optional)
                   </label>
                   <textarea
@@ -2111,10 +2168,10 @@ export default function Dashboard({
                 </div>
 
                 <div>
-                  <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                  <label className={`block text-xs sm:text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                     Attachments (optional)
                   </label>
-                  <div className="border-2 border-dashed rounded-lg p-4 hover:border-blue-500 transition-colors">
+                  <div className="border-2 border-dashed rounded-lg p-3 sm:p-4 hover:border-blue-500 transition-colors">
                     <input
                       type="file"
                       multiple
@@ -2127,11 +2184,11 @@ export default function Dashboard({
                       htmlFor="submission-file-upload"
                       className="flex flex-col items-center justify-center cursor-pointer"
                     >
-                      <Upload size={24} className={isDarkMode ? 'text-slate-400' : 'text-slate-500'} />
-                      <p className={`text-sm font-medium mt-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                      <Upload size={18} className={`shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
+                      <p className={`text-xs sm:text-sm font-medium mt-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
                         Click to upload files
                       </p>
-                      <p className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-400'} text-center mt-1`}>
+                      <p className={`text-[10px] sm:text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-400'} text-center mt-1`}>
                         PPT, Doc, PDF, or any file type
                       </p>
                     </label>
@@ -2144,16 +2201,16 @@ export default function Dashboard({
                           key={index}
                           className={`flex items-center justify-between p-2 rounded-lg ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}
                         >
-                          <div className="flex items-center gap-2">
-                            <File size={14} className={isDarkMode ? 'text-slate-400' : 'text-slate-500'} />
-                            <span className={`text-sm truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{file.name}</span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <File size={12} className={`shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
+                            <span className={`text-xs sm:text-sm truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{file.name}</span>
                           </div>
                           <button
                             type="button"
                             onClick={() => removeSubmissionFile(index)}
-                            className="text-red-500 hover:text-red-600 transition-colors"
+                            className="text-red-500 hover:text-red-600 transition-colors shrink-0 p-0.5"
                           >
-                            <X size={14} />
+                            <X size={12} className="shrink-0" />
                           </button>
                         </div>
                       ))}
@@ -2161,7 +2218,7 @@ export default function Dashboard({
                   )}
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-4">
+                <div className="flex items-center justify-end gap-2 sm:gap-3 pt-2 sm:pt-4">
                   <button
                     type="button"
                     onClick={() => {
@@ -2171,14 +2228,14 @@ export default function Dashboard({
                       setSubmissionTeamId(null);
                       setSubmissionError(null);
                     }}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isDarkMode ? 'bg-[#1E293B] text-slate-300 hover:bg-[#334155]' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                    className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${isDarkMode ? 'bg-[#1E293B] text-slate-300 hover:bg-[#334155]' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting || (!submissionNote.trim() && submissionFiles.length === 0)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isSubmitting || (!submissionNote.trim() && submissionFiles.length === 0) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'} bg-blue-500 text-white`}
+                    className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${isSubmitting || (!submissionNote.trim() && submissionFiles.length === 0) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'} bg-blue-500 text-white`}
                   >
                     {isSubmitting ? 'Submitting...' : 'Submit report'}
                   </button>

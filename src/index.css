@@ -158,6 +158,24 @@ body {
 
 /* Mobile-specific improvements */
 @media (max-width: 768px) {
+  /* Auth page icon buttons keep compact sizing */
+  .auth-page .auth-icon-btn {
+    min-height: unset;
+    min-width: unset;
+    padding: 0.25rem;
+  }
+
+  .auth-page input {
+    min-height: unset;
+    min-width: unset;
+  }
+
+  /* Inline link pills should not get oversized touch targets */
+  a.inline-link-pill {
+    min-height: unset;
+    min-width: unset;
+  }
+
   /* Larger touch targets for mobile (WCAG 2.5.5) */
   button, a, input, select, textarea {
     min-height: 44px;

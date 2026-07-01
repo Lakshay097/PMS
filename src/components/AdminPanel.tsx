@@ -19,7 +19,11 @@ import {
   FileText,
   AlertCircle,
   RefreshCw,
-  X
+  X,
+  UserPlus,
+  ChevronDown,
+  FileSpreadsheet,
+  Upload
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -81,6 +85,7 @@ export default function AdminPanel({
   const [csvErrors, setCsvErrors] = useState<any[]>([]);
   const [isProcessingCsv, setIsProcessingCsv] = useState(false);
   const [csvUploadResult, setCsvUploadResult] = useState<{ success: number; failed: number } | null>(null);
+  const [showRegistrationGuide, setShowRegistrationGuide] = useState(true);
 
   // Create Team state
   const [teamName, setTeamName] = useState('');
@@ -731,6 +736,90 @@ export default function AdminPanel({
               );
             })()}
 
+            {/* How to register users — guide */}
+            <div className={`rounded-xl border overflow-hidden ${isDarkMode ? 'bg-gradient-to-br from-blue-500/5 via-[#1E293B] to-purple-500/5 border-blue-500/20' : 'bg-gradient-to-br from-blue-50 via-white to-indigo-50 border-blue-200/60'}`}>
+              <button
+                type="button"
+                onClick={() => setShowRegistrationGuide(!showRegistrationGuide)}
+                className={`w-full flex items-center justify-between gap-3 p-4 sm:p-5 text-left transition-colors ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-white/60'}`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-blue-500/15 ring-1 ring-blue-500/25' : 'bg-blue-100 ring-1 ring-blue-200'}`}>
+                    <Info size={16} className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className={`font-semibold text-sm sm:text-base ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                      How to register users
+                    </h4>
+                    <p className={`text-xs mt-0.5 truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      Three ways to add people to your workspace
+                    </p>
+                  </div>
+                </div>
+                <ChevronDown
+                  size={16}
+                  className={`shrink-0 transition-transform duration-200 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} ${showRegistrationGuide ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {showRegistrationGuide && (
+                <div className={`px-4 sm:px-5 pb-4 sm:pb-5 pt-0 border-t ${isDarkMode ? 'border-blue-500/10' : 'border-blue-100'}`}>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 mt-4">
+                    <div className={`relative rounded-xl p-4 border ${isDarkMode ? 'bg-[#0F141F]/80 border-[#334155]' : 'bg-white/80 border-slate-200 shadow-sm'}`}>
+                      <div className={`absolute -top-2.5 left-4 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${isDarkMode ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+                        OPTION 1
+                      </div>
+                      <div className="flex items-start gap-3 mt-2">
+                        <div className={`p-2 rounded-lg shrink-0 ${isDarkMode ? 'bg-emerald-500/10' : 'bg-emerald-50'}`}>
+                          <Plus size={14} className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} />
+                        </div>
+                        <div>
+                          <p className={`font-semibold text-xs sm:text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Create manually</p>
+                          <p className={`text-[11px] sm:text-xs mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                            Fill in the form below with name, email, role, teams, and password. The user can sign in immediately.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={`relative rounded-xl p-4 border ${isDarkMode ? 'bg-[#0F141F]/80 border-[#334155]' : 'bg-white/80 border-slate-200 shadow-sm'}`}>
+                      <div className={`absolute -top-2.5 left-4 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${isDarkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>
+                        OPTION 2
+                      </div>
+                      <div className="flex items-start gap-3 mt-2">
+                        <div className={`p-2 rounded-lg shrink-0 ${isDarkMode ? 'bg-purple-500/10' : 'bg-purple-50'}`}>
+                          <FileSpreadsheet size={14} className={isDarkMode ? 'text-purple-400' : 'text-purple-600'} />
+                        </div>
+                        <div>
+                          <p className={`font-semibold text-xs sm:text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Bulk CSV import</p>
+                          <p className={`text-[11px] sm:text-xs mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                            Download the template, add rows (Full Name, Email, Role, Manager Email, Password), then upload the CSV.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={`relative rounded-xl p-4 border ${isDarkMode ? 'bg-[#0F141F]/80 border-[#334155]' : 'bg-white/80 border-slate-200 shadow-sm'}`}>
+                      <div className={`absolute -top-2.5 left-4 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${isDarkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
+                        OPTION 3
+                      </div>
+                      <div className="flex items-start gap-3 mt-2">
+                        <div className={`p-2 rounded-lg shrink-0 ${isDarkMode ? 'bg-amber-500/10' : 'bg-amber-50'}`}>
+                          <UserPlus size={14} className={isDarkMode ? 'text-amber-400' : 'text-amber-600'} />
+                        </div>
+                        <div>
+                          <p className={`font-semibold text-xs sm:text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Self-service request</p>
+                          <p className={`text-[11px] sm:text-xs mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                            Users click <span className="font-medium">Request Account</span> on the login page. Approve pending requests in the banner above.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8">
               
               {/* Modern Provisioning Form */}
@@ -743,23 +832,32 @@ export default function AdminPanel({
                 </div>
 
                 {/* Bulk CSV Upload Section */}
-                <div className={`p-4 rounded-lg border space-y-3 ${isDarkMode ? 'bg-[#334155] border-[#475569]' : 'bg-slate-50 border-slate-200'}`}>
-                  <div className={`flex items-center justify-between ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                    <span className="text-xs font-bold">Bulk CSV Upload</span>
+                <div className={`p-4 rounded-xl border space-y-3 ${isDarkMode ? 'bg-[#334155]/50 border-[#475569]' : 'bg-slate-50/80 border-slate-200'}`}>
+                  <div className={`flex items-center justify-between gap-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet size={14} className={isDarkMode ? 'text-purple-400' : 'text-purple-600'} />
+                      <span className="text-xs font-bold">Bulk CSV Upload</span>
+                    </div>
                     <button
                       type="button"
                       onClick={downloadCSVTemplate}
-                      className={`text-[10px] font-bold px-2 py-1 rounded transition-colors ${isDarkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+                      className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition-colors shrink-0 ${isDarkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
                     >
                       Download Template
                     </button>
                   </div>
-                  <input
-                    type="file"
-                    accept=".csv"
-                    onChange={handleCSVFileChange}
-                    className={`w-full text-xs ${isDarkMode ? 'bg-[#1E293B] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                  />
+                  <label className={`flex flex-col items-center justify-center gap-2 p-4 rounded-lg border-2 border-dashed cursor-pointer transition-colors ${isDarkMode ? 'border-[#475569] hover:border-blue-500/50 bg-[#1E293B]/50' : 'border-slate-300 hover:border-blue-400 bg-white'}`}>
+                    <Upload size={18} className={isDarkMode ? 'text-slate-400' : 'text-slate-500'} />
+                    <span className={`text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                      {csvFile ? csvFile.name : 'Drop CSV file or click to browse'}
+                    </span>
+                    <input
+                      type="file"
+                      accept=".csv"
+                      onChange={handleCSVFileChange}
+                      className="hidden"
+                    />
+                  </label>
                   {csvPreview.length > 0 && (
                     <div className="space-y-2">
                       <div className={`text-xs font-bold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
