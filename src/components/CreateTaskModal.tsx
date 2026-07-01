@@ -224,59 +224,61 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
-        className="bg-white rounded-xl shadow-xl border border-[#E5E7EB] w-full max-w-2xl overflow-hidden font-sans flex flex-col max-h-[90vh]"
+        className="bg-white rounded-xl sm:rounded-xl shadow-xl border border-[#E5E7EB] w-full max-w-2xl overflow-hidden font-sans flex flex-col max-h-[90vh] sm:max-h-[85vh]"
       >
-        <div className="px-6 py-4.5 flex items-center justify-between border-b border-[#E5E7EB] bg-white">
-          <div className="flex items-center space-x-2.5">
-            <ClipboardList className="text-[#2563EB]" size={20} />
-            <h3 className="font-bold text-base tracking-tight font-sans text-slate-900">Configure New Task Allocation</h3>
+        <div className="px-4 sm:px-6 py-3 sm:py-4.5 flex items-center justify-between border-b border-[#E5E7EB] bg-white">
+          <div className="flex items-center space-x-1.5 sm:space-x-2.5">
+            <ClipboardList className="text-[#2563EB]" size={16} />
+            <h3 className="font-bold text-sm sm:text-base tracking-tight font-sans text-slate-900">Configure New Task Allocation</h3>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer">
-            <X size={20} />
+            <X size={16} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 flex-1 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="p-3 sm:p-6 space-y-3 sm:space-y-4 flex-1 overflow-y-auto">
           {validationError && (
-            <div className="bg-red-50 border border-red-200 text-red-600 text-xs px-4 py-3 rounded-lg">
+            <div className="bg-red-50 border border-red-200 text-[10px] sm:text-xs px-3 sm:px-4 py-2 sm:py-3 rounded-lg">
               {validationError}
             </div>
           )}
           {/* Task Type Switcher */}
           <div>
-            <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-2">
+            <label className="block text-[9px] sm:text-[10px] font-bold text-[#64748B] tracking-wider mb-1.5 sm:mb-2">
               Task scheduling type
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
               <button
                 type="button"
                 onClick={() => setTaskType('One-time')}
-                className={`py-2 px-3 rounded-lg border text-xs font-bold tracking-wider transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+                className={`py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg border text-[10px] sm:text-xs font-bold tracking-wider transition-all flex items-center justify-center space-x-1.5 sm:space-x-2 cursor-pointer ${
                   taskType === 'One-time'
                     ? 'bg-[#2563EB]/10 border-[#2563EB] text-[#2563EB]'
                     : 'bg-white border-[#E5E7EB] text-slate-700 hover:bg-slate-50'
                 }`}
               >
-                <Calendar size={15} />
-                <span>One-Time Task Allocation</span>
+                <Calendar size={12} className="sm:size-15" />
+                <span className="hidden sm:inline">One-Time Task Allocation</span>
+                <span className="sm:hidden">One-Time</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setTaskType('Recurring')}
-                className={`py-2 px-3 rounded-lg border text-xs font-bold tracking-wider transition-all flex items-center justify-center space-x-2 cursor-pointer ${
+                className={`py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg border text-[10px] sm:text-xs font-bold tracking-wider transition-all flex items-center justify-center space-x-1.5 sm:space-x-2 cursor-pointer ${
                   taskType === 'Recurring'
                     ? 'bg-[#2563EB]/10 border-[#2563EB] text-[#2563EB]'
                     : 'bg-white border-[#E5E7EB] text-slate-700 hover:bg-slate-50'
                 }`}
               >
-                <Repeat size={15} />
-                <span>Recurring Schedule Blueprint</span>
+                <Repeat size={12} className="sm:size-15" />
+                <span className="hidden sm:inline">Recurring Schedule Blueprint</span>
+                <span className="sm:hidden">Recurring</span>
               </button>
             </div>
           </div>
@@ -623,18 +625,18 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
             </div>
           </div>
 
-          <div className="pt-4 border-t border-[#E5E7EB] flex items-center justify-end space-x-3 sticky bottom-0 bg-white pb-0">
+          <div className="pt-3 sm:pt-4 border-t border-[#E5E7EB] flex items-center justify-end space-x-2 sm:space-x-3 sticky bottom-0 bg-white pb-0">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-[#E5E7EB] text-slate-700 hover:bg-slate-50 transition-all rounded-lg text-xs font-bold cursor-pointer"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-[#E5E7EB] text-slate-700 hover:bg-slate-50 transition-all rounded-lg text-[10px] sm:text-xs font-bold cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={selectedEmails.length === 0 && selectedTeamIDs.length === 0}
-              className="px-5 py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-xs font-bold transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="px-4 sm:px-5 py-1.5 sm:py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-[10px] sm:text-xs font-bold transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               Allocate task
             </button>

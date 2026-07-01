@@ -34,4 +34,11 @@ router.post('/email/trigger/task-overdue', oauthRateLimiter, authenticateToken, 
  */
 router.post('/email/trigger/report-submission', oauthRateLimiter, authenticateToken, asyncWrapper(emailTriggerController.triggerReportSubmissionHandler));
 
+/**
+ * POST /api/email/trigger/task-closed
+ * Triggers task closure email (protected)
+ * Rate limited: 20 failed requests per 15 minutes per IP
+ */
+router.post('/email/trigger/task-closed', oauthRateLimiter, authenticateToken, asyncWrapper(emailTriggerController.triggerTaskClosureHandler));
+
 export default router;

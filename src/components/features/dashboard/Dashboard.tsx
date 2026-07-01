@@ -809,24 +809,24 @@ export default function Dashboard({
   };
 
   const renderOverview = () => (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           onClick={() => handleViewChange('tasks', 'In Progress,Submitted', 'status')}
-          className={`border rounded-xl p-4 cursor-pointer hover:shadow-md transition-all ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B] hover:border-blue-500/50' : 'bg-white border-[#E5E7EB]'}`}
+          className={`border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B] hover:border-blue-500/50' : 'bg-white border-[#E5E7EB]'}`}
         >
           <div className="flex items-center justify-between mb-2">
-            <div className="w-8 h-8 bg-blue-500/10 rounded-lg flex items-center justify-center">
-              <ClipboardList className="text-blue-400" size={18} />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-blue-500/10 rounded-lg flex items-center justify-center">
+              <ClipboardList className="text-blue-400" size={16} />
             </div>
-            <span className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Open & in progress</span>
+            <span className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Open & in progress</span>
           </div>
-          <p className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{activeTasks}</p>
-          <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Active Tasks</p>
+          <p className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{activeTasks}</p>
+          <p className={`text-[10px] sm:text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Active Tasks</p>
         </motion.div>
 
         <motion.div
@@ -834,16 +834,16 @@ export default function Dashboard({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
           onClick={() => handleViewChange('tasks', 'Overdue', 'status')}
-          className={`border rounded-xl p-4 cursor-pointer hover:shadow-md transition-all ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B] hover:border-red-500/50' : 'bg-white border-[#E5E7EB]'}`}
+          className={`border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B] hover:border-red-500/50' : 'bg-white border-[#E5E7EB]'}`}
         >
           <div className="flex items-center justify-between mb-2">
-            <div className="w-8 h-8 bg-red-500/10 rounded-lg flex items-center justify-center">
-              <AlertTriangle className="text-red-400" size={18} />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-red-500/10 rounded-lg flex items-center justify-center">
+              <AlertTriangle className="text-red-400" size={16} />
             </div>
-            <span className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Past due date</span>
+            <span className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Past due date</span>
           </div>
-          <p className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{overdueTasks}</p>
-          <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Overdue</p>
+          <p className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{overdueTasks}</p>
+          <p className={`text-[10px] sm:text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Overdue</p>
         </motion.div>
 
         <motion.div
@@ -851,16 +851,16 @@ export default function Dashboard({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
           onClick={() => handleViewChange('tasks', 'today', 'dueDate')}
-          className={`border rounded-xl p-4 cursor-pointer hover:shadow-md transition-all ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B] hover:border-yellow-500/50' : 'bg-white border-[#E5E7EB]'}`}
+          className={`border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B] hover:border-yellow-500/50' : 'bg-white border-[#E5E7EB]'}`}
         >
           <div className="flex items-center justify-between mb-2">
-            <div className="w-8 h-8 bg-yellow-500/10 rounded-lg flex items-center justify-center">
-              <Clock className="text-yellow-400" size={18} />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-yellow-500/10 rounded-lg flex items-center justify-center">
+              <Clock className="text-yellow-400" size={16} />
             </div>
-            <span className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Deadline today</span>
+            <span className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Deadline today</span>
           </div>
-          <p className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{dueToday}</p>
-          <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Due Today</p>
+          <p className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{dueToday}</p>
+          <p className={`text-[10px] sm:text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Due Today</p>
         </motion.div>
 
         <motion.div
@@ -868,16 +868,16 @@ export default function Dashboard({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
           onClick={() => handleViewChange('tasks', 'Closed', 'completedThisWeek')}
-          className={`border rounded-xl p-4 cursor-pointer hover:shadow-md transition-all ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B] hover:border-green-500/50' : 'bg-white border-[#E5E7EB]'}`}
+          className={`border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B] hover:border-green-500/50' : 'bg-white border-[#E5E7EB]'}`}
         >
           <div className="flex items-center justify-between mb-2">
-            <div className="w-8 h-8 bg-green-500/10 rounded-lg flex items-center justify-center">
-              <CheckCircle className="text-green-400" size={18} />
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-green-500/10 rounded-lg flex items-center justify-center">
+              <CheckCircle className="text-green-400" size={16} />
             </div>
-            <span className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Last 7 days</span>
+            <span className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Last 7 days</span>
           </div>
-          <p className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{completedThisWeek}</p>
-          <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Completed This Week</p>
+          <p className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{completedThisWeek}</p>
+          <p className={`text-[10px] sm:text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Completed This Week</p>
         </motion.div>
       </div>
 
@@ -888,16 +888,17 @@ export default function Dashboard({
         transition={{ delay: 0.5 }}
         className={`border rounded-xl ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}
       >
-        <div className={`p-6 border-b flex items-center justify-between border-[#E5E7EB] ${isDarkMode ? 'border-[#1E293B]' : ''}`}>
-          <div className="flex items-center space-x-3">
-            <Bell className="text-orange-400" size={20} />
-            <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Needs attention</h3>
-            <span className="bg-orange-500/10 text-orange-400 text-xs font-bold px-2 py-1 rounded-full border border-orange-500/20">
+        <div className={`p-4 sm:p-6 border-b flex items-center justify-between border-[#E5E7EB] ${isDarkMode ? 'border-[#1E293B]' : ''}`}>
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <Bell className="text-orange-400" size={18} />
+            <h3 className={`font-semibold text-sm sm:text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Needs attention</h3>
+            <span className="bg-orange-500/10 text-orange-400 text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full border border-orange-500/20">
               {needsAttention.length} items
             </span>
           </div>
-          <button onClick={() => handleViewChange('tasks')} className="text-blue-400 text-sm font-medium hover:text-blue-300 flex items-center space-x-1">
-            <span>View all active</span>
+          <button onClick={() => handleViewChange('tasks')} className="text-blue-400 text-[10px] sm:text-sm font-medium hover:text-blue-300 flex items-center space-x-1">
+            <span className="hidden sm:inline">View all active</span>
+            <span className="sm:hidden">View all</span>
             <ChevronRight size={16} />
           </button>
         </div>
@@ -913,28 +914,28 @@ export default function Dashboard({
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.6 + index * 0.1 }}
                 onClick={(e) => { e.preventDefault(); onTaskClick(task); }}
-                className={`p-6 transition-colors cursor-pointer ${isDarkMode ? 'hover:bg-[#1E293B]/30' : 'hover:bg-slate-50'}`}
+                className={`p-4 sm:p-6 transition-colors cursor-pointer ${isDarkMode ? 'hover:bg-[#1E293B]/30' : 'hover:bg-slate-50'}`}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <span className={`text-xs font-bold px-2 py-1 rounded border ${getPriorityColor(task.Priority)}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2">
+                      <span className={`text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border ${getPriorityColor(task.Priority)}`}>
                         {task.Priority}
                       </span>
-                      <span className={`text-xs font-bold px-2 py-1 rounded border ${getStatusColor(task.Status)}`}>
+                      <span className={`text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border ${getStatusColor(task.Status)}`}>
                         {task.Status}
                       </span>
                     </div>
-                    <h4 className={`font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    <h4 className={`font-medium text-sm sm:text-base mb-2 line-clamp-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                       {task.Title.length > 30 ? task.Title.substring(0, 30) + '...' : task.Title}
                     </h4>
-                    <div className="flex items-center space-x-4 text-sm">
-                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Due: {task.DueDate} {daysUntil > 0 && `(${dueText})`}</span>
-                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Assigned to: {task.AssignedToEmail.split('@')[0]}</span>
+                    <div className={`flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-[10px] sm:text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                      <span>Due: {task.DueDate} {daysUntil > 0 && `(${dueText})`}</span>
+                      <span>Assigned to: {task.AssignedToEmail.split('@')[0]}</span>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className={`text-xs font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{task.TaskID}</p>
+                  <div className="text-right flex-shrink-0">
+                    <p className={`text-[10px] sm:text-xs font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{task.TaskID}</p>
                   </div>
                 </div>
               </motion.div>
@@ -944,20 +945,20 @@ export default function Dashboard({
       </motion.div>
 
       {/* Alerts and Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7 }}
           className={`border rounded-xl ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}
         >
-          <div className={`p-6 border-b ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'}`}>
-            <div className="flex items-center space-x-3">
-              <AlertTriangle className="text-red-400" size={20} />
-              <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Alerts</h3>
+          <div className={`p-4 sm:p-6 border-b ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'}`}>
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <AlertTriangle className="text-red-400" size={18} />
+              <h3 className={`font-semibold text-sm sm:text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Alerts</h3>
             </div>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
             {alerts.length > 0 ? (
               alerts.map((task) => {
                 const isOverdue = task.DueDate < today;
@@ -965,22 +966,22 @@ export default function Dashboard({
                   <div
                     key={task.TaskID}
                     onClick={(e) => { e.preventDefault(); onTaskClick(task); }}
-                    className={`${isOverdue ? 'bg-red-500/10 border-red-500/20 hover:bg-red-500/20' : 'bg-yellow-500/10 border-yellow-500/20 hover:bg-yellow-500/20'} border rounded-lg p-4 cursor-pointer transition-colors`}
+                    className={`${isOverdue ? 'bg-red-500/10 border-red-500/20 hover:bg-red-500/20' : 'bg-yellow-500/10 border-yellow-500/20 hover:bg-yellow-500/20'} border rounded-lg p-3 sm:p-4 cursor-pointer transition-colors`}
                   >
-                    <div className="flex items-start space-x-3">
+                    <div className="flex items-start space-x-2 sm:space-x-3">
                       {isOverdue ? (
-                        <AlertTriangle className="text-red-400 mt-0.5" size={18} />
+                        <AlertTriangle className="text-red-400 mt-0.5" size={16} />
                       ) : (
-                        <Bell className="text-yellow-400 mt-0.5" size={18} />
+                        <Bell className="text-yellow-400 mt-0.5" size={16} />
                       )}
-                      <div className="flex-1">
-                        <p className={`font-medium text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-medium text-xs sm:text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                           {isOverdue ? 'Overdue task' : 'High priority task'}
                         </p>
-                        <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                        <p className={`text-[10px] sm:text-xs mt-1 line-clamp-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                           {task.TaskID}: {task.Title.length > 50 ? task.Title.substring(0, 50) + '...' : task.Title}
                         </p>
-                        <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                        <p className={`text-[10px] sm:text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                           Due: {task.DueDate} &bull; Priority: {task.Priority}
                         </p>
                       </div>
@@ -989,10 +990,10 @@ export default function Dashboard({
                 );
               })
             ) : (
-              <div className={`text-center py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+              <div className={`text-center py-6 sm:py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                 <CheckCircle className="mx-auto mb-2 text-green-400" size={24} />
-                <p className="text-sm">No alerts at this time</p>
-                <p className="text-xs mt-1">All tasks are on track</p>
+                <p className="text-xs sm:text-sm">No alerts at this time</p>
+                <p className="text-[10px] sm:text-xs mt-1">All tasks are on track</p>
               </div>
             )}
           </div>

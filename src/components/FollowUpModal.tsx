@@ -26,24 +26,24 @@ export default function FollowUpModal({ task, isOpen, onClose, onSubmit, isDarkM
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
-        className={`${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E2E8F0]'} rounded-xl shadow-xl w-full max-w-md overflow-hidden font-sans`}
+        className={`${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E2E8F0]'} rounded-xl shadow-xl w-full max-w-md overflow-hidden font-sans max-h-[90vh] sm:max-h-[85vh] flex flex-col`}
       >
-        <div className={`${isDarkMode ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-slate-800 border-slate-700'} px-6 py-4.5 flex items-center justify-between border-b`}>
-          <div className="flex items-center space-x-2.5">
-            <CornerRightDown className="text-[#3B82F6]" size={18} />
-            <h3 className="text-white font-bold text-base tracking-tight font-sans">Initiate Task Follow-Up</h3>
+        <div className={`${isDarkMode ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-slate-800 border-slate-700'} px-4 sm:px-6 py-3 sm:py-4.5 flex items-center justify-between border-b`}>
+          <div className="flex items-center space-x-1.5 sm:space-x-2.5">
+            <CornerRightDown className="text-[#3B82F6]" size={14} />
+            <h3 className="text-white font-bold text-sm sm:text-base tracking-tight font-sans">Initiate Task Follow-Up</h3>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors cursor-pointer">
-            <X size={20} />
+            <X size={14} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-3 sm:p-6 space-y-3 sm:space-y-4 flex-1 overflow-y-auto">
           <div className={`${isDarkMode ? 'bg-blue-900/20 border-blue-800 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-800'} rounded-lg p-3 text-xs flex items-start space-x-2`}>
             <HelpCircle size={16} className={`${isDarkMode ? 'text-blue-400' : 'text-blue-500'} mt-0.5 flex-shrink-0`} />
             <div>
@@ -52,10 +52,10 @@ export default function FollowUpModal({ task, isOpen, onClose, onSubmit, isDarkM
             </div>
           </div>
 
-          <div className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-[#E2E8F0]'} rounded-lg p-3`}>
-            <span className={`text-[10px] font-mono tracking-wider block font-bold ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Original parent task</span>
-            <span className={`font-semibold text-sm block mt-0.5 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{task.Title}</span>
-            <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Assigned to: {task.AssignedToEmail}</span>
+          <div className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-[#E2E8F0]'} rounded-lg p-2.5 sm:p-3`}>
+            <span className={`text-[9px] sm:text-[10px] font-mono tracking-wider block font-bold ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Original parent task</span>
+            <span className={`font-semibold text-xs sm:text-sm block mt-0.5 line-clamp-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{task.Title}</span>
+            <span className={`text-[10px] sm:text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Assigned to: {task.AssignedToEmail}</span>
           </div>
 
           <div>
@@ -72,17 +72,17 @@ export default function FollowUpModal({ task, isOpen, onClose, onSubmit, isDarkM
             ></textarea>
           </div>
 
-          <div className={`pt-4 border-t flex items-center justify-end space-x-3 ${isDarkMode ? 'border-slate-700' : 'border-[#E2E8F0]'}`}>
+          <div className={`pt-3 sm:pt-4 border-t flex items-center justify-end space-x-2 sm:space-x-3 ${isDarkMode ? 'border-slate-700' : 'border-[#E2E8F0]'}`}>
             <button
               type="button"
               onClick={onClose}
-              className={`px-4 py-2 border transition-all rounded-lg text-xs font-bold cursor-pointer ${isDarkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-[#E2E8F0] text-slate-700 hover:bg-slate-50'}`}
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 border transition-all rounded-lg text-[10px] sm:text-xs font-bold cursor-pointer ${isDarkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-[#E2E8F0] text-slate-700 hover:bg-slate-50'}`}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer border-none"
+              className="px-4 sm:px-5 py-1.5 sm:py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-[10px] sm:text-xs font-bold transition-all shadow-sm cursor-pointer border-none"
             >
               Generate follow-up
             </button>

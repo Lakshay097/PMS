@@ -243,35 +243,35 @@ export default function TaskDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center font-sans p-4 bg-slate-900/50 backdrop-blur-xs pointer-events-auto">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center font-sans p-2 sm:p-4 bg-slate-900/50 backdrop-blur-xs pointer-events-auto">
       {/* Centered Modal */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className={`relative w-full max-w-2xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col pointer-events-auto overflow-hidden ${isDarkMode ? 'bg-[#0F141F]' : 'bg-white'}`}
+        className={`relative w-full max-w-2xl max-h-[90vh] sm:max-h-[85vh] rounded-xl sm:rounded-2xl shadow-2xl flex flex-col pointer-events-auto overflow-hidden ${isDarkMode ? 'bg-[#0F141F]' : 'bg-white'}`}
       >
         {/* Header */}
-        <div className={`px-6 py-5 text-white flex items-center justify-between border-b ${isDarkMode ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-slate-800 border-slate-700'}`}>
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className={`text-[10px] px-2.5 py-0.5 rounded-full border font-bold ${getStatusStyle(task.Status)}`}>
+        <div className={`px-4 sm:px-6 py-3 sm:py-5 text-white flex items-center justify-between border-b ${isDarkMode ? 'bg-[#0F172A] border-[#1E293B]' : 'bg-slate-800 border-slate-700'}`}>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center space-x-1.5 sm:space-x-2">
+              <span className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2.5 py-0.5 rounded-full border font-bold ${getStatusStyle(task.Status)}`}>
                 {task.Status}
               </span>
-              <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${getPriorityStyle(task.Priority)}`}>
+              <span className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-md font-bold ${getPriorityStyle(task.Priority)}`}>
                 {task.Priority} Priority
               </span>
             </div>
-            <h2 className="text-sm font-bold tracking-tight mt-2 text-white line-clamp-1 font-sans">
+            <h2 className="text-xs sm:text-sm font-bold tracking-tight mt-1.5 sm:mt-2 text-white line-clamp-1 font-sans">
               {task.Title}
             </h2>
-            <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
+            <span className="text-[9px] sm:text-[10px] text-slate-400 font-mono block mt-0.5">
               ID: {task.TaskID} &bull; Type: {task.TaskType}
             </span>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer">
-            <X size={20} />
+          <button onClick={onClose} className="text-slate-400 hover:text-white p-1.5 sm:p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer flex-shrink-0">
+            <X size={18} className="sm:size-20" />
           </button>
         </div>
 
@@ -279,34 +279,36 @@ export default function TaskDrawer({
         <div className={`flex border-b ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-[#E2E8F0] bg-slate-50'}`}>
           <button
             onClick={() => setActiveTab('details')}
-            className={`flex-1 py-3 text-center text-xs font-bold border-b-2 transition-all cursor-pointer ${
+            className={`flex-1 py-2.5 sm:py-3 text-center text-[10px] sm:text-xs font-bold border-b-2 transition-all cursor-pointer ${
               activeTab === 'details'
                 ? `border-[#2563EB] text-[#2563EB] ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`
                 : `border-transparent ${isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'}`
             }`}
           >
-            <div className="flex items-center justify-center space-x-1.5">
-              <FileText size={14} />
-              <span>Details</span>
+            <div className="flex items-center justify-center space-x-1 sm:space-x-1.5">
+              <FileText size={12} className="sm:size-14" />
+              <span className="hidden sm:inline">Details</span>
+              <span className="sm:hidden">Details</span>
             </div>
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`flex-1 py-3 text-center text-xs font-bold border-b-2 transition-all relative cursor-pointer ${
+            className={`flex-1 py-2.5 sm:py-3 text-center text-[10px] sm:text-xs font-bold border-b-2 transition-all relative cursor-pointer ${
               activeTab === 'history'
                 ? `border-[#2563EB] text-[#2563EB] ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`
                 : `border-transparent ${isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'}`
             }`}
           >
-            <div className="flex items-center justify-center space-x-1.5">
-              <History size={14} />
-              <span>Report Logs ({taskReports.length})</span>
+            <div className="flex items-center justify-center space-x-1 sm:space-x-1.5">
+              <History size={12} className="sm:size-14" />
+              <span className="hidden sm:inline">Report Logs ({taskReports.length})</span>
+              <span className="sm:hidden">Logs ({taskReports.length})</span>
             </div>
           </button>
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
           {activeTab === 'details' ? (
             <div className="space-y-6">
               {isEditing ? (
@@ -1289,34 +1291,37 @@ export default function TaskDrawer({
             </form>
           )}
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {canSubmitReport && task.Status !== 'Closed' && (
               <button
                 onClick={onOpenReportModal}
-                className="bg-[#2563EB] hover:bg-[#1d4ed8] text-white text-xs font-bold tracking-wider py-3 px-4 rounded-lg flex items-center justify-center space-x-2 shadow-xs cursor-pointer border-none"
+                className="bg-[#2563EB] hover:bg-[#1d4ed8] text-white text-[10px] sm:text-xs font-bold tracking-wider py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-xs cursor-pointer border-none"
               >
-                <TrendingUp size={14} />
-                <span>Submit report</span>
+                <TrendingUp size={12} className="sm:size-14" />
+                <span className="hidden sm:inline">Submit report</span>
+                <span className="sm:hidden">Report</span>
               </button>
             )}
 
             {canCloseTask && task.Status !== 'Closed' && !showCloseForm && (
               <button
                 onClick={() => setShowCloseForm(true)}
-                className="bg-[#0F172A] hover:bg-[#1E293B] text-white text-xs font-bold tracking-wider py-3 px-4 rounded-lg flex items-center justify-center space-x-2 shadow-xs cursor-pointer border-none"
+                className="bg-[#0F172A] hover:bg-[#1E293B] text-white text-[10px] sm:text-xs font-bold tracking-wider py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-xs cursor-pointer border-none"
               >
-                <CheckCircle size={14} />
-                <span>Mark as closed</span>
+                <CheckCircle size={12} className="sm:size-14" />
+                <span className="hidden sm:inline">Mark as closed</span>
+                <span className="sm:hidden">Close</span>
               </button>
             )}
 
             {canCreateFollowUp && (
               <button
                 onClick={onOpenFollowUpModal}
-                className="bg-[#D97706] hover:bg-[#B45309] col-span-2 text-white text-xs font-bold tracking-wider py-3 px-4 rounded-lg flex items-center justify-center space-x-2 shadow-xs cursor-pointer border-none"
+                className="bg-[#D97706] hover:bg-[#B45309] col-span-1 sm:col-span-2 text-white text-[10px] sm:text-xs font-bold tracking-wider py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-xs cursor-pointer border-none"
               >
-                <CheckCircle size={14} />
-                <span>Trigger linked follow-up</span>
+                <CheckCircle size={12} className="sm:size-14" />
+                <span className="hidden sm:inline">Trigger linked follow-up</span>
+                <span className="sm:hidden">Follow-up</span>
               </button>
             )}
           </div>

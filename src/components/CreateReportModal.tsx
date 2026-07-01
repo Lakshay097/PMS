@@ -111,30 +111,30 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-2 sm:p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
-        className="bg-white rounded-xl shadow-xl border border-[#E2E8F0] w-full max-w-xl overflow-hidden font-sans"
+        className="bg-white rounded-xl shadow-xl border border-[#E2E8F0] w-full max-w-xl overflow-hidden font-sans max-h-[90vh] sm:max-h-[85vh] flex flex-col"
       >
-        <div className="bg-[#0F172A] px-6 py-4.5 flex items-center justify-between border-b border-[#1E293B]">
-          <div>
-            <span className="text-[9px] bg-[#2563EB]/10 text-[#3B82F6] font-bold font-mono px-2.5 py-1 rounded-full border border-[#2563EB]/25 tracking-wider">
+        <div className="bg-[#0F172A] px-4 sm:px-6 py-3 sm:py-4.5 flex items-center justify-between border-b border-[#1E293B]">
+          <div className="flex-1 min-w-0">
+            <span className="text-[8px] sm:text-[9px] bg-[#2563EB]/10 text-[#3B82F6] font-bold font-mono px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full border border-[#2563EB]/25 tracking-wider">
               Append-Only Report
             </span>
-            <h3 className="text-white font-bold text-base tracking-tight mt-1.5 font-sans">Submit Progress Report</h3>
+            <h3 className="text-white font-bold text-sm sm:text-base tracking-tight mt-1 sm:mt-1.5 font-sans line-clamp-1">Submit Progress Report</h3>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors duration-150 cursor-pointer">
-            <X size={20} />
+          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors duration-150 cursor-pointer flex-shrink-0 ml-2">
+            <X size={16} className="sm:size-20" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
-          <div className="bg-slate-50 border border-[#E2E8F0] rounded-lg p-3">
-            <span className="text-[10px] font-mono text-[#64748B] tracking-wider block font-bold">Active task</span>
-            <span className="font-bold text-[#0F172A] text-sm mt-0.5 block">{task.Title}</span>
-            <span className="text-xs text-slate-500 font-medium">{task.TaskID}</span>
+        <form onSubmit={handleSubmit} className="p-3 sm:p-6 space-y-3 sm:space-y-4 flex-1 overflow-y-auto">
+          <div className="bg-slate-50 border border-[#E2E8F0] rounded-lg p-2.5 sm:p-3">
+            <span className="text-[9px] sm:text-[10px] font-mono text-[#64748B] tracking-wider block font-bold">Active task</span>
+            <span className="font-bold text-[#0F172A] text-xs sm:text-sm mt-0.5 block line-clamp-2">{task.Title}</span>
+            <span className="text-[10px] sm:text-xs text-slate-500 font-medium">{task.TaskID}</span>
           </div>
 
           {showSubtaskSelector && (
@@ -317,20 +317,21 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
             )}
           </div>
 
-          <div className="pt-4 border-t border-[#E2E8F0] flex items-center justify-end space-x-3">
+          <div className="pt-3 sm:pt-4 border-t border-[#E2E8F0] flex items-center justify-end space-x-2 sm:space-x-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-[#E2E8F0] text-slate-700 hover:bg-slate-50 transition-all rounded-lg text-xs font-bold tracking-wider cursor-pointer"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-[#E2E8F0] text-slate-700 hover:bg-slate-50 transition-all rounded-lg text-[10px] sm:text-xs font-bold tracking-wider cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-xs font-bold tracking-wider transition-all shadow-sm flex items-center space-x-2 cursor-pointer border-none"
+              className="px-4 sm:px-5 py-1.5 sm:py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-[10px] sm:text-xs font-bold tracking-wider transition-all shadow-sm flex items-center space-x-1.5 sm:space-x-2 cursor-pointer border-none"
             >
-              <Send size={13} />
-              <span>Publish report</span>
+              <Send size={11} className="sm:size-13" />
+              <span className="hidden sm:inline">Publish report</span>
+              <span className="sm:hidden">Publish</span>
             </button>
           </div>
         </form>

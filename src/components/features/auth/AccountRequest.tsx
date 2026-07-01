@@ -11,8 +11,8 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
-    password: '',
-    confirmPassword: '',
+    password: '123456',
+    confirmPassword: '123456',
     managerEmail: '',
   });
   const [error, setError] = useState<string | null>(null);
@@ -24,18 +24,8 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
     setError(null);
 
     // Validation
-    if (!formData.fullName.trim() || !formData.email.trim() || !formData.password) {
+    if (!formData.fullName.trim() || !formData.email.trim()) {
       setError('Please fill in all required fields');
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
       return;
     }
 
@@ -163,7 +153,7 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
             </div>
 
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-300">Password</label>
+              <label className="block text-sm font-medium text-slate-300">Password (Default: 123456)</label>
               <div className="relative group">
                 <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors" size={20} />
                 <input
