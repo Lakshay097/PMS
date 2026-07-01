@@ -985,11 +985,32 @@ export default function App() {
         }}
         onUpdateSetting={async (key, value) => {
           try {
+            console.log('[onUpdateSetting] Saving setting:', key, 'value:', value);
             const updatedSettings = settings.map(s =>
               s.Key === key ? { ...s, Value: value } : s
             );
-            setSettings(updatedSettings); 
+            setSettings(updatedSettings);
             await dbService.saveSettings(updatedSettings);
+            console.log('[onUpdateSetting] Setting saved successfully to Firestore');
+
+            // If this is a team leader or stakeholder setting, update teams locally without full reload
+            if (key.startsWith('team_') && (key.endsWith('_leaders') || key.endsWith('_stakeholders'))) {
+              const teamId = key.replace('team_', '').replace('_leaders', '').replace('_stakeholders', '');
+              console.log('[onUpdateSetting] Updating team local state for:', teamId);
+              const leaderEmails = key.endsWith('_leaders')
+                ? (value ? value.split(',').map(e => e.trim()).filter(Boolean) : [])
+                : teams.find(t => t.TeamID === teamId)?.TeamLeaderEmails || [];
+              const stakeholderEmails = key.endsWith('_stakeholders')
+                ? (value ? value.split(',').map(e => e.trim()).filter(Boolean) : [])
+                : teams.find(t => t.TeamID === teamId)?.StakeholderEmails || [];
+
+              setTeams(prev => prev.map(team =>
+                team.TeamID === teamId
+                  ? { ...team, TeamLeaderEmails: leaderEmails, StakeholderEmails: stakeholderEmails }
+                  : team
+              ));
+              console.log('[onUpdateSetting] Team local state updated:', { leaderEmails, stakeholderEmails });
+            }
 
             // If this is an email template setting, also update the email_templates sheet
             if (key.startsWith('template_')) {
@@ -1010,9 +1031,9 @@ export default function App() {
               }
             }
 
-            // Trigger sync after action
-            handleManualSync();
+            // SSE will handle syncing to other clients - no need for manual sync
           } catch (error) {
+            console.error('[onUpdateSetting] Error saving setting:', error);
             throw error;
           }
         }}

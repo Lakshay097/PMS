@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { User, Task, Team, TaskTemplate, AppSetting } from '../types';
+import { dbService, clearCache } from '../lib/dbService';
+import { logger } from '../utils/logger';
 
 export function useSSE(
   setUsers: (users: User[]) => void,
@@ -15,9 +17,9 @@ export function useSSE(
 
   useEffect(() => {
     setSseConnectionStatus('connecting');
-    
+
     const eventSource = new EventSource('/api/sse');
-    
+
     eventSource.onopen = () => {
       setSseConnectionStatus('connected');
       setDbConnectionStatus('connected');
@@ -60,9 +62,24 @@ export function useSSE(
       setLastSyncTime(new Date().toISOString());
     });
 
-    eventSource.addEventListener('settings', (e) => {
+    eventSource.addEventListener('settings', async (e) => {
       const data = JSON.parse(e.data);
-      setSettings(data);
+      logger.log('[SSE] Invalidating settings, reloading from Firestore...');
+      // Clear cache to force fresh fetch from Firestore
+      clearCache('settings');
+      logger.log('[SSE] Cache cleared, fetching from Firestore...');
+      // Reload settings from Firestore instead of using SSE data
+      try {
+        const freshSettings = await dbService.getSettings();
+        logger.log('[SSE] Settings reloaded from Firestore:', freshSettings.length, 'items');
+        logger.log('[SSE] Settings keys:', freshSettings.map(s => s.Key));
+        const teamLeadersSetting = freshSettings.find(s => s.Key === 'team_T-7_leaders');
+        logger.log('[SSE] team_T-7_leaders value:', teamLeadersSetting?.Value);
+        setSettings(freshSettings);
+        logger.log('[SSE] Settings state updated');
+      } catch (error) {
+        logger.error('[SSE] Failed to reload settings:', error);
+      }
       setIsSyncingSheets(true);
       setTimeout(() => setIsSyncingSheets(false), 500);
       setLastSyncTime(new Date().toISOString());

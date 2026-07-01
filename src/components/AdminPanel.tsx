@@ -117,69 +117,88 @@ export default function AdminPanel({
     }
   };
 
-  const handleAssignTeamLeader = (userEmail: string, teamId: string) => {
-    const team = teams.find(t => t.TeamID === teamId);
-    if (team) {
-      const currentLeaders = team.TeamLeaderEmails || [];
+  const handleAssignTeamLeader = async (userEmail: string, teamId: string) => {
+    try {
+      const currentLeaders = currentTeamLeaders || [];
       if (!currentLeaders.includes(userEmail)) {
         const updatedLeaders = [...currentLeaders, userEmail];
-        onUpdateSetting(`team_${teamId}_leaders`, updatedLeaders.join(','));
+        console.log('[handleAssignTeamLeader] Assigning leader:', userEmail, 'to team:', teamId);
+        await onUpdateSetting(`team_${teamId}_leaders`, updatedLeaders.join(','));
         setCurrentTeamLeaders(updatedLeaders);
       }
+    } catch (error) {
+      console.error('[handleAssignTeamLeader] Error:', error);
+      alert('Failed to assign team leader. Please try again.');
     }
   };
 
-  const handleAssignMultipleTeamLeaders = (teamId: string) => {
-    const team = teams.find(t => t.TeamID === teamId);
-    if (team) {
-      const currentLeaders = team.TeamLeaderEmails || [];
+  const handleAssignMultipleTeamLeaders = async (teamId: string) => {
+    try {
+      const currentLeaders = currentTeamLeaders || [];
       const newLeaders = [...new Set([...currentLeaders, ...Array.from(selectedTeamLeaders)])];
-      onUpdateSetting(`team_${teamId}_leaders`, newLeaders.join(','));
+      console.log('[handleAssignMultipleTeamLeaders] Assigning leaders to team:', teamId, 'current:', currentLeaders, 'new:', newLeaders);
+      await onUpdateSetting(`team_${teamId}_leaders`, newLeaders.join(','));
       setCurrentTeamLeaders(newLeaders);
       setSelectedTeamLeaders(new Set());
+      console.log('[handleAssignMultipleTeamLeaders] Successfully assigned leaders');
+    } catch (error) {
+      console.error('[handleAssignMultipleTeamLeaders] Error assigning leaders:', error);
+      alert('Failed to assign team leaders. Please try again.');
     }
   };
 
-  const handleRemoveTeamLeader = (userEmail: string, teamId: string) => {
-    const team = teams.find(t => t.TeamID === teamId);
-    if (team) {
-      const currentLeaders = team.TeamLeaderEmails || [];
+  const handleRemoveTeamLeader = async (userEmail: string, teamId: string) => {
+    try {
+      const currentLeaders = currentTeamLeaders || [];
       const updatedLeaders = currentLeaders.filter(email => email !== userEmail);
-      onUpdateSetting(`team_${teamId}_leaders`, updatedLeaders.join(','));
+      console.log('[handleRemoveTeamLeader] Removing leader:', userEmail, 'from team:', teamId);
+      await onUpdateSetting(`team_${teamId}_leaders`, updatedLeaders.join(','));
       setCurrentTeamLeaders(updatedLeaders);
+    } catch (error) {
+      console.error('[handleRemoveTeamLeader] Error:', error);
+      alert('Failed to remove team leader. Please try again.');
     }
   };
 
-  const handleAssignTeamStakeholder = (userEmail: string, teamId: string) => {
-    const team = teams.find(t => t.TeamID === teamId);
-    if (team) {
-      const currentStakeholders = team.StakeholderEmails || [];
+  const handleAssignTeamStakeholder = async (userEmail: string, teamId: string) => {
+    try {
+      const currentStakeholders = currentTeamStakeholders || [];
       if (!currentStakeholders.includes(userEmail)) {
         const updatedStakeholders = [...currentStakeholders, userEmail];
-        onUpdateSetting(`team_${teamId}_stakeholders`, updatedStakeholders.join(','));
+        console.log('[handleAssignTeamStakeholder] Assigning stakeholder:', userEmail, 'to team:', teamId);
+        await onUpdateSetting(`team_${teamId}_stakeholders`, updatedStakeholders.join(','));
         setCurrentTeamStakeholders(updatedStakeholders);
       }
+    } catch (error) {
+      console.error('[handleAssignTeamStakeholder] Error:', error);
+      alert('Failed to assign team stakeholder. Please try again.');
     }
   };
 
-  const handleRemoveTeamStakeholder = (userEmail: string, teamId: string) => {
-    const team = teams.find(t => t.TeamID === teamId);
-    if (team) {
-      const currentStakeholders = team.StakeholderEmails || [];
+  const handleRemoveTeamStakeholder = async (userEmail: string, teamId: string) => {
+    try {
+      const currentStakeholders = currentTeamStakeholders || [];
       const updatedStakeholders = currentStakeholders.filter(email => email !== userEmail);
-      onUpdateSetting(`team_${teamId}_stakeholders`, updatedStakeholders.join(','));
+      console.log('[handleRemoveTeamStakeholder] Removing stakeholder:', userEmail, 'from team:', teamId);
+      await onUpdateSetting(`team_${teamId}_stakeholders`, updatedStakeholders.join(','));
       setCurrentTeamStakeholders(updatedStakeholders);
+    } catch (error) {
+      console.error('[handleRemoveTeamStakeholder] Error:', error);
+      alert('Failed to remove team stakeholder. Please try again.');
     }
   };
 
-  const handleAssignMultipleTeamStakeholders = (teamId: string) => {
-    const team = teams.find(t => t.TeamID === teamId);
-    if (team) {
-      const currentStakeholders = team.StakeholderEmails || [];
-      const newStakeholders = [...currentStakeholders, ...Array.from(selectedTeamStakeholders)];
-      onUpdateSetting(`team_${teamId}_stakeholders`, newStakeholders.join(','));
+  const handleAssignMultipleTeamStakeholders = async (teamId: string) => {
+    try {
+      const currentStakeholders = currentTeamStakeholders || [];
+      const newStakeholders = [...new Set([...currentStakeholders, ...Array.from(selectedTeamStakeholders)])];
+      console.log('[handleAssignMultipleTeamStakeholders] Assigning stakeholders to team:', teamId, 'new:', newStakeholders);
+      await onUpdateSetting(`team_${teamId}_stakeholders`, newStakeholders.join(','));
       setCurrentTeamStakeholders(newStakeholders);
       setSelectedTeamStakeholders(new Set());
+    } catch (error) {
+      console.error('[handleAssignMultipleTeamStakeholders] Error:', error);
+      alert('Failed to assign team stakeholders. Please try again.');
     }
   };
 
@@ -1051,20 +1070,23 @@ export default function AdminPanel({
                               <div className="flex gap-1.5">
                                 <button
                                   type="button"
-                                  onClick={() => {
+                                  onClick={async () => {
                                     setExpandedTeamId(team.TeamID);
                                     setSelectedUsersToAdd(new Set());
                                     setSelectedTeamLeaders(new Set());
                                     setSelectedTeamStakeholders(new Set());
                                     setMemberSearchQuery('');
-                                    // Load team leaders from settings
-                                    const leadersSetting = settings.find(s => s.Key === `team_${team.TeamID}_leaders`);
-                                    const leadersFromSettings = leadersSetting?.Value ? leadersSetting.Value.split(',').map(e => e.trim()).filter(Boolean) : [];
-                                    setCurrentTeamLeaders(leadersFromSettings.length > 0 ? leadersFromSettings : (team.TeamLeaderEmails || []));
-                                    // Load team stakeholders from settings
-                                    const stakeholdersSetting = settings.find(s => s.Key === `team_${team.TeamID}_stakeholders`);
-                                    const stakeholdersFromSettings = stakeholdersSetting?.Value ? stakeholdersSetting.Value.split(',').map(e => e.trim()).filter(Boolean) : [];
-                                    setCurrentTeamStakeholders(stakeholdersFromSettings.length > 0 ? stakeholdersFromSettings : (team.StakeholderEmails || []));
+
+                                    // Read leaders/stakeholders directly from team object (which is updated by App.tsx)
+                                    // instead of settings, since onUpdateSetting only updates team state, not settings array
+                                    const teamData = teams.find(t => t.TeamID === team.TeamID);
+                                    const leadersFromTeam = teamData?.TeamLeaderEmails || [];
+                                    const stakeholdersFromTeam = teamData?.StakeholderEmails || [];
+
+                                    console.log('[Modal Open] Loading leaders from team state for team:', team.TeamID, 'leaders:', leadersFromTeam, 'stakeholders:', stakeholdersFromTeam);
+
+                                    setCurrentTeamLeaders(leadersFromTeam);
+                                    setCurrentTeamStakeholders(stakeholdersFromTeam);
                                   }}
                                   className={`px-2.5 py-1.5 text-[10px] font-bold tracking-wider rounded-lg transition-colors border-none cursor-pointer ${isDarkMode ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400' : 'bg-blue-50 hover:bg-blue-100 text-blue-700'}`}
                                 >
@@ -1109,9 +1131,9 @@ export default function AdminPanel({
                   const eligibleForLeadership = teamUsers.filter(u => !currentTeamLeaders.includes(u.Email));
 
                   return (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                       <div className="absolute inset-0 bg-black/50" onClick={() => setExpandedTeamId(null)} />
-                      <div className={`relative w-full max-w-4xl max-h-[85vh] overflow-hidden rounded-xl shadow-2xl flex flex-col ${isDarkMode ? 'bg-[#1E293B]' : 'bg-white'}`}>
+                      <div className={`relative w-full max-w-3xl max-h-[80vh] overflow-hidden rounded-xl shadow-2xl flex flex-col ${isDarkMode ? 'bg-[#1E293B]' : 'bg-white'}`}>
                         {/* Header */}
                         <div className={`flex-shrink-0 flex items-center justify-between p-6 border-b ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
                           <div>

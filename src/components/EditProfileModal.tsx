@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import type { FormEvent } from 'react';
 import { X, User, Mail, Building2, Lock, Moon, Sun } from 'lucide-react';
 import { User as UserType } from '../types';
-import ChangePasswordModal from './ChangePasswordModal';
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -17,13 +17,10 @@ export default function EditProfileModal({ isOpen, onClose, currentUser, onSave,
   const [fullName, setFullName] = useState(currentUser.FullName);
   const [email, setEmail] = useState(currentUser.Email);
   const [teamName, setTeamName] = useState(currentUser.TeamName);
-  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
 
   const handleChangePasswordClick = () => {
     if (onChangePassword) {
       onChangePassword();
-    } else {
-      setIsChangePasswordModalOpen(true);
     }
   };
 
@@ -33,15 +30,9 @@ export default function EditProfileModal({ isOpen, onClose, currentUser, onSave,
     }
   };
 
-  const handlePasswordChange = (oldPassword: string, newPassword: string) => {
-    // This will be handled by the parent component via onChangePassword
-    // For now, just close the modal
-    setIsChangePasswordModalOpen(false);
-  };
-
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     onSave({
       FullName: fullName,
@@ -133,13 +124,6 @@ export default function EditProfileModal({ isOpen, onClose, currentUser, onSave,
           </div>
         </div>
       </div>
-
-      {/* Change Password Modal */}
-      <ChangePasswordModal
-        isOpen={isChangePasswordModalOpen}
-        onClose={() => setIsChangePasswordModalOpen(false)}
-        onSave={handlePasswordChange}
-      />
     </div>
   );
 }

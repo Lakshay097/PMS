@@ -231,7 +231,7 @@ export function forceClearAllCaches(): void {
   memoryCache.clear();
 }
 
-function clearCache(key?: string): void {
+export function clearCache(key?: string): void {
   if (key) {
     memoryCache.delete(key);
   } else {
@@ -479,7 +479,7 @@ export const dbService = {
 
       const teamsWithLeaders = teams.map(team => {
         const leaderSetting = settings.find(s => s.Key === `team_${team.TeamID}_leaders`);
-        const leaderEmails = leaderSetting?.Value ? leaderSetting.Value.split(',').map(e => e.trim()) : [];
+        const leaderEmails = leaderSetting?.Value ? leaderSetting.Value.split(',').map(e => e.trim()).filter(Boolean) : [];
         return {
           ...team,
           TeamLeaderEmails: leaderEmails
@@ -920,6 +920,12 @@ export const dbService = {
       // Update local data and cache immediately
       setCache('settings', settingsList);
 
+      // If any team leader/stakeholder settings were updated, clear teams cache so it reloads with fresh data
+      const hasTeamSettings = settingsList.some(s => s.Key.startsWith('team_') && (s.Key.endsWith('_leaders') || s.Key.endsWith('_stakeholders')));
+      if (hasTeamSettings) {
+        clearCache('teams');
+      }
+
       // Enqueue Sheets write for background sync
       enqueueSheetsWrite('settings', 'save', settingsList);
 
@@ -1219,7 +1225,7 @@ export const dbService = {
     // Attach team leader emails to teams from settings
     const teamsWithLeaders = teams.map(team => {
       const leaderSetting = settings.find(s => s.Key === `team_${team.TeamID}_leaders`);
-      const leaderEmails = leaderSetting?.Value ? leaderSetting.Value.split(',').map(e => e.trim()) : [];
+      const leaderEmails = leaderSetting?.Value ? leaderSetting.Value.split(',').map(e => e.trim()).filter(Boolean) : [];
       return {
         ...team,
         TeamLeaderEmails: leaderEmails
