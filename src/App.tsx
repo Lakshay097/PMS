@@ -986,9 +986,10 @@ export default function App() {
         onUpdateSetting={async (key, value) => {
           try {
             console.log('[onUpdateSetting] Saving setting:', key, 'value:', value);
-            const updatedSettings = settings.map(s =>
-              s.Key === key ? { ...s, Value: value } : s
-            );
+            const settingExists = settings.some(s => s.Key === key);
+            const updatedSettings = settingExists
+              ? settings.map(s => (s.Key === key ? { ...s, Value: value } : s))
+              : [...settings, { Key: key, Value: value }];
             setSettings(updatedSettings);
             await dbService.saveSettings(updatedSettings);
             console.log('[onUpdateSetting] Setting saved successfully to Firestore');
@@ -1013,19 +1014,28 @@ export default function App() {
             }
 
             // If this is an email template setting, also update the email_templates sheet
-            if (key.startsWith('template_')) {
+            const emailTemplateKeys = ['template_assigned_email', 'template_completion_email', 'template_delayed_email', 'template_scheduled_reminder', 'report_submitted', 'task_closed'];
+            const baseKey = key.replace('_value', '').replace('_frequency', '').replace('_sendTime', '').replace('_triggerCondition', '').replace('_active', '');
+            if (emailTemplateKeys.includes(baseKey) || key.startsWith('template_')) {
               try {
-                await fetch('/api/auth/email/templates/update', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('PMS_auth_token')}`,
-                  },
-                  body: JSON.stringify({
-                    templateName: key.replace('template_', ''),
-                    body: value,
-                  }),
-                });
+                let templateName = baseKey;
+                if (baseKey.startsWith('template_')) {
+                  templateName = baseKey.replace('template_', '');
+                }
+                // Only sync the body content, not frequency/sendTime/triggerCondition/active
+                if (key.endsWith('_value') || (!key.includes('_') && emailTemplateKeys.includes(baseKey))) {
+                  await fetch('/api/auth/email/templates/update', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${localStorage.getItem('PMS_auth_token')}`,
+                    },
+                    body: JSON.stringify({
+                      templateName,
+                      body: value,
+                    }),
+                  });
+                }
               } catch (emailError) {
                 console.error('Failed to sync email template to sheet:', emailError);
               }
