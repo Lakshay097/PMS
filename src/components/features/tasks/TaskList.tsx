@@ -115,7 +115,7 @@ export default function TaskList({
                       className={`p-1.5 sm:p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-red-500/20 text-red-400 hover:text-red-300' : 'hover:bg-red-50 text-red-500 hover:text-red-600'}`}
                       title="Delete task"
                     >
-                      <Trash2 size={14} className="sm:size-16" />
+                      <Trash2 size={14} className="sm:size-4" />
                     </button>
                   )}
                   <div className="text-right">

@@ -125,7 +125,7 @@ export default function TaskFilters({
   return (
     <div className={`border rounded-xl p-3 sm:p-4 flex flex-wrap gap-2 sm:gap-4 items-center ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
       <div className={`flex items-center space-x-1.5 sm:space-x-2 text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-        <Filter size={14} className="sm:size-16" />
+        <Filter size={14} className="sm:size-4" />
         <span className="hidden sm:inline">Filters:</span>
         <span className="sm:hidden">Filter</span>
       </div>
@@ -170,7 +170,7 @@ export default function TaskFilters({
               : 'bg-slate-50 border-slate-200 text-slate-900'
           }`}
         >
-          <Filter size={14} className="sm:size-16" />
+          <Filter size={14} className="sm:size-4" />
           <span className="hidden sm:inline">Assignees</span>
           <span className="sm:hidden">Users</span>
           {filterAssigneeNames.length > 0 && (
@@ -180,7 +180,7 @@ export default function TaskFilters({
               {filterAssigneeNames.length}
             </span>
           )}
-          <ChevronDown size={12} className={`transition-transform sm:size-14 ${isAssigneeDropdownOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown size={12} className={`transition-transform sm:size-3.5 ${isAssigneeDropdownOpen ? 'rotate-180' : ''}`} />
         </button>
 
         {isAssigneeDropdownOpen && (
@@ -190,7 +190,7 @@ export default function TaskFilters({
             {/* Search input */}
             <div className="p-2 sm:p-3 border-b border-[#E5E7EB] dark:border-[#334155]">
               <div className="relative">
-                <Search size={12} className={`absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} sm:size-14`} />
+                <Search size={12} className={`absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} sm:size-3.5`} />
                 <input
                   type="text"
                   placeholder="Search assignees..."
@@ -242,7 +242,7 @@ export default function TaskFilters({
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                 >
-                  <X size={12} className="sm:size-14" />
+                  <X size={12} className="sm:size-3.5" />
                   Clear all
                 </button>
               </div>
@@ -261,7 +261,7 @@ export default function TaskFilters({
               : 'bg-slate-50 border-slate-200 text-slate-900'
           }`}
         >
-          <Filter size={14} className="sm:size-16" />
+          <Filter size={14} className="sm:size-4" />
           <span>Teams</span>
           {filterTeamIDs.length > 0 && (
             <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${
@@ -270,7 +270,7 @@ export default function TaskFilters({
               {filterTeamIDs.length}
             </span>
           )}
-          <ChevronDown size={12} className={`transition-transform sm:size-14 ${isTeamDropdownOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown size={12} className={`transition-transform sm:size-3.5 ${isTeamDropdownOpen ? 'rotate-180' : ''}`} />
         </button>
 
         {isTeamDropdownOpen && (
@@ -314,7 +314,7 @@ export default function TaskFilters({
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                 >
-                  <X size={12} className="sm:size-14" />
+                  <X size={12} className="sm:size-3.5" />
                   Clear teams
                 </button>
               </div>
