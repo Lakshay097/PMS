@@ -1,4 +1,4 @@
-﻿// Firestore-First, Sheets-Deferred Database Layer
+// Firestore-First, Sheets-Deferred Database Layer
 // All writes go to Firestore immediately for instant UI updates
 // Google Sheets sync runs in background every 5 minutes as a batch flush
 
@@ -157,6 +157,9 @@ export function startSheetsSyncInterval(): void {
           case 'comments':
             currentData = await dbService.getComments();
             break;
+          case 'team_submissions':
+            currentData = await dbService.getTeamSubmissions();
+            break;
           default:
             console.warn(`Unknown collection: ${collectionName}`);
             continue;
@@ -209,7 +212,8 @@ function getIdFieldForCollection(collection: string): string {
     followups: 'FollowUpID',
     settings: 'Key',
     subtasks: 'SubtaskID',
-    comments: 'CommentID'
+    comments: 'CommentID',
+    team_submissions: 'SubmissionID'
   };
   return idFields[collection] || 'ID';
 }
@@ -279,7 +283,8 @@ export async function initializeDatabase(): Promise<void> {
           { name: 'followups', data: INITIAL_FOLLOWUPS },
           { name: 'settings', data: INITIAL_SETTINGS },
           { name: 'subtasks', data: INITIAL_SUBTASKS },
-          { name: 'comments', data: INITIAL_COMMENTS }
+          { name: 'comments', data: INITIAL_COMMENTS },
+          { name: 'team_submissions', data: [] }
         ];
 
         // Process in batches of 3-4 to avoid rate limits
@@ -287,7 +292,7 @@ export async function initializeDatabase(): Promise<void> {
         for (let i = 0; i < collections.length; i += batchSize) {
           const batch = collections.slice(i, i + batchSize);
           await Promise.all(batch.map(collection =>
-            sheetsApi.saveCollection(collection.name as 'users' | 'teams' | 'templates' | 'tasks' | 'reports' | 'followups' | 'settings' | 'subtasks' | 'comments', collection.data)
+            sheetsApi.saveCollection(collection.name as 'users' | 'teams' | 'templates' | 'tasks' | 'reports' | 'followups' | 'settings' | 'subtasks' | 'comments' | 'team_submissions', collection.data)
           ));
           // Small delay between batches
           if (i + batchSize < collections.length) {
@@ -1125,6 +1130,20 @@ export const dbService = {
     }
   },
 
+  async getTeamSubmissions(): Promise<TeamSubmission[]> {
+    const cached = getFromCache<TeamSubmission>('teamSubmissions');
+    if (cached) return cached;
+ 
+    try {
+      const snapshot = await getDocs(collection(db, 'team_submissions'));
+      const submissions = snapshot.docs.map(doc => doc.data() as TeamSubmission);
+      setCache('teamSubmissions', submissions);
+      return submissions;
+    } catch (error) {
+      throw new Error(`Failed to load team submissions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  },
+ 
   async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
     try {
       // Write to Firestore immediately

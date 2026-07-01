@@ -202,7 +202,8 @@ export async function getOrCreateSpreadsheetHandler(req: Request, res: Response)
           { properties: { title: 'auditlogs' } },
           { properties: { title: 'settings' } },
           { properties: { title: 'subtasks' } },
-          { properties: { title: 'comments' } }
+          { properties: { title: 'comments' } },
+          { properties: { title: 'team_submissions' } }
         ]
       })
     }), 500);

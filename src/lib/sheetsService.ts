@@ -26,7 +26,8 @@ export const HEADERS = {
   settings: ['Key', 'Value'],
   email_templates: ['Key', 'Value', 'Subject', 'Description'],
   subtasks: ['SubtaskID', 'TaskID', 'Title', 'AssignedTo', 'DueDate', 'CreatedBy', 'LastReportSummary', 'Completed', 'CreatedAt'],
-  comments: ['CommentID', 'TaskID', 'Comment', 'CreatedAt', 'CreatedBy']
+  comments: ['CommentID', 'TaskID', 'Comment', 'CreatedAt', 'CreatedBy'],
+  team_submissions: ['SubmissionID', 'TeamID', 'SubmittedBy', 'SubmittedAt', 'Note', 'AttachmentLinks']
 };
 
 let cachedSpreadsheetId: string | null = null;

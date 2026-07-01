@@ -148,17 +148,25 @@ export function useTaskOperations({
     }
   }, [currentUser, users, triggerNotification, formatEmailTemplate, logAudit, silentSync]);
 
-  const handleCloseTask = useCallback(async (taskId: string, remark: string) => {
+  const handleCloseTask = useCallback(async (taskId: string, remark: string, attachmentLink?: string) => {
     const nowStr = new Date().toISOString();
     const targetTask = tasks.find(t => t.TaskID === taskId);
 
     if (targetTask) {
+      let finalAttachment = targetTask.AttachmentLink;
+      if (attachmentLink) {
+        finalAttachment = targetTask.AttachmentLink
+          ? `${targetTask.AttachmentLink}, ${attachmentLink}`
+          : attachmentLink;
+      }
+
       const updatedTask: Task = {
         ...targetTask,
         Status: 'Closed' as TaskStatus,
         PercentComplete: 100,
         CompletionDate: nowStr.split('T')[0],
         CloseRemark: remark,
+        AttachmentLink: finalAttachment,
         UpdatedAt: nowStr
       };
 

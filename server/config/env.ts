@@ -76,6 +76,7 @@ export const config = {
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
   GMAIL_REDIRECT_URI: process.env.GMAIL_REDIRECT_URI || 'http://localhost:3000/auth/gmail/callback',
   DEFAULT_FALLBACK_EMAIL: process.env.DEFAULT_FALLBACK_EMAIL || 'noreply@pms.local',
+  APP_URL: process.env.APP_URL || 'http://localhost:3000',
 
   // Cloudinary
   CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME || '',

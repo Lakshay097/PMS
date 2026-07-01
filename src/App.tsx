@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useAppModals } from './hooks/useAppModals';
 import { useAppEvents } from './hooks/useAppEvents';
 import { useDatabase } from './hooks/useDatabase';
@@ -713,6 +713,7 @@ export default function App() {
         LastReportSummary: data.WorkSummary,
         AttachmentLink: attachmentLinks.length > 0 ? attachmentLinks.join(', ') : targetTask.AttachmentLink,
         CompletionDate: data.StatusUpdate === 'Closed' ? nowStr.split('T')[0] : targetTask.CompletionDate,
+        CloseRemark: data.StatusUpdate === 'Closed' ? data.WorkSummary : targetTask.CloseRemark,
         UpdatedAt: nowStr
       };
 
@@ -741,6 +742,22 @@ export default function App() {
             reportContent: data.WorkSummary,
           }),
         });
+
+        if (data.StatusUpdate === 'Closed') {
+          await fetch('/api/email/trigger/task-closed', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({
+              closedByEmail: activeUser.Email,
+              assignedToEmail: targetTask.AssignedToEmail,
+              task: updatedTask,
+              closeRemark: data.WorkSummary,
+            }),
+          });
+        }
       } catch (err) {
         console.error('Email trigger FAILED:', err); 
         logger.error('Failed to trigger report email:', err);
@@ -1115,11 +1132,11 @@ export default function App() {
             subtasks={subtasks}
             onOpenReportModal={() => setIsReportModalOpen(true)}
             onOpenFollowUpModal={() => setIsFollowUpModalOpen(true)}
-           onCloseTask={async (taskId, remark) => {
-                setIsDrawerOpen(false);
-                setSelectedTask(null);
-                handleCloseTask(taskId, remark);
-              }}
+            onCloseTask={async (taskId, remark, attachmentLink) => {
+                 setIsDrawerOpen(false);
+                 setSelectedTask(null);
+                 handleCloseTask(taskId, remark, attachmentLink);
+               }}
             onUpdateTask={handleUpdateTask}
             onAddSubtask={handleAddSubtask}
             onToggleSubtask={handleToggleSubtask}

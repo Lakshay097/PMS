@@ -168,6 +168,7 @@ export async function triggerReportSubmissionEmail(
         task_name: task.Title,
         task_id: task.TaskID,
         Description: task.Description || task.description || '',
+        assigned_by: submitterEmail,
         assigned_to: submitterEmail,
         report_content: reportContent,
         app_url: appUrl,

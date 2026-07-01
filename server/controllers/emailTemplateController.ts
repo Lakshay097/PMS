@@ -64,9 +64,13 @@ export async function updateEmailTemplateHandler(req: AuthRequest, res: Response
       return;
     }
 
-    // Get existing template to preserve subject (normalize name with template_ prefix if missing)
-    const targetName = templateName.startsWith('template_') ? templateName : `template_${templateName}`;
-    const existingTemplate = await getEmailTemplate(targetName);
+    // Get existing template to preserve subject (try as is, then with template_ prefix if missing)
+    let targetName = templateName;
+    let existingTemplate = await getEmailTemplate(targetName);
+    if (!existingTemplate && !templateName.startsWith('template_')) {
+      targetName = `template_${templateName}`;
+      existingTemplate = await getEmailTemplate(targetName);
+    }
     if (!existingTemplate) {
       res.status(404).json({ error: 'Template not found' });
       return;
@@ -106,7 +110,11 @@ export async function resetEmailTemplateHandler(req: AuthRequest, res: Response)
       return;
     }
 
-    const targetName = templateName.startsWith('template_') ? templateName : `template_${templateName}`;
+    let targetName = templateName;
+    const existingTemplate = await getEmailTemplate(targetName);
+    if (!existingTemplate && !templateName.startsWith('template_')) {
+      targetName = `template_${templateName}`;
+    }
     const success = await resetTemplateToDefault(targetName);
 
     if (success) {

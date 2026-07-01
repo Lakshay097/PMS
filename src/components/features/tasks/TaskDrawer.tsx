@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Calendar, User, FileText, Link as LinkIcon, History, AlertCircle, CheckCircle, TrendingUp, Edit2, Save, Trash, ShieldAlert, CornerRightDown } from 'lucide-react';
+import { X, Calendar, User, FileText, Link as LinkIcon, History, AlertCircle, CheckCircle, TrendingUp, Edit2, Save, Trash, ShieldAlert, CornerRightDown, Upload, File, Image as ImageIcon } from 'lucide-react';
 import { Task, TaskReport, User as UserType, Team, Subtask } from '../../../types/index';
 import { ROLE } from '../../../constants/status';
+import { uploadFile } from '../../../api/upload';
 
 // Helper function to get tomorrow's date in YYYY-MM-DD format
 const getTomorrowDate = (): string => {
@@ -32,7 +33,7 @@ interface TaskDrawerProps {
   subtasks: Subtask[];
   onOpenReportModal: () => void;
   onOpenFollowUpModal: () => void;
-  onCloseTask: (taskId: string, remark: string) => void;
+  onCloseTask: (taskId: string, remark: string, attachmentLink?: string) => void;
   onUpdateTask?: (taskId: string, fields: Partial<Task>) => void;
   onAddSubtask?: (taskId: string, data: { title: string; assignedTo?: string; dueDate?: string }) => Promise<void>;
   onToggleSubtask?: (subtaskId: string, isDone: boolean) => Promise<void>;
@@ -64,6 +65,9 @@ export default function TaskDrawer({
   const [closeRemarkInput, setCloseRemarkInput] = useState('');
   const [showCloseForm, setShowCloseForm] = useState(false);
   const [etaError, setEtaError] = useState('');
+  const [attachmentLink, setAttachmentLink] = useState('');
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; type: string; data: string }>>([]);
+  const [isClosingTask, setIsClosingTask] = useState(false);
 
   // Edit Mode states
   const [isEditing, setIsEditing] = useState(false);
@@ -198,12 +202,44 @@ export default function TaskDrawer({
     setIsEditing(false);
   };
 
-  const handleCloseSubmit = (e: React.FormEvent) => {
+  const handleCloseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!closeRemarkInput.trim()) return;
-    onCloseTask(task.TaskID, closeRemarkInput);
-    setCloseRemarkInput('');
-    setShowCloseForm(false);
+
+    setIsClosingTask(true);
+    try {
+      const uploadedUrls: string[] = [];
+      for (const file of uploadedFiles) {
+        try {
+          const uploadData = await uploadFile({
+            fileName: file.name,
+            fileData: file.data,
+            mimeType: file.type,
+            taskId: task.TaskID
+          });
+          uploadedUrls.push(uploadData.webViewLink);
+        } catch (uploadError) {
+          console.error("Failed to upload file during closure:", uploadError);
+        }
+      }
+
+      const links = [...uploadedUrls];
+      if (attachmentLink.trim()) {
+        links.push(attachmentLink.trim());
+      }
+
+      const finalLink = links.length > 0 ? links.join(', ') : undefined;
+      onCloseTask(task.TaskID, closeRemarkInput, finalLink);
+
+      setCloseRemarkInput('');
+      setAttachmentLink('');
+      setUploadedFiles([]);
+      setShowCloseForm(false);
+    } catch (err) {
+      console.error("Error closing task:", err);
+    } finally {
+      setIsClosingTask(false);
+    }
   };
 
   return (
@@ -1153,9 +1189,90 @@ export default function TaskDrawer({
                 placeholder="Declare clearing audit parameters. Accounts verified? Balance matched?"
                 className={`w-full text-xs border rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-[#2563EB] ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-200 placeholder-slate-500' : 'bg-white border-[#E2E8F0] text-slate-800 placeholder-slate-400'}`}
               />
+
+              {/* Attachment link / URL */}
+              <div className="space-y-1">
+                <label className={`block text-[10px] font-bold tracking-wider mb-1 flex items-center space-x-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>
+                  <LinkIcon size={12} />
+                  <span>Attachment / deliverable URI (optional)</span>
+                </label>
+                <input
+                  type="url"
+                  value={attachmentLink}
+                  onChange={(e) => setAttachmentLink(e.target.value)}
+                  placeholder="https://example.com/your-deliverable-link"
+                  className={`w-full text-xs border rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#2563EB] ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-200 placeholder-slate-500' : 'bg-white border-[#E2E8F0] text-slate-800 placeholder-slate-400'}`}
+                />
+              </div>
+
+              {/* File upload */}
+              <div className="space-y-1">
+                <label className={`block text-[10px] font-bold tracking-wider mb-1 flex items-center space-x-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>
+                  <Upload size={12} />
+                  <span>Upload files / photos (optional)</span>
+                </label>
+                <div className={`border-2 border-dashed rounded-lg p-4 ${isDarkMode ? 'border-slate-700 bg-slate-800/50' : 'border-[#E2E8F0] bg-slate-50/50'}`}>
+                  <input
+                    type="file"
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []) as File[];
+                      files.forEach((file: File) => {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          const base64Data = event.target?.result as string;
+                          setUploadedFiles(prev => [...prev, { name: file.name, type: file.type, data: base64Data }]);
+                        };
+                        reader.readAsDataURL(file);
+                      });
+                    }}
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+                    className="hidden"
+                    id="closure-file-upload"
+                  />
+                  <label
+                    htmlFor="closure-file-upload"
+                    className="flex flex-col items-center justify-center cursor-pointer"
+                  >
+                    <Upload className="text-slate-400 mb-2" size={20} />
+                    <p className={`text-xs text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                      Click to upload files or drag and drop
+                    </p>
+                    <p className="text-[10px] text-slate-400 text-center mt-1">
+                      Images, PDFs, Documents (Max 10MB each)
+                    </p>
+                  </label>
+                </div>
+                {uploadedFiles.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    <p className={`text-[10px] font-bold tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Uploaded files:</p>
+                    {uploadedFiles.map((file, index) => (
+                      <div key={index} className={`flex items-center justify-between border rounded-lg p-2 ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-[#E2E8F0]'}`}>
+                        <div className="flex items-center space-x-2">
+                          {file.type.startsWith('image/') ? (
+                            <ImageIcon className="text-blue-500" size={14} />
+                          ) : (
+                            <File className="text-slate-500" size={14} />
+                          )}
+                          <span className={`text-xs truncate max-w-[200px] ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{file.name}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setUploadedFiles(prev => prev.filter((_, i) => i !== index))}
+                          className="text-red-500 hover:text-red-700 transition-colors border-none bg-transparent cursor-pointer"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-end space-x-2">
                 <button
                   type="button"
+                  disabled={isClosingTask}
                   onClick={() => setShowCloseForm(false)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold tracking-wider cursor-pointer ${isDarkMode ? 'text-slate-400 hover:bg-slate-700' : 'text-slate-500 hover:bg-slate-150'}`}
                 >
@@ -1163,9 +1280,10 @@ export default function TaskDrawer({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-[#10B981] hover:bg-[#059669] text-white rounded-lg text-xs font-bold tracking-wider cursor-pointer border-none"
+                  disabled={isClosingTask}
+                  className="px-4 py-1.5 bg-[#10B981] hover:bg-[#059669] text-white rounded-lg text-xs font-bold tracking-wider cursor-pointer border-none disabled:opacity-50"
                 >
-                  Confirm closing
+                  {isClosingTask ? 'Closing task...' : 'Confirm closing'}
                 </button>
               </div>
             </form>

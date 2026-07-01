@@ -623,6 +623,7 @@ export default function Dashboard({
       window.history.pushState({ view: activeView }, '', `#${view}`);
     }
     setActiveView(view);
+    setIsSidebarVisible(false);
     
     // Reset filters first
     setFilterStatus('All');
@@ -2356,7 +2357,7 @@ export default function Dashboard({
       )}
 
       {/* Sidebar */}
-      <aside className={`${isSidebarVisible ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed md:fixed top-0 left-0 h-screen z-10 border-r flex flex-col transition-all duration-300 ease-in-out ${isAnyModalOpen ? 'opacity-40 pointer-events-none' : ''} ${isSidebarCollapsed ? 'md:w-16' : 'md:w-64'} ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
+      <aside className={`${isSidebarVisible ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed md:fixed top-0 left-0 h-screen z-50 border-r flex flex-col transition-all duration-300 ease-in-out ${isAnyModalOpen ? 'opacity-40 pointer-events-none' : ''} ${isSidebarCollapsed ? 'md:w-16' : 'md:w-64'} ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
         {/* Logo */}
         <div className={`p-4 border-b flex items-center justify-center ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'} ${isSidebarCollapsed ? 'md:px-2' : 'md:px-6'} flex-shrink-0`}>
           <img src="/pw-logo.jpg" alt="PW Logo" className={`object-contain ${isSidebarCollapsed ? 'w-8 h-8' : 'w-10 h-10'}`} />

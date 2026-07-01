@@ -8,7 +8,8 @@ import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import { initializeEmailSheets, getGmailAuthUrlHandler, gmailCallbackHandler, getGmailStatusHandler, disconnectGmailHandler } from "./server/controllers/gmailAuthController";
-import { triggerTaskAssignmentHandler, triggerTaskDueSoonHandler, triggerTaskOverdueHandler, triggerReportSubmissionHandler } from "./server/controllers/emailTriggerController";
+import { initializeTeamSubmissionsSheet } from "./server/services/googleSheetsService";
+import { triggerTaskAssignmentHandler, triggerTaskDueSoonHandler, triggerTaskOverdueHandler, triggerReportSubmissionHandler, triggerTaskClosureHandler } from "./server/controllers/emailTriggerController";
 import { getEmailTemplatesHandler, saveEmailTemplateHandler, updateEmailTemplateHandler } from "./server/controllers/emailTemplateController";
 
 dotenv.config();
@@ -173,6 +174,7 @@ async function startServer() {
 
   // Initialize email-related sheets
   await initializeEmailSheets();
+  await initializeTeamSubmissionsSheet();
 
   // Trust proxy for rate limiting behind proxies (only trust specific proxies)
   app.set('trust proxy', 1); // Trust first proxy
@@ -507,11 +509,11 @@ async function startServer() {
   app.get("/api/auth/gmail/status", authenticateToken, getGmailStatusHandler);
   app.post("/api/auth/gmail/disconnect", authenticateToken, disconnectGmailHandler);
 
-  // Email trigger routes
   app.post("/api/email/trigger/task-assignment", authenticateToken, triggerTaskAssignmentHandler);
   app.post("/api/email/trigger/task-due-soon", authenticateToken, triggerTaskDueSoonHandler);
   app.post("/api/email/trigger/task-overdue", authenticateToken, triggerTaskOverdueHandler);
   app.post("/api/email/trigger/report-submission", authenticateToken, triggerReportSubmissionHandler);
+  app.post("/api/email/trigger/task-closed", authenticateToken, triggerTaskClosureHandler);
 
   // Email template routes
   app.get("/api/email/templates", authenticateToken, getEmailTemplatesHandler);

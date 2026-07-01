@@ -9,7 +9,7 @@ interface DashboardPageProps {
   onTaskClick: (task: Task) => void;
   onLogout: () => void;
   templates?: TaskTemplate[];
-  onViewChange?: (view: 'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings') => void;
+  onViewChange?: (view: 'overview' | 'tasks' | 'schedules' | 'team' | 'reports' | 'admin' | 'settings' | 'scheduled-tasks') => void;
   users?: UserType[];
   onAddUser?: (userData: UserType) => void;
   onAddTemplate?: (templateData: TaskTemplate) => void;

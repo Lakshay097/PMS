@@ -37,13 +37,20 @@ export default function TasksPage({
       <TaskFilters
         filterStatus={filters.status}
         filterPriority={filters.priority}
-        filterAssignee={filters.assignee}
+        filterAssigneeNames={filters.assignee ? [filters.assignee] : []}
+        filterTeamIDs={[]}
+        filterDateFrom=""
+        filterDateTo=""
         currentUser={currentUser}
         users={users}
+        teams={[]}
         isDarkMode={isDarkMode}
         onFilterStatusChange={(value) => onFilterChange('status', value)}
         onFilterPriorityChange={(value) => onFilterChange('priority', value)}
-        onFilterAssigneeChange={(value) => onFilterChange('assignee', value)}
+        onFilterAssigneeNamesChange={(value) => onFilterChange('assignee', value.join(','))}
+        onFilterTeamIDsChange={() => {}}
+        onFilterDateFromChange={() => {}}
+        onFilterDateToChange={() => {}}
       />
       <TaskList
         tasks={tasks}

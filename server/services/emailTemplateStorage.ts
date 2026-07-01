@@ -24,13 +24,19 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
   {
     templateName: 'report_submitted',
     subject: 'Progress Report: {task_name} [{task_id}]',
-    body: 'Hello,\n\nA progress report has been submitted for the following task:\n\nTask: {task_name}\nTask ID: {task_id}\nSubmitted By: {assigned_to}\n\nReport Summary:\n{report_content}\n\nBest regards,\nPMS Team',
+    body: 'Hello,\n\nA progress report has been submitted for the following task:\n\nTask: {task_name}\nTask ID: {task_id}\nReported By: {assigned_by}\nReported By Email: {assigned_by}\n\nReport Content:\n{report_content}\n\nBest regards,\nPMS Team',
     updatedAt: new Date().toISOString(),
   },
   {
     templateName: 'task_closed',
     subject: 'Task Closed: {task_name} [{task_id}]',
     body: 'Hello,\n\nThe following task has been marked as closed:\n\nTask: {task_name}\nTask ID: {task_id}\nClosed By: {closed_by}\nCompletion Date: {completion_date}\n\nClose Remarks:\n{close_remark}\n\nBest regards,\nPMS Team',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    templateName: 'template_scheduled_reminder',
+    subject: 'Scheduled Document Reminder: Weekly Report for {TeamName}',
+    body: 'Hello,\n\nThis is a reminder for team leaders of team "{TeamName}" to submit the weekly report (scheduled document) due tomorrow.\n\nPlease log in and submit the document:\n\nApp URL: {AppURL}\n\nBest regards,\nPMS Team',
     updatedAt: new Date().toISOString(),
   },
 ];

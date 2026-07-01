@@ -287,3 +287,47 @@ export async function fetchRowByFilter(
     return null;
   }
 }
+
+/**
+ * Initializes the team_submissions sheet if it doesn't exist
+ * This should be called during app initialization
+ */
+export async function initializeTeamSubmissionsSheet(): Promise<boolean> {
+  try {
+    const tokenData = await generateGoogleSheetsToken();
+    if (!tokenData || !tokenData.spreadsheetId) {
+      logger.error('Failed to get Google Sheets token for team submissions initialization');
+      return false;
+    }
+
+    const spreadsheetId = tokenData.spreadsheetId;
+    
+    // Check if team_submissions sheet exists by trying to fetch it
+    const existingValues = await fetchSheetValues(tokenData.accessToken, spreadsheetId, 'team_submissions!A1:F1');
+    
+    if (existingValues && existingValues.length > 0) {
+      // Sheet already exists with headers
+      return true;
+    }
+
+    // Create the sheet first
+    await createSheet(tokenData.accessToken, spreadsheetId, 'team_submissions');
+
+    // Create the sheet with headers
+    const headers = [
+      ['SubmissionID', 'TeamID', 'SubmittedBy', 'SubmittedAt', 'Note', 'AttachmentLinks']
+    ];
+
+    const success = await appendSheetValues(tokenData.accessToken, spreadsheetId, 'team_submissions', headers);
+    
+    if (success) {
+      logger.info('Initialized team_submissions sheet');
+    }
+    
+    return success;
+  } catch (err) {
+    logger.error('Error initializing team_submissions sheet:', err);
+    return false;
+  }
+}
+

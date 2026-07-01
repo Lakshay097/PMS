@@ -245,7 +245,7 @@ export default function AdminPanel({
       'template_completion_email': 'Hello {AssignedToEmail},\n\nThe following task has been completed:\n\nTask ID: {TaskID}\nTitle: {Title}\n\nGreat job! The task has been marked as complete.\n\nBest regards,\nPMS Team',
       'template_delayed_email': 'URGENT: Task Overdue Alert\n\nHello {AssignedToEmail},\n\nThe following task is now overdue:\n\nTask ID: {TaskID}\nTitle: {Title}\nDue Date: {DueDate}\nPriority: {Priority}\n\nPlease address this immediately.\n\nBest regards,\nPMS Team',
       'template_scheduled_reminder': 'Scheduled Task Reminder\n\nHello {AssignedToEmail},\n\nThis is a reminder for your scheduled task:\n\nTask ID: {TaskID}\nTitle: {Title}\nDue Date: {DueDate}\nPriority: {Priority}\n\nPlease ensure you complete this task on time.\n\nBest regards,\nPMS Team',
-      'report_submitted': 'Hello,\n\nA progress report has been submitted for the following task:\n\nTask: {Title}\nTask ID: {TaskID}\nSubmitted By: {AssignedToEmail}\n\nReport Summary:\n{ReportContent}\n\nBest regards,\nPMS Team',
+      'report_submitted': 'Hello,\n\nA progress report has been submitted for the following task:\n\nTask: {Title}\nTask ID: {TaskID}\nReported By: {assigned_by}\nReported By Email: {assigned_by}\n\nReport Content:\n{report_content}\n\nBest regards,\nPMS Team',
       'task_closed': 'Hello,\n\nThe following task has been marked as closed:\n\nTask: {Title}\nTask ID: {TaskID}\nClosed By: {AssignedByEmail}\nCompletion Date: {DueDate}\n\nClose Remarks:\n{ReportContent}\n\nBest regards,\nPMS Team'
     };
     return defaults[key] || '';
@@ -543,16 +543,65 @@ export default function AdminPanel({
 
   // Mock template renderer for Live Preview
   const getSimulatedEmailPreviewStr = () => {
+    const isReport = selectedEmailTemplateKey === 'report_submitted';
+    const reporterEmail = "sales.lead@PMS.com";
+
     return tempEmailValue
       .replace(/{TaskID}/g, "TSK-0842-DEMO")
+      .replace(/{task_id}/g, "TSK-0842-DEMO")
       .replace(/{Title}/g, "Prepare Staging Environment Backups")
+      .replace(/{task_name}/g, "Prepare Staging Environment Backups")
       .replace(/{Description}/g, "Complete backup of staging environment before production deployment")
       .replace(/{Priority}/g, "Critical")
+      .replace(/{priority}/g, "Critical")
       .replace(/{DueDate}/g, "2026-06-25")
+      .replace(/{due_date}/g, "2026-06-25")
       .replace(/{AssignedToEmail}/g, "sales.lead@PMS.com")
-      .replace(/{AssignedByEmail}/g, "admin@PMS.com")
+      .replace(/{assigned_to}/g, "sales.lead@PMS.com")
+      .replace(/{AssignedByEmail}/g, isReport ? reporterEmail : "admin@PMS.com")
+      .replace(/{assigned_by}/g, reporterEmail)
+      .replace(/{ReportContent}/g, "Staging database backup successfully stored in GCP bucket pms-backups-staging-2026-06-25.")
+      .replace(/{report_content}/g, "Staging database backup successfully stored in GCP bucket pms-backups-staging-2026-06-25.")
       .replace(/{AssignedToName}/g, "John Smith")
-      .replace(/{AssignedByName}/g, "Admin User");
+      .replace(/{AssignedByName}/g, "Admin User")
+      .replace(/{close_remark}/g, "All staging verification tests passed, backups verified.")
+      .replace(/{closed_by}/g, "admin@PMS.com")
+      .replace(/{completion_date}/g, "2026-06-25");
+  };
+
+  const getAvailableTokens = () => {
+    const baseTokens = [
+      { token: "{TaskID}", desc: "Task Identifier Code" },
+      { token: "{Title}", desc: "Checklist Title" },
+      { token: "{Description}", desc: "Task Description" },
+      { token: "{Priority}", desc: "Importance Rank" },
+      { token: "{DueDate}", desc: "Target Due Date" },
+    ];
+    
+    if (selectedEmailTemplateKey === 'report_submitted') {
+      return [
+        ...baseTokens,
+        { token: "{assigned_by}", desc: "Reporter Email" },
+        { token: "{report_content}", desc: "Progress Report Content" },
+      ];
+    }
+    
+    if (selectedEmailTemplateKey === 'task_closed') {
+      return [
+        ...baseTokens,
+        { token: "{closed_by}", desc: "Closed By User Email" },
+        { token: "{close_remark}", desc: "Closure Remarks" },
+        { token: "{completion_date}", desc: "Date Task Was Closed" },
+      ];
+    }
+    
+    return [
+      ...baseTokens,
+      { token: "{AssignedToEmail}", desc: "Receiver Mail" },
+      { token: "{AssignedByEmail}", desc: "Sender Mail" },
+      { token: "{AssignedToName}", desc: "Receiver Name" },
+      { token: "{AssignedByName}", desc: "Sender Name" }
+    ];
   };
 
   const getRoleBadgeColor = (role: string, isDarkMode: boolean) => {
@@ -1614,17 +1663,7 @@ export default function AdminPanel({
                 <div className={`p-3 rounded-lg border space-y-2 ${isDarkMode ? 'bg-[#334155] border-[#475569]' : 'bg-slate-50 border-slate-150'}`}>
                   <span className={`block text-[8px] font-black font-mono tracking-widest ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Interactive placeholders (click to insert)</span>
                   <div className="flex flex-wrap gap-1.5">
-                    {[
-                      { token: "{TaskID}", desc: "Task Identifier Code" },
-                      { token: "{Title}", desc: "Checklist Title" },
-                      { token: "{Description}", desc: "Task Description" },
-                      { token: "{Priority}", desc: "Importance Rank" },
-                      { token: "{DueDate}", desc: "Target Due Date" },
-                      { token: "{AssignedToEmail}", desc: "Receiver Mail" },
-                      { token: "{AssignedByEmail}", desc: "Sender Mail" },
-                      { token: "{AssignedToName}", desc: "Receiver Name" },
-                      { token: "{AssignedByName}", desc: "Sender Name" }
-                    ].map(tok => (
+                    {getAvailableTokens().map(tok => (
                       <button
                         key={tok.token}
                         onClick={() => handleInsertToken(tok.token)}

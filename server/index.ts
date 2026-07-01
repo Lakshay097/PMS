@@ -13,12 +13,18 @@ import { sseService } from './services/sseService';
 import { authenticateToken, AuthRequest } from './middleware/auth';
 import { oauthRateLimiter, loginRateLimiter } from './middleware/rateLimiters';
 import * as gmailAuthController from './controllers/gmailAuthController';
+import { initializeTeamSubmissionsSheet } from './services/googleSheetsService';
+import { startReminderScheduler } from './services/reminderScheduler';
 
 validateEnv();
 
 async function startServer() {
   // Initialize email-related sheets
   await gmailAuthController.initializeEmailSheets();
+  await initializeTeamSubmissionsSheet();
+
+  // Start automated email reminders scheduler
+  startReminderScheduler();
   const app = express();
 
   app.set('trust proxy', 1);

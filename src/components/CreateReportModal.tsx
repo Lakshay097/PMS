@@ -184,6 +184,7 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
               <option value="Submitted">Submitted (Review Request)</option>
               <option value="On Hold">On Hold</option>
               <option value="Dropped">Dropped</option>
+              <option value="Closed">Closed (Task Complete)</option>
             </select>
           </div>
 
