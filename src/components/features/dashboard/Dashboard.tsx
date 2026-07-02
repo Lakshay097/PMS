@@ -50,7 +50,7 @@ import { uploadFile } from '../../../api/upload';
 interface DashboardProps {
   tasks: Task[];
   currentUser: UserType;
-  onNewTask: (assigneeEmail?: string) => void;
+  onNewTask: (assigneeEmail?: string, teamIds?: string[]) => void;
   onTaskClick: (task: Task) => void;
   onLogout: () => void;
   templates?: TaskTemplate[];
@@ -1293,7 +1293,10 @@ export default function Dashboard({
                         {teamUsers.filter(u => u.Active).length} / {teamUsers.length} Active
                       </span>
                       <button
-                        onClick={() => onNewTask(teamUsers.map(u => u.Email).join(', '))}
+                        onClick={() => {
+                          const teamObj = (teams || []).find(t => t.TeamName === teamName);
+                          onNewTask(teamUsers.map(u => u.Email).join(', '), teamObj ? [teamObj.TeamID] : undefined);
+                        }}
                         className="text-xs font-medium px-2 py-1 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 transition-colors"
                       >
                         Assign Task to Team

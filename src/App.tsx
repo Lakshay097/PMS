@@ -236,6 +236,8 @@ export default function App() {
     setIsAddTeamModalOpen,
     preSelectedAssignee,
     setPreSelectedAssignee,
+    preSelectedTeamIDs,
+    setPreSelectedTeamIDs,
   } = useAppModals();
 
   // Tasks Board Filters
@@ -920,8 +922,9 @@ export default function App() {
           <DashboardPage
         tasks={getVisibleTasks()}
         currentUser={activeUser}
-        onNewTask={(assigneeEmail) => {
+        onNewTask={(assigneeEmail, teamIds) => {
           setPreSelectedAssignee(assigneeEmail);
+          setPreSelectedTeamIDs(teamIds);
           setIsTaskModalOpen(true);
         }}
         onTaskClick={(task) => {
@@ -1108,13 +1111,16 @@ export default function App() {
             onClose={() => {
               setIsTaskModalOpen(false);
               setPreSelectedAssignee(undefined);
+              setPreSelectedTeamIDs(undefined);
             }}
             onSubmit={async (data) => {
               setIsTaskModalOpen(false);
               setPreSelectedAssignee(undefined);
+              setPreSelectedTeamIDs(undefined);
               await handleCreateTaskOrTemplate(data);
             }}
             preSelectedAssignee={preSelectedAssignee}
+            preSelectedTeamIDs={preSelectedTeamIDs}
           />
         )}
 

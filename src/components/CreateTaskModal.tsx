@@ -24,9 +24,10 @@ interface CreateTaskModalProps {
     AttachmentLink: string;
   }) => void;
   preSelectedAssignee?: string;
+  preSelectedTeamIDs?: string[];
 }
 
-export default function CreateTaskModal({ currentUser, usersList, teamsList = [], isOpen, onClose, onSubmit, preSelectedAssignee }: CreateTaskModalProps) {
+export default function CreateTaskModal({ currentUser, usersList, teamsList = [], isOpen, onClose, onSubmit, preSelectedAssignee, preSelectedTeamIDs }: CreateTaskModalProps) {
   const [taskType, setTaskType] = useState<'One-time' | 'Recurring'>('One-time');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -55,7 +56,12 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
     } else if (isOpen) {
       setSelectedEmails([]);
     }
-  }, [isOpen, preSelectedAssignee]);
+    if (isOpen && preSelectedTeamIDs && preSelectedTeamIDs.length > 0) {
+      setSelectedTeamIDs(preSelectedTeamIDs);
+    } else if (isOpen) {
+      setSelectedTeamIDs([]);
+    }
+  }, [isOpen, preSelectedAssignee, preSelectedTeamIDs]);
   
   // Filter eligible assignees based on role
   // Rule: Admin can assign to anyone. Stakeholders can assign to other stakeholders, admins, or themselves
@@ -72,6 +78,8 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
   const [selectedTeamIDs, setSelectedTeamIDs] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
+  const [teamSearchQuery, setTeamSearchQuery] = useState('');
+  const [showTeamDropdown, setShowTeamDropdown] = useState(false);
   const [attachmentLink, setAttachmentLink] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; type: string; data: string }>>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -262,7 +270,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                     : 'bg-white border-[#E5E7EB] text-slate-700 hover:bg-slate-50'
                 }`}
               >
-                <Calendar size={12} className="sm:size-15" />
+                <Calendar size={12} className="sm:size-3.5" />
                 <span className="hidden sm:inline">One-Time Task Allocation</span>
                 <span className="sm:hidden">One-Time</span>
               </button>
@@ -276,7 +284,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                     : 'bg-white border-[#E5E7EB] text-slate-700 hover:bg-slate-50'
                 }`}
               >
-                <Repeat size={12} className="sm:size-15" />
+                <Repeat size={12} className="sm:size-3.5" />
                 <span className="hidden sm:inline">Recurring Schedule Blueprint</span>
                 <span className="sm:hidden">Recurring</span>
               </button>
@@ -396,21 +404,21 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                 <div className="relative search-dropdown-container">
                   <input
                     type="text"
-                    value={searchQuery}
+                    value={teamSearchQuery}
                     onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setShowDropdown(true);
+                      setTeamSearchQuery(e.target.value);
+                      setShowTeamDropdown(true);
                     }}
-                    onFocus={() => setShowDropdown(true)}
+                    onFocus={() => setShowTeamDropdown(true)}
                     placeholder="Search teams by name..."
                     className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                   />
-                  {showDropdown && searchQuery && (
+                  {showTeamDropdown && teamSearchQuery && (
                     <div className="absolute z-10 w-full mt-1 bg-white border border-[#E2E8F0] rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                      {teamsList.filter(t => t.Active && t.TeamName.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
+                      {teamsList.filter(t => t.Active && t.TeamName.toLowerCase().includes(teamSearchQuery.toLowerCase())).length === 0 ? (
                         <div className="p-3 text-slate-400 text-xs italic">No teams found.</div>
                       ) : (
-                        teamsList.filter(t => t.Active && t.TeamName.toLowerCase().includes(searchQuery.toLowerCase())).map(team => {
+                        teamsList.filter(t => t.Active && t.TeamName.toLowerCase().includes(teamSearchQuery.toLowerCase())).map(team => {
                           const isSelected = selectedTeamIDs.includes(team.TeamID);
                           const teamUsers = usersList.filter(u => u.TeamIDs.includes(team.TeamID) && u.Active);
                           return (
@@ -423,8 +431,8 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                                   const teamMemberEmails = teamUsers.map(u => u.Email);
                                   setSelectedEmails([...new Set([...selectedEmails, ...teamMemberEmails])]);
                                 }
-                                setSearchQuery('');
-                                setShowDropdown(false);
+                                setTeamSearchQuery('');
+                                setShowTeamDropdown(false);
                               }}
                               className={`p-2.5 cursor-pointer text-xs hover:bg-slate-50 transition-colors ${
                                 isSelected ? 'bg-slate-100 opacity-50' : ''

@@ -14,6 +14,7 @@ export function useAppModals() {
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [isAddTeamModalOpen, setIsAddTeamModalOpen] = useState(false);
   const [preSelectedAssignee, setPreSelectedAssignee] = useState<string | undefined>(undefined);
+  const [preSelectedTeamIDs, setPreSelectedTeamIDs] = useState<string[] | undefined>(undefined);
 
   return {
     selectedTask,
@@ -40,5 +41,7 @@ export function useAppModals() {
     setIsAddTeamModalOpen,
     preSelectedAssignee,
     setPreSelectedAssignee,
+    preSelectedTeamIDs,
+    setPreSelectedTeamIDs,
   };
 }
