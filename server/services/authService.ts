@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { config } from '../config';
-import { InternalServerError, UnauthorizedError } from '../utils/AppError';
+import { BadRequestError, InternalServerError, UnauthorizedError } from '../utils/AppError';
 import { generateGoogleSheetsToken, fetchSheetValues } from './googleSheetsService';
 
 /**
@@ -68,7 +68,7 @@ export function createToken(
  */
 export async function login(email: string, password: string): Promise<LoginResponse> {
   if (!email || !password) {
-    throw new InternalServerError("Email and password are required");
+    throw new BadRequestError("Email and password are required");
   }
 
   // Get Google Sheets access token

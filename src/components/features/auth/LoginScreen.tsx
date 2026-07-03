@@ -97,6 +97,7 @@ export default function LoginScreen({ usersList, onLoginSuccess }: LoginScreenPr
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={isLoading}
                   required
+                  autoComplete="email"
                   className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl py-3 sm:py-3.5 pl-10 sm:pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-slate-500 text-base sm:text-sm"
                 />
               </div>
@@ -113,6 +114,7 @@ export default function LoginScreen({ usersList, onLoginSuccess }: LoginScreenPr
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isLoading}
                   required
+                  autoComplete="current-password"
                   className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl py-3 sm:py-3.5 pl-10 sm:pl-12 pr-10 sm:pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-slate-500 text-base sm:text-sm"
                 />
                 <button

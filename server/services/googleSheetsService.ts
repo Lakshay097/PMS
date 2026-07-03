@@ -27,6 +27,13 @@ export async function generateGoogleSheetsToken(): Promise<GoogleSheetsTokenResp
       return null;
     }
 
+    // Warn early if key doesn't look like a valid PEM block — catches secrets
+    // stored incorrectly in Cloud Secret Manager (e.g. extra escaping).
+    const formattedKeyCheck = privateKey.replace(/\\n/g, "\n");
+    if (!formattedKeyCheck.includes('-----BEGIN PRIVATE KEY-----')) {
+      logger.error("GOOGLE_PRIVATE_KEY does not appear to be a valid PEM key. Check that the secret is stored with real newlines (not escaped \\\\n) in Cloud Secret Manager.");
+    }
+
     // RS256 JWT claims
     const iat = Math.floor(Date.now() / 1000);
     const exp = iat + config.JWT_EXPIRATION_SECONDS;
@@ -63,7 +70,8 @@ export async function generateGoogleSheetsToken(): Promise<GoogleSheetsTokenResp
 
     if (!tokenRes.ok) {
       const errorText = await tokenRes.text();
-      logger.error("Google SA Token fetch failed:", errorText);
+      logger.error(`Google SA Token fetch failed (HTTP ${tokenRes.status}):`, errorText);
+      logger.error(`Service account email used: ${email}`);
       return null;
     }
 
