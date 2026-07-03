@@ -4,6 +4,7 @@ import { X, Calendar, User, FileText, Link as LinkIcon, History, AlertCircle, Ch
 import { Task, TaskReport, User as UserType, Team, Subtask } from '../../../types/index';
 import { ROLE } from '../../../constants/status';
 import { uploadFile } from '../../../api/upload';
+import { getAllSubordinates } from '../../../utils/userUtils';
 
 // Helper function to derive a human-readable label and file extension from an
 // attachment URL, so downloadable notes/reports (PDF, PPT, Excel, etc.) show
@@ -111,10 +112,9 @@ export default function TaskDrawer({
 
   // Subordinate delegation state
   const [selectedSubordinates, setSelectedSubordinates] = useState<string[]>([]);
+  const subordinateEmails = getAllSubordinates(currentUser.Email, usersList);
   const subordinates = usersList.filter(u => 
-    u.Active && 
-    u.ManagerEmail && 
-    u.ManagerEmail.toLowerCase() === currentUser.Email.toLowerCase()
+    u.Active && subordinateEmails.includes(u.Email)
   );
 
   // Subtask division state
@@ -188,8 +188,8 @@ export default function TaskDrawer({
     .split(',')
     .map(e => e.trim().toLowerCase())
     .some(email => {
-      const u = usersList.find(usr => usr.Email?.toLowerCase() === email);
-      return u && u.ManagerEmail && u.ManagerEmail.toLowerCase() === currentUser.Email?.toLowerCase();
+      const allSubEmails = getAllSubordinates(currentUser.Email, usersList);
+      return allSubEmails.map(s => s.toLowerCase()).includes(email);
     });
 
   const canSubmitReport = currentUser.Role === ROLE.ADMIN ||

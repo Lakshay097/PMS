@@ -18,7 +18,8 @@ function getQuarter(d: Date): number {
 // Generate the specific cycle key, start date, and due date for a given frequency
 export function getCurrentCycleDetails(
   type: TaskTemplate['RecurrenceType'], 
-  baseDate: Date = new Date()
+  baseDate: Date = new Date(),
+  anchorDate?: Date  // Optional: original template StartDate for preserving day-of-week in Weekly tasks
 ): { cycleKey: string; startDate: string; dueDate: string } {
   const year = baseDate.getFullYear();
   let cycleKey = '';
@@ -39,20 +40,32 @@ export function getCurrentCycleDetails(
       const week = getWeekNumber(baseDate);
       cycleKey = `${year}-W${String(week).padStart(2, '0')}`;
       
-      // Calculate Monday of this week
-      const day = baseDate.getDay();
-      const diff = baseDate.getDate() - day + (day === 0 ? -6 : 1);
-      const monday = new Date(baseDate.setDate(diff));
-      const monthStr = String(monday.getMonth() + 1).padStart(2, '0');
-      const dayStr = String(monday.getDate()).padStart(2, '0');
-      startDate = `${monday.getFullYear()}-${monthStr}-${dayStr}`;
+      // Preserve the day-of-week from anchorDate (template StartDate) if provided,
+      // otherwise use baseDate's day-of-week. This ensures weekly tasks recur on
+      // the same day-of-week as when the template was created.
+      const referenceDate = anchorDate || baseDate;
+
+      // Normalize JS getDay() (0=Sun...6=Sat) to ISO day (1=Mon...7=Sun) before
+      // diffing, so Sunday is treated as the LAST day of the week rather than the
+      // first. Without this, a Sunday-anchored template produces a negative dayDiff
+      // and drifts into the previous week.
+      const toIsoDay = (jsDay: number) => (jsDay === 0 ? 7 : jsDay);
+      const targetDayOfWeek = toIsoDay(referenceDate.getDay());
+      const currentDayOfWeek = toIsoDay(baseDate.getDay());
+      const dayDiff = targetDayOfWeek - currentDayOfWeek;
+      const weekStartDate = new Date(baseDate);
+      weekStartDate.setDate(baseDate.getDate() + dayDiff);
       
-      // Due on Sunday
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      const sMonthStr = String(sunday.getMonth() + 1).padStart(2, '0');
-      const sDayStr = String(sunday.getDate()).padStart(2, '0');
-      dueDate = `${sunday.getFullYear()}-${sMonthStr}-${sDayStr}`;
+      const monthStr = String(weekStartDate.getMonth() + 1).padStart(2, '0');
+      const dayStr = String(weekStartDate.getDate()).padStart(2, '0');
+      startDate = `${weekStartDate.getFullYear()}-${monthStr}-${dayStr}`;
+      
+      // Due 7 days later (same day-of-week next week)
+      const weekDueDate = new Date(weekStartDate);
+      weekDueDate.setDate(weekStartDate.getDate() + 7);
+      const dMonthStr = String(weekDueDate.getMonth() + 1).padStart(2, '0');
+      const dDayStr = String(weekDueDate.getDate()).padStart(2, '0');
+      dueDate = `${weekDueDate.getFullYear()}-${dMonthStr}-${dDayStr}`;
       break;
     }
     case 'Monthly': {
@@ -139,8 +152,9 @@ export async function checkAndGenerateRecurringTasks(
   const activeTemplates = templates.filter(t => t.Active);
 
   for (const template of activeTemplates) {
-    // 1. Calculate the standard cycle attributes for today
-    const { cycleKey, startDate, dueDate } = getCurrentCycleDetails(template.RecurrenceType, now);
+    // 1. Calculate the standard cycle attributes for today, preserving the template's original day-of-week
+    const templateAnchorDate = template.StartDate ? new Date(template.StartDate) : undefined;
+    const { cycleKey, startDate, dueDate } = getCurrentCycleDetails(template.RecurrenceType, now, templateAnchorDate);
     
     // 2. See if there is already a live task generated matching standard template and cycle mapping
     const isAlreadyGenerated = existingTasks.some(

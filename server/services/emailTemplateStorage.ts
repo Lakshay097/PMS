@@ -12,25 +12,25 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
   {
     templateName: 'template_assigned_email',
     subject: 'New task assigned: {Title}',
-    body: 'Hello {AssignedToEmail},\n\nYou have been assigned a new task:\n\nTask: {Title}\nTask ID: {TaskID}\nDue Date: {DueDate}\nPriority: {Priority}\nAssigned by: {AssignedByEmail}\n\nDescription: {Description}\n\nPlease review and start working on this task.\n\nBest regards,\nPMS Team',
+    body: 'Hi {AssignedToName},\n\nYou have been assigned a new task:\n\nTask: {Title}\nTask ID: {TaskID}\nDue Date: {DueDate}\nPriority: {Priority}\nAssigned by: {AssignedByEmail}\n\nDescription: {Description}\n\nPlease review and start working on this task.\n\nBest regards,\n{AssignedByName}',
     updatedAt: new Date().toISOString(),
   },
   {
     templateName: 'template_delayed_email',
     subject: 'Task due in 24 hours: {Title}',
-    body: 'Hello {AssignedToEmail},\n\nThe following task is due within 24 hours:\n\nTask: {Title}\nTask ID: {TaskID}\nDue Date: {DueDate}\nPriority: {Priority}\n\nPlease ensure you complete this task on time.\n\nBest regards,\nPMS Team',
+    body: 'Hi {AssignedToName},\n\nThe following task is due within 24 hours:\n\nTask: {Title}\nTask ID: {TaskID}\nDue Date: {DueDate}\nPriority: {Priority}\n\nPlease ensure you complete this task on time.\n\nBest regards,\n{AssignedByName}',
     updatedAt: new Date().toISOString(),
   },
   {
     templateName: 'report_submitted',
     subject: 'Progress Report: {task_name} [{task_id}]',
-    body: 'Hello,\n\nA progress report has been submitted for the following task:\n\nTask: {task_name}\nTask ID: {task_id}\nReported By: {assigned_by}\nReported By Email: {assigned_by}\n\nReport Content:\n{report_content}\n\nBest regards,\nPMS Team',
+    body: 'Hi {AllocatorName},\n\nA progress report has been submitted for the following task:\n\nTask: {task_name}\nTask ID: {task_id}\nSubmitted By: {SubmittedByName}\n\nReport Content:\n{report_content}\n\nBest regards,\n{SubmittedByName}',
     updatedAt: new Date().toISOString(),
   },
   {
     templateName: 'task_closed',
     subject: 'Task Closed: {task_name} [{task_id}]',
-    body: 'Hello,\n\nThe following task has been marked as closed:\n\nTask: {task_name}\nTask ID: {task_id}\nClosed By: {closed_by}\nCompletion Date: {completion_date}\n\nClose Remarks:\n{close_remark}\n\nBest regards,\nPMS Team',
+    body: 'Hi {AssignedToName},\n\nThe following task has been marked as closed:\n\nTask: {task_name}\nTask ID: {task_id}\nClosed By: {ClosedByName}\nCompletion Date: {completion_date}\n\nClose Remarks:\n{close_remark}\n\nBest regards,\n{ClosedByName}',
     updatedAt: new Date().toISOString(),
   },
   {

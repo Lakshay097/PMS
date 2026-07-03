@@ -201,7 +201,7 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
                 />
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                Your role will be determined based on your manager (Admin = Stakeholder, others = Sub-stakeholder)
+                Enter your direct manager's email. Your initial role is assigned based on your manager's role (Admin manager = Stakeholder, otherwise Sub-stakeholder), but can be updated by an administrator at any time.
               </p>
             </div>
 

@@ -3,7 +3,7 @@ export interface User {
   FullName: string;
   Email: string;
   Role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder' | 'Team Leader';
-  ManagerEmail: string; // empty if Admin or Stakeholder (unless Stakeholder is mapped to someone)
+  ManagerEmail: string; // empty if Admin with no manager; settable for any role to represent the reporting chain
   TeamIDs: string[]; // Multiple teams support
   TeamNames: string[]; // Multiple team names for display
   Active: boolean;
