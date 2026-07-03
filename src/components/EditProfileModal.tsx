@@ -48,7 +48,7 @@ export default function EditProfileModal({ isOpen, onClose, currentUser, onSave,
         <div className="p-4 sm:p-6 border-b border-[#E5E7EB] flex items-center justify-between">
           <h2 className="text-lg sm:text-xl font-bold text-slate-900">Edit Profile</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
-            <X size={16} className="sm:size-20" />
+            <X size={16} className="sm:size-[18px]" />
           </button>
         </div>
 
