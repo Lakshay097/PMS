@@ -1087,7 +1087,7 @@ export default function App() {
         )}
 
         {/* Task Details Drawer */}
-        {isDrawerOpen && selectedTask && (
+        {isDrawerOpen && selectedTask && activeUser && (
           <TaskDrawer
             task={selectedTask}
             isOpen={isDrawerOpen}

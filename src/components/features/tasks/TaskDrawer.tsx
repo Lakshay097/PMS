@@ -110,19 +110,16 @@ export default function TaskDrawer({
   const [adminAddToExisting, setAdminAddToExisting] = useState(false);
   const [adminUserSearch, setAdminUserSearch] = useState('');
 
-  // Subordinate delegation state
-  const [selectedSubordinates, setSelectedSubordinates] = useState<string[]>([]);
-  const subordinateEmails = getAllSubordinates(currentUser.Email, usersList);
-  const subordinates = usersList.filter(u => 
-    u.Active && subordinateEmails.includes(u.Email)
-  );
-
   // Subtask division state
   const [showSubtaskDivision, setShowSubtaskDivision] = useState(false);
   const [subtaskDivisionRows, setSubtaskDivisionRows] = useState<Array<{ title: string; assignedTo: string; dueDate: string }>>([]);
+  const [selectedSubordinates, setSelectedSubordinates] = useState<string[]>([]);
 
+  // useEffect MUST remain above any early return to satisfy React Rules of Hooks.
+  // The body guards on both task and currentUser since those can still be null/undefined
+  // on the render where this hook executes (before the early return below fires).
   useEffect(() => {
-    if (task) {
+    if (task && currentUser) {
       setEditDescription(task.Description);
       setEditEmails((task.AssignedToEmail || '').split(',').map(e => e.trim()).filter(Boolean));
       setStakeholderEmails(task.StakeholderEmails || []);
@@ -138,7 +135,16 @@ export default function TaskDrawer({
     }
   }, [task, currentUser, usersList]);
 
-  if (!isOpen || !task) return null;
+  // Early return AFTER every hook call. Defends against null currentUser/task at runtime
+  // even though the prop type declares currentUser as non-nullable UserType.
+  if (!isOpen || !task || !currentUser) return null;
+
+  // Derived values that dereference currentUser/task — safe because they are
+  // only reached after the guard above confirms both are non-null.
+  const subordinateEmails = getAllSubordinates(currentUser.Email, usersList);
+  const subordinates = usersList.filter(u =>
+    u.Active && subordinateEmails.includes(u.Email)
+  );
 
   // Filter reports specifically linked to this Task ID or its subtasks
   const taskSubtasks = subtasks.filter(s => s.TaskID === task.TaskID);
@@ -184,13 +190,13 @@ export default function TaskDrawer({
     (isCurrentUserAssignee && currentUser.CanCloseTask);
 
   // Determine report submittal credentials
-  const hasSubordinateAssignee = (task.AssignedToEmail || '')
+  const hasSubordinateAssignee = currentUser ? (task.AssignedToEmail || '')
     .split(',')
     .map(e => e.trim().toLowerCase())
     .some(email => {
       const allSubEmails = getAllSubordinates(currentUser.Email, usersList);
       return allSubEmails.map(s => s.toLowerCase()).includes(email);
-    });
+    }) : false;
 
   const canSubmitReport = currentUser.Role === ROLE.ADMIN ||
     isCurrentUserAssignee ||
