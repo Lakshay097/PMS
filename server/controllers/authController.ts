@@ -323,7 +323,10 @@ export async function changePasswordHandler(req: AuthRequest, res: Response): Pr
   console.log('User found at row:', userRowIndex);
 
   // Verify old password
-  const storedPassword = userRow[12]; // Password is in column 13 (index 12)
+  const storedPassword: string | undefined = userRow[12]; // Password is in column 13 (index 12)
+  if (!storedPassword) {
+    throw new BadRequestError("No password is set for this account. Please contact your administrator.");
+  }
   const isBcryptHash = storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2a$');
   
   let passwordMatches = false;

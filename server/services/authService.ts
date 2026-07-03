@@ -113,9 +113,15 @@ export async function login(email: string, password: string): Promise<LoginRespo
   }
 
   // Verify password (password is at index 12)
-  const storedPassword = foundUser[12];
+  // Note: Google Sheets trims trailing empty cells, so foundUser[12] may be
+  // undefined if the Password column is empty or the row is shorter than 13 cols.
+  const storedPassword: string | undefined = foundUser[12];
+  if (!storedPassword) {
+    throw new UnauthorizedError("Account has no password set. Please contact your administrator.");
+  }
+
   const isBcryptHash = storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2a$');
-  
+
   let passwordMatches = false;
   if (isBcryptHash) {
     passwordMatches = await bcrypt.compare(password, storedPassword);
