@@ -12,6 +12,7 @@
 import {
   User,
   Team,
+  SubTeam,
   Task,
   TaskTemplate,
   TaskReport,
@@ -136,6 +137,9 @@ export function startSheetsSyncInterval(): void {
           case 'teams':
             currentData = await dbService.getTeams();
             break;
+          case 'sub_teams':
+            currentData = await dbService.getSubTeams();
+            break;
           case 'templates':
             currentData = await dbService.getTemplates();
             break;
@@ -206,6 +210,7 @@ function getIdFieldForCollection(collection: string): string {
   const idFields: Record<string, string> = {
     users: 'UserID',
     teams: 'TeamID',
+    sub_teams: 'SubTeamID',
     templates: 'TemplateID',
     tasks: 'TaskID',
     reports: 'ReportID',
@@ -1172,11 +1177,101 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
     }
   },
 
+  // SubTeams Service
+  // Sub-team leader emails are stored as settings keys:
+  //   team_{TeamID}_subteam_{SubTeamID}_leaders  →  comma-separated emails
+  // This mirrors the existing TeamLeaderEmails pattern exactly.
+  async getSubTeams(): Promise<SubTeam[]> {
+    const cached = getFromCache<SubTeam>('sub_teams');
+    if (cached) return cached;
+
+    try {
+      const snapshot = await getDocs(collection(db, 'sub_teams'));
+      const subTeams = snapshot.docs.map(doc => doc.data() as SubTeam);
+
+      // Attach sub-team leader emails from settings (same pattern as TeamLeaderEmails)
+      const settingsSnapshot = await getDocs(collection(db, 'settings'));
+      const settings = settingsSnapshot.docs.map(doc => doc.data() as AppSetting);
+
+      const subTeamsWithLeaders = subTeams.map(st => {
+        const key = `team_${st.TeamID}_subteam_${st.SubTeamID}_leaders`;
+        const leaderSetting = settings.find(s => s.Key === key);
+        const leaderEmails = leaderSetting?.Value
+          ? leaderSetting.Value.split(',').map(e => e.trim()).filter(Boolean)
+          : [];
+        return { ...st, SubTeamLeaderEmails: leaderEmails };
+      });
+
+      setCache('sub_teams', subTeamsWithLeaders);
+      return subTeamsWithLeaders;
+    } catch (error) {
+      throw new Error(`Failed to load sub-teams from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  },
+
+  async saveSubTeam(subTeam: SubTeam): Promise<void> {
+    try {
+      const subTeams = await this.getSubTeams();
+      const idx = subTeams.findIndex(st => st.SubTeamID === subTeam.SubTeamID);
+      const now = new Date().toISOString();
+
+      const subTeamToSave = idx >= 0
+        ? { ...subTeams[idx], ...subTeam, UpdatedAt: now }
+        : { ...subTeam, CreatedAt: now, UpdatedAt: now, SubTeamLeaderEmails: subTeam.SubTeamLeaderEmails ?? [] };
+
+      // Strip derived field before persisting
+      const { SubTeamLeaderEmails: _derived, ...persistable } = subTeamToSave;
+
+      try {
+        await setDoc(doc(db, 'sub_teams', subTeam.SubTeamID), persistable);
+      } catch (err) {
+        console.error('Firestore write failed — saveSubTeam:', err);
+        clearCache('sub_teams');
+        throw err;
+      }
+
+      if (idx >= 0) {
+        subTeams[idx] = subTeamToSave;
+      } else {
+        subTeams.push(subTeamToSave);
+      }
+      setCache('sub_teams', subTeams);
+
+      enqueueSheetsWrite('sub_teams', 'save', persistable);
+      notifyChange('sub_teams', 'updated', subTeam.SubTeamID).catch(() => {});
+    } catch (error) {
+      throw new Error(`Failed to save sub-team: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  },
+
+  async deleteSubTeam(subTeamId: string): Promise<void> {
+    try {
+      const subTeams = await this.getSubTeams();
+      const filtered = subTeams.filter(st => st.SubTeamID !== subTeamId);
+
+      try {
+        await deleteDoc(doc(db, 'sub_teams', subTeamId));
+      } catch (err) {
+        console.error('Firestore write failed — deleteSubTeam:', err);
+        clearCache('sub_teams');
+        throw err;
+      }
+
+      setCache('sub_teams', filtered);
+
+      enqueueSheetsWrite('sub_teams', 'delete', subTeamId);
+      notifyChange('sub_teams', 'deleted', subTeamId).catch(() => {});
+    } catch (error) {
+      throw new Error(`Failed to delete sub-team: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  },
+
   // Batch load all collections from Firestore (fast initial load)
   async batchLoadAll(): Promise<{
     users: User[];
     tasks: Task[];
     teams: Team[];
+    subTeams: SubTeam[];
     templates: TaskTemplate[];
     settings: AppSetting[];
     emailTemplates: EmailTemplate[];
@@ -1191,6 +1286,7 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
       usersSnapshot,
       tasksSnapshot,
       teamsSnapshot,
+      subTeamsSnapshot,
       templatesSnapshot,
       settingsSnapshot,
       emailTemplatesSnapshot,
@@ -1203,6 +1299,7 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
       getDocs(collection(db, 'users')),
       getDocs(collection(db, 'tasks')),
       getDocs(collection(db, 'teams')),
+      getDocs(collection(db, 'sub_teams')),
       getDocs(collection(db, 'templates')),
       getDocs(collection(db, 'settings')),
       getDocs(collection(db, 'email_templates')),
@@ -1254,6 +1351,18 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
         TeamLeaderEmails: leaderEmails
       };
     });
+
+    // Attach sub-team leader emails from settings (mirrors TeamLeaderEmails pattern)
+    const rawSubTeams: SubTeam[] = subTeamsSnapshot.docs.map(doc => doc.data() as SubTeam);
+    const subTeams: SubTeam[] = rawSubTeams.map(st => {
+      const key = `team_${st.TeamID}_subteam_${st.SubTeamID}_leaders`;
+      const leaderSetting = settings.find(s => s.Key === key);
+      const leaderEmails = leaderSetting?.Value
+        ? leaderSetting.Value.split(',').map(e => e.trim()).filter(Boolean)
+        : [];
+      return { ...st, SubTeamLeaderEmails: leaderEmails };
+    });
+
     const emailTemplates: EmailTemplate[] = emailTemplatesSnapshot.docs.map(doc => doc.data() as EmailTemplate);
     const reports: TaskReport[] = reportsSnapshot.docs.map(doc => doc.data() as TaskReport);
     const followups: FollowUp[] = followupsSnapshot.docs.map(doc => doc.data() as FollowUp);
@@ -1266,6 +1375,7 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
     setCache('users', users);
     setCache('tasks', tasks);
     setCache('teams', teamsWithLeaders);
+    setCache('sub_teams', subTeams);
     setCache('templates', templates);
     setCache('settings', settings);
     setCache('emailTemplates', emailTemplates);
@@ -1279,6 +1389,7 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
       users,
       tasks,
       teams: teamsWithLeaders,
+      subTeams,
       templates,
       settings,
       emailTemplates,
@@ -1319,6 +1430,9 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
               break;
             case 'teams':
               result = await this.getTeams();
+              break;
+            case 'sub_teams':
+              result = await this.getSubTeams();
               break;
             case 'templates':
               result = await this.getTemplates();

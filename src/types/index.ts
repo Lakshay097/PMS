@@ -6,6 +6,8 @@ export interface User {
   ManagerEmail: string; // empty if Admin with no manager; settable for any role to represent the reporting chain
   TeamIDs: string[]; // Multiple teams support
   TeamNames: string[]; // Multiple team names for display
+  SubTeamID?: string;   // The sub-team this user belongs to within their primary team
+  SubTeamName?: string; // Display name of that sub-team
   Active: boolean;
   CanCreateFollowUp: boolean;
   CanCloseTask: boolean;
@@ -19,6 +21,27 @@ export interface User {
   ApprovedAt?: string;
   TeamID?: string;
   TeamName?: string;
+}
+
+/**
+ * A SubTeam is a named grouping of members within a single parent Team.
+ *
+ * Leadership is stored exactly like TeamLeaderEmails — via a settings key:
+ *   team_{TeamID}_subteam_{SubTeamID}_leaders  →  comma-separated emails
+ *
+ * This mirrors the existing TeamLeaderEmails pattern and keeps the
+ * settings collection as the single source of truth for all leader assignments.
+ */
+export interface SubTeam {
+  SubTeamID: string;   // e.g. "ST-001"
+  TeamID: string;      // Parent team
+  SubTeamName: string;
+  Description?: string;
+  Active: boolean;
+  CreatedAt: string;
+  UpdatedAt: string;
+  // Derived at read-time from settings key team_{TeamID}_subteam_{SubTeamID}_leaders
+  SubTeamLeaderEmails?: string[];
 }
 
 export interface Team {

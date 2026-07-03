@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Task, Team, TaskTemplate, AppSetting, TaskReport, FollowUp, Subtask, Comment, EmailTemplate, TeamSubmission } from '../types';
+import { User, Task, Team, SubTeam, TaskTemplate, AppSetting, TaskReport, FollowUp, Subtask, Comment, EmailTemplate, TeamSubmission } from '../types';
 import { dbService, initializeDatabaseWithRace, getPrimaryDatabase, forceClearAllCaches, getSyncStatus, subscribeToSyncStatus, startSheetsSyncInterval, stopSheetsSyncInterval, setDatabaseSwitchCallback, switchToFirestoreBackup } from '../lib/dbService';
 import { logger } from '../utils/logger';
 
@@ -7,6 +7,7 @@ export function useDatabase(isAuthInitialized: boolean = false) {
   const [users, setUsers] = useState<User[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [subTeams, setSubTeams] = useState<SubTeam[]>([]);
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
   const [audits, setAudits] = useState<AppSetting[]>([]);
   const [settings, setSettings] = useState<AppSetting[]>([]);
@@ -43,6 +44,7 @@ export function useDatabase(isAuthInitialized: boolean = false) {
       setUsers(data.users);
       setTasks(data.tasks);
       setTeams(data.teams);
+      setSubTeams(data.subTeams || []);
       setTemplates(data.templates);
       setAudits(data.settings);
       setSettings(data.settings);
@@ -80,6 +82,7 @@ export function useDatabase(isAuthInitialized: boolean = false) {
       setUsers(data.users);
       setTasks(data.tasks);
       setTeams(data.teams);
+      setSubTeams(data.subTeams || []);
       setTemplates(data.templates);
       setAudits(data.settings);
       setSettings(data.settings);
@@ -124,6 +127,8 @@ export function useDatabase(isAuthInitialized: boolean = false) {
     setTasks,
     teams,
     setTeams,
+    subTeams,
+    setSubTeams,
     templates,
     setTemplates,
     audits,
