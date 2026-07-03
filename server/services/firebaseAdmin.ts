@@ -1,18 +1,33 @@
 ﻿import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import fs from 'fs';
-import path from 'path';
-
-const keyFileName = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || 'firebase-service-account.json';
-const keyPath = path.join(process.cwd(), keyFileName);
 
 if (!getApps().length) {
-  if (!fs.existsSync(keyPath)) {
-    throw new Error(`Firebase service account key not found at ${keyPath}. Check FIREBASE_SERVICE_ACCOUNT_PATH in .env`);
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
+
+  // Validate all required environment variables are present
+  const missing: string[] = [];
+  if (!projectId) missing.push('FIREBASE_PROJECT_ID');
+  if (!clientEmail) missing.push('GOOGLE_CLIENT_EMAIL');
+  if (!privateKey) missing.push('GOOGLE_PRIVATE_KEY');
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required Firebase Admin environment variables: ${missing.join(', ')}. ` +
+      `These must be set in your .env file or Cloud Run secrets configuration.`
+    );
   }
-  const serviceAccount = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
+
+  // Un-escape literal \n sequences back into real newlines
+  const formattedPrivateKey = privateKey!.replace(/\\n/g, '\n');
+
   initializeApp({
-    credential: cert(serviceAccount),
+    credential: cert({
+      projectId: projectId!,
+      clientEmail: clientEmail!,
+      privateKey: formattedPrivateKey,
+    }),
   });
 }
 

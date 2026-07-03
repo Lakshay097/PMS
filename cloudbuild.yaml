@@ -24,6 +24,8 @@ steps:
       - '--cpu-boost'
       - '--set-env-vars=GOOGLE_SERVICE_ACCOUNT_EMAIL=pms-service-account@pms-taskflow-500309.iam.gserviceaccount.com'
       - '--set-secrets=GOOGLE_PRIVATE_KEY=GOOGLE_PRIVATE_KEY:latest'
+      - '--set-secrets=GOOGLE_CLIENT_EMAIL=GOOGLE_CLIENT_EMAIL:latest'
+      - '--set-env-vars=FIREBASE_PROJECT_ID=pms-taskflow-aa254'
       - '--set-env-vars=GOOGLE_SPREADSHEET_ID=1zwbskE3dTGVNn8EGG6Dx45TorL08zCB9ovLvnGeoEWQ'
       - '--set-secrets=JWT_SECRET=JWT_SECRET:latest'
       - '--set-secrets=GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest'
