@@ -300,6 +300,14 @@ export default function Dashboard({
     setSubmissionError(null);
 
     try {
+      // FIX: generate the submission ID up front so it can be used both for
+      // the Cloudinary upload folder path and the submission record itself.
+      // Previously no id was passed to uploadFile() at all here, which caused
+      // uploads to land in "TaskReports/undefined/undefined/..." on the backend
+      // (that endpoint always expected a taskId+reportId or teamId+submissionId
+      // pair; team submissions were never passing either).
+      const submissionId = `SUB-${Math.floor(Math.random() * 10000)}`;
+
       // Upload files if any
       let attachmentLinks = '';
       if (submissionFiles.length > 0) {
@@ -311,6 +319,8 @@ export default function Dashboard({
               fileName: file.name,
               fileData: file.data,
               mimeType: file.type,
+              teamId: submissionTeamId,
+              submissionId: submissionId,
             });
             uploadedUrls.push(uploadResult.webViewLink);
           } catch (error) {
@@ -325,7 +335,7 @@ export default function Dashboard({
 
       // Create submission
       const newSubmission: TeamSubmission = {
-        SubmissionID: `SUB-${Math.floor(Math.random() * 10000)}`,
+        SubmissionID: submissionId,
         TeamID: submissionTeamId,
         SubmittedBy: currentUser.Email,
         SubmittedAt: new Date().toISOString(),

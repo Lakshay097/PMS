@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Send, AlertTriangle, Link as LinkIcon, Sparkles, Upload, File, Image as ImageIcon } from 'lucide-react';
 import { Task, TaskStatus, User as UserType, Subtask } from '../types';
+import { uploadFile } from '../api/upload';
 
 interface CreateReportModalProps {
   task: Task;
@@ -18,7 +19,6 @@ interface CreateReportModalProps {
     Blockers: string;
     NextAction: string;
     AttachmentLink: string;
-    UploadedFiles: Array<{ name: string; type: string; data: string }>;
   }) => void;
 }
 
@@ -30,9 +30,10 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
   const [blockers, setBlockers] = useState('');
   const [nextAction, setNextAction] = useState('');
   const [attachmentLink, setAttachmentLink] = useState('');
-  const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; type: string; data: string }>>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; type: string; data: string; size: number }>>([]);
   const [selectedSubtaskId, setSelectedSubtaskId] = useState<string>('');
   const [statusReason, setStatusReason] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Check if user is assigned to any subtasks
   const userSubtasks = subtasks.filter(s => s.AssignedTo === currentUser.Email);
@@ -47,7 +48,7 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!workSummary.trim()) return;
 
@@ -57,48 +58,75 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
       return;
     }
 
-    // Simulate completion percentage mapping behind the scenes to preserve database schemas
-    const simulatedPercent = statusUpdate === 'Closed' ? 100 : (statusUpdate === 'Submitted' ? 90 : (statusUpdate === 'Not Started' ? 0 : 50));
+    setIsSubmitting(true);
+    try {
+      // Upload each attached file and collect real, openable URLs
+      const uploadedUrls: string[] = [];
+      for (const file of uploadedFiles) {
+        try {
+          const uploadData = await uploadFile({
+            fileName: file.name,
+            fileData: file.data,
+            mimeType: file.type,
+            taskId: task.TaskID
+          });
+          uploadedUrls.push(uploadData.webViewLink);
+        } catch (uploadError) {
+          console.error('Failed to upload file during report submission:', uploadError);
+        }
+      }
 
-    console.log('CreateReportModal: Submitting report with files:', uploadedFiles);
-    console.log('CreateReportModal: File data lengths:', uploadedFiles.map(f => ({ name: f.name, dataLength: f.data?.length })));
+      // Merge uploaded file links with the manually typed attachment link
+      const links = [...uploadedUrls];
+      if (attachmentLink.trim()) {
+        links.push(attachmentLink.trim());
+      }
+      const finalAttachmentLink = links.join(', ');
 
-    onSubmit({
-      TaskID: task.TaskID,
-      SubtaskID: selectedSubtaskId || '',
-      StatusUpdate: statusUpdate,
-      WorkSummary: workSummary,
-      PercentComplete: simulatedPercent,
-      Blockers: blockers,
-      NextAction: nextAction,
-      AttachmentLink: attachmentLink,
-      UploadedFiles: uploadedFiles
-    });
-    
-    // reset
-    setWorkSummary('');
-    setBlockers('');
-    setNextAction('');
-    setAttachmentLink('');
-    setUploadedFiles([]);
-    setSelectedSubtaskId('');
-    setStatusReason('');
-    onClose();
+      // Simulate completion percentage mapping behind the scenes to preserve database schemas
+      const simulatedPercent = statusUpdate === 'Closed' ? 100 : (statusUpdate === 'Submitted' ? 90 : (statusUpdate === 'Not Started' ? 0 : 50));
+
+      onSubmit({
+        TaskID: task.TaskID,
+        SubtaskID: selectedSubtaskId || '',
+        StatusUpdate: statusUpdate,
+        WorkSummary: workSummary,
+        PercentComplete: simulatedPercent,
+        Blockers: blockers,
+        NextAction: nextAction,
+        AttachmentLink: finalAttachmentLink
+      });
+
+      // reset
+      setWorkSummary('');
+      setBlockers('');
+      setNextAction('');
+      setAttachmentLink('');
+      setUploadedFiles([]);
+      setSelectedSubtaskId('');
+      setStatusReason('');
+      onClose();
+    } catch (err) {
+      console.error('Error submitting report:', err);
+      alert('Failed to submit report. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []) as File[];
-    
+
     // Convert each file to base64 for upload
     files.forEach((file: File) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         const base64Data = event.target?.result as string;
-        // Create a simple object with the needed properties
         const fileWithData = {
           name: file.name,
           type: file.type,
-          data: base64Data
+          data: base64Data,
+          size: file.size
         };
         setUploadedFiles(prev => [...prev, fileWithData]);
       };
@@ -125,8 +153,8 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
             </span>
             <h3 className="text-white font-bold text-sm sm:text-base tracking-tight mt-1 sm:mt-1.5 font-sans line-clamp-1">Submit Progress Report</h3>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors duration-150 cursor-pointer flex-shrink-0 ml-2">
-            <X size={16} className="sm:size-20" />
+          <button onClick={onClose} disabled={isSubmitting} className="text-slate-400 hover:text-white transition-colors duration-150 cursor-pointer flex-shrink-0 ml-2 disabled:opacity-50 disabled:cursor-not-allowed">
+            <X size={16} className="sm:size-[20px]" />
           </button>
         </div>
 
@@ -321,17 +349,19 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
             <button
               type="button"
               onClick={onClose}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-[#E2E8F0] text-slate-700 hover:bg-slate-50 transition-all rounded-lg text-[10px] sm:text-xs font-bold tracking-wider cursor-pointer"
+              disabled={isSubmitting}
+              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-[#E2E8F0] text-slate-700 hover:bg-slate-50 transition-all rounded-lg text-[10px] sm:text-xs font-bold tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 sm:px-5 py-1.5 sm:py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-[10px] sm:text-xs font-bold tracking-wider transition-all shadow-sm flex items-center space-x-1.5 sm:space-x-2 cursor-pointer border-none"
+              disabled={isSubmitting}
+              className="px-4 sm:px-5 py-1.5 sm:py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-[10px] sm:text-xs font-bold tracking-wider transition-all shadow-sm flex items-center space-x-1.5 sm:space-x-2 cursor-pointer border-none disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Send size={11} className="sm:size-13" />
-              <span className="hidden sm:inline">Publish report</span>
-              <span className="sm:hidden">Publish</span>
+              <Send size={11} className="sm:size-[13px]" />
+              <span className="hidden sm:inline">{isSubmitting ? 'Publishing...' : 'Publish report'}</span>
+              <span className="sm:hidden">{isSubmitting ? '...' : 'Publish'}</span>
             </button>
           </div>
         </form>

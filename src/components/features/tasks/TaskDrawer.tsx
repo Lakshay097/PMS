@@ -5,6 +5,33 @@ import { Task, TaskReport, User as UserType, Team, Subtask } from '../../../type
 import { ROLE } from '../../../constants/status';
 import { uploadFile } from '../../../api/upload';
 
+// Helper function to derive a human-readable label and file extension from an
+// attachment URL, so downloadable notes/reports (PDF, PPT, Excel, etc.) show
+// what they actually are instead of a generic "Attachment N".
+const getAttachmentMeta = (url: string): { label: string; ext: string } => {
+  const cleanUrl = url.split('?')[0];
+  const rawName = decodeURIComponent(cleanUrl.split('/').pop() || 'file');
+  const extMatch = rawName.match(/\.([a-zA-Z0-9]+)$/);
+  const ext = (extMatch ? extMatch[1] : '').toLowerCase();
+
+  const typeLabels: Record<string, string> = {
+    pdf: 'PDF',
+    ppt: 'PowerPoint',
+    pptx: 'PowerPoint',
+    xls: 'Excel',
+    xlsx: 'Excel',
+    csv: 'CSV',
+    doc: 'Word',
+    docx: 'Word',
+    png: 'Image',
+    jpg: 'Image',
+    jpeg: 'Image',
+  };
+
+  const label = typeLabels[ext] ? `${typeLabels[ext]} (${rawName})` : rawName;
+  return { label, ext };
+};
+
 // Helper function to get tomorrow's date in YYYY-MM-DD format
 const getTomorrowDate = (): string => {
   const tomorrow = new Date();
@@ -271,7 +298,7 @@ export default function TaskDrawer({
             </span>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white p-1.5 sm:p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer flex-shrink-0">
-            <X size={18} className="sm:size-20" />
+            <X size={18} className="sm:size-[20px]" />
           </button>
         </div>
 
@@ -286,7 +313,7 @@ export default function TaskDrawer({
             }`}
           >
             <div className="flex items-center justify-center space-x-1 sm:space-x-1.5">
-              <FileText size={12} className="sm:size-14" />
+              <FileText size={12} className="sm:size-[14px]" />
               <span className="hidden sm:inline">Details</span>
               <span className="sm:hidden">Details</span>
             </div>
@@ -300,7 +327,7 @@ export default function TaskDrawer({
             }`}
           >
             <div className="flex items-center justify-center space-x-1 sm:space-x-1.5">
-              <History size={12} className="sm:size-14" />
+              <History size={12} className="sm:size-[14px]" />
               <span className="hidden sm:inline">Report Logs ({taskReports.length})</span>
               <span className="sm:hidden">Logs ({taskReports.length})</span>
             </div>
@@ -1142,19 +1169,30 @@ export default function TaskDrawer({
 
                         {report.AttachmentLink ? (
                           <div className="mt-2.5 space-y-1">
-                            {report.AttachmentLink.split(',').map((url, idx) => (
-                              <a
-                                key={idx}
-                                href={url.trim()}
-                                target="_blank"
-                                rel="noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className={`flex items-center space-x-1.5 text-[10px] hover:underline font-bold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}
-                              >
-                                <LinkIcon size={11} className={isDarkMode ? 'text-blue-500' : 'text-blue-500'} />
-                                <span>Attachment {idx + 1}</span>
-                              </a>
-                            ))}
+                            {report.AttachmentLink.split(',').map((url, idx) => {
+                              const trimmedUrl = url.trim();
+                              const { label, ext } = getAttachmentMeta(trimmedUrl);
+                              const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext);
+                              return (
+                                <a
+                                  key={idx}
+                                  href={trimmedUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  download
+                                  onClick={(e) => e.stopPropagation()}
+                                  className={`flex items-center space-x-1.5 text-[10px] hover:underline font-bold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}
+                                  title={`Download ${label}`}
+                                >
+                                  {isImage ? (
+                                    <ImageIcon size={11} className={isDarkMode ? 'text-blue-500' : 'text-blue-500'} />
+                                  ) : (
+                                    <File size={11} className={isDarkMode ? 'text-blue-500' : 'text-blue-500'} />
+                                  )}
+                                  <span className="truncate max-w-[220px]">{label}</span>
+                                </a>
+                              );
+                            })}
                           </div>
                         ) : (
                           <div className={`mt-2.5 text-[10px] italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
@@ -1297,7 +1335,7 @@ export default function TaskDrawer({
                 onClick={onOpenReportModal}
                 className="bg-[#2563EB] hover:bg-[#1d4ed8] text-white text-[10px] sm:text-xs font-bold tracking-wider py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-xs cursor-pointer border-none"
               >
-                <TrendingUp size={12} className="sm:size-14" />
+                <TrendingUp size={12} className="sm:size-[14px]" />
                 <span className="hidden sm:inline">Submit report</span>
                 <span className="sm:hidden">Report</span>
               </button>
@@ -1308,7 +1346,7 @@ export default function TaskDrawer({
                 onClick={() => setShowCloseForm(true)}
                 className="bg-[#0F172A] hover:bg-[#1E293B] text-white text-[10px] sm:text-xs font-bold tracking-wider py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-xs cursor-pointer border-none"
               >
-                <CheckCircle size={12} className="sm:size-14" />
+                <CheckCircle size={12} className="sm:size-[14px]" />
                 <span className="hidden sm:inline">Mark as closed</span>
                 <span className="sm:hidden">Close</span>
               </button>
@@ -1319,7 +1357,7 @@ export default function TaskDrawer({
                 onClick={onOpenFollowUpModal}
                 className="bg-[#D97706] hover:bg-[#B45309] col-span-1 sm:col-span-2 text-white text-[10px] sm:text-xs font-bold tracking-wider py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-xs cursor-pointer border-none"
               >
-                <CheckCircle size={12} className="sm:size-14" />
+                <CheckCircle size={12} className="sm:size-[14px]" />
                 <span className="hidden sm:inline">Trigger linked follow-up</span>
                 <span className="sm:hidden">Follow-up</span>
               </button>

@@ -31,7 +31,6 @@ import InstallBanner from './components/InstallBanner';
 import OfflineBanner from './components/OfflineBanner';
 import UpdateBanner from './components/UpdateBanner';
 import { approveUser } from './api/auth';
-import { uploadFile } from './api/upload';
 
 // Icons
 import {
@@ -650,44 +649,7 @@ export default function App() {
     const nowStr = new Date().toISOString();
 
     console.log('App.handleSubmitProgressReport: Received data:', data);
-    console.log('App.handleSubmitProgressReport: UploadedFiles:', data.UploadedFiles);
-
-    // Handle file uploads to Google Drive
-    const uploadedFiles = data.UploadedFiles || [];
-    const uploadedFileUrls: string[] = [];
-
-    for (const file of uploadedFiles) {
-      try {
-        console.log(`App: Uploading file ${file.name}, data length: ${file.data?.length}`);
-        const token = localStorage.getItem('PMS_auth_token');
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-        };
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        const uploadData = await uploadFile({
-          fileName: file.name,
-          fileData: file.data,
-          mimeType: file.type,
-          taskId: data.TaskID,
-          reportId: propId
-        });
-        console.log(`App: File uploaded successfully: ${uploadData.webViewLink}`);
-        uploadedFileUrls.push(uploadData.webViewLink);
-      } catch (error) {
-        console.error('App: Error uploading file:', error);
-        logger.error('Error uploading file:', error);
-      }
-    }
-
-    const attachmentLinks = [...uploadedFileUrls];
-    if (data.AttachmentLink) {
-      attachmentLinks.push(data.AttachmentLink);
-    }
-
-    console.log('App: Final attachment links:', attachmentLinks);
+    console.log('App: Final attachment links:', data.AttachmentLink);
 
     const newReport: TaskReport = {
       ReportID: propId,
@@ -700,7 +662,7 @@ export default function App() {
       PercentComplete: data.PercentComplete,
       Blockers: data.Blockers,
       NextAction: data.NextAction,
-      AttachmentLink: attachmentLinks.length > 0 ? attachmentLinks.join(', ') : '',
+      AttachmentLink: data.AttachmentLink || '',
       CreatedAt: nowStr
     };
 
@@ -713,7 +675,7 @@ export default function App() {
         Status: data.StatusUpdate,
         PercentComplete: Number(data.PercentComplete),
         LastReportSummary: data.WorkSummary,
-        AttachmentLink: attachmentLinks.length > 0 ? attachmentLinks.join(', ') : targetTask.AttachmentLink,
+        AttachmentLink: data.AttachmentLink || targetTask.AttachmentLink,
         CompletionDate: data.StatusUpdate === 'Closed' ? nowStr.split('T')[0] : targetTask.CompletionDate,
         CloseRemark: data.StatusUpdate === 'Closed' ? data.WorkSummary : targetTask.CloseRemark,
         UpdatedAt: nowStr

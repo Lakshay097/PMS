@@ -9,6 +9,8 @@ export interface UploadFileRequest {
   mimeType: string;
   taskId?: string;
   reportId?: string;
+  teamId?: string;
+  submissionId?: string;
 }
 
 /**

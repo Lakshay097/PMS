@@ -46,7 +46,7 @@ export default function ChangePasswordModal({ isOpen, onClose, onSave }: ChangeP
         <div className="p-4 sm:p-6 border-b border-slate-200 flex items-center justify-between">
           <h2 className="text-lg sm:text-xl font-bold text-slate-900">Change Password</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
-            <X size={16} className="sm:size-20" />
+            <X size={16} className="sm:size-[20px]" />
           </button>
         </div>
 

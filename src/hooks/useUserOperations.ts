@@ -48,13 +48,16 @@ export function useUserOperations({
     }
   }, [users, logAudit]);
 
-  const handleApproveUser = useCallback(async (email: string) => {
-    try {
-      await approveUser({ email });
-    } catch (error) {
-      // Error handling without console logging
-    }
-  }, []);
+const handleApproveUser = useCallback(async (email: string) => {
+  try {
+    const result = await approveUser({ email });
+    console.log('[handleApproveUser] Success:', result);
+    await silentSync(); // refresh local state so the banner clears immediately
+  } catch (error: any) {
+    console.error('[handleApproveUser] Failed:', error);
+    alert(`Failed to approve user: ${error?.message || 'Unknown error'}`);
+  }
+}, [silentSync]);
 
   const handleUpdateUserRole = useCallback(async (email: string, newRole: typeof ROLE[keyof typeof ROLE]) => {
     const foundUser = users.find(u => u.Email === email);

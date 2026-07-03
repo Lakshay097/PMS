@@ -1,9 +1,10 @@
-import { Request, Response } from 'express';
+﻿import { Request, Response } from 'express';
 import { login, generateUserId } from '../services/authService';
 import { generateGoogleSheetsToken, fetchSheetValues, appendSheetValues, updateSheetValues } from '../services/googleSheetsService';
 import { BadRequestError, NotFoundError, InternalServerError } from '../utils/AppError';
 import { AuthRequest } from '../middleware/auth';
 import bcrypt from 'bcrypt';
+import { firestoreAdmin } from '../services/firebaseAdmin';
 
 /**
  * Login request body
@@ -103,8 +104,8 @@ export async function accountRequestHandler(req: Request, res: Response): Promis
   // Create new user with pending approval status
   const newUserId = generateUserId();
   const now = new Date().toISOString();
-  const teamId = 'T-01';
-  const teamName = 'Enterprise Sales';
+  const teamId = '';
+  const teamName = '';
 
   const newUserRow = [
     newUserId,                    // UserID (A)
@@ -132,6 +133,32 @@ export async function accountRequestHandler(req: Request, res: Response): Promis
 
   if (!success) {
     throw new InternalServerError("Failed to submit account request");
+  }
+
+  // Mirror into Firestore so the Admin Panel (which reads Firestore) can see this pending request
+  try {
+    await firestoreAdmin.collection('users').doc(normalizedEmail).set({
+      UserID: newUserId,
+      FullName: fullName,
+      Email: normalizedEmail,
+      Role: role,
+      ManagerEmail: normalizedManagerEmail,
+      TeamID: '',
+      TeamName: '',
+      TeamIDs: [],
+      TeamNames: [],
+      Active: false,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: now,
+      UpdatedAt: now,
+      ApprovalStatus: 'pending',
+      RequestedBy: normalizedEmail,
+      RequestedAt: now,
+    });
+  } catch (firestoreErr) {
+    console.error("Failed to mirror pending user into Firestore:", firestoreErr);
+    // Don't fail the whole request if this mirror write fails - Sheets is still source of truth
   }
 
   res.json({
@@ -207,6 +234,19 @@ export async function approveUserHandler(req: AuthRequest, res: Response): Promi
 
   if (!success) {
     throw new InternalServerError("Failed to approve user");
+  }
+
+  // Mirror approval into Firestore so the Admin Panel reflects the change
+  try {
+    await firestoreAdmin.collection('users').doc(normalizedEmail).set({
+      Active: true,
+      ApprovalStatus: 'approved',
+      ApprovedBy: adminEmail,
+      ApprovedAt: now,
+      UpdatedAt: now,
+    }, { merge: true });
+  } catch (firestoreErr) {
+    console.error("Failed to mirror user approval into Firestore:", firestoreErr);
   }
 
   res.json({
@@ -321,3 +361,4 @@ export async function changePasswordHandler(req: AuthRequest, res: Response): Pr
     message: "Password changed successfully"
   });
 }
+

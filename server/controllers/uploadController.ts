@@ -23,6 +23,8 @@ interface UploadFileRequestBody {
   mimeType: string;
   taskId?: string;
   reportId?: string;
+  teamId?: string;
+  submissionId?: string;
 }
 
 /**
@@ -46,13 +48,61 @@ function validateFileUpload(fileName: string, fileData: string, mimeType: string
 }
 
 /**
+ * Resolves the Cloudinary folder path based on the upload context.
+ *
+ * There are two supported contexts today:
+ *  - Task report uploads:      requires taskId + reportId  -> TaskReports/{taskId}/{reportId}
+ *  - Team submission uploads:  requires teamId + submissionId -> TeamSubmissions/{teamId}/{submissionId}
+ *
+ * FIX: Previously this always built `TaskReports/${taskId}/${reportId}` regardless of
+ * which fields were actually present, so callers that only had a teamId/submissionId
+ * (e.g. team weekly submissions) silently produced "TaskReports/undefined/undefined/...".
+ * Now we detect the intended context and fail loudly if its required ids are missing,
+ * instead of ever uploading to a path containing "undefined".
+ */
+function resolveUploadFolder(body: UploadFileRequestBody): string {
+  const { taskId, reportId, teamId, submissionId } = body;
+
+  const hasTeamContext = Boolean(teamId || submissionId);
+  const hasTaskContext = Boolean(taskId || reportId);
+
+  if (hasTeamContext && hasTaskContext) {
+    throw new BadRequestError(
+      'Upload request specified both task-report and team-submission identifiers; only one context is allowed.'
+    );
+  }
+
+  if (hasTeamContext) {
+    if (!teamId || !submissionId) {
+      throw new BadRequestError(
+        `Team submission upload requires both teamId and submissionId. Received teamId=${teamId ?? 'missing'}, submissionId=${submissionId ?? 'missing'}`
+      );
+    }
+    return `TeamSubmissions/${teamId}/${submissionId}`;
+  }
+
+  if (hasTaskContext) {
+    if (!taskId || !reportId) {
+      throw new BadRequestError(
+        `Task report upload requires both taskId and reportId. Received taskId=${taskId ?? 'missing'}, reportId=${reportId ?? 'missing'}`
+      );
+    }
+    return `TaskReports/${taskId}/${reportId}`;
+  }
+
+  throw new BadRequestError(
+    'Upload request is missing required context: expected (taskId + reportId) or (teamId + submissionId).'
+  );
+}
+
+/**
  * POST /api/upload-file
  * Protected endpoint to upload files to Cloudinary
  */
 export async function uploadFileHandler(req: AuthRequest, res: Response): Promise<void> {
-  const { fileName, fileData, mimeType, taskId, reportId } = req.body as UploadFileRequestBody;
+  const { fileName, fileData, mimeType, taskId, reportId, teamId, submissionId } = req.body as UploadFileRequestBody;
 
-  logger.info(`Upload request received: fileName=${fileName}, mimeType=${mimeType}, taskId=${taskId}, reportId=${reportId}`);
+  logger.info(`Upload request received: fileName=${fileName}, mimeType=${mimeType}, taskId=${taskId}, reportId=${reportId}, teamId=${teamId}, submissionId=${submissionId}`);
 
   const validation = validateFileUpload(fileName, fileData, mimeType);
   if (!validation.valid) {
@@ -65,7 +115,10 @@ export async function uploadFileHandler(req: AuthRequest, res: Response): Promis
   const buffer = Buffer.from(base64Data, 'base64');
 
   // Create folder structure in Cloudinary
-  const folder = `TaskReports/${taskId}/${reportId}`;
+  // FIX: resolveUploadFolder() validates that the required ids for the detected
+  // context are present and throws BadRequestError (400) instead of silently
+  // uploading to a folder containing "undefined".
+  const folder = resolveUploadFolder({ fileName, fileData, mimeType, taskId, reportId, teamId, submissionId });
 
   logger.info(`Uploading to Cloudinary: folder=${folder}, fileName=${fileName}`);
 
