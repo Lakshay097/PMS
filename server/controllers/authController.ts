@@ -107,6 +107,10 @@ export async function accountRequestHandler(req: Request, res: Response): Promis
   const teamId = '';
   const teamName = '';
 
+  // Always store a bcrypt hash — never plaintext. This is also what the
+  // Firestore→Sheets sync will write back, so the column stays populated.
+  const hashedPassword = await bcrypt.hash(password, parseInt(process.env.BCRYPT_ROUNDS || '12'));
+
   const newUserRow = [
     newUserId,                    // UserID (A)
     fullName,                     // FullName (B)
@@ -120,7 +124,7 @@ export async function accountRequestHandler(req: Request, res: Response): Promis
     'true',                       // CanCloseTask (J)
     now,                          // CreatedAt (K)
     now,                          // UpdatedAt (L)
-    password,                     // Password (M)
+    hashedPassword,               // Password (M) — bcrypt hash
     'pending',                    // ApprovalStatus (N)
     normalizedEmail,              // RequestedBy (O)
     now,                          // RequestedAt (P)
@@ -135,7 +139,9 @@ export async function accountRequestHandler(req: Request, res: Response): Promis
     throw new InternalServerError("Failed to submit account request");
   }
 
-  // Mirror into Firestore so the Admin Panel (which reads Firestore) can see this pending request
+  // Mirror into Firestore so the Admin Panel (which reads Firestore) can see this pending request.
+  // Password is stored here too so that the background Firestore→Sheets sync never overwrites
+  // column M with an empty string.
   try {
     await firestoreAdmin.collection('users').doc(normalizedEmail).set({
       UserID: newUserId,
@@ -152,6 +158,7 @@ export async function accountRequestHandler(req: Request, res: Response): Promis
       CanCloseTask: true,
       CreatedAt: now,
       UpdatedAt: now,
+      Password: hashedPassword,   // keep in sync so Sheets sync round-trips correctly
       ApprovalStatus: 'pending',
       RequestedBy: normalizedEmail,
       RequestedAt: now,
@@ -236,14 +243,19 @@ export async function approveUserHandler(req: AuthRequest, res: Response): Promi
     throw new InternalServerError("Failed to approve user");
   }
 
-  // Mirror approval into Firestore so the Admin Panel reflects the change
+  // Mirror approval into Firestore so the Admin Panel reflects the change.
+  // We read the password from the Sheets row so the Firestore document stays
+  // in sync — the background Sheets sync reads from Firestore, so if Password
+  // is absent from the Firestore doc it would overwrite column M with empty.
   try {
+    const existingPassword: string = userRow[12] || '';
     await firestoreAdmin.collection('users').doc(normalizedEmail).set({
       Active: true,
       ApprovalStatus: 'approved',
       ApprovedBy: adminEmail,
       ApprovedAt: now,
       UpdatedAt: now,
+      ...(existingPassword ? { Password: existingPassword } : {}),
     }, { merge: true });
   } catch (firestoreErr) {
     console.error("Failed to mirror user approval into Firestore:", firestoreErr);
@@ -357,6 +369,18 @@ export async function changePasswordHandler(req: AuthRequest, res: Response): Pr
 
   if (!success) {
     throw new InternalServerError("Failed to update password");
+  }
+
+  // Keep Firestore in sync so the background Firestore→Sheets sync doesn't
+  // overwrite column M with the old hash on the next 5-minute flush.
+  try {
+    await firestoreAdmin.collection('users').doc(normalizedEmail).set({
+      Password: hashedPassword,
+      UpdatedAt: now,
+    }, { merge: true });
+  } catch (firestoreErr) {
+    console.error("Failed to mirror password change into Firestore:", firestoreErr);
+    // Non-fatal: Sheets is already updated, Firestore will be corrected on next full sync
   }
 
   res.json({
