@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+                                                                          import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAllSubordinates } from '../../../utils/userUtils';
 import { generateReportWithAttachments, AttachmentInfo } from '../../../utils/pdfGenerator';
@@ -38,7 +38,7 @@ import {
   File
 } from 'lucide-react';
 import { Task, User as UserType, TaskTemplate, AppSetting, Team, TaskReport, AuditLog, EmailTemplate, TeamSubmission } from '../../../types';
-import { ROLE } from '../../../constants/status';
+import { ROLE, isAdminLevel } from '../../../constants/status';
 import AdminPanel from '../../AdminPanel';
 import TaskList from '../tasks/TaskList';
 import TaskFilters from '../tasks/TaskFilters';
@@ -369,7 +369,7 @@ export default function Dashboard({
 
   // Check if current user is a team leader for any team
   const isUserTeamLeader = () => {
-    if (currentUser.Role === ROLE.ADMIN) return true;
+    if (isAdminLevel(currentUser.Role)) return true;
     return teams.some(team => team.TeamLeaderEmails?.includes(currentUser.Email));
   };
 
@@ -688,7 +688,7 @@ export default function Dashboard({
 
   // Get team members based on user role with hierarchical visibility
   const getTeamMembers = () => {
-    if (currentUser.Role === ROLE.ADMIN) {
+    if (isAdminLevel(currentUser.Role)) {
       return users || [];
     } else if (currentUser.Role === ROLE.STAKEHOLDER) {
       // Stakeholders see themselves and all hierarchical subordinates
@@ -721,7 +721,7 @@ export default function Dashboard({
     
     const roleFiltered = (tasks || []).filter(task => {
       // Admin: My Tasks = assigned to me, Team Tasks = all tasks, Assigned by Me = tasks I assigned
-      if (currentUser.Role === ROLE.ADMIN) {
+      if (isAdminLevel(currentUser.Role)) {
         if (subView === 'my-tasks') {
           return task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
         }
@@ -1051,7 +1051,7 @@ export default function Dashboard({
           <h2 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Tasks & Schedules</h2>
           <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
             {taskContentType === 'tasks' 
-              ? (currentUser.Role === ROLE.ADMIN ? 'Manage all tasks' : 'Manage your assigned tasks')
+              ? (isAdminLevel(currentUser.Role) ? 'Manage all tasks' : 'Manage your assigned tasks')
               : 'Manage recurring task schedules'
             }
           </p>
@@ -1095,7 +1095,7 @@ export default function Dashboard({
       </div>
 
       {/* Task Sub-tabs for Admin and Stakeholder only - only show for tasks */}
-      {taskContentType === 'tasks' && (currentUser.Role === ROLE.ADMIN || currentUser.Role === ROLE.STAKEHOLDER) && (
+      {taskContentType === 'tasks' && (isAdminLevel(currentUser.Role) || currentUser.Role === ROLE.STAKEHOLDER) && (
         <div className={`border rounded-xl p-4 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
           <div className="flex items-center space-x-4">
             <button
@@ -1120,10 +1120,10 @@ export default function Dashboard({
                   : 'bg-slate-100 text-slate-600 hover:text-slate-900'
               }`}
             >
-              {currentUser.Role === ROLE.ADMIN ? 'Team Tasks' : 'Assigned by Me'}
+              {isAdminLevel(currentUser.Role) ? 'Team Tasks' : 'Assigned by Me'}
             </button>
             {/* Admin-only: Assigned by Me filter option */}
-            {currentUser.Role === ROLE.ADMIN && (
+            {isAdminLevel(currentUser.Role) && (
               <button
                 onClick={() => setTaskSubView('assigned-by-me')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -1260,15 +1260,15 @@ export default function Dashboard({
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                {currentUser.Role === ROLE.ADMIN ? 'Teams & Members' : 'Team Members'}
+                {isAdminLevel(currentUser.Role) ? 'Teams & Members' : 'Team Members'}
               </h3>
               <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                {currentUser.Role === ROLE.ADMIN ? 'Manage teams and their members' :
+                {isAdminLevel(currentUser.Role) ? 'Manage teams and their members' :
                  currentUser.Role === ROLE.STAKEHOLDER ? 'Your sub-stakeholders' :
                  'Your manager'}
               </p>
             </div>
-            {currentUser.Role === ROLE.ADMIN && (
+            {isAdminLevel(currentUser.Role) && (
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => handleViewChange('admin')}
@@ -1288,7 +1288,7 @@ export default function Dashboard({
             )}
           </div>
 
-          {currentUser.Role === ROLE.ADMIN ? (
+          {isAdminLevel(currentUser.Role) ? (
             <div className="space-y-4">
               {Object.entries(groupedTeams).map(([teamName, teamUsers]) => (
                 <div key={teamName} className={`border rounded-lg p-4 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-[#E5E7EB]'}`}>
@@ -1972,6 +1972,7 @@ export default function Dashboard({
       settings={settings}
       emailTemplates={emailTemplates}
       teams={teams}
+      currentUserEmail={currentUser.Email}
       onAddUser={onAddUser || (() => {})}
       onToggleUserStatus={onToggleUserStatus || (() => {})}
       onAddTemplate={onAddTemplate || (() => {})}
@@ -1992,8 +1993,8 @@ export default function Dashboard({
   );
 
   const renderScheduledTasks = () => {
-    // Filter teams based on user role - Admin, Team Leader, or Stakeholder assigned to team
-    const visibleTeams = currentUser.Role === ROLE.ADMIN
+    // Filter teams based on user role - Admin sees all, Team Leader or Stakeholder see their own
+    const visibleTeams = isAdminLevel(currentUser.Role)
       ? teams.filter(t => t.Active)
       : teams.filter(t => 
           (t.TeamLeaderEmails?.includes(currentUser.Email) && t.Active) ||
@@ -2019,14 +2020,14 @@ export default function Dashboard({
 
           {visibleTeams.length === 0 ? (
             <div className={`p-8 sm:p-12 text-center text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-              {currentUser.Role === ROLE.ADMIN ? 'No teams available' : 'You are not assigned as a team leader to any team'}
+              {isAdminLevel(currentUser.Role) ? 'No teams available' : 'You are not assigned as a team leader to any team'}
             </div>
           ) : (
             <div className="space-y-3 sm:space-y-4">
               {visibleTeams.map(team => {
                 const teamMembers = users.filter(u => u.TeamIDs.includes(team.TeamID));
                 const isTeamLeader = team.TeamLeaderEmails?.includes(currentUser.Email);
-                const canPost = isTeamLeader || currentUser.Role === ROLE.ADMIN;
+                const canPost = isTeamLeader || isAdminLevel(currentUser.Role);
                 const filteredSubmissions = teamSubmissions.filter(s => s.TeamID === team.TeamID);
 
                 return (
@@ -2518,7 +2519,7 @@ export default function Dashboard({
                   {!isSidebarCollapsed && <span className="font-medium text-sm">Reports</span>}
                 </button>
               </li>
-              {(currentUser.Role === ROLE.ADMIN || isUserTeamLeader()) && (
+              {(isAdminLevel(currentUser.Role) || isUserTeamLeader()) && (
                 <li>
                   <button
                     onClick={() => handleViewChange('scheduled-tasks')}
@@ -2532,7 +2533,7 @@ export default function Dashboard({
                   </button>
                 </li>
               )}
-              {currentUser.Role === ROLE.ADMIN && (
+              {isAdminLevel(currentUser.Role) && (
                 <li>
                   <button
                     onClick={() => handleViewChange('admin')}

@@ -30,13 +30,14 @@ export function useUserOperations({
       };
       await dbService.saveUser(updatedUser);
       await logAudit('User', foundUser.UserID, `Updated Team memberships to: ${teamNames.join(', ')}`, JSON.stringify(foundUser.TeamIDs), JSON.stringify(teamIDs));
-      await silentSync();
+      // Optimistic update handles UI refresh automatically
     }
-  }, [users, logAudit, silentSync]);
+  }, [users, logAudit]);
 
   const handleAddUser = useCallback(async (newUser: User) => {
     await dbService.saveUser(newUser);
     await logAudit('User', newUser.UserID, 'Account Authorized', '', JSON.stringify(newUser));
+    // Optimistic update handles UI refresh automatically
   }, [logAudit]);
 
   const handleToggleUserStatus = useCallback(async (email: string) => {
@@ -45,6 +46,7 @@ export function useUserOperations({
       const updatedUser = { ...foundUser, Active: !foundUser.Active, UpdatedAt: new Date().toISOString() };
       await dbService.saveUser(updatedUser);
       await logAudit('User', foundUser.UserID, `Toggle Active State : ${updatedUser.Active}`, JSON.stringify({ Active: foundUser.Active }), JSON.stringify({ Active: updatedUser.Active }));
+      // Optimistic update handles UI refresh automatically
     }
   }, [users, logAudit]);
 
@@ -65,6 +67,7 @@ const handleApproveUser = useCallback(async (email: string) => {
       const updatedUser = { ...foundUser, Role: newRole, UpdatedAt: new Date().toISOString() };
       await dbService.saveUser(updatedUser);
       await dbService.logAction('User', foundUser.UserID, `Role updated to ${newRole}`, foundUser.Email, null, updatedUser);
+      // Optimistic update handles UI refresh automatically
     }
   }, [users, logAudit]);
 

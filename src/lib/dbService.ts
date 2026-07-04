@@ -395,6 +395,35 @@ export function switchToFirestoreBackup() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Optimistic Update Pub/Sub
+// dbService methods call notifyOptimisticUpdate immediately after updating the
+// in-memory cache so that React state (via useDatabase) reflects the change
+// before the Firestore write even starts.
+// ---------------------------------------------------------------------------
+type OptimisticCallback<T> = (data: T[]) => void;
+const optimisticCallbacks = new Map<string, Set<OptimisticCallback<any>>>();
+
+export function registerOptimisticCallback<T>(
+  collectionName: string,
+  callback: OptimisticCallback<T>
+): () => void {
+  if (!optimisticCallbacks.has(collectionName)) {
+    optimisticCallbacks.set(collectionName, new Set());
+  }
+  optimisticCallbacks.get(collectionName)!.add(callback);
+  return () => {
+    optimisticCallbacks.get(collectionName)?.delete(callback);
+  };
+}
+
+function notifyOptimisticUpdate<T>(collectionName: string, data: T[]): void {
+  const callbacks = optimisticCallbacks.get(collectionName);
+  if (callbacks) {
+    callbacks.forEach(cb => cb(data));
+  }
+}
+
 // Firestore Primary Database Service
 // All operations go directly to Firestore with in-memory caching for performance
 export const dbService = {
@@ -424,54 +453,55 @@ export const dbService = {
   },
 
   async saveUser(user: User): Promise<void> {
-    try {
-      const users = await this.getUsers();
-      const idx = users.findIndex(u => u.UserID === user.UserID || u.Email === user.Email);
-      const now = new Date().toISOString();
+    const users = await this.getUsers();
+    const idx = users.findIndex(u => u.UserID === user.UserID || u.Email === user.Email);
+    const now = new Date().toISOString();
 
-      const userToSave = {
-        ...user,
-        TeamID: user.TeamID || (user.TeamIDs && user.TeamIDs.length > 0 ? user.TeamIDs[0] : ''),
-        TeamName: user.TeamName || (user.TeamNames && user.TeamNames.length > 0 ? user.TeamNames[0] : '')
-      };
+    const userToSave = {
+      ...user,
+      TeamID: user.TeamID || (user.TeamIDs && user.TeamIDs.length > 0 ? user.TeamIDs[0] : ''),
+      TeamName: user.TeamName || (user.TeamNames && user.TeamNames.length > 0 ? user.TeamNames[0] : '')
+    };
 
-      // Write to Firestore immediately
+    const finalUser = idx >= 0
+      ? { ...users[idx], ...userToSave, UpdatedAt: now }
+      : { ...userToSave, CreatedAt: now, UpdatedAt: now };
+
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    if (idx >= 0) {
+      users[idx] = finalUser;
+    } else {
+      users.push(finalUser);
+    }
+    setCache('users', users);
+    clearCache('teams');
+    notifyOptimisticUpdate('users', users);
+
+    // Background async: Write to Firestore, then queue Sheets sync
+    (async () => {
       try {
-        await setDoc(doc(db, 'users', user.Email), userToSave);
+        await setDoc(doc(db, 'users', user.Email), finalUser);
+        enqueueSheetsWrite('users', 'save', finalUser);
+        notifyChange('users', 'updated', user.UserID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveUser:', err);
-        // Fallback to direct Sheets write if Firestore fails
-        if (idx >= 0) {
-          users[idx] = { ...users[idx], ...userToSave, UpdatedAt: now };
-          await sheetsApi.saveCollection('users', users);
-        } else {
-          const newUser = { ...userToSave, CreatedAt: now, UpdatedAt: now };
-          users.push(newUser);
-          await sheetsApi.appendRecord('users', newUser);
-        }
-        clearCache('users');
-        clearCache('teams');
-        throw err;
+        // Rollback optimistic update
+        const rollback = await getDocs(collection(db, 'users'));
+        const rollbackData: User[] = rollback.docs.map(d => {
+          const u = d.data() as any;
+          return {
+            ...u,
+            TeamIDs: u.TeamIDs ? (Array.isArray(u.TeamIDs) ? u.TeamIDs : [u.TeamIDs]) : (u.TeamID ? [u.TeamID] : []),
+            TeamNames: u.TeamNames ? (Array.isArray(u.TeamNames) ? u.TeamNames : [u.TeamNames]) : (u.TeamName ? [u.TeamName] : []),
+            TeamID: u.TeamID || (u.TeamIDs && u.TeamIDs.length > 0 ? (Array.isArray(u.TeamIDs) ? u.TeamIDs[0] : u.TeamIDs) : ''),
+            TeamName: u.TeamName || (u.TeamNames && u.TeamNames.length > 0 ? (Array.isArray(u.TeamNames) ? u.TeamNames[0] : u.TeamNames) : '')
+          };
+        });
+        setCache('users', rollbackData);
+        notifyOptimisticUpdate('users', rollbackData);
+        throw new Error(`Failed to save user: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      // Update local data and cache immediately
-      if (idx >= 0) {
-        users[idx] = { ...users[idx], ...userToSave, UpdatedAt: now };
-      } else {
-        const newUser = { ...userToSave, CreatedAt: now, UpdatedAt: now };
-        users.push(newUser);
-      }
-      setCache('users', users);
-      clearCache('teams');
-
-      // Enqueue Sheets write for background sync
-      enqueueSheetsWrite('users', 'save', userToSave);
-
-      // Notify other clients immediately (fire and forget)
-      notifyChange('users', 'updated', user.UserID).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to save user: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   // Teams Service
@@ -504,113 +534,92 @@ export const dbService = {
   },
 
   async saveTeam(team: Team): Promise<void> {
-    try {
-      const teams = await this.getTeams();
-      const idx = teams.findIndex(t => t.TeamID === team.TeamID);
-      const now = new Date().toISOString();
+    const teams = await this.getTeams();
+    const idx = teams.findIndex(t => t.TeamID === team.TeamID);
+    const now = new Date().toISOString();
 
-      const teamToSave = idx >= 0 
-        ? { ...teams[idx], ...team, UpdatedAt: now }
-        : { ...team, CreatedAt: now, UpdatedAt: now };
+    const teamToSave = idx >= 0
+      ? { ...teams[idx], ...team, UpdatedAt: now }
+      : { ...team, CreatedAt: now, UpdatedAt: now };
 
-      // Write to Firestore immediately
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    if (idx >= 0) {
+      teams[idx] = teamToSave;
+    } else {
+      teams.push(teamToSave);
+    }
+    setCache('teams', teams);
+    clearCache('users');
+    notifyOptimisticUpdate('teams', teams);
+
+    // Background async: Write to Firestore, then queue Sheets sync
+    (async () => {
       try {
         await setDoc(doc(db, 'teams', team.TeamID), teamToSave);
+        enqueueSheetsWrite('teams', 'save', teamToSave);
+        notifyChange('teams', 'updated', team.TeamID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveTeam:', err);
-        // Fallback to direct Sheets write
-        if (idx >= 0) {
-          teams[idx] = teamToSave;
-        } else {
-          teams.push(teamToSave);
-        }
-        await sheetsApi.saveCollection('teams', teams);
-        clearCache('teams');
-        clearCache('users');
-        throw err;
+        const rollback = await getDocs(collection(db, 'teams'));
+        const rollbackData = rollback.docs.map(d => d.data() as Team);
+        setCache('teams', rollbackData);
+        notifyOptimisticUpdate('teams', rollbackData);
+        throw new Error(`Failed to save team: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      // Update local data and cache immediately
-      if (idx >= 0) {
-        teams[idx] = teamToSave;
-      } else {
-        teams.push(teamToSave);
-      }
-      setCache('teams', teams);
-      clearCache('users');
-
-      // Enqueue Sheets write for background sync
-      enqueueSheetsWrite('teams', 'save', teamToSave);
-
-      // Notify other clients immediately (fire and forget)
-      notifyChange('teams', 'updated', team.TeamID).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to save team: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   async toggleTeamStatus(teamId: string): Promise<void> {
-    try {
-      const teams = await this.getTeams();
-      const team = teams.find(t => t.TeamID === teamId);
-      if (team) {
-        team.Active = !team.Active;
-        team.UpdatedAt = new Date().toISOString();
+    const teams = await this.getTeams();
+    const team = teams.find(t => t.TeamID === teamId);
+    if (!team) return;
 
-        // Write to Firestore immediately
-        try {
-          await updateDoc(doc(db, 'teams', teamId), { Active: team.Active, UpdatedAt: team.UpdatedAt });
-        } catch (err) {
-          console.error('Firestore write failed — toggleTeamStatus:', err);
-          // Fallback to direct Sheets write
-          await sheetsApi.saveCollection('teams', teams);
-          clearCache('teams');
-          throw err;
-        }
+    const now = new Date().toISOString();
+    team.Active = !team.Active;
+    team.UpdatedAt = now;
 
-        // Update local data and cache immediately
-        setCache('teams', teams);
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    setCache('teams', teams);
+    notifyOptimisticUpdate('teams', teams);
 
-        // Enqueue Sheets write for background sync
+    (async () => {
+      try {
+        await updateDoc(doc(db, 'teams', teamId), { Active: team.Active, UpdatedAt: now });
         enqueueSheetsWrite('teams', 'save', team);
-
-        // Notify other clients immediately (fire and forget)
         notifyChange('teams', 'updated', teamId).catch(() => {});
+      } catch (err) {
+        console.error('Firestore write failed — toggleTeamStatus:', err);
+        const rollback = await getDocs(collection(db, 'teams'));
+        const rollbackData = rollback.docs.map(d => d.data() as Team);
+        setCache('teams', rollbackData);
+        notifyOptimisticUpdate('teams', rollbackData);
       }
-    } catch (error) {
-      throw new Error(`Failed to toggle team status: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   async deleteTeam(teamId: string): Promise<void> {
-    try {
-      const teams = await this.getTeams();
-      const filtered = teams.filter(t => t.TeamID !== teamId);
+    const teams = await this.getTeams();
+    const filtered = teams.filter(t => t.TeamID !== teamId);
 
-      // Write to Firestore immediately
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    setCache('teams', filtered);
+    clearCache('users');
+    notifyOptimisticUpdate('teams', filtered);
+
+    (async () => {
       try {
         await deleteDoc(doc(db, 'teams', teamId));
+        enqueueSheetsWrite('teams', 'delete', teamId);
+        notifyChange('teams', 'deleted', teamId).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — deleteTeam:', err);
-        // Fallback to direct Sheets write
-        await sheetsApi.saveCollection('teams', filtered);
-        clearCache('teams');
-        clearCache('users');
-        throw err;
+        const rollback = await getDocs(collection(db, 'teams'));
+        const rollbackData = rollback.docs.map(d => d.data() as Team);
+        setCache('teams', rollbackData);
+        notifyOptimisticUpdate('teams', rollbackData);
+        throw new Error(`Failed to delete team: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      // Update local data and cache immediately
-      setCache('teams', filtered);
-      clearCache('users');
-
-      // Enqueue Sheets delete for background sync
-      enqueueSheetsWrite('teams', 'delete', teamId);
-
-      // Notify other clients immediately (fire and forget)
-      notifyChange('teams', 'deleted', teamId).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to delete team: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   // Task Templates
@@ -629,76 +638,61 @@ export const dbService = {
   },
 
   async saveTemplate(template: TaskTemplate): Promise<void> {
-    try {
-      const templates = await this.getTemplates();
-      const idx = templates.findIndex(t => t.TemplateID === template.TemplateID);
-      const now = new Date().toISOString();
+    const templates = await this.getTemplates();
+    const idx = templates.findIndex(t => t.TemplateID === template.TemplateID);
+    const now = new Date().toISOString();
 
-      const templateToSave = idx >= 0
-        ? { ...templates[idx], ...template, UpdatedAt: now }
-        : { ...template, CreatedAt: now, UpdatedAt: now };
+    const templateToSave = idx >= 0
+      ? { ...templates[idx], ...template, UpdatedAt: now }
+      : { ...template, CreatedAt: now, UpdatedAt: now };
 
-      // Write to Firestore immediately
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    if (idx >= 0) {
+      templates[idx] = templateToSave;
+    } else {
+      templates.push(templateToSave);
+    }
+    setCache('templates', templates);
+    notifyOptimisticUpdate('templates', templates);
+
+    (async () => {
       try {
         await setDoc(doc(db, 'templates', template.TemplateID), templateToSave);
+        enqueueSheetsWrite('templates', 'save', templateToSave);
+        notifyChange('templates', 'updated', template.TemplateID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveTemplate:', err);
-        // Fallback to direct Sheets write
-        if (idx >= 0) {
-          templates[idx] = templateToSave;
-        } else {
-          templates.push(templateToSave);
-        }
-        await sheetsApi.saveCollection('templates', templates);
-        clearCache('templates');
-        throw err;
+        const rollback = await getDocs(collection(db, 'templates'));
+        const rollbackData = rollback.docs.map(d => d.data() as TaskTemplate);
+        setCache('templates', rollbackData);
+        notifyOptimisticUpdate('templates', rollbackData);
+        throw new Error(`Failed to save template: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      // Update local data and cache immediately
-      if (idx >= 0) {
-        templates[idx] = templateToSave;
-      } else {
-        templates.push(templateToSave);
-      }
-      setCache('templates', templates);
-
-      // Enqueue Sheets write for background sync
-      enqueueSheetsWrite('templates', 'save', templateToSave);
-
-      // Notify other clients immediately (fire and forget)
-      notifyChange('templates', 'updated', template.TemplateID).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to save template: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   async deleteTemplate(templateId: string): Promise<void> {
-    try {
-      const templates = await this.getTemplates();
-      const filtered = templates.filter(t => t.TemplateID !== templateId);
+    const templates = await this.getTemplates();
+    const filtered = templates.filter(t => t.TemplateID !== templateId);
 
-      // Write to Firestore immediately
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    setCache('templates', filtered);
+    notifyOptimisticUpdate('templates', filtered);
+
+    (async () => {
       try {
         await deleteDoc(doc(db, 'templates', templateId));
+        enqueueSheetsWrite('templates', 'delete', templateId);
+        notifyChange('templates', 'deleted', templateId).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — deleteTemplate:', err);
-        // Fallback to direct Sheets write
-        await sheetsApi.saveCollection('templates', filtered);
-        clearCache('templates');
-        throw err;
+        const rollback = await getDocs(collection(db, 'templates'));
+        const rollbackData = rollback.docs.map(d => d.data() as TaskTemplate);
+        setCache('templates', rollbackData);
+        notifyOptimisticUpdate('templates', rollbackData);
+        throw new Error(`Failed to delete template: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      // Update local data and cache immediately
-      setCache('templates', filtered);
-
-      // Enqueue Sheets delete for background sync
-      enqueueSheetsWrite('templates', 'delete', templateId);
-
-      // Notify other clients immediately (fire and forget)
-      notifyChange('templates', 'deleted', templateId).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to delete template: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   // Live Tasks
@@ -727,86 +721,72 @@ export const dbService = {
   },
 
   async saveTask(task: Task): Promise<void> {
-    try {
-      // Validate that task has an assigned stakeholder
-      if (!task.AssignedToEmail || task.AssignedToEmail.trim() === '') {
-        throw new Error('Task must be assigned to at least one stakeholder');
-      }
+    // Validate that task has an assigned stakeholder
+    if (!task.AssignedToEmail || task.AssignedToEmail.trim() === '') {
+      throw new Error('Task must be assigned to at least one stakeholder');
+    }
 
-      const tasks = await this.getTasks();
-      const idx = tasks.findIndex(t => t.TaskID === task.TaskID);
-      const now = new Date().toISOString();
+    const tasks = await this.getTasks();
+    const idx = tasks.findIndex(t => t.TaskID === task.TaskID);
+    const now = new Date().toISOString();
 
-      const taskToSave = {
-        ...task,
-        TeamID: task.TeamID || (task.AssignedToTeamIDs && task.AssignedToTeamIDs.length > 0 ? task.AssignedToTeamIDs[0] : '')
-      };
+    const taskToSave = {
+      ...task,
+      TeamID: task.TeamID || (task.AssignedToTeamIDs && task.AssignedToTeamIDs.length > 0 ? task.AssignedToTeamIDs[0] : '')
+    };
+    const finalTask = idx >= 0
+      ? { ...tasks[idx], ...taskToSave, UpdatedAt: now }
+      : { ...taskToSave, CreatedAt: now, UpdatedAt: now };
 
-      const finalTask = idx >= 0
-        ? { ...tasks[idx], ...taskToSave, UpdatedAt: now }
-        : { ...taskToSave, CreatedAt: now, UpdatedAt: now };
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    if (idx >= 0) { tasks[idx] = finalTask; } else { tasks.push(finalTask); }
+    setCache('tasks', tasks);
+    notifyOptimisticUpdate('tasks', tasks);
 
-      // Write to Firestore immediately
+    (async () => {
       try {
         await setDoc(doc(db, 'tasks', task.TaskID), finalTask);
+        enqueueSheetsWrite('tasks', 'save', finalTask);
+        notifyChange('tasks', 'updated', task.TaskID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveTask:', err);
-        // Fallback to direct Sheets write
-        if (idx >= 0) {
-          tasks[idx] = finalTask;
-          await sheetsApi.saveCollection('tasks', tasks);
-        } else {
-          await sheetsApi.appendRecord('tasks', finalTask);
-        }
-        clearCache('tasks');
-        throw err;
+        const rollback = await getDocs(collection(db, 'tasks'));
+        const rollbackData: Task[] = rollback.docs.map(d => {
+          const t = d.data() as any;
+          return { ...t, AssignedToTeamIDs: t.AssignedToTeamIDs ? (Array.isArray(t.AssignedToTeamIDs) ? t.AssignedToTeamIDs : [t.AssignedToTeamIDs]) : (t.TeamID ? [t.TeamID] : []) };
+        });
+        setCache('tasks', rollbackData);
+        notifyOptimisticUpdate('tasks', rollbackData);
+        throw new Error(`Failed to save task: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      // Update local data and cache immediately
-      if (idx >= 0) {
-        tasks[idx] = finalTask;
-      } else {
-        tasks.push(finalTask);
-      }
-      setCache('tasks', tasks);
-
-      // Enqueue Sheets write for background sync
-      enqueueSheetsWrite('tasks', 'save', finalTask);
-
-      // Notify other clients immediately (fire and forget)
-      notifyChange('tasks', 'updated', task.TaskID).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to save task: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   async deleteTask(taskId: string): Promise<void> {
-    try {
-      const tasks = await this.getTasks();
-      const filtered = tasks.filter(t => t.TaskID !== taskId);
+    const tasks = await this.getTasks();
+    const filtered = tasks.filter(t => t.TaskID !== taskId);
 
-      // Write to Firestore immediately
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    setCache('tasks', filtered);
+    notifyOptimisticUpdate('tasks', filtered);
+
+    (async () => {
       try {
         await deleteDoc(doc(db, 'tasks', taskId));
+        enqueueSheetsWrite('tasks', 'delete', taskId);
+        notifyChange('tasks', 'deleted', taskId).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — deleteTask:', err);
-        // Fallback to direct Sheets write
-        await sheetsApi.saveCollection('tasks', filtered);
-        clearCache('tasks');
-        throw err;
+        const rollback = await getDocs(collection(db, 'tasks'));
+        const rollbackData: Task[] = rollback.docs.map(d => {
+          const t = d.data() as any;
+          return { ...t, AssignedToTeamIDs: t.AssignedToTeamIDs ? (Array.isArray(t.AssignedToTeamIDs) ? t.AssignedToTeamIDs : [t.AssignedToTeamIDs]) : (t.TeamID ? [t.TeamID] : []) };
+        });
+        setCache('tasks', rollbackData);
+        notifyOptimisticUpdate('tasks', rollbackData);
+        throw new Error(`Failed to delete task: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      // Update local data and cache immediately
-      setCache('tasks', filtered);
-
-      // Enqueue Sheets delete for background sync
-      enqueueSheetsWrite('tasks', 'delete', taskId);
-
-      // Notify other clients immediately (fire and forget)
-      notifyChange('tasks', 'deleted', taskId).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to delete task: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   // Reports
@@ -825,32 +805,27 @@ export const dbService = {
   },
 
   async saveReport(report: TaskReport): Promise<void> {
-    try {
-      const reports = await this.getReports();
-      reports.push(report);
+    const reports = await this.getReports();
+    reports.push(report);
 
-      // Write to Firestore immediately
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    setCache('reports', reports);
+    notifyOptimisticUpdate('reports', reports);
+
+    (async () => {
       try {
         await setDoc(doc(db, 'reports', report.ReportID), report);
+        enqueueSheetsWrite('reports', 'save', report);
+        notifyChange('reports', 'created', report.ReportID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveReport:', err);
-        // Fallback to direct Sheets write
-        await sheetsApi.appendRecord('reports', report);
-        clearCache('reports');
-        throw err;
+        const rollback = await getDocs(collection(db, 'reports'));
+        const rollbackData = rollback.docs.map(d => d.data() as TaskReport);
+        setCache('reports', rollbackData);
+        notifyOptimisticUpdate('reports', rollbackData);
+        throw new Error(`Failed to save report: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      // Update local data and cache immediately
-      setCache('reports', reports);
-
-      // Enqueue Sheets write for background sync
-      enqueueSheetsWrite('reports', 'save', report);
-
-      // Notify other clients immediately (fire and forget)
-      notifyChange('reports', 'created', report.ReportID).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to save report: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   // Follow-ups
@@ -869,32 +844,27 @@ export const dbService = {
   },
 
   async saveFollowup(follow: FollowUp): Promise<void> {
-    try {
-      const followups = await this.getFollowups();
-      followups.push(follow);
+    const followups = await this.getFollowups();
+    followups.push(follow);
 
-      // Write to Firestore immediately
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    setCache('followups', followups);
+    notifyOptimisticUpdate('followups', followups);
+
+    (async () => {
       try {
         await setDoc(doc(db, 'followups', follow.FollowUpID), follow);
+        enqueueSheetsWrite('followups', 'save', follow);
+        notifyChange('followups', 'created', follow.FollowUpID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveFollowup:', err);
-        // Fallback to direct Sheets write
-        await sheetsApi.saveCollection('followups', followups);
-        clearCache('followups');
-        throw err;
+        const rollback = await getDocs(collection(db, 'followups'));
+        const rollbackData = rollback.docs.map(d => d.data() as FollowUp);
+        setCache('followups', rollbackData);
+        notifyOptimisticUpdate('followups', rollbackData);
+        throw new Error(`Failed to save followup: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      // Update local data and cache immediately
-      setCache('followups', followups);
-
-      // Enqueue Sheets write for background sync
-      enqueueSheetsWrite('followups', 'save', follow);
-
-      // Notify other clients immediately (fire and forget)
-      notifyChange('followups', 'created', follow.FollowUpID).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to save followup: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   // Settings
@@ -913,37 +883,34 @@ export const dbService = {
   },
 
   async saveSettings(settingsList: AppSetting[]): Promise<void> {
-    try {
-      // Write to Firestore immediately
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    setCache('settings', settingsList);
+    notifyOptimisticUpdate('settings', settingsList);
+
+    // If any team leader/stakeholder settings were updated, clear teams cache
+    const hasTeamSettings = settingsList.some(s => s.Key.startsWith('team_') && (s.Key.endsWith('_leaders') || s.Key.endsWith('_stakeholders')));
+    if (hasTeamSettings) {
+      clearCache('teams');
+    }
+
+    // Background async: Write to Firestore, then queue Sheets sync
+    (async () => {
       try {
         for (const setting of settingsList) {
           await setDoc(doc(db, 'settings', setting.Key), setting);
         }
+        enqueueSheetsWrite('settings', 'save', settingsList);
+        notifyChange('settings', 'updated', 'settings').catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveSettings:', err);
-        // Fallback to direct Sheets write
-        await sheetsApi.saveCollection('settings', settingsList);
-        clearCache('settings');
-        throw err;
+        // Rollback optimistic update
+        const rollback = await getDocs(collection(db, 'settings'));
+        const rollbackData = rollback.docs.map(d => d.data() as AppSetting);
+        setCache('settings', rollbackData);
+        notifyOptimisticUpdate('settings', rollbackData);
+        throw new Error(`Failed to save settings: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      // Update local data and cache immediately
-      setCache('settings', settingsList);
-
-      // If any team leader/stakeholder settings were updated, clear teams cache so it reloads with fresh data
-      const hasTeamSettings = settingsList.some(s => s.Key.startsWith('team_') && (s.Key.endsWith('_leaders') || s.Key.endsWith('_stakeholders')));
-      if (hasTeamSettings) {
-        clearCache('teams');
-      }
-
-      // Enqueue Sheets write for background sync
-      enqueueSheetsWrite('settings', 'save', settingsList);
-
-      // Notify other clients immediately (fire and forget)
-      notifyChange('settings', 'updated', 'settings').catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to save settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   // Email Templates
@@ -962,31 +929,28 @@ export const dbService = {
   },
 
   async saveEmailTemplates(emailTemplatesList: EmailTemplate[]): Promise<void> {
-    try {
-      // Write to Firestore immediately
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    setCache('email_templates', emailTemplatesList);
+    notifyOptimisticUpdate('email_templates', emailTemplatesList);
+
+    // Background async: Write to Firestore, then queue Sheets sync
+    (async () => {
       try {
         for (const template of emailTemplatesList) {
           await setDoc(doc(db, 'email_templates', template.Key), template);
         }
+        enqueueSheetsWrite('email_templates', 'save', emailTemplatesList);
+        notifyChange('email_templates', 'updated', 'email_templates').catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveEmailTemplates:', err);
-        // Fallback to direct Sheets write
-        await sheetsApi.saveCollection('email_templates', emailTemplatesList);
-        clearCache('email_templates');
-        throw err;
+        // Rollback optimistic update
+        const rollback = await getDocs(collection(db, 'email_templates'));
+        const rollbackData = rollback.docs.map(d => d.data() as EmailTemplate);
+        setCache('email_templates', rollbackData);
+        notifyOptimisticUpdate('email_templates', rollbackData);
+        throw new Error(`Failed to save email templates: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      // Update local data and cache immediately
-      setCache('email_templates', emailTemplatesList);
-
-      // Enqueue Sheets write for background sync
-      enqueueSheetsWrite('email_templates', 'save', emailTemplatesList);
-
-      // Notify other clients immediately (fire and forget)
-      notifyChange('email_templates', 'updated', 'email_templates').catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to save email templates: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   // Subtasks Service
@@ -1005,64 +969,59 @@ export const dbService = {
   },
 
   async saveSubtask(subtask: Subtask): Promise<void> {
-    try {
-      const subtasks = await this.getSubtasks();
-      const idx = subtasks.findIndex(s => s.SubtaskID === subtask.SubtaskID);
-      const now = new Date().toISOString();
+    const subtasks = await this.getSubtasks();
+    const idx = subtasks.findIndex(s => s.SubtaskID === subtask.SubtaskID);
+    const now = new Date().toISOString();
 
-      const subtaskToSave = idx >= 0
-        ? { ...subtasks[idx], ...subtask, UpdatedAt: now }
-        : { ...subtask, CreatedAt: now, UpdatedAt: now };
+    const subtaskToSave = idx >= 0
+      ? { ...subtasks[idx], ...subtask, UpdatedAt: now }
+      : { ...subtask, CreatedAt: now, UpdatedAt: now };
 
-      // Write to Firestore immediately
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    if (idx >= 0) {
+      subtasks[idx] = subtaskToSave;
+    } else {
+      subtasks.push(subtaskToSave);
+    }
+    setCache('subtasks', subtasks);
+    notifyOptimisticUpdate('subtasks', subtasks);
+
+    // Background async: Write to Firestore, then queue Sheets sync
+    (async () => {
       try {
         await setDoc(doc(db, 'subtasks', subtask.SubtaskID), subtaskToSave);
+        enqueueSheetsWrite('subtasks', 'save', subtaskToSave);
+        notifyChange('subtasks', 'updated', subtask.SubtaskID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveSubtask:', err);
-        // Fallback to direct Sheets write
-        if (idx >= 0) {
-          subtasks[idx] = subtaskToSave;
-        } else {
-          subtasks.push(subtaskToSave);
-        }
-        await sheetsApi.saveCollection('subtasks', subtasks);
-        clearCache('subtasks');
-        throw err;
+        // Rollback optimistic update
+        const rollback = await getDocs(collection(db, 'subtasks'));
+        const rollbackData = rollback.docs.map(d => d.data() as Subtask);
+        setCache('subtasks', rollbackData);
+        notifyOptimisticUpdate('subtasks', rollbackData);
+        throw new Error(`Failed to save subtask: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      // Update local data and cache immediately
-      if (idx >= 0) {
-        subtasks[idx] = subtaskToSave;
-      } else {
-        subtasks.push(subtaskToSave);
-      }
-      setCache('subtasks', subtasks);
-
-      // Enqueue Sheets write for background sync
-      enqueueSheetsWrite('subtasks', 'save', subtaskToSave);
-
-      // Notify other clients immediately (fire and forget)
-      notifyChange('subtasks', 'updated', subtask.SubtaskID).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to save subtask: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   async saveSubtasksBatch(taskId: string, subtasks: Subtask[]): Promise<void> {
-    try {
-      const allSubtasks = await this.getSubtasks();
-      // Remove existing subtasks for this task
-      const filtered = allSubtasks.filter(s => s.TaskID !== taskId);
-      // Add new subtasks
-      const now = new Date().toISOString();
-      const newSubtasks = subtasks.map(s => ({
-        ...s,
-        CreatedAt: s.CreatedAt || now,
-        UpdatedAt: now
-      }));
-      const updated = [...filtered, ...newSubtasks];
+    const allSubtasks = await this.getSubtasks();
+    // Remove existing subtasks for this task
+    const filtered = allSubtasks.filter(s => s.TaskID !== taskId);
+    const now = new Date().toISOString();
+    const newSubtasks = subtasks.map(s => ({
+      ...s,
+      CreatedAt: s.CreatedAt || now,
+      UpdatedAt: now
+    }));
+    const updated = [...filtered, ...newSubtasks];
 
-      // Write to Firestore immediately
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    setCache('subtasks', updated);
+    notifyOptimisticUpdate('subtasks', updated);
+
+    // Background async: Write to Firestore (batch), then queue Sheets sync
+    (async () => {
       try {
         const { writeBatch } = await import('firebase/firestore');
         const wb = writeBatch(db);
@@ -1070,25 +1029,18 @@ export const dbService = {
           wb.set(doc(db, 'subtasks', s.SubtaskID), s);
         }
         await wb.commit();
+        enqueueSheetsWrite('subtasks', 'save', updated);
+        notifyChange('subtasks', 'updated', taskId).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveSubtasksBatch:', err);
-        // Fallback to direct Sheets write
-        await sheetsApi.saveCollection('subtasks', updated);
-        clearCache('subtasks');
-        throw err;
+        // Rollback optimistic update
+        const rollback = await getDocs(collection(db, 'subtasks'));
+        const rollbackData = rollback.docs.map(d => d.data() as Subtask);
+        setCache('subtasks', rollbackData);
+        notifyOptimisticUpdate('subtasks', rollbackData);
+        throw new Error(`Failed to save subtasks batch: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      // Update local data and cache immediately
-      setCache('subtasks', updated);
-
-      // Enqueue Sheets write for background sync
-      enqueueSheetsWrite('subtasks', 'save', updated);
-
-      // Notify other clients immediately (fire and forget)
-      notifyChange('subtasks', 'updated', taskId).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to save subtasks batch: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   // Comments Service
@@ -1107,32 +1059,29 @@ export const dbService = {
   },
 
   async saveComment(comment: Comment): Promise<void> {
-    try {
-      const comments = await this.getComments();
-      comments.push(comment);
+    const comments = await this.getComments();
+    comments.push(comment);
 
-      // Write to Firestore immediately
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    setCache('comments', comments);
+    notifyOptimisticUpdate('comments', comments);
+
+    // Background async: Write to Firestore, then queue Sheets sync
+    (async () => {
       try {
         await setDoc(doc(db, 'comments', comment.CommentID), comment);
+        enqueueSheetsWrite('comments', 'save', comment);
+        notifyChange('comments', 'created', comment.CommentID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveComment:', err);
-        // Fallback to direct Sheets write
-        await sheetsApi.saveCollection('comments', comments);
-        clearCache('comments');
-        throw err;
+        // Rollback optimistic update
+        const rollback = await getDocs(collection(db, 'comments'));
+        const rollbackData = rollback.docs.map(d => d.data() as Comment);
+        setCache('comments', rollbackData);
+        notifyOptimisticUpdate('comments', rollbackData);
+        throw new Error(`Failed to save comment: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      // Update local data and cache immediately
-      setCache('comments', comments);
-
-      // Enqueue Sheets write for background sync
-      enqueueSheetsWrite('comments', 'save', comment);
-
-      // Notify other clients immediately (fire and forget)
-      notifyChange('comments', 'created', comment.CommentID).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to save comment: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   async getTeamSubmissions(): Promise<TeamSubmission[]> {
@@ -1150,31 +1099,32 @@ export const dbService = {
   },
  
 async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
-    try {
-      // Strip undefined fields — Firestore setDoc() rejects undefined values
-      const sanitizedSubmission = Object.fromEntries(
-        Object.entries(submission).filter(([, v]) => v !== undefined)
-      ) as TeamSubmission;
-      // Write to Firestore immediately
+    // Strip undefined fields — Firestore setDoc() rejects undefined values
+    const sanitizedSubmission = Object.fromEntries(
+      Object.entries(submission).filter(([, v]) => v !== undefined)
+    ) as TeamSubmission;
+
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    const cached = getFromCache('teamSubmissions') as TeamSubmission[] || [];
+    setCache('teamSubmissions', [...cached, sanitizedSubmission]);
+    notifyOptimisticUpdate('teamSubmissions', [...cached, sanitizedSubmission]);
+
+    // Background async: Write to Firestore, then queue Sheets sync
+    (async () => {
       try {
         await setDoc(doc(db, 'team_submissions', submission.SubmissionID), sanitizedSubmission);
+        enqueueSheetsWrite('team_submissions', 'save', submission);
+        notifyChange('team_submissions', 'created', submission.SubmissionID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveTeamSubmission:', err);
-        throw err;
+        // Rollback optimistic update
+        const rollback = await getDocs(collection(db, 'team_submissions'));
+        const rollbackData = rollback.docs.map(d => d.data() as TeamSubmission);
+        setCache('teamSubmissions', rollbackData);
+        notifyOptimisticUpdate('teamSubmissions', rollbackData);
+        throw new Error(`Failed to save team submission: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      // Update local cache immediately
-      const cached = getFromCache('teamSubmissions') as TeamSubmission[] || [];
-      setCache('teamSubmissions', [...cached, submission]);
-
-      // Enqueue Sheets write for background sync
-      enqueueSheetsWrite('team_submissions', 'save', submission);
-
-      // Notify other clients immediately (fire and forget)
-      notifyChange('team_submissions', 'created', submission.SubmissionID).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to save team submission: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   // SubTeams Service
@@ -1210,60 +1160,66 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
   },
 
   async saveSubTeam(subTeam: SubTeam): Promise<void> {
-    try {
-      const subTeams = await this.getSubTeams();
-      const idx = subTeams.findIndex(st => st.SubTeamID === subTeam.SubTeamID);
-      const now = new Date().toISOString();
+    const subTeams = await this.getSubTeams();
+    const idx = subTeams.findIndex(st => st.SubTeamID === subTeam.SubTeamID);
+    const now = new Date().toISOString();
 
-      const subTeamToSave = idx >= 0
-        ? { ...subTeams[idx], ...subTeam, UpdatedAt: now }
-        : { ...subTeam, CreatedAt: now, UpdatedAt: now, SubTeamLeaderEmails: subTeam.SubTeamLeaderEmails ?? [] };
+    const subTeamToSave = idx >= 0
+      ? { ...subTeams[idx], ...subTeam, UpdatedAt: now }
+      : { ...subTeam, CreatedAt: now, UpdatedAt: now, SubTeamLeaderEmails: subTeam.SubTeamLeaderEmails ?? [] };
 
-      // Strip derived field before persisting
-      const { SubTeamLeaderEmails: _derived, ...persistable } = subTeamToSave;
+    // Strip derived field before persisting
+    const { SubTeamLeaderEmails: _derived, ...persistable } = subTeamToSave;
 
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    if (idx >= 0) {
+      subTeams[idx] = subTeamToSave;
+    } else {
+      subTeams.push(subTeamToSave);
+    }
+    setCache('sub_teams', subTeams);
+    notifyOptimisticUpdate('sub_teams', subTeams);
+
+    // Background async: Write to Firestore, then queue Sheets sync
+    (async () => {
       try {
         await setDoc(doc(db, 'sub_teams', subTeam.SubTeamID), persistable);
+        enqueueSheetsWrite('sub_teams', 'save', persistable);
+        notifyChange('sub_teams', 'updated', subTeam.SubTeamID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveSubTeam:', err);
+        // Rollback optimistic update
         clearCache('sub_teams');
-        throw err;
+        const rollback = await this.getSubTeams();
+        notifyOptimisticUpdate('sub_teams', rollback);
+        throw new Error(`Failed to save sub-team: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      if (idx >= 0) {
-        subTeams[idx] = subTeamToSave;
-      } else {
-        subTeams.push(subTeamToSave);
-      }
-      setCache('sub_teams', subTeams);
-
-      enqueueSheetsWrite('sub_teams', 'save', persistable);
-      notifyChange('sub_teams', 'updated', subTeam.SubTeamID).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to save sub-team: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   async deleteSubTeam(subTeamId: string): Promise<void> {
-    try {
-      const subTeams = await this.getSubTeams();
-      const filtered = subTeams.filter(st => st.SubTeamID !== subTeamId);
+    const subTeams = await this.getSubTeams();
+    const filtered = subTeams.filter(st => st.SubTeamID !== subTeamId);
 
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    setCache('sub_teams', filtered);
+    notifyOptimisticUpdate('sub_teams', filtered);
+
+    // Background async: Delete from Firestore, then queue Sheets sync
+    (async () => {
       try {
         await deleteDoc(doc(db, 'sub_teams', subTeamId));
+        enqueueSheetsWrite('sub_teams', 'delete', subTeamId);
+        notifyChange('sub_teams', 'deleted', subTeamId).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — deleteSubTeam:', err);
+        // Rollback optimistic update
         clearCache('sub_teams');
-        throw err;
+        const rollback = await this.getSubTeams();
+        notifyOptimisticUpdate('sub_teams', rollback);
+        throw new Error(`Failed to delete sub-team: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
-
-      setCache('sub_teams', filtered);
-
-      enqueueSheetsWrite('sub_teams', 'delete', subTeamId);
-      notifyChange('sub_teams', 'deleted', subTeamId).catch(() => {});
-    } catch (error) {
-      throw new Error(`Failed to delete sub-team: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    })();
   },
 
   // Batch load all collections from Firestore (fast initial load)

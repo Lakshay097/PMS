@@ -10,7 +10,7 @@ import { useTaskMetrics } from './hooks/useTaskMetrics';
 import { getAllSubordinates } from './utils/userUtils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logger } from './utils/logger';
-import { ROLE } from './constants/status';
+import { ROLE, isAdminLevel } from './constants/status';
 import {
   INITIAL_USERS,
   INITIAL_TEAMS,
@@ -306,7 +306,7 @@ export default function App() {
       setPasswordChangeSuccess(false);
       setIsEditingPassword(false);
     }, 2500);
-    debouncedLoadDatabase();
+    // Optimistic update handles UI refresh automatically
   };
 
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
@@ -388,12 +388,6 @@ export default function App() {
     return () => clearTimeout(debounced as any);
   }, [searchQuery]);
 
-  // Debounced version of loadDatabase for post-action syncs
-  const debouncedLoadDatabase = useMemo(
-    () => debounce(() => loadDatabase(), 2000),
-    [loadDatabase]
-  );
-
   // Manual sync function for AdminPanel - use silent sync to avoid blocking UI
   const handleManualSync = async () => {
     await silentSync();
@@ -407,9 +401,26 @@ export default function App() {
     if (users.length > 0) {
       const found = users.find(u => u.Email === activeUserEmail);
       if (found) {
-        setActiveUser(found);
+        // Always trust the Role from the login JWT (stored in PMS_user) rather than
+        // the Firestore users array, which may be stale or have a different value.
+        // This prevents a re-render after loadDatabase() from downgrading the role.
+        const storedUser = localStorage.getItem('PMS_user');
+        let loginRole: string | undefined;
+        try {
+          if (storedUser) {
+            const parsed = JSON.parse(storedUser);
+            const storedEmail = (parsed.Email || parsed.email || '').toLowerCase();
+            if (storedEmail === activeUserEmail?.toLowerCase()) {
+              loginRole = parsed.Role || parsed.role;
+            }
+          }
+        } catch (_) { /* ignore */ }
+
+        const resolvedUser = loginRole ? { ...found, Role: loginRole as typeof found.Role } : found;
+
+        setActiveUser(resolvedUser);
         // Force redirect to Dashboard when switching credentials to prevent scoping bugs
-        if (found.Role === ROLE.SUB_STAKEHOLDER && activeView === 'admin') {
+        if (resolvedUser.Role === ROLE.SUB_STAKEHOLDER && activeView === 'admin') {
           setActiveView('dashboard');
         }
       } else if (activeUserEmail) {
@@ -477,7 +488,7 @@ export default function App() {
       return task;
     }).filter(task => {
       // Role scope filter - Admins see everything, including inactive or deleted tasks
-      if (activeUser.Role === ROLE.ADMIN) return true;
+      if (isAdminLevel(activeUser.Role)) return true;
 
       if (!task.Active) return false;
       if (task.DeletedAt) return false;
@@ -1208,8 +1219,8 @@ export default function App() {
                 TeamIDs: [`TM-${Date.now()}`],
                 TeamNames: [userData.TeamName || 'Default Team'],
                 Active: true,
-                CanCreateFollowUp: userData.Role === ROLE.ADMIN || userData.Role === ROLE.STAKEHOLDER,
-                CanCloseTask: userData.Role === ROLE.ADMIN || userData.Role === ROLE.STAKEHOLDER,
+                CanCreateFollowUp: isAdminLevel(userData.Role) || userData.Role === ROLE.STAKEHOLDER,
+                CanCloseTask: isAdminLevel(userData.Role) || userData.Role === ROLE.STAKEHOLDER,
                 CreatedAt: new Date().toISOString(),
                 UpdatedAt: new Date().toISOString(),
                 Password: userData.Password,

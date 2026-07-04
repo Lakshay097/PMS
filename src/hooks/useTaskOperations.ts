@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { Task, User, TaskTemplate, Subtask, Comment, FollowUp, TaskStatus } from '../types';
 import { dbService } from '../lib/dbService';
 import { checkAndGenerateRecurringTasks } from '../lib/taskEngine';
-import { ROLE } from '../constants/status';
+import { ROLE, isAdminLevel } from '../constants/status';
 import { triggerTaskAssignmentEmail, triggerTaskClosureEmail } from '../api/emailTrigger';
 
 interface UseTaskOperationsProps {
@@ -61,7 +61,7 @@ export function useTaskOperations({
           AssignedByEmail: currentUser.Email,
           AssignedToEmail: data.AssignedToEmail,
           AssignedToRole: ROLE.STAKEHOLDER,
-          TeamID: currentUser.Role === ROLE.ADMIN ? 'T-ALL' : (currentUser.TeamIDs.length > 0 ? currentUser.TeamIDs[0] : 'T-01'),
+          TeamID: isAdminLevel(currentUser.Role) ? 'T-ALL' : (currentUser.TeamIDs.length > 0 ? currentUser.TeamIDs[0] : 'T-01'),
           Active: true,
           CreatedAt: nowStr,
           UpdatedAt: nowStr
@@ -140,13 +140,12 @@ export function useTaskOperations({
           alertMsg,
           `${newTask.AssignedToEmail}`
         );
-        // Trigger sync after action
-        silentSync();
+        // Optimistic update handles UI refresh automatically
       }
     } catch (error) {
       throw error;
     }
-  }, [currentUser, users, triggerNotification, formatEmailTemplate, logAudit, silentSync]);
+  }, [currentUser, users, triggerNotification, formatEmailTemplate, logAudit]);
 
   const handleCloseTask = useCallback(async (taskId: string, remark: string, attachmentLink?: string) => {
     const nowStr = new Date().toISOString();
@@ -188,9 +187,8 @@ export function useTaskOperations({
     }
 
     await logAudit('Task', taskId, 'Task Cleared & Closed', '', JSON.stringify({ Remark: remark }));
-    // Trigger sync after action
-    silentSync();
-  }, [tasks, selectedTask, setSelectedTask, logAudit, silentSync]);
+    // Optimistic update handles UI refresh automatically
+  }, [tasks, selectedTask, setSelectedTask, logAudit, currentUser]);
 
   const handleUpdateTask = useCallback(async (taskId: string, fields: Partial<Task>) => {
     const nowStr = new Date().toISOString();
@@ -218,10 +216,9 @@ export function useTaskOperations({
       }
       
       await logAudit('Task', taskId, 'Updated Task Properties', '', JSON.stringify(fields));
-      // Trigger sync after action
-      silentSync();
+      // Optimistic update handles UI refresh automatically
     }
-  }, [tasks, selectedTask, setSelectedTask, triggerNotification, logAudit, silentSync]);
+  }, [tasks, selectedTask, setSelectedTask, triggerNotification, logAudit]);
 
   const handleCreateFollowUp = useCallback(async (parentTaskId: string, reason: string) => {
     if (!currentUser) return;
@@ -279,9 +276,8 @@ export function useTaskOperations({
       FollowUpNumber: nextFCount,
       Reason: reason,
     }));
-
-    silentSync();
-  }, [tasks, currentUser, selectedTask, setSelectedTask, logAudit, silentSync]);
+    // Optimistic update handles UI refresh automatically
+  }, [tasks, currentUser, selectedTask, setSelectedTask, logAudit]);
 
   const handleAddSubtask = useCallback(async (taskId: string, data: { title: string; assignedTo?: string; dueDate?: string }) => {
     if (!currentUser) return;
@@ -298,28 +294,22 @@ export function useTaskOperations({
       CreatedAt: new Date().toISOString()
     };
     await dbService.saveSubtask(newSubtask);
-    // Trigger sync after action
-    silentSync();
-  }, [currentUser, silentSync]);
+    // Optimistic update handles UI refresh automatically
+  }, [currentUser]);
 
   const handleToggleSubtask = useCallback(async (subtaskId: string, isDone: boolean) => {
     const subtask = subtasks.find(s => s.SubtaskID === subtaskId);
     if (subtask) {
       await dbService.saveSubtask({ ...subtask, Completed: isDone });
-      // Trigger sync after action
-      silentSync();
+      // Optimistic update handles UI refresh automatically
     }
-  }, [subtasks, silentSync]);
+  }, [subtasks]);
 
   const handleDeleteSubtask = useCallback(async (subtaskId: string) => {
     const updated = subtasks.filter(s => s.SubtaskID !== subtaskId);
     setSubtasks(updated);
-    // Delete subtask by updating the subtasks list in the database
-    // Note: deleteSubtask may not exist, so we handle it differently
-    // Trigger sync after action
-    silentSync();
-    // Note: Google Sheets sync removed as it's handled by SSE
-  }, [subtasks, setSubtasks, silentSync]);
+    // Optimistic update handles UI refresh automatically
+  }, [subtasks, setSubtasks]);
 
   const handleAddComment = useCallback(async (taskId: string, comment: string) => {
     if (!currentUser) return;
@@ -332,9 +322,8 @@ export function useTaskOperations({
       CreatedBy: currentUser.Email
     };
     await dbService.saveComment(newComment);
-    // Trigger sync after action
-    silentSync();
-  }, [currentUser, silentSync]);
+    // Optimistic update handles UI refresh automatically
+  }, [currentUser]);
 
   const handleDeleteTask = useCallback(async (taskId: string) => {
     if (!currentUser) return;
@@ -342,8 +331,7 @@ export function useTaskOperations({
     try {
       await dbService.deleteTask(taskId);
       await logAudit('Task', taskId, 'Deleted Task', '', '');
-      // Trigger sync after action
-      silentSync();
+      // Optimistic update handles UI refresh automatically
       
       // Clear selected task if it's the deleted one
       if (selectedTask && selectedTask.TaskID === taskId) {
@@ -352,7 +340,7 @@ export function useTaskOperations({
     } catch (error) {
       throw error;
     }
-  }, [currentUser, selectedTask, setSelectedTask, logAudit, silentSync]);
+  }, [currentUser, selectedTask, setSelectedTask, logAudit]);
 
   const runSimulatedRecurrenceEngine = useCallback(async () => {
     setIsSimulatingRecurrence(true);

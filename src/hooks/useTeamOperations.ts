@@ -38,6 +38,7 @@ export function useTeamOperations({
     }
 
     await logAudit('Team', teamId, `Deleted Team: ${targetTeam.TeamName}`, JSON.stringify(targetTeam), '');
+    // Optimistic update handles UI refresh automatically
   }, [teams, users, logAudit]);
 
   return {

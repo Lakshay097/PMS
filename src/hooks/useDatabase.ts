@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { User, Task, Team, SubTeam, TaskTemplate, AppSetting, TaskReport, FollowUp, Subtask, Comment, EmailTemplate, TeamSubmission } from '../types';
-import { dbService, initializeDatabaseWithRace, getPrimaryDatabase, forceClearAllCaches, getSyncStatus, subscribeToSyncStatus, startSheetsSyncInterval, stopSheetsSyncInterval, setDatabaseSwitchCallback, switchToFirestoreBackup } from '../lib/dbService';
+import { dbService, initializeDatabaseWithRace, getPrimaryDatabase, forceClearAllCaches, getSyncStatus, subscribeToSyncStatus, startSheetsSyncInterval, stopSheetsSyncInterval, setDatabaseSwitchCallback, switchToFirestoreBackup, registerOptimisticCallback } from '../lib/dbService';
 import { logger } from '../utils/logger';
 
 export function useDatabase(isAuthInitialized: boolean = false) {
@@ -109,13 +109,75 @@ export function useDatabase(isAuthInitialized: boolean = false) {
     }
 
     // Subscribe to sync status changes
-    const unsubscribe = subscribeToSyncStatus((status) => {
+    const unsubscribeSyncStatus = subscribeToSyncStatus((status) => {
       setSyncStatus(status);
+    });
+
+    // Subscribe to optimistic updates for instant UI feedback
+    const unsubscribeUsers = registerOptimisticCallback<User>('users', (data) => {
+      setUsers(data);
+    });
+    
+    const unsubscribeTasks = registerOptimisticCallback<Task>('tasks', (data) => {
+      setTasks(data);
+    });
+    
+    const unsubscribeTeams = registerOptimisticCallback<Team>('teams', (data) => {
+      setTeams(data);
+    });
+    
+    const unsubscribeTemplates = registerOptimisticCallback<TaskTemplate>('templates', (data) => {
+      setTemplates(data);
+    });
+    
+    const unsubscribeReports = registerOptimisticCallback<TaskReport>('reports', (data) => {
+      setReports(data);
+    });
+    
+    const unsubscribeFollowups = registerOptimisticCallback<FollowUp>('followups', (data) => {
+      setFollowUps(data);
+    });
+
+    const unsubscribeSubtasks = registerOptimisticCallback<Subtask>('subtasks', (data) => {
+      setSubtasks(data);
+    });
+
+    const unsubscribeComments = registerOptimisticCallback<Comment>('comments', (data) => {
+      setComments(data);
+    });
+
+    const unsubscribeSubTeams = registerOptimisticCallback<SubTeam>('sub_teams', (data) => {
+      setSubTeams(data);
+    });
+
+    const unsubscribeSettings = registerOptimisticCallback<AppSetting>('settings', (data) => {
+      setSettings(data);
+      setAudits(data);
+    });
+
+    const unsubscribeEmailTemplates = registerOptimisticCallback<EmailTemplate>('email_templates', (data) => {
+      setEmailTemplates(data);
+    });
+
+    const unsubscribeTeamSubmissions = registerOptimisticCallback<TeamSubmission>('teamSubmissions', (data) => {
+      setTeamSubmissions(data);
     });
 
     // Cleanup on unmount
     return () => {
-      unsubscribe();
+      unsubscribeSyncStatus();
+      unsubscribeUsers();
+      unsubscribeTasks();
+      unsubscribeTeams();
+      unsubscribeSubTeams();
+      unsubscribeTemplates();
+      unsubscribeReports();
+      unsubscribeFollowups();
+      unsubscribeSubtasks();
+      unsubscribeComments();
+      unsubscribeSettings();
+      unsubscribeEmailTemplates();
+      unsubscribeTeamSubmissions();
       stopSheetsSyncInterval();
     };
   }, [isAuthInitialized]);
