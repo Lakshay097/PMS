@@ -28,7 +28,6 @@ export interface LoginResponse {
 
 /**
  * Generates a unique user ID
- * @returns User ID string
  */
 export function generateUserId(): string {
   return 'USR-' + Math.floor(config.USER_ID_MIN + Math.random() * (config.USER_ID_MAX - config.USER_ID_MIN));
@@ -36,11 +35,6 @@ export function generateUserId(): string {
 
 /**
  * Creates a JWT token for a user
- * @param email - User email
- * @param userId - User ID
- * @param role - User role
- * @param fullName - User full name
- * @returns JWT token
  */
 export function createToken(
   email: string,
@@ -61,17 +55,13 @@ export function createToken(
 }
 
 /**
- * Performs user login
- * @param email - User email
- * @param password - User password
- * @returns Login response
+ * Performs user login — reads role from Google Sheets (source of truth).
  */
 export async function login(email: string, password: string): Promise<LoginResponse> {
   if (!email || !password) {
     throw new BadRequestError("Email and password are required");
   }
 
-  // Get Google Sheets access token
   const tokenData = await generateGoogleSheetsToken();
   if (!tokenData) {
     throw new InternalServerError("Failed to authenticate with Google Sheets");
@@ -82,7 +72,6 @@ export async function login(email: string, password: string): Promise<LoginRespo
     throw new InternalServerError("Spreadsheet ID not found");
   }
 
-  // Fetch users from Google Sheets
   const usersRange = 'users!A:R';
   const users = await fetchSheetValues(tokenData.accessToken, spreadsheetId, usersRange);
 
@@ -93,7 +82,6 @@ export async function login(email: string, password: string): Promise<LoginRespo
   const normalizedEmail = email.toLowerCase();
   let foundUser: any[] | null = null;
 
-  // Skip header row (index 0) and find user by email (email is at index 2)
   for (let i = 1; i < users.length; i++) {
     const row = users[i];
     if (row[2] === normalizedEmail) {
@@ -106,15 +94,12 @@ export async function login(email: string, password: string): Promise<LoginRespo
     throw new UnauthorizedError("Invalid email or password");
   }
 
-  // Check if user is active (Active is at index 7)
+  // Check if user is active
   const activeValue = foundUser[7];
   if (activeValue !== 'true' && activeValue !== 'TRUE' && activeValue !== true) {
     throw new UnauthorizedError("Account is not active. Please wait for admin approval.");
   }
 
-  // Verify password (password is at index 12)
-  // Note: Google Sheets trims trailing empty cells, so foundUser[12] may be
-  // undefined if the Password column is empty or the row is shorter than 13 cols.
   const storedPassword: string | undefined = foundUser[12];
   if (!storedPassword) {
     throw new UnauthorizedError("Account has no password set. Please contact your administrator.");
@@ -126,7 +111,6 @@ export async function login(email: string, password: string): Promise<LoginRespo
   if (isBcryptHash) {
     passwordMatches = await bcrypt.compare(password, storedPassword);
   } else {
-    // Legacy plaintext fallback
     passwordMatches = password === storedPassword;
   }
 
@@ -134,38 +118,32 @@ export async function login(email: string, password: string): Promise<LoginRespo
     throw new UnauthorizedError("Invalid email or password");
   }
 
-  // Extract user data from the row
-  const userId = foundUser[0]; // UserID (A)
+  const userId   = foundUser[0]; // UserID (A)
   const fullName = foundUser[1]; // FullName (B)
-  const role = foundUser[3]; // Role (D)
-  const teamId = foundUser[5]; // TeamID (F)
+  const role     = foundUser[3]; // Role (D)
+  const teamId   = foundUser[5]; // TeamID (F)
   const teamName = foundUser[6]; // TeamName (G)
-  const active = foundUser[7] === 'true' || foundUser[7] === true; // Active (H)
+  const active   = foundUser[7] === 'true' || foundUser[7] === true;
 
-  // Create JWT token
   const token = createToken(normalizedEmail, userId, role, fullName);
-
-  const userResponse: UserResponse = {
-    email: normalizedEmail,
-    UserID: userId,
-    Role: role,
-    FullName: fullName,
-    TeamID: teamId,
-    TeamName: teamName,
-    Active: active
-  };
 
   return {
     token,
-    user: userResponse,
-    expiresIn: config.JWT_EXPIRES_IN
+    user: {
+      email: normalizedEmail,
+      UserID: userId,
+      Role: role,
+      FullName: fullName,
+      TeamID: teamId,
+      TeamName: teamName,
+      Active: active,
+    },
+    expiresIn: config.JWT_EXPIRES_IN,
   };
 }
 
 /**
  * Verifies a JWT token
- * @param token - JWT token to verify
- * @returns Decoded token payload or null if invalid
  */
 export function verifyToken(token: string): any {
   try {

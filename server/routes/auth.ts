@@ -10,7 +10,6 @@ const router = Router();
  * POST /api/login
  * Public endpoint for user login
  * Rate limited: 10 attempts per 15 minutes per IP
- * After 5 failed attempts, adds 2 second delay
  */
 router.post('/login', loginRateLimiter, asyncWrapper(authController.loginHandler));
 
@@ -22,7 +21,7 @@ router.post('/account-request', asyncWrapper(authController.accountRequestHandle
 
 /**
  * POST /api/approve-user
- * Protected endpoint to approve user accounts
+ * Protected endpoint to approve user accounts (Admin only)
  */
 router.post('/approve-user', authenticateToken, asyncWrapper(authController.approveUserHandler));
 

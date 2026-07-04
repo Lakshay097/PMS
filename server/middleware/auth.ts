@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
-import { UnauthorizedError } from '../utils/AppError';
+import { UnauthorizedError, ForbiddenError } from '../utils/AppError';
 
 /**
  * Extended Request interface with user property
@@ -37,4 +37,21 @@ export const authenticateToken = (
     req.user = user;
     next();
   });
+};
+
+/**
+ * Middleware that restricts a route to Admin users only.
+ * Admin is the top-level role — there is no SuperAdmin.
+ * Must be used after authenticateToken.
+ */
+export const requireAdmin = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): void => {
+  const role = req.user?.role;
+  if (role !== 'Admin') {
+    throw new ForbiddenError('Admin access required');
+  }
+  next();
 };
