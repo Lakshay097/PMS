@@ -29,7 +29,7 @@ export const PRIORITY = {
 export type Priority = typeof PRIORITY[keyof typeof PRIORITY];
 
 /**
- * Role constants
+ * Role constants — Admin is the top role.
  */
 export const ROLE = {
   ADMIN: 'Admin',
@@ -39,6 +39,13 @@ export const ROLE = {
 } as const;
 
 export type Role = typeof ROLE[keyof typeof ROLE];
+
+/**
+ * Returns true when the role is Admin (top-level role with all powers).
+ * Kept as a helper so all permission checks remain a single call site.
+ */
+export const isAdminLevel = (role: string | undefined): boolean =>
+  role === ROLE.ADMIN;
 
 /**
  * User role constants (for API/backend compatibility)

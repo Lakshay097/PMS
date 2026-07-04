@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Filter, X, ChevronDown, Search, Calendar } from 'lucide-react';
 import { User as UserType, Team } from '../../../types';
-import { ROLE } from '../../../constants/status';
+import { ROLE, isAdminLevel } from '../../../constants/status';
 import { getAllSubordinates } from '../../../utils/userUtils';
 
 interface TaskFiltersProps {
@@ -72,7 +72,7 @@ export default function TaskFilters({
   // Get filtered users based on role and search
   const getFilteredUsers = () => {
     let filteredUsers;
-    if (currentUser.Role === ROLE.ADMIN) {
+    if (isAdminLevel(currentUser.Role)) {
       filteredUsers = users.filter(u => u.Active);
     } else if (currentUser.Role === ROLE.STAKEHOLDER) {
       const subStakeholderEmails = getAllSubordinates(currentUser.Email, users);

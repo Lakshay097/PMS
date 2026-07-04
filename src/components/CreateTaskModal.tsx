@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Calendar, ClipboardList, Repeat, UserPlus, Info, Users, CheckCircle, Upload, File, X as XIcon } from 'lucide-react';
 import { User, TaskTemplate, Task, TaskStatus, Team } from '../types';
-import { ROLE } from '../constants/status';
+import { ROLE, isAdminLevel } from '../constants/status';
 import { uploadFile } from '../api/upload';
 
 interface CreateTaskModalProps {
@@ -67,9 +67,9 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
   // Rule: Admin can assign to anyone. Stakeholders can assign to other stakeholders, admins, or themselves
   const filteredAssignees = usersList.filter(user => {
     if (!user.Active) return false;
-    if (currentUser.Role === ROLE.ADMIN) return true;
+    if (isAdminLevel(currentUser.Role)) return true;
     if (currentUser.Role === ROLE.STAKEHOLDER) {
-      return user.Role === ROLE.ADMIN || user.Role === ROLE.STAKEHOLDER || user.Email.toLowerCase() === currentUser.Email.toLowerCase();
+      return isAdminLevel(user.Role) || user.Role === ROLE.STAKEHOLDER || user.Email.toLowerCase() === currentUser.Email.toLowerCase();
     }
     return false;
   });
@@ -363,7 +363,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                             <div className="flex flex-col">
                               <span className="font-semibold text-slate-900">{user.FullName}</span>
                               <span className="text-[10px] text-slate-500 font-mono">
-                                {currentUser.Role === 'Admin' ? `${user.Role} • ` : ''}{user.Email}
+                                {isAdminLevel(currentUser.Role) ? `${user.Role} • ` : ''}{user.Email}
                               </span>
                             </div>
                           </div>

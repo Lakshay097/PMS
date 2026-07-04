@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Trash2, Search } from 'lucide-react';
 import { Task, User as UserType } from '../../../types';
-import { ROLE } from '../../../constants/status';
+import { ROLE, isAdminLevel } from '../../../constants/status';
 
 interface TaskListProps {
   tasks: Task[];
@@ -104,7 +104,7 @@ export default function TaskList({
                   )}
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                  {currentUser?.Role === ROLE.ADMIN && onDeleteTask && (
+                  {isAdminLevel(currentUser?.Role) && onDeleteTask && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

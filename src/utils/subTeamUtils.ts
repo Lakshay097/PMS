@@ -135,7 +135,7 @@ export function getVisibleMemberEmails(
   const normalised = viewerEmail.toLowerCase();
   const result = new Set<string>([normalised]); // viewer always sees themselves
 
-  // Admin / SuperAdmin — handled upstream, but guard here too
+  // Admin — handled upstream, but guard here too
   const viewer = allUsers.find(u => u.Email.toLowerCase() === normalised);
   if (!viewer) return result;
   if (isAdminLevel(viewer.Role)) {

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Calendar, User, FileText, Link as LinkIcon, History, AlertCircle, CheckCircle, TrendingUp, Edit2, Save, Trash, ShieldAlert, CornerRightDown, Upload, File, Image as ImageIcon } from 'lucide-react';
 import { Task, TaskReport, User as UserType, Team, Subtask } from '../../../types/index';
-import { ROLE } from '../../../constants/status';
+import { ROLE, isAdminLevel } from '../../../constants/status';
 import { uploadFile } from '../../../api/upload';
 import { getAllSubordinates } from '../../../utils/userUtils';
 
@@ -185,7 +185,7 @@ export default function TaskDrawer({
     .includes(currentUser.Email?.toLowerCase() || '');
 
   // Determine close credentials
-  const canCloseTask = currentUser.Role === ROLE.ADMIN ||
+  const canCloseTask = isAdminLevel(currentUser.Role) ||
     (currentUser.Role === ROLE.STAKEHOLDER && (task.AssignedToTeamIDs || []).some(id => (currentUser.TeamIDs || []).includes(id))) ||
     (isCurrentUserAssignee && currentUser.CanCloseTask);
 
@@ -198,7 +198,7 @@ export default function TaskDrawer({
       return allSubEmails.map(s => s.toLowerCase()).includes(email);
     }) : false;
 
-  const canSubmitReport = currentUser.Role === ROLE.ADMIN ||
+  const canSubmitReport = isAdminLevel(currentUser.Role) ||
     isCurrentUserAssignee ||
     (currentUser.Role === ROLE.STAKEHOLDER && (
       (task.AssignedByEmail || '').toLowerCase() === currentUser.Email?.toLowerCase() ||
@@ -206,10 +206,10 @@ export default function TaskDrawer({
     ));
 
   // Determine follow-up credentials
-  const canCreateFollowUp = currentUser.Role === ROLE.ADMIN || isCurrentUserAssignee;
+  const canCreateFollowUp = isAdminLevel(currentUser.Role) || isCurrentUserAssignee;
 
-  // Determine task editing credentials (Admins only)
-  const canEditTask = currentUser.Role === ROLE.ADMIN;
+  // Determine task editing credentials (Admin only)
+  const canEditTask = isAdminLevel(currentUser.Role);
 
   const handleEditSubmit = () => {
     if (editEmails.length === 0) {
@@ -475,7 +475,7 @@ export default function TaskDrawer({
                       })}
                     </div>
                   </div>
-                  {currentUser.Role === 'Admin' && (
+                  {isAdminLevel(currentUser.Role) && (
                     <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono uppercase block w-max ${isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'}`}>
                       {task.AssignedToRole}
                     </span>
@@ -484,7 +484,7 @@ export default function TaskDrawer({
               </div>
 
               {/* Stakeholder Task Assignment to Subordinates Section */}
-              {currentUser.Role === 'Stakeholder' && isCurrentUserAssignee && task.Status !== 'Closed' && subordinates.length > 0 && (
+              {currentUser.Role === ROLE.STAKEHOLDER && isCurrentUserAssignee && task.Status !== 'Closed' && subordinates.length > 0 && (
                 <div className={`rounded-lg p-4 space-y-3 shadow-3xs ${isDarkMode ? 'bg-blue-900/20 border-blue-800' : 'bg-[#EFF6FF] border-[#BFDBFE]'}`}>
                   <div className={`flex items-center space-x-1.5 font-bold text-xs tracking-wider ${isDarkMode ? 'text-blue-300' : 'text-blue-900'}`}>
                     <User size={14} className="text-[#2563EB]" />
@@ -579,7 +579,7 @@ export default function TaskDrawer({
               )}
               
               {/* Subtask Division Section */}
-              {currentUser.Role === 'Stakeholder' && isCurrentUserAssignee && task.Status !== 'Closed' && subordinates.length > 0 && (
+              {currentUser.Role === ROLE.STAKEHOLDER && isCurrentUserAssignee && task.Status !== 'Closed' && subordinates.length > 0 && (
                 <div className={`rounded-lg p-4 space-y-3 shadow-3xs ${isDarkMode ? 'bg-green-900/20 border-green-800' : 'bg-[#F0FDF4] border-[#86EFAC]'}`}>
                   <button
                     type="button"
@@ -774,7 +774,7 @@ export default function TaskDrawer({
               )}
 
               {/* Admin Reassign Task Section */}
-              {currentUser.Role === 'Admin' && task.Status !== 'Closed' && (
+              {isAdminLevel(currentUser.Role) && task.Status !== 'Closed' && (
                 <div className={`rounded-lg p-4 space-y-3 shadow-3xs ${isDarkMode ? 'bg-amber-900/20 border-amber-800' : 'bg-[#FFFBEB] border-[#FDE68A]'}`}>
                   <div className={`flex items-center space-x-1.5 font-bold text-xs tracking-wider ${isDarkMode ? 'text-amber-300' : 'text-amber-950'}`}>
                     <User size={14} className="text-[#D97706]" />

@@ -1,5 +1,5 @@
 import { Task, TaskReport, FollowUp } from '../types';
-import { ROLE } from '../constants/status';
+import { ROLE, isAdminLevel } from '../constants/status';
 import { getAllSubordinates } from './userUtils';
 
 export function parseSafely(value: string): any {
@@ -33,7 +33,7 @@ export function getVisibleTasks(tasks: Task[], activeUser: any, currentView: str
   
   const afterRoleFilter = tasks.filter(task => {
     // Admin sees everything
-    if (activeUser.Role === ROLE.ADMIN) return true;
+    if (isAdminLevel(activeUser.Role)) return true;
     
     // Stakeholders see their assigned tasks, tasks they assigned, and their hierarchical sub-stakeholder tasks
     if (activeUser.Role === ROLE.STAKEHOLDER) {
@@ -61,7 +61,7 @@ export function getVisibleTasks(tasks: Task[], activeUser: any, currentView: str
     }
     if (currentView === 'team-tasks') {
       // Team Tasks: For Admin - all tasks, for Stakeholder - their tasks + sub-stakeholder tasks
-      if (activeUser.Role === ROLE.ADMIN) {
+      if (isAdminLevel(activeUser.Role)) {
         return true; // Admin sees all tasks in team view
       }
       if (activeUser.Role === ROLE.STAKEHOLDER) {
@@ -123,7 +123,7 @@ export function getOverdueAndSoonTasks(tasks: Task[], activeUser: any, users: an
     : [];
   
   const visibleTasks = tasks.filter(task => {
-    if (activeUser.Role === ROLE.ADMIN) return true;
+    if (isAdminLevel(activeUser.Role)) return true;
     if (activeUser.Role === ROLE.STAKEHOLDER) {
       const assignedToMe = task.AssignedToEmail?.includes(activeUser.Email);
       const assignedByMe = task.AssignedByEmail === activeUser.Email;
@@ -156,7 +156,7 @@ export function getOverdueAndSoonTasks(tasks: Task[], activeUser: any, users: an
 export function getVisibleReports(reports: TaskReport[], activeUser: any) {
   if (!reports) return [];
   
-  if (activeUser.Role === ROLE.ADMIN) return reports;
+  if (isAdminLevel(activeUser.Role)) return reports;
   
   return reports.filter(report => {
     return report.SubmittedByEmail === activeUser.Email;

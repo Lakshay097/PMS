@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Task, FollowUp } from '../types';
 import { getVisibleTasks, getOverdueAndSoonTasks } from '../utils/taskUtils';
-import { ROLE } from '../constants/status';
+import { ROLE, isAdminLevel } from '../constants/status';
 
 interface UseTaskMetricsProps {
   tasks: Task[];
@@ -64,7 +64,7 @@ export function useTaskMetrics({
   const metricFollowUps = useMemo(() => {
     return (followUps || []).filter(f => {
       if (f.Status !== 'Active' && f.Status !== 'Pending') return false;
-      if (activeUser.Role === ROLE.ADMIN) return true;
+      if (isAdminLevel(activeUser.Role)) return true;
       return f.CreatedByEmail === activeUser.Email;
     }).length;
   }, [followUps, activeUser]);
