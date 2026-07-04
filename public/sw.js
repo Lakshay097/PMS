@@ -87,6 +87,14 @@ self.addEventListener('fetch', (event) => {
     return; // Let the browser handle it normally, don't intercept
   }
 
+  // Vite-compiled assets have content-hashed filenames (e.g. /assets/index-CY8pse7v.js).
+  // Always fetch these from the network so a recompile is never blocked by a stale
+  // cached chunk. The content hash in the filename IS the cache key — if the hash
+  // changed, it's a new file; if it didn't, the network response will be identical.
+  if (url.pathname.startsWith('/assets/')) {
+    return; // Let the browser handle it — don't intercept Vite output chunks
+  }
+
   // API routes - Network First with offline fallback
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
