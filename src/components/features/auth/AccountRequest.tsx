@@ -1,6 +1,12 @@
-import React, { useState } from 'react';
-import { Mail, Lock, User, Building2, ArrowLeft, CheckCircle, Clock, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Mail, Lock, User, Building2, ArrowLeft, CheckCircle, Clock, X, ChevronDown } from 'lucide-react';
 import { requestAccount } from '../../../api/auth';
+import { api } from '../../../api/client';
+
+interface PublicTeam {
+  TeamID: string;
+  TeamName: string;
+}
 
 interface AccountRequestProps {
   onBackToLogin: () => void;
@@ -15,9 +21,18 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
     confirmPassword: '123456',
     managerEmail: '',
   });
+  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
+  const [publicTeams, setPublicTeams] = useState<PublicTeam[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch active teams for the dropdown on mount — public endpoint, no auth needed
+  useEffect(() => {
+    api.get<{ success: boolean; teams: PublicTeam[] }>('/teams/public', { skipAuth: true })
+      .then(res => { if (res.success) setPublicTeams(res.teams); })
+      .catch(() => { /* non-fatal — dropdown just stays empty */ });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +57,7 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
         managerEmail: formData.managerEmail.trim().toLowerCase(),
+        teamId: selectedTeamId || undefined,
       });
 
       setSuccess(true);
@@ -202,6 +218,31 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
               </div>
               <p className="text-xs text-slate-500 mt-1">
                 Enter your direct manager's email. Your initial role is assigned based on your manager's role (Admin manager = Stakeholder, otherwise Sub-stakeholder), but can be updated by an administrator at any time.
+              </p>
+            </div>
+
+            {/* Optional team selection */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-300">
+                Team <span className="text-slate-500 font-normal">(optional)</span>
+              </label>
+              <div className="relative group">
+                <Building2 className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors shrink-0 pointer-events-none" size={18} />
+                <ChevronDown className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2 text-slate-500 pointer-events-none shrink-0" size={16} />
+                <select
+                  value={selectedTeamId}
+                  onChange={e => setSelectedTeamId(e.target.value)}
+                  disabled={isLoading}
+                  className="w-full appearance-none bg-slate-900/50 border border-slate-700 text-white rounded-xl py-3 sm:py-3.5 pl-10 sm:pl-12 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-base sm:text-sm"
+                >
+                  <option value="">No team — Admin will assign</option>
+                  {publicTeams.map(t => (
+                    <option key={t.TeamID} value={t.TeamID}>{t.TeamName}</option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Selecting a team is optional. If left blank an administrator will assign you to a team after approval.
               </p>
             </div>
 

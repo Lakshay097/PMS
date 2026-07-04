@@ -62,6 +62,7 @@ export interface AccountRequest {
   email: string;
   password: string;
   managerEmail: string;
+  teamId?: string; // optional — leave blank and Admin will assign after approval
 }
 
 /**
@@ -129,4 +130,103 @@ export interface ChangePasswordResponse {
  */
 export async function changePassword(data: ChangePasswordRequest): Promise<ChangePasswordResponse> {
   return api.post<ChangePasswordResponse>('/change-password', data);
+}
+
+// ─── SuperAdmin API calls ──────────────────────────────────────────────────
+
+/**
+ * Reveal password request
+ */
+export interface RevealPasswordRequest {
+  email: string;
+}
+
+/**
+ * Reveal password response
+ */
+export interface RevealPasswordResponse {
+  success: boolean;
+  email: string;
+  fullName: string;
+  storedPasswordSheets: string | null;
+  storedPasswordFirestore: string | null;
+  isBcryptHash: boolean;
+  note: string;
+}
+
+/**
+ * Update user request (SuperAdmin only)
+ */
+export interface SuperAdminUpdateUserRequest {
+  email: string;
+  fullName?: string;
+  role?: string;
+  active?: boolean;
+  password?: string;
+  managerEmail?: string;
+  teamId?: string;
+  teamName?: string;
+  canCreateFollowUp?: boolean;
+  canCloseTask?: boolean;
+  approvalStatus?: string;
+  firestorePatch?: Record<string, any>;
+}
+
+/**
+ * Update user response (SuperAdmin only)
+ */
+export interface SuperAdminUpdateUserResponse {
+  success: boolean;
+  message: string;
+  updatedFields: string[];
+}
+
+/**
+ * List all users response (SuperAdmin only)
+ */
+export interface SuperAdminListUsersResponse {
+  success: boolean;
+  users: Array<{
+    UserID: string;
+    FullName: string;
+    Email: string;
+    Role: string;
+    ManagerEmail: string;
+    TeamID: string;
+    TeamName: string;
+    Active: string;
+    CanCreateFollowUp: string;
+    CanCloseTask: string;
+    CreatedAt: string;
+    UpdatedAt: string;
+    StoredPassword: string;
+    ApprovalStatus: string;
+    RequestedBy: string;
+    RequestedAt: string;
+    ApprovedBy: string;
+    ApprovedAt: string;
+    isBcryptHash: boolean;
+  }>;
+}
+
+/**
+ * Reveal stored password for a user (SuperAdmin only)
+ * Returns the raw stored value (bcrypt hash or plaintext)
+ */
+export async function revealPassword(data: RevealPasswordRequest): Promise<RevealPasswordResponse> {
+  return api.post<RevealPasswordResponse>('/superadmin/reveal-password', data);
+}
+
+/**
+ * Directly update any user field in Sheets and Firestore (SuperAdmin only)
+ */
+export async function superAdminUpdateUser(data: SuperAdminUpdateUserRequest): Promise<SuperAdminUpdateUserResponse> {
+  return api.post<SuperAdminUpdateUserResponse>('/superadmin/update-user', data);
+}
+
+/**
+ * List all users including stored passwords (SuperAdmin only)
+ */
+export async function superAdminListUsers(): Promise<SuperAdminListUsersResponse> {
+  return api.get<SuperAdminListUsersResponse>('/superadmin/all-users');
 }

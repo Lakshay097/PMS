@@ -32,6 +32,8 @@ interface AdminPanelProps {
   settings: AppSetting[];
   emailTemplates?: EmailTemplate[];
   teams: Team[];
+  currentUserEmail?: string;
+  isSuperAdmin?: boolean;
   onAddUser: (user: UserType) => void;
   onToggleUserStatus: (email: string) => void;
   onAddTemplate: (template: TaskTemplate) => void;
@@ -44,6 +46,7 @@ interface AdminPanelProps {
   onUpdateUserTeams: (email: string, teamIDs: string[], teamNames: string[]) => void;
   onDeleteTeam: (teamId: string) => void;
   onSendInviteEmail?: (email: string, fullName: string, role: string) => void;
+  onSyncDatabase?: () => void; // optional — called on users-tab activation to pick up new pending registrations
   isDarkMode?: boolean;
 }
 
@@ -53,6 +56,8 @@ export default function AdminPanel({
   settings,
   emailTemplates = [],
   teams,
+  currentUserEmail,
+  isSuperAdmin = false,
   onAddUser,
   onToggleUserStatus,
   onAddTemplate,
@@ -65,10 +70,19 @@ export default function AdminPanel({
   onUpdateUserTeams,
   onDeleteTeam,
   onSendInviteEmail,
+  onSyncDatabase,
   isDarkMode = false,
 }: AdminPanelProps) {
   // Master administrative tabs
   const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'teams' | 'templates' | 'email_templates'>('users');
+
+  // Auto-sync when the users tab is activated so pending registrations
+  // that arrived after initial page load are visible immediately.
+  useEffect(() => {
+    if (activeAdminSubTab === 'users' && onSyncDatabase) {
+      onSyncDatabase();
+    }
+  }, [activeAdminSubTab]); // eslint-disable-line react-hooks/exhaustive-deps
   
   // Create User state
   const [fullName, setFullName] = useState('');
@@ -210,6 +224,49 @@ export default function AdminPanel({
   // Search filter inputs
   const [userSearchText, setUserSearchText] = useState('');
   const [templateSearchText, setTemplateSearchText] = useState('');
+
+  // SuperAdmin password reveal state
+  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, { stored: string; isBcrypt: boolean; loading: boolean }>>({});
+
+  const handleRevealPassword = async (email: string) => {
+    setRevealedPasswords(prev => ({ ...prev, [email]: { stored: '', isBcrypt: false, loading: true } }));
+    
+    try {
+      const token = localStorage.getItem('PMS_auth_token');
+      const response = await fetch('/api/superadmin/reveal-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reveal password');
+      }
+
+      const data = await response.json();
+      setRevealedPasswords(prev => ({
+        ...prev,
+        [email]: {
+          stored: data.storedPasswordSheets || data.storedPasswordFirestore || '(no password set)',
+          isBcrypt: data.isBcryptHash,
+          loading: false,
+        },
+      }));
+    } catch (error) {
+      console.error('Failed to reveal password:', error);
+      setRevealedPasswords(prev => ({
+        ...prev,
+        [email]: {
+          stored: 'Error loading password',
+          isBcrypt: false,
+          loading: false,
+        },
+      }));
+    }
+  };
 
   // Define template state
   const [tempTitle, setTempTitle] = useState('');
@@ -611,6 +668,7 @@ export default function AdminPanel({
 
   const getRoleBadgeColor = (role: string, isDarkMode: boolean) => {
     switch (role) {
+      case 'SuperAdmin': return isDarkMode ? 'bg-purple-500/10 text-purple-300 border-purple-500/20' : 'bg-purple-50 text-purple-800 border-purple-300';
       case 'Admin': return isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200';
       case 'Stakeholder': return isDarkMode ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-indigo-50 text-indigo-700 border-indigo-200';
       case 'Sub-stakeholder': return isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200';
@@ -1040,6 +1098,7 @@ export default function AdminPanel({
                           <th className={`px-4 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Teams</th>
                           <th className={`px-4 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Manager</th>
                           <th className={`px-4 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Role</th>
+                          {isSuperAdmin && <th className={`px-4 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Password</th>}
                           <th className={`px-4 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Status</th>
                         </tr>
                       </thead>
@@ -1088,8 +1147,10 @@ export default function AdminPanel({
                                 <select
                                   value={user.Role}
                                   onChange={(e) => onUpdateUserRole(user.Email, e.target.value as any)}
-                                  className={`text-xs uppercase font-bold pl-2 pr-6 py-1 rounded border appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer ${isDarkMode ? 'bg-[#1E293B] text-white' : 'bg-white'} ${getRoleBadgeColor(user.Role, isDarkMode)}`}
+                                  disabled={user.Email === 'admin@pw.live' && !isSuperAdmin}
+                                  className={`text-xs uppercase font-bold pl-2 pr-6 py-1 rounded border appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer ${isDarkMode ? 'bg-[#1E293B] text-white' : 'bg-white'} ${getRoleBadgeColor(user.Role, isDarkMode)} ${(user.Email === 'admin@pw.live' && !isSuperAdmin) ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
+                                  {isSuperAdmin && <option value="SuperAdmin">SuperAdmin</option>}
                                   <option value="Admin">Admin</option>
                                   <option value="Stakeholder">Stakeholder</option>
                                   <option value="Sub-stakeholder">Sub-stakeholder</option>
@@ -1097,6 +1158,39 @@ export default function AdminPanel({
                                 <ChevronDown size={12} className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 opacity-60" />
                                 </div>
                               </td>
+                              {isSuperAdmin && (
+                                <td className="px-4 py-3">
+                                  {revealedPasswords[user.Email] ? (
+                                    <div className="space-y-1">
+                                      <div className={`text-[10px] font-mono p-2 rounded border break-all max-w-xs ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                                        {revealedPasswords[user.Email].loading ? 'Loading...' : revealedPasswords[user.Email].stored}
+                                      </div>
+                                      {revealedPasswords[user.Email].isBcrypt && !revealedPasswords[user.Email].loading && (
+                                        <div className={`text-[9px] italic ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
+                                          Bcrypt hash (no plaintext recovery)
+                                        </div>
+                                      )}
+                                      <button
+                                        onClick={() => setRevealedPasswords(prev => {
+                                          const updated = { ...prev };
+                                          delete updated[user.Email];
+                                          return updated;
+                                        })}
+                                        className={`text-[9px] underline ${isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800'}`}
+                                      >
+                                        Hide
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleRevealPassword(user.Email)}
+                                      className={`text-[10px] font-bold px-2 py-1 rounded border transition-colors ${isDarkMode ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'}`}
+                                    >
+                                      Reveal
+                                    </button>
+                                  )}
+                                </td>
+                              )}
                               <td className="px-4 py-3">
                                 <button
                                   onClick={() => onToggleUserStatus(user.Email)}
