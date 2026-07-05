@@ -37,7 +37,7 @@ import {
   Upload,
   File
 } from 'lucide-react';
-import { Task, User as UserType, TaskTemplate, AppSetting, Team, TaskReport, AuditLog, EmailTemplate, TeamSubmission } from '../../../types';
+import { Task, User as UserType, TaskTemplate, AppSetting, Team, SubTeam, TaskReport, AuditLog, EmailTemplate, TeamSubmission } from '../../../types';
 import { ROLE, isAdminLevel } from '../../../constants/status';
 import AdminPanel from '../../AdminPanel';
 import TaskList from '../tasks/TaskList';
@@ -74,6 +74,7 @@ interface DashboardProps {
   settings?: AppSetting[];
   emailTemplates?: EmailTemplate[];
   teams?: Team[];
+  subTeams?: SubTeam[];
   onToggleUserStatus?: (email: string) => void;
   onUpdateUserRole?: (email: string, role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder') => void;
   onApproveUser?: (email: string) => void;
@@ -81,6 +82,10 @@ interface DashboardProps {
   onToggleTeamStatus?: (teamId: string) => void;
   onUpdateUserTeams?: (email: string, teamIDs: string[], teamNames: string[]) => Promise<void>;
   onDeleteTeam?: (teamId: string) => Promise<void>;
+  onSaveSubTeam?: (subTeam: SubTeam) => Promise<void>;
+  onDeleteSubTeam?: (subTeamId: string) => Promise<void>;
+  onUpdateSubTeamLeaders?: (teamId: string, subTeamId: string, leaderEmails: string[]) => Promise<void>;
+  onAssignUserToSubTeam?: (userEmail: string, subTeamId: string | null, subTeamName: string | null) => Promise<void>;
   onDeleteTask?: (taskId: string) => void;
   isDrawerOpen?: boolean;
   isTaskModalOpen?: boolean;
@@ -125,6 +130,7 @@ export default function Dashboard({
   settings = [],
   emailTemplates = [],
   teams = [],
+  subTeams = [],
   onToggleUserStatus,
   onUpdateUserRole,
   onApproveUser,
@@ -132,6 +138,10 @@ export default function Dashboard({
   onToggleTeamStatus,
   onUpdateUserTeams,
   onDeleteTeam,
+  onSaveSubTeam,
+  onDeleteSubTeam,
+  onUpdateSubTeamLeaders,
+  onAssignUserToSubTeam,
   onDeleteTask,
   isDrawerOpen = false,
   isTaskModalOpen = false,
@@ -1220,39 +1230,14 @@ export default function Dashboard({
   );
 
   const renderTeam = () => {
-    const teamMembers = getTeamMembers();
+    // Roster amendment: every team member sees the full roster of all members in
+    // their team(s), grouped by sub-team. Names/email only — no task/report data.
+    // Admins see every team; non-admins see only teams they belong to.
+    const visibleTeams = isAdminLevel(currentUser.Role)
+      ? (teams || []).filter(t => t.Active)
+      : (teams || []).filter(t => t.Active && (currentUser.TeamIDs || []).includes(t.TeamID));
 
-    const filteredTeamMembers = searchQuery
-      ? teamMembers.filter(user =>
-          (user.FullName && user.FullName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          (user.Email && user.Email.toLowerCase().includes(searchQuery.toLowerCase()))
-        )
-      : teamMembers;
-
-    const groupedTeams: Record<string, UserType[]> = {};
-
-    (teams || []).forEach(t => {
-      groupedTeams[t.TeamName] = [];
-    });
-
-    groupedTeams['Unassigned'] = [];
-
-    filteredTeamMembers.forEach(user => {
-      if (user.TeamNames && user.TeamNames.length > 0) {
-        user.TeamNames.forEach(teamName => {
-          if (!groupedTeams[teamName]) {
-            groupedTeams[teamName] = [];
-          }
-          groupedTeams[teamName].push(user);
-        });
-      } else {
-        groupedTeams['Unassigned'].push(user);
-      }
-    });
-
-    if (groupedTeams['Unassigned'].length === 0) {
-      delete groupedTeams['Unassigned'];
-    }
+    const searchLower = searchQuery.toLowerCase();
 
     return (
       <div className="space-y-6">
@@ -1260,12 +1245,10 @@ export default function Dashboard({
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                {isAdminLevel(currentUser.Role) ? 'Teams & Members' : 'Team Members'}
+                Team Members
               </h3>
               <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                {isAdminLevel(currentUser.Role) ? 'Manage teams and their members' :
-                 currentUser.Role === ROLE.STAKEHOLDER ? 'Your sub-stakeholders' :
-                 'Your manager'}
+                Full roster — all members across all sub-teams
               </p>
             </div>
             {isAdminLevel(currentUser.Role) && (
@@ -1288,127 +1271,146 @@ export default function Dashboard({
             )}
           </div>
 
-          {isAdminLevel(currentUser.Role) ? (
-            <div className="space-y-4">
-              {Object.entries(groupedTeams).map(([teamName, teamUsers]) => (
-                <div key={teamName} className={`border rounded-lg p-4 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-[#E5E7EB]'}`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{teamName}</h4>
-                    <div className="flex items-center space-x-2">
-                      <span className={`text-xs font-bold px-2 py-1 rounded border ${
-                        teamUsers.filter(u => u.Active).length > 0
-                          ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                          : 'bg-red-500/10 text-red-400 border-red-500/20'
-                      }`}>
-                        {teamUsers.filter(u => u.Active).length} / {teamUsers.length} Active
-                      </span>
-                      <button
-                        onClick={() => {
-                          const teamObj = (teams || []).find(t => t.TeamName === teamName);
-                          onNewTask(teamUsers.map(u => u.Email).join(', '), teamObj ? [teamObj.TeamID] : undefined);
-                        }}
-                        className="text-xs font-medium px-2 py-1 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 transition-colors"
-                      >
-                        Assign Task to Team
-                      </button>
-                    </div>
-                  </div>
-                  <div className={`divide-y ${isDarkMode ? 'divide-[#1E293B]' : 'divide-slate-200'}`}>
-                    {teamUsers.map((member) => (
-                      <div key={member.UserID} className="p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start space-x-4">
-                            <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
-                              <User className="text-white" size={16} />
-                            </div>
-                            <div className="flex-1">
-                              <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{member.FullName}</h4>
-                              <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{member.Email}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-3">
-                            <span className={`text-xs font-bold px-2 py-1 rounded border ${
-                              member.Role === ROLE.ADMIN ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                              member.Role === ROLE.STAKEHOLDER ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                              'bg-slate-500/10 text-slate-400 border-slate-500/20'
-                            }`}>
-                              {member.Role}
-                            </span>
-                            {member.Role === ROLE.STAKEHOLDER && (
-                              <button
-                                onClick={() => onNewTask(member.Email)}
-                                className="text-xs font-medium px-2 py-1 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 transition-colors"
-                              >
-                                Assign Task
-                              </button>
-                            )}
-                            <button
-                              onClick={() => onToggleUserActive && onToggleUserActive(member.UserID, !member.Active)}
-                              className={`text-xs font-medium px-2 py-1 rounded border transition-colors ${
-                                member.Active
-                                  ? 'text-green-400 bg-green-500/10 border-green-500/20 hover:bg-green-500/20'
-                                  : 'text-red-400 bg-red-500/10 border-red-500/20 hover:bg-red-500/20'
-                              }`}
-                            >
-                              {member.Active ? 'Active' : 'Inactive'}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {teamUsers.length === 0 && (
-                      <div className={`p-4 text-center text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                        No members in this team
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {Object.keys(groupedTeams).length === 0 && (
-                <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No teams found</div>
-              )}
+          {visibleTeams.length === 0 ? (
+            <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+              {isAdminLevel(currentUser.Role) ? 'No active teams.' : 'You are not assigned to any team.'}
             </div>
           ) : (
-            <div className="space-y-3">
-              {teamMembers.length > 0 ? (
-                teamMembers.map((member) => (
-                  <div key={member.Email} className={`border rounded-lg p-4 flex items-center justify-between hover:border-[#475569] transition-colors ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
-                    <div className="flex items-center space-x-4">
-                      <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full flex items-center justify-center">
-                        <User className="text-white" size={18} />
+            <div className="space-y-6">
+              {visibleTeams.map(team => {
+                // All active members of this team
+                const allTeamMembers = (users || []).filter(
+                  u => u.Active && (u.TeamIDs || []).includes(team.TeamID)
+                );
+                const filteredMembers = searchQuery
+                  ? allTeamMembers.filter(u =>
+                      u.FullName.toLowerCase().includes(searchLower) ||
+                      u.Email.toLowerCase().includes(searchLower)
+                    )
+                  : allTeamMembers;
+
+                // Sub-teams for this team
+                const teamSubTeamList = (subTeams || []).filter(
+                  st => st.TeamID === team.TeamID && st.Active
+                );
+
+                // Group members by sub-team; unassigned go to a separate bucket
+                type GroupEntry = { label: string; members: UserType[]; isSubTeam: boolean };
+                const groups: GroupEntry[] = [];
+
+                teamSubTeamList.forEach(st => {
+                  const members = filteredMembers.filter(u => u.SubTeamID === st.SubTeamID);
+                  groups.push({ label: st.SubTeamName, members, isSubTeam: true });
+                });
+
+                const unassigned = filteredMembers.filter(u => !u.SubTeamID || !teamSubTeamList.some(st => st.SubTeamID === u.SubTeamID));
+                if (unassigned.length > 0 || teamSubTeamList.length === 0) {
+                  groups.push({ label: teamSubTeamList.length > 0 ? 'Unassigned' : 'Members', members: unassigned, isSubTeam: false });
+                }
+
+                return (
+                  <div key={team.TeamID} className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                    {/* Team header */}
+                    <div className={`flex items-center justify-between px-5 py-3 ${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-50'}`}>
+                      <div className="flex items-center gap-3">
+                        <h4 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{team.TeamName}</h4>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${isDarkMode ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
+                          {allTeamMembers.length} member{allTeamMembers.length !== 1 ? 's' : ''}
+                        </span>
+                        {teamSubTeamList.length > 0 && (
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
+                            {teamSubTeamList.length} sub-team{teamSubTeamList.length !== 1 ? 's' : ''}
+                          </span>
+                        )}
                       </div>
-                      <div>
-                        <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{member.FullName}</h4>
-                        <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{member.Email}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <span className={`text-xs font-bold px-2 py-1 rounded border ${
-                        member.Role === ROLE.ADMIN ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                        member.Role === ROLE.STAKEHOLDER ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                        'bg-slate-500/10 text-slate-400 border-slate-500/20'
-                      }`}>
-                        {member.Role}
-                      </span>
-                      {member.Role === ROLE.STAKEHOLDER && (
+                      {isAdminLevel(currentUser.Role) && (
                         <button
-                          onClick={() => onNewTask(member.Email)}
+                          onClick={() => onNewTask(allTeamMembers.map(u => u.Email).join(', '), [team.TeamID])}
                           className="text-xs font-medium px-2 py-1 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 transition-colors"
                         >
-                          Assign Task
+                          Assign Task to Team
                         </button>
                       )}
-                      <span className={`text-xs font-medium ${member.Active ? 'text-green-400' : 'text-red-400'}`}>
-                        {member.Active ? 'Active' : 'Inactive'}
-                      </span>
+                    </div>
+
+                    {/* Member groups */}
+                    <div className={`divide-y ${isDarkMode ? 'divide-[#1E293B]' : 'divide-slate-100'}`}>
+                      {groups.map(group => (
+                        <div key={group.label}>
+                          {/* Sub-team label — only show when there are actual sub-teams */}
+                          {teamSubTeamList.length > 0 && (
+                            <div className={`px-5 py-2 flex items-center gap-2 ${isDarkMode ? 'bg-[#0F141F]/60' : 'bg-slate-50/80'}`}>
+                              <span className={`text-[10px] font-bold tracking-widest uppercase ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                {group.label}
+                              </span>
+                              <span className={`text-[10px] ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
+                                ({group.members.length})
+                              </span>
+                            </div>
+                          )}
+                          {group.members.length === 0 ? (
+                            <div className={`px-5 py-3 text-xs italic ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
+                              No members in this sub-team
+                            </div>
+                          ) : (
+                            group.members.map(member => {
+                              const isLeader = team.TeamLeaderEmails?.includes(member.Email);
+                              const subTeamObj = teamSubTeamList.find(st => st.SubTeamID === member.SubTeamID);
+                              const isSubLeader = subTeamObj?.SubTeamLeaderEmails?.some(
+                                e => e.toLowerCase() === member.Email.toLowerCase()
+                              );
+                              return (
+                                <div key={member.Email} className={`px-5 py-3 flex items-center justify-between hover:bg-opacity-50 transition-colors ${isDarkMode ? 'hover:bg-[#1E293B]/40' : 'hover:bg-slate-50'}`}>
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                      <User className="text-white" size={14} />
+                                    </div>
+                                    <div>
+                                      <div className={`font-medium text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                        {member.FullName}
+                                      </div>
+                                      <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{member.Email}</div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 flex-shrink-0">
+                                    {isLeader && (
+                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                                        Team Leader
+                                      </span>
+                                    )}
+                                    {isSubLeader && (
+                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
+                                        Sub-Team Leader
+                                      </span>
+                                    )}
+                                    <span className={`text-xs font-bold px-2 py-0.5 rounded border ${
+                                      member.Role === ROLE.ADMIN
+                                        ? isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200'
+                                        : member.Role === ROLE.STAKEHOLDER
+                                        ? isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-700 border-blue-200'
+                                        : isDarkMode ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-slate-50 text-slate-700 border-slate-200'
+                                    }`}>
+                                      {member.Role}
+                                    </span>
+                                    {isAdminLevel(currentUser.Role) && member.Role === ROLE.STAKEHOLDER && (
+                                      <button
+                                        onClick={() => onNewTask(member.Email)}
+                                        className="text-xs font-medium px-2 py-1 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+                                      >
+                                        Assign Task
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                  {currentUser.Role === ROLE.STAKEHOLDER ? 'No sub-stakeholders assigned to you' : 'No manager assigned'}
-                </div>
-              )}
+                );
+              })}
             </div>
           )}
         </div>
@@ -1972,6 +1974,7 @@ export default function Dashboard({
       settings={settings}
       emailTemplates={emailTemplates}
       teams={teams}
+      subTeams={subTeams}
       currentUserEmail={currentUser.Email}
       onAddUser={onAddUser || (() => {})}
       onToggleUserStatus={onToggleUserStatus || (() => {})}
@@ -1984,6 +1987,11 @@ export default function Dashboard({
       onToggleTeamStatus={onToggleTeamStatus || (() => {})}
       onUpdateUserTeams={onUpdateUserTeams || (() => {})}
       onDeleteTeam={onDeleteTeam || (() => {})}
+      onSaveSubTeam={onSaveSubTeam}
+      onDeleteSubTeam={onDeleteSubTeam}
+      onUpdateSubTeamLeaders={onUpdateSubTeamLeaders}
+      onAssignUserToSubTeam={onAssignUserToSubTeam}
+      onSyncDatabase={onSyncDatabase}
       onSendInviteEmail={(email, fullName, role) => {
         const inviteMessage = `Welcome to PMS! Your account has been created as ${role}. You can now log in with your credentials.`;
         triggerNotification('Task Assignment', inviteMessage, email);
