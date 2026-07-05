@@ -1,284 +1,245 @@
-# PMS TaskFlow Architecture
+# PMS TaskFlow — Architecture
 
 ## Overview
 
-PMS TaskFlow is an enterprise task management system that uses Google Sheets as its primary database. The application follows a client-server architecture with React on the frontend and Express.js on the backend.
+PMS TaskFlow is an enterprise task management and compliance-reporting system. Users are organised into Teams and Sub-Teams with role-based access. Recurring task schedules are generated automatically from blueprints. Progress reports, follow-up chains, file attachments, and email notifications are all first-class features.
 
-## Architecture Diagram
+---
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Frontend (React)                         │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │  Components: Dashboard, LoginScreen, Modals, Drawers        ││
-│  │  State Management: React useState hooks                     ││
-│  │  API Calls: fetch() to Express backend                      ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ HTTP/HTTPS
-                              │
-┌─────────────────────────────────────────────────────────────────┐
-│                      Backend (Express.js)                        │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │  Security Middleware:                                      ││
-│  │  - Helmet (CSP headers)                                    ││
-│  │  - Rate Limiting                                           ││
-│  │  - Body Parser                                             ││
-│  └─────────────────────────────────────────────────────────────┘│
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │  API Endpoints:                                           ││
-│  │  - GET  /api/token (Google Sheets service account token)  ││
-│  │  - POST /api/login (JWT authentication)                    ││
-│  │  - POST /api/hash-password (bcrypt hashing)                ││
-│  │  - POST /api/upload-file (Google Drive upload)            ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ OAuth 2.0 (Service Account)
-                              │
-┌─────────────────────────────────────────────────────────────────┐
-│                    Google Services                               │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │  Google Sheets API (Primary Database)                      ││
-│  │  - Spreadsheet: "PMS Systems Database"               ││
-│  │  - Tabs: Users, Teams, Tasks, Templates, Reports, etc.    ││
-│  └─────────────────────────────────────────────────────────────┘│
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │  Google Drive API (File Storage)                           ││
-│  │  - Folder: /BE/TaskReports/{TaskID}/{ReportID}/           ││
-│  │  - File validation: size (10MB), type whitelist            ││
-│  └─────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
-```
+## Tech Stack
 
-## Data Flow
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, TypeScript 5.8, Vite 8 |
+| Styling | Tailwind CSS 4 (native theme variables) |
+| Animations | Framer Motion |
+| Icons | lucide-react |
+| Backend | Express.js 4, TypeScript, `tsx` (dev), `esbuild` (prod bundle) |
+| Primary database | **Firestore** (client writes directly via Firebase SDK) |
+| Auth source-of-truth | **Google Sheets** (login reads column-indexed rows) |
+| Background sync | Google Sheets (5-min flush queue from client `dbService`) |
+| Auth tokens | JWT (RS256, issued by Express from Sheets data) |
+| Password hashing | bcrypt (12 rounds) |
+| File uploads | Cloudinary (primary) + Google Drive (legacy path) |
+| Email | Gmail OAuth (per-user), fallback to system account |
+| Real-time | SSE (`/api/changes/stream`), immediate broadcast via `POST /api/events/notify` |
+| PWA | Service worker (`public/sw.js`), `manifest.json`, install prompt |
+| Deployment | Google Cloud Run (Dockerfile + `cloudbuild.yaml`) |
+| State management | React `useState` + custom hooks — no Redux/Zustand |
+| Query cache | TanStack React Query (used for SSE cache-key invalidation only) |
 
-### Authentication Flow
+---
+
+## Repository Structure
 
 ```
-1. User enters email/password in LoginScreen
-2. Frontend POSTs to /api/login
-3. Backend:
-   a. Fetches users from Google Sheets
-   b. Verifies password using bcrypt.compare()
-   c. Generates JWT token
-   d. Returns token and user data
-4. Frontend stores token in localStorage
-5. Frontend includes token in Authorization header for subsequent requests
+/
+├── server/              Express.js backend
+│   ├── config/          Environment variable loading and validation
+│   ├── controllers/     Request handlers (one file per route group)
+│   ├── middleware/       JWT auth, error handler, rate limiters, logger, validation
+│   ├── routes/          Route definitions (mounted in routes/index.ts)
+│   ├── services/        Business logic and external API integrations
+│   └── utils/           AppError class hierarchy, async wrapper, logger
+│
+├── src/                 React frontend
+│   ├── api/             Thin REST client wrappers (call Express endpoints)
+│   ├── components/      UI components organised by concern
+│   │   ├── dashboard/   Overview dashboard
+│   │   ├── features/    Feature-scoped components (admin, auth, tasks, ...)
+│   │   ├── layout/      AppShell, Sidebar, TopBar
+│   │   ├── shared/      Generic reusable primitives (Modal, Drawer, badges, ...)
+│   │   └── ui/          Minimal atoms (Spinner)
+│   ├── constants/       Enums and static config
+│   ├── contexts/        React Context providers (AuthContext)
+│   ├── hooks/           All custom hooks
+│   ├── lib/             Core client libraries (Firestore, Sheets, SSE, task engine)
+│   ├── pages/           Thin page wrappers that forward props to feature components
+│   ├── types/           All TypeScript interfaces (single file)
+│   └── utils/           Pure utility functions
+│
+├── scripts/             One-off operational scripts (not bundled)
+├── public/              Static assets, service worker, PWA icons, manifest
+└── dist/                Build output (gitignored)
 ```
 
-### Data Read Flow
+---
+
+## Database Architecture
+
+### Two-store design
+
+| Store | Role | Who writes |
+|---|---|---|
+| **Firestore** | Primary read/write store for the React app | `src/lib/dbService.ts` (client-side, direct) |
+| **Google Sheets** | Auth source-of-truth; legacy sync target | Express auth handlers (writes); `dbService` background queue (syncs) |
+
+**Why two stores?**  
+The app started with Google Sheets as the only database. Firestore was added later for lower latency and real-time capability. Login authentication was left on Sheets because it reads column-indexed rows directly and the schema predates Firestore. Migrating auth to Firestore is deferred work.
+
+### Write path (client)
 
 ```
-1. Frontend calls dbService.getUsers()
-2. dbService checks in-memory cache
-3. If cache miss:
-   a. Calls sheetsApi.getCollection('users')
-   b. sheetsApi uses fetchWithRetry with exponential backoff
-   c. Data is fetched from Google Sheets API
-   d. Data is cached in memory
-4. Data is returned to frontend
+UI action
+  → dbService.saveX()          (optimistic: update in-memory cache + notify pub/sub instantly)
+  → (async) setDoc(Firestore)  (actual persistence)
+  → on failure: rollback cache from Firestore re-read
+  → enqueue Sheets write       (flushed every 5 minutes)
 ```
 
-### Data Write Flow
+### Read path on startup
 
 ```
-1. Frontend calls dbService.saveUser(user)
-2. dbService fetches current data from Google Sheets
-3. dbService updates the data array
-4. dbService calls sheetsApi.saveCollection('users', updatedData)
-5. sheetsApi:
-   a. Clears the sheet
-   b. Writes new data
-   c. Uses fetchWithRetry for reliability
-6. Cache is invalidated
-7. Success/error is returned to frontend
+batchLoadAll() races:
+  ├─ Firestore (primary, faster)  → wins if responds within 15 s
+  └─ Google Sheets (fallback)     → wins if Firestore times out
 ```
 
-### File Upload Flow
+### Optimistic update pub/sub
+
+`dbService` exposes `registerOptimisticCallback(collection, fn)`. `useDatabase` registers callbacks for all collections. When `dbService.saveX()` updates the cache, it immediately calls all registered callbacks so React state reflects the change before the Firestore write completes.
+
+### Settings key pattern
+
+Leadership assignments are stored as `Key/Value` rows in the `settings` Firestore collection:
 
 ```
-1. User uploads file in CreateReportModal
-2. Frontend converts file to base64
-3. Frontend POSTs to /api/upload-file
-4. Backend:
-   a. Validates file size (max 10MB)
-   b. Validates file type (whitelist)
-   c. Uploads to Google Drive with folder structure
-   d. Returns file URL
-5. Frontend stores file URL in task report
-6. File metadata is saved to Google Sheets
+team_{TeamID}_leaders                           → comma-separated emails  (team leader)
+team_{TeamID}_stakeholders                      → comma-separated emails  (team stakeholders)
+team_{TeamID}_subteam_{SubTeamID}_leaders       → comma-separated emails  (sub-team leader)
 ```
 
-## Key Components
+---
 
-### Frontend Components
+## Firestore Collections
 
-#### src/App.tsx
-- Main application controller
-- Manages all state (users, tasks, templates, etc.)
-- Handles user authentication flow
-- Coordinates with dbService for data operations
+| Collection | Document ID | Purpose |
+|---|---|---|
+| `users` | `email` (lowercase) | User profiles, roles, team assignments |
+| `teams` | `TeamID` | Team definitions |
+| `sub_teams` | `SubTeamID` | Sub-team definitions (new) |
+| `tasks` | `TaskID` | Task instances |
+| `templates` | `TemplateID` | Recurring task blueprints |
+| `settings` | `Key` | App config and leadership assignments |
+| `reports` | `ReportID` | Progress reports |
+| `followups` | `FollowUpID` | Follow-up task chains |
+| `subtasks` | `SubtaskID` | Checklist items within tasks |
+| `comments` | `CommentID` | Task comments |
+| `email_templates` | `Key` | Email body/subject templates |
+| `team_submissions` | `SubmissionID` | Weekly scheduled-task submissions |
+| `auditlogs` | auto | Append-only audit trail |
 
-#### src/components/LoginScreen.tsx
-- User authentication UI
-- Calls /api/login for JWT authentication
-- Calls /api/hash-password for registration
-- Stores JWT token in localStorage
+---
 
-#### src/components/Dashboard.tsx
-- Main dashboard UI
-- Task filtering and search
-- Role-based views
-- Metrics display
+## Server API Routes
 
-#### src/lib/dbService.ts
-- Database abstraction layer
-- Coordinates Google Sheets API calls
-- Implements in-memory caching (5-minute TTL)
-- All operations go directly to Google Sheets (no LocalStorage fallback)
-- Throws explicit errors on failures
+All routes are mounted under `/api` via `server/routes/index.ts`.
 
-#### src/lib/sheetsService.ts
-- Google Sheets API integration
-- Implements retry logic with exponential backoff
-- Manages service account authentication
-- Handles spreadsheet creation and metadata
-- Converts between objects and sheet rows
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/login` | Public | Authenticate against Sheets, issue JWT |
+| POST | `/api/account-request` | Public | Self-registration (creates pending user) |
+| POST | `/api/approve-user` | JWT | Admin approves pending user |
+| POST | `/api/change-password` | JWT | Change own password |
+| GET | `/api/teams/public` | Public | Active team names for registration dropdown |
+| POST | `/api/upload-file` | JWT | Upload file to Cloudinary |
+| GET | `/api/token` | Public | Return Google Sheets OAuth token to client |
+| GET | `/api/changes/stream` | — | SSE stream for real-time notifications |
+| POST | `/api/events/notify` | JWT | Trigger immediate SSE broadcast |
+| GET | `/api/sheets/:id/metadata` | — | Sheets spreadsheet metadata proxy |
+| GET/PUT/POST | `/api/sheets/:id/values/*` | — | Sheets read/write proxy |
+| GET | `/api/auth/gmail/url` | JWT | Get Gmail OAuth URL |
+| GET | `/api/auth/gmail/callback` | Public | Gmail OAuth callback |
+| GET/DELETE | `/api/auth/gmail/status` | JWT | Gmail connection status |
+| POST | `/api/email/trigger/*` | JWT | Fire event-driven emails |
+| GET/POST | `/api/email/templates` | JWT | Read/write email templates |
 
-#### src/lib/taskEngine.ts
-- Recurring task generation logic
-- Overdue task evaluation
-- Cycle key calculations
-- All async operations are properly awaited (no race conditions)
+---
 
-### Backend Components
+## Authentication Flow
 
-#### server.ts
-- Express.js server
-- Security middleware (helmet, rate-limiting)
-- API endpoints for authentication and file upload
-- Google Sheets service account token proxy
-- Serves static files in production
+```
+1. LoginScreen POSTs { email, password } → /api/login
+2. authService reads users from Google Sheets (column 12 = password)
+3. bcrypt.compare() against stored hash
+4. JWT signed with RS256, embedded { email, userId, role, fullName }
+5. Token stored in localStorage as 'PMS_auth_token'
+6. App.tsx reads JWT role from localStorage on re-render (prevents Firestore
+   stale-value from downgrading role after loadDatabase())
+```
 
-## Security Architecture
+---
 
-### Authentication
-- JWT-based authentication with configurable expiration
-- Passwords hashed using bcrypt (12 rounds)
-- Service account authentication for Google APIs
-- No plain text password storage
+## Role Hierarchy
 
-### API Security
-- Rate limiting (100 requests per 15 minutes)
-- Content Security Policy (CSP) headers
-- Input validation on all endpoints
-- File upload validation (size, type)
+| Role | Task/report visibility | Assignment privilege |
+|---|---|---|
+| **Admin** | Everything | Everything, cross-team |
+| **Team Leader** | Everyone in their team across all sub-teams | Same-team members |
+| **Sub-Team Leader** | Only members of their own sub-team | Same-team members |
+| **Stakeholder** | Own tasks + tasks assigned by them + direct subordinates | Same-team members |
+| **Sub-stakeholder** | Only their own assigned tasks | None |
 
-### Data Security
-- All data stored in Google Sheets (encrypted in transit)
-- Service account credentials stored in environment variables
-- No sensitive data in LocalStorage (except JWT token)
-- Audit logging for all write operations
+**Roster visibility (amendment):** Every team member — regardless of role — can see the full name/email roster of all members in their team(s), including sub-team groupings. Task/report data visibility is governed by the table above and is separate from roster access.
 
-## Performance Optimizations
+---
 
-### Caching Strategy
-- In-memory cache with 5-minute TTL
-- Cache invalidation on write operations
-- No LocalStorage persistence (security improvement)
+## Real-Time Sync
 
-### API Optimization
-- Retry logic with exponential backoff (max 3 retries)
-- Jitter to prevent thundering herd
-- Batch operations where possible
+```
+Write  →  POST /api/events/notify  →  SSEService.broadcastChange()
+                                         └→ all open EventSource connections
+                                              └→ useRealtimeSync invalidates
+                                                 React Query cache keys
+Fallback: SSEService.startAuditLoop() polls auditlogs every 60 s
+```
 
-### Frontend Optimization
-- React 19 with concurrent features
-- Framer Motion for smooth animations
-- Lazy loading of components
+---
 
-## Error Handling
+## Email System
 
-### Google Sheets API Failures
-- Explicit error messages to users
-- No silent fallbacks
-- Retry logic with exponential backoff
-- Detailed error logging
+1. Emails are sent via the connected user's Gmail OAuth tokens (per-user sending)
+2. Fallback: system account (`DEFAULT_FALLBACK_EMAIL`) if user has no Gmail token
+3. Email thread continuity: `task_email_threads` Sheets tab stores Gmail `threadId` + `messageId` so replies chain into the same Gmail thread
+4. Templates are stored in `email_templates` Firestore collection and `email_templates` Sheets tab
+5. Weekly scheduled-task reminders are sent on a configurable day (default: day before report due day) by `reminderScheduler.ts`
 
-### Authentication Failures
-- Clear error messages for invalid credentials
-- Account inactive status checks
-- Rate limiting to prevent brute force
+---
 
-### Data Validation
-- Server-side validation on all inputs
-- Type checking with TypeScript
-- Schema validation for database operations
+## PWA
 
-## Deployment Architecture
+- Service worker registered on production builds (`public/sw.js`)
+- Cache strategy: pre-cache static assets on install; `/assets/*` (Vite content-hashed chunks) bypass cache to prevent stale bundles
+- Install prompt handled by `useInstallPrompt` hook
+- `UpdateBanner` component listens for `swUpdateAvailable` custom event
 
-### Development
-- Vite dev server with HMR
-- Express backend on port 3000
-- Local environment variables
+---
 
-### Production (Google Cloud Run)
-- Docker containerization
-- Serverless deployment
-- Auto-scaling (0 to 10 instances)
-- Free tier optimized (512Mi memory, 0.5 vCPU)
-- Environment variables configured in Cloud Run
+## Build and Deployment
 
-## Migration Notes
+```bash
+# Development (Vite middleware mode + tsx hot reload)
+npm run dev          # Express on :3000, Vite middleware serves /
 
-### Changes from Previous Architecture
+# Production build
+npm run build        # vite build → dist/ + esbuild server → dist/server.mjs
 
-**Removed:**
-- LocalStorage as primary database
-- Firebase Auth
-- Firestore integration
-- Silent fallback to cache
-- Plain text password storage
+# Run production build
+npm start            # node dist/server.mjs
 
-**Added:**
-- Google Sheets as primary database
-- JWT authentication
-- bcrypt password hashing
-- Google Drive file uploads
-- Rate limiting
-- CSP headers
-- Proper error handling
-- Retry logic with exponential backoff
+# Deploy to Google Cloud Run
+gcloud builds submit --config cloudbuild.yaml
+```
 
-**Improved:**
-- Security posture (passwords hashed, JWT tokens)
-- Reliability (retry logic, explicit errors)
-- Performance (in-memory caching)
-- User experience (file uploads, better error messages)
+---
 
-## Future Considerations
+## Known Issues / Technical Debt
 
-### Scalability
-- Current architecture supports ~100 concurrent users
-- Google Sheets API quotas may require pagination for larger datasets
-- Consider migrating to PostgreSQL for >1000 users
-
-### Security Enhancements
-- Implement httpOnly cookies for JWT storage
-- Add CSRF token validation
-- Implement proper session management
-- Add two-factor authentication
-
-### Performance
-- Implement pagination for large datasets
-- Add virtual scrolling for task lists
-- Optimize Google Sheets API calls with batching
-- Consider Redis for distributed caching
-
-### Monitoring
-- Add application performance monitoring
-- Implement error tracking (Sentry)
-- Add health check endpoints
-- Implement usage analytics
+- `Architecture.md` was previously stale (described old Sheets-only architecture). This version is accurate.
+- `NODE_ENV=production` in `.env` causes `import.meta.env.DEV = false` locally — breaks `DEV`-guarded code paths and registers the service worker in dev mode. Change to `NODE_ENV=development` for local development.
+- `FIREBASE_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` are required by the Firebase Admin SDK (server) but not listed in `.env.example`.
+- `src/api/tasks.ts`, `src/api/users.ts`, `src/api/reports.ts`, `src/api/teams.ts` are REST wrappers that reference server endpoints which do not exist. They are not used by the running app — all data access goes through `dbService`. They exist as scaffolding stubs.
+- No test framework is configured. Zero test coverage.
+- `src/lib/syncQueue.ts` is implemented but not wired into `dbService` failure paths (noted in code as `TECH-DEBT`).
+- Sub-Teams feature (7-task spec) is in progress. Tasks 1–4 committed. Task 4 (Admin UI) is working — the "admin panel fails to load" symptom was caused by a stale service worker cache (SW registered locally because `NODE_ENV=production` in `.env` makes `import.meta.env.PROD` true, which triggers SW registration). Unregistering the SW + hard reload resolved the symptom without code changes. Separately, `DashboardPageProps` was found to be missing `reports`, `teamSubmissions`, `onAddTeamSubmission`, `triggerNotification`, `subTeams`, and the four sub-team callbacks; `onNewTask` was also missing the `teamIds` param — all silently dropped at the page boundary since the file was created. Fixed in commit `869a829`.
+- **Open item — NODE_ENV:** `NODE_ENV=production` in `.env` causes the service worker to register during local dev, producing stale-bundle cache issues on every bundle change. Decision pending: change to `NODE_ENV=development` for local work to stop SW registration. Do not change without explicit decision — it affects `import.meta.env.PROD`/`DEV` guards throughout the app.
