@@ -1522,7 +1522,7 @@ export default function AdminPanel({
                                 {teamSubTeams.length > 0 && (
                                   <div className="space-y-3 mb-6">
                                     {teamSubTeams.map(st => {
-                                      const stMembers = users.filter(u => u.SubTeamID === st.SubTeamID && u.Active);
+                                      const stMembers = users.filter(u => u.SubTeamIDs?.includes(st.SubTeamID) && u.Active);
                                       const stLeaders = st.SubTeamLeaderEmails ?? [];
                                       const isExpanded = expandedSubTeamId === st.SubTeamID;
                                       return (
@@ -1590,7 +1590,8 @@ export default function AdminPanel({
                                                 )}
                                                 {/* Add member to sub-team */}
                                                 {(() => {
-                                                  const eligible = teamUsers.filter(u => !u.SubTeamID);
+                                                  // Multi-membership: eligible if not already in THIS sub-team
+                                                  const eligible = teamUsers.filter(u => !u.SubTeamIDs?.includes(st.SubTeamID));
                                                   if (eligible.length === 0) return null;
                                                   return (
                                                     <select
