@@ -128,6 +128,18 @@ export default function AdminPanel({
   const [subTeamError, setSubTeamError] = useState<string | null>(null);
   const [expandedSubTeamId, setExpandedSubTeamId] = useState<string | null>(null);
 
+  // Keep modal-local leader/stakeholder state in sync with the teams prop.
+  // Without this, currentTeamLeaders is only loaded once when the modal opens
+  // (in the "Manage" button onClick) and becomes stale if onUpdateSetting or
+  // onUpdateSubTeamLeaders writes back through App.tsx while the modal is open.
+  useEffect(() => {
+    if (!expandedTeamId) return;
+    const team = teams.find(t => t.TeamID === expandedTeamId);
+    if (!team) return;
+    setCurrentTeamLeaders(team.TeamLeaderEmails || []);
+    setCurrentTeamStakeholders(team.StakeholderEmails || []);
+  }, [teams, expandedTeamId]);
+
 
 
   const handleAddMember = (userEmail: string, teamId: string, teamName: string) => {
