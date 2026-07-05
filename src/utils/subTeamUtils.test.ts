@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getVisibleSubTeamIds } from './subTeamUtils';
+import { getVisibleSubTeamIds, canAssignWithinTeam } from './subTeamUtils';
 import { User, SubTeam } from '../types';
 
 describe('getVisibleSubTeamIds', () => {
@@ -259,5 +259,384 @@ describe('getVisibleSubTeamIds', () => {
     // Should only appear once despite being both leader and member (with duplicate in array)
     expect(result).toEqual(['ST-001']);
     expect(result).toHaveLength(1);
+  });
+});
+
+describe('canAssignWithinTeam', () => {
+  it('Sub-Team Leader can assign within own led sub-team', () => {
+    const assigner: User = {
+      UserID: 'USR-001',
+      FullName: 'Sub-Team Leader',
+      Email: 'leader@test.com',
+      Role: 'Sub-stakeholder',
+      ManagerEmail: '',
+      SubTeamIDs: ['ST-001'],
+      TeamIDs: ['T-001'],
+      TeamNames: ['Team A'],
+      Active: true,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    };
+
+    const assignee: User = {
+      UserID: 'USR-002',
+      FullName: 'Team Member',
+      Email: 'member@test.com',
+      Role: 'Sub-stakeholder',
+      ManagerEmail: '',
+      SubTeamIDs: ['ST-001'],
+      TeamIDs: ['T-001'],
+      TeamNames: ['Team A'],
+      Active: true,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    };
+
+    const subTeams: SubTeam[] = [
+      {
+        SubTeamID: 'ST-001',
+        TeamID: 'T-001',
+        SubTeamName: 'SubTeam Alpha',
+        Description: 'First sub-team',
+        Active: true,
+        SubTeamLeaderEmails: ['leader@test.com'],
+        CreatedAt: new Date().toISOString(),
+        UpdatedAt: new Date().toISOString(),
+      },
+    ];
+
+    const result = canAssignWithinTeam(assigner, assignee, subTeams);
+    expect(result).toBe(true);
+  });
+
+  it('Sub-Team Leader cannot assign to a sub-team they do not lead', () => {
+    const assigner: User = {
+      UserID: 'USR-001',
+      FullName: 'Sub-Team Leader',
+      Email: 'leader@test.com',
+      Role: 'Sub-stakeholder',
+      ManagerEmail: '',
+      SubTeamIDs: ['ST-001'],
+      TeamIDs: ['T-001'],
+      TeamNames: ['Team A'],
+      Active: true,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    };
+
+    const assignee: User = {
+      UserID: 'USR-002',
+      FullName: 'Other Team Member',
+      Email: 'member@test.com',
+      Role: 'Sub-stakeholder',
+      ManagerEmail: '',
+      SubTeamIDs: ['ST-002'],
+      TeamIDs: ['T-001'],
+      TeamNames: ['Team A'],
+      Active: true,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    };
+
+    const subTeams: SubTeam[] = [
+      {
+        SubTeamID: 'ST-001',
+        TeamID: 'T-001',
+        SubTeamName: 'SubTeam Alpha',
+        Description: 'First sub-team',
+        Active: true,
+        SubTeamLeaderEmails: ['leader@test.com'],
+        CreatedAt: new Date().toISOString(),
+        UpdatedAt: new Date().toISOString(),
+      },
+      {
+        SubTeamID: 'ST-002',
+        TeamID: 'T-001',
+        SubTeamName: 'SubTeam Beta',
+        Description: 'Second sub-team',
+        Active: true,
+        SubTeamLeaderEmails: ['other-leader@test.com'],
+        CreatedAt: new Date().toISOString(),
+        UpdatedAt: new Date().toISOString(),
+      },
+    ];
+
+    const result = canAssignWithinTeam(assigner, assignee, subTeams);
+    expect(result).toBe(false);
+  });
+
+  it('Admin can assign to anyone (regression guard)', () => {
+    const assigner: User = {
+      UserID: 'USR-001',
+      FullName: 'Admin',
+      Email: 'admin@test.com',
+      Role: 'Admin',
+      ManagerEmail: '',
+      SubTeamIDs: [],
+      TeamIDs: ['T-001'],
+      TeamNames: ['Team A'],
+      Active: true,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    };
+
+    const assignee: User = {
+      UserID: 'USR-002',
+      FullName: 'Team Member',
+      Email: 'member@test.com',
+      Role: 'Sub-stakeholder',
+      ManagerEmail: '',
+      SubTeamIDs: ['ST-001'],
+      TeamIDs: ['T-001'],
+      TeamNames: ['Team A'],
+      Active: true,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    };
+
+    const subTeams: SubTeam[] = [];
+
+    const result = canAssignWithinTeam(assigner, assignee, subTeams);
+    expect(result).toBe(true);
+  });
+
+  it('Stakeholder assignment unaffected (regression guard)', () => {
+    const assigner: User = {
+      UserID: 'USR-001',
+      FullName: 'Stakeholder',
+      Email: 'stakeholder@test.com',
+      Role: 'Stakeholder',
+      ManagerEmail: '',
+      SubTeamIDs: [],
+      TeamIDs: ['T-001'],
+      TeamNames: ['Team A'],
+      Active: true,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    };
+
+    const assignee: User = {
+      UserID: 'USR-002',
+      FullName: 'Team Member',
+      Email: 'member@test.com',
+      Role: 'Sub-stakeholder',
+      ManagerEmail: '',
+      SubTeamIDs: ['ST-001'],
+      TeamIDs: ['T-001'],
+      TeamNames: ['Team A'],
+      Active: true,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    };
+
+    const subTeams: SubTeam[] = [];
+
+    const result = canAssignWithinTeam(assigner, assignee, subTeams);
+    expect(result).toBe(true);
+  });
+
+  it('User with no SubTeamIDs cannot be assigned by a Sub-Team Leader', () => {
+    const assigner: User = {
+      UserID: 'USR-001',
+      FullName: 'Sub-Team Leader',
+      Email: 'leader@test.com',
+      Role: 'Sub-stakeholder',
+      ManagerEmail: '',
+      SubTeamIDs: ['ST-001'],
+      TeamIDs: ['T-001'],
+      TeamNames: ['Team A'],
+      Active: true,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    };
+
+    const assignee: User = {
+      UserID: 'USR-002',
+      FullName: 'Unassigned User',
+      Email: 'unassigned@test.com',
+      Role: 'Sub-stakeholder',
+      ManagerEmail: '',
+      SubTeamIDs: [], // No sub-team membership
+      TeamIDs: ['T-001'],
+      TeamNames: ['Team A'],
+      Active: true,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    };
+
+    const subTeams: SubTeam[] = [
+      {
+        SubTeamID: 'ST-001',
+        TeamID: 'T-001',
+        SubTeamName: 'SubTeam Alpha',
+        Description: 'First sub-team',
+        Active: true,
+        SubTeamLeaderEmails: ['leader@test.com'],
+        CreatedAt: new Date().toISOString(),
+        UpdatedAt: new Date().toISOString(),
+      },
+    ];
+
+    const result = canAssignWithinTeam(assigner, assignee, subTeams);
+    expect(result).toBe(false);
+  });
+
+  it('Assigning to self (member of own sub-team, not leader) works for regular member', () => {
+    const assigner: User = {
+      UserID: 'USR-001',
+      FullName: 'Regular Member',
+      Email: 'member@test.com',
+      Role: 'Sub-stakeholder',
+      ManagerEmail: '',
+      SubTeamIDs: ['ST-001'],
+      TeamIDs: ['T-001'],
+      TeamNames: ['Team A'],
+      Active: true,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    };
+
+    const assignee: User = {
+      UserID: 'USR-001',
+      FullName: 'Regular Member',
+      Email: 'member@test.com',
+      Role: 'Sub-stakeholder',
+      ManagerEmail: '',
+      SubTeamIDs: ['ST-001'],
+      TeamIDs: ['T-001'],
+      TeamNames: ['Team A'],
+      Active: true,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    };
+
+    const subTeams: SubTeam[] = [
+      {
+        SubTeamID: 'ST-001',
+        TeamID: 'T-001',
+        SubTeamName: 'SubTeam Alpha',
+        Description: 'First sub-team',
+        Active: true,
+        SubTeamLeaderEmails: ['leader@test.com'],
+        CreatedAt: new Date().toISOString(),
+        UpdatedAt: new Date().toISOString(),
+      },
+    ];
+
+    const result = canAssignWithinTeam(assigner, assignee, subTeams);
+    expect(result).toBe(true);
+  });
+
+  it('Regular member (non-leader Sub-stakeholder) can assign to anyone in same team', () => {
+    const assigner: User = {
+      UserID: 'USR-001',
+      FullName: 'Regular Member',
+      Email: 'member@test.com',
+      Role: 'Sub-stakeholder',
+      ManagerEmail: '',
+      SubTeamIDs: ['ST-001'],
+      TeamIDs: ['T-001'],
+      TeamNames: ['Team A'],
+      Active: true,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    };
+
+    const assignee: User = {
+      UserID: 'USR-002',
+      FullName: 'Other Member',
+      Email: 'other@test.com',
+      Role: 'Sub-stakeholder',
+      ManagerEmail: '',
+      SubTeamIDs: ['ST-002'],
+      TeamIDs: ['T-001'],
+      TeamNames: ['Team A'],
+      Active: true,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    };
+
+    const subTeams: SubTeam[] = [
+      {
+        SubTeamID: 'ST-001',
+        TeamID: 'T-001',
+        SubTeamName: 'SubTeam Alpha',
+        Description: 'First sub-team',
+        Active: true,
+        SubTeamLeaderEmails: ['leader@test.com'], // Assigner is NOT a leader
+        CreatedAt: new Date().toISOString(),
+        UpdatedAt: new Date().toISOString(),
+      },
+    ];
+
+    const result = canAssignWithinTeam(assigner, assignee, subTeams);
+    expect(result).toBe(true);
+  });
+
+  it('Regular member cannot assign to user in different team', () => {
+    const assigner: User = {
+      UserID: 'USR-001',
+      FullName: 'Regular Member',
+      Email: 'member@test.com',
+      Role: 'Sub-stakeholder',
+      ManagerEmail: '',
+      SubTeamIDs: ['ST-001'],
+      TeamIDs: ['T-001'],
+      TeamNames: ['Team A'],
+      Active: true,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    };
+
+    const assignee: User = {
+      UserID: 'USR-002',
+      FullName: 'Other Team Member',
+      Email: 'other@test.com',
+      Role: 'Sub-stakeholder',
+      ManagerEmail: '',
+      SubTeamIDs: ['ST-002'],
+      TeamIDs: ['T-002'],
+      TeamNames: ['Team B'],
+      Active: true,
+      CanCreateFollowUp: true,
+      CanCloseTask: true,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+    };
+
+    const subTeams: SubTeam[] = [];
+
+    const result = canAssignWithinTeam(assigner, assignee, subTeams);
+    expect(result).toBe(false);
   });
 });

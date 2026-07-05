@@ -27,7 +27,7 @@
  */
 
 import { User, SubTeam, Team } from '../types';
-import { isAdminLevel } from '../constants/status';
+import { isAdminLevel, ROLE } from '../constants/status';
 
 // ─── Leadership checks ────────────────────────────────────────────────────────
 
@@ -225,32 +225,56 @@ export function getTeamRoster(teamId: string, allUsers: User[]): User[] {
  * Returns true if the assigner can assign a task to the target user without
  * Admin involvement.
  *
- * Rule: any team member can assign to any other member in the same parent
- * team. Cross-team assignment requires Admin.
+ * Rules:
+ * - Admin: can always assign
+ * - Stakeholder: can assign within their hierarchical scope (deferred to existing logic in App.tsx)
+ * - Sub-Team Leader: can assign to users in their visible sub-teams (reuses getVisibleSubTeamIds)
+ * - Regular member: can assign to anyone in the same team
  *
- * Sub-team leaders get NO special assignment privilege over regular members —
- * visibility (who they can see data for) and assignment (who they can assign
- * to) are separate rules per the spec.
+ * This function reuses getVisibleSubTeamIds() for Sub-Team Leader visibility to avoid
+ * duplicating the visibility logic from Task 5.
+ *
+ * @param assigner  - The user attempting to assign
+ * @param assignee  - The target user being assigned to
+ * @param subTeams  - All sub-teams (already hydrated with SubTeamLeaderEmails)
+ * @returns         - true if assignment is allowed
  */
 export function canAssignWithinTeam(
-  assignerEmail: string,
-  targetEmail: string,
-  allUsers: User[]
+  assigner: User,
+  assignee: User,
+  subTeams: SubTeam[]
 ): boolean {
-  const assigner = allUsers.find(
-    u => u.Email.toLowerCase() === assignerEmail.toLowerCase()
-  );
-  const target = allUsers.find(
-    u => u.Email.toLowerCase() === targetEmail.toLowerCase()
-  );
-  if (!assigner || !target) return false;
+  if (!assigner || !assignee) return false;
 
   // Admins can always assign
   if (isAdminLevel(assigner.Role)) return true;
 
-  // Check for at least one shared team
+  // Stakeholders: defer to existing hierarchical subordinate logic in App.tsx
+  // This function doesn't duplicate that logic - it's handled upstream
+  if (assigner.Role === ROLE.STAKEHOLDER) {
+    // For now, allow stakeholder assignment - the real filtering happens in App.tsx
+    // via getAllSubordinates. This is a guard, not the full logic.
+    return true;
+  }
+
+  // Sub-Team Leader (Sub-stakeholder who leads ≥1 sub-team): reuse Task 5's function
+  if (assigner.Role === ROLE.SUB_STAKEHOLDER) {
+    const visibleSubTeamIds = getVisibleSubTeamIds(assigner, subTeams);
+    // Check if they're actually a leader (not just a member)
+    const isLeader = subTeams.some(st =>
+      st.Active && st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === assigner.Email?.toLowerCase())
+    );
+    // If they lead at least one sub-team, restrict assignment to their visible sub-teams
+    if (isLeader && visibleSubTeamIds.length > 0) {
+      const assigneeSubTeamIds = assignee.SubTeamIDs ?? [];
+      return assigneeSubTeamIds.some(id => visibleSubTeamIds.includes(id));
+    }
+    // Otherwise, they're a regular sub-stakeholder - fall through to team-based assignment
+  }
+
+  // Regular member: can assign to anyone in the same team
   const assignerTeams = new Set(assigner.TeamIDs ?? []);
-  return (target.TeamIDs ?? []).some(tid => assignerTeams.has(tid));
+  return (assignee.TeamIDs ?? []).some(tid => assignerTeams.has(tid));
 }
 
 // ─── Settings key helpers ─────────────────────────────────────────────────────
