@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { User as UserType, TaskTemplate, AppSetting, Team, EmailTemplate } from '../types';
+import { User as UserType, TaskTemplate, AppSetting, Team, SubTeam, EmailTemplate } from '../types';
 import { ROLE } from '../constants/status';
 import { 
   Users, 
@@ -23,7 +23,8 @@ import {
   UserPlus,
   ChevronDown,
   FileSpreadsheet,
-  Upload
+  Upload,
+  Layers
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -32,6 +33,7 @@ interface AdminPanelProps {
   settings: AppSetting[];
   emailTemplates?: EmailTemplate[];
   teams: Team[];
+  subTeams?: SubTeam[];
   currentUserEmail?: string;
   onAddUser: (user: UserType) => void;
   onToggleUserStatus: (email: string) => void;
@@ -44,8 +46,12 @@ interface AdminPanelProps {
   onToggleTeamStatus: (teamId: string) => void;
   onUpdateUserTeams: (email: string, teamIDs: string[], teamNames: string[]) => void;
   onDeleteTeam: (teamId: string) => void;
+  onSaveSubTeam?: (subTeam: SubTeam) => Promise<void>;
+  onDeleteSubTeam?: (subTeamId: string) => Promise<void>;
+  onUpdateSubTeamLeaders?: (teamId: string, subTeamId: string, leaderEmails: string[]) => Promise<void>;
+  onAssignUserToSubTeam?: (userEmail: string, subTeamId: string | null, subTeamName: string | null) => Promise<void>;
   onSendInviteEmail?: (email: string, fullName: string, role: string) => void;
-  onSyncDatabase?: () => void; // optional — called on users-tab activation to pick up new pending registrations
+  onSyncDatabase?: () => void;
   isDarkMode?: boolean;
 }
 
@@ -67,8 +73,13 @@ export default function AdminPanel({
   onToggleTeamStatus,
   onUpdateUserTeams,
   onDeleteTeam,
+  onSaveSubTeam,
+  onDeleteSubTeam,
+  onUpdateSubTeamLeaders,
+  onAssignUserToSubTeam,
   onSendInviteEmail,
   onSyncDatabase,
+  subTeams = [],
   isDarkMode = false,
 }: AdminPanelProps) {
   // Master administrative tabs
@@ -110,6 +121,13 @@ export default function AdminPanel({
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [currentTeamLeaders, setCurrentTeamLeaders] = useState<string[]>([]);
   const [currentTeamStakeholders, setCurrentTeamStakeholders] = useState<string[]>([]);
+
+  // Sub-team management state — tracks which team's sub-teams are being managed
+  const [newSubTeamName, setNewSubTeamName] = useState('');
+  const [newSubTeamDesc, setNewSubTeamDesc] = useState('');
+  const [subTeamError, setSubTeamError] = useState<string | null>(null);
+  const [expandedSubTeamId, setExpandedSubTeamId] = useState<string | null>(null);
+
 
 
   const handleAddMember = (userEmail: string, teamId: string, teamName: string) => {
@@ -1472,6 +1490,229 @@ export default function AdminPanel({
                               </>
                             )}
                           </div>
+
+                          {/* Divider */}
+                          <div className={`h-px mb-8 ${isDarkMode ? 'bg-[#334155]' : 'bg-slate-200'}`} />
+
+                          {/* Sub-Teams Section */}
+                          {(() => {
+                            const teamSubTeams = subTeams.filter(st => st.TeamID === team.TeamID && st.Active);
+                            return (
+                              <div className="mb-8">
+                                <div className="flex items-center gap-3 mb-4">
+                                  <Layers size={18} className={isDarkMode ? 'text-indigo-400' : 'text-indigo-600'} />
+                                  <h4 className={`font-bold text-base ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                    Sub-Teams ({teamSubTeams.length})
+                                  </h4>
+                                </div>
+
+                                {/* Existing sub-teams */}
+                                {teamSubTeams.length > 0 && (
+                                  <div className="space-y-3 mb-6">
+                                    {teamSubTeams.map(st => {
+                                      const stMembers = users.filter(u => u.SubTeamID === st.SubTeamID && u.Active);
+                                      const stLeaders = st.SubTeamLeaderEmails ?? [];
+                                      const isExpanded = expandedSubTeamId === st.SubTeamID;
+                                      return (
+                                        <div key={st.SubTeamID} className={`border rounded-xl ${isDarkMode ? 'border-[#334155] bg-[#0F141F]' : 'border-slate-200 bg-slate-50'}`}>
+                                          {/* Sub-team header */}
+                                          <div className="flex items-center justify-between p-4">
+                                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                              <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${isDarkMode ? 'bg-indigo-500/20' : 'bg-indigo-100'}`}>
+                                                <Layers size={14} className={isDarkMode ? 'text-indigo-400' : 'text-indigo-600'} />
+                                              </div>
+                                              <div className="flex-1 min-w-0">
+                                                <div className={`font-semibold text-sm truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{st.SubTeamName}</div>
+                                                <div className={`text-xs truncate ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                                  {stMembers.length} member{stMembers.length !== 1 ? 's' : ''} · {stLeaders.length} leader{stLeaders.length !== 1 ? 's' : ''}
+                                                </div>
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                              <button
+                                                type="button"
+                                                onClick={() => setExpandedSubTeamId(isExpanded ? null : st.SubTeamID)}
+                                                className={`px-2.5 py-1.5 text-[10px] font-bold rounded-lg border transition-colors cursor-pointer ${isDarkMode ? 'bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'}`}
+                                              >
+                                                {isExpanded ? 'Collapse' : 'Manage'}
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={async () => {
+                                                  if (!confirm(`Delete sub-team "${st.SubTeamName}"? Members will be unassigned.`)) return;
+                                                  await onDeleteSubTeam?.(st.SubTeamID);
+                                                }}
+                                                className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-50 text-red-500'}`}
+                                                title="Delete sub-team"
+                                              >
+                                                <X size={14} />
+                                              </button>
+                                            </div>
+                                          </div>
+
+                                          {/* Expanded sub-team management */}
+                                          {isExpanded && (
+                                            <div className={`border-t px-4 pb-4 pt-3 space-y-4 ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+
+                                              {/* Members in this sub-team */}
+                                              <div>
+                                                <h6 className={`text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Members</h6>
+                                                {stMembers.length === 0 ? (
+                                                  <p className={`text-xs italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>No members assigned yet.</p>
+                                                ) : (
+                                                  <div className="flex flex-wrap gap-2">
+                                                    {stMembers.map(u => (
+                                                      <span key={u.UserID} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}>
+                                                        {u.FullName}
+                                                        <button
+                                                          type="button"
+                                                          title={`Remove ${u.FullName} from sub-team`}
+                                                          onClick={() => onAssignUserToSubTeam?.(u.Email, null, null)}
+                                                          className="opacity-60 hover:opacity-100 transition-opacity"
+                                                        >
+                                                          <X size={10} />
+                                                        </button>
+                                                      </span>
+                                                    ))}
+                                                  </div>
+                                                )}
+                                                {/* Add member to sub-team */}
+                                                {(() => {
+                                                  const eligible = teamUsers.filter(u => !u.SubTeamID);
+                                                  if (eligible.length === 0) return null;
+                                                  return (
+                                                    <select
+                                                      defaultValue=""
+                                                      onChange={e => {
+                                                        if (e.target.value) {
+                                                          onAssignUserToSubTeam?.(e.target.value, st.SubTeamID, st.SubTeamName);
+                                                        }
+                                                        e.target.value = '';
+                                                      }}
+                                                      className={`mt-2 w-full text-xs rounded-lg px-2 py-1.5 border focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}
+                                                    >
+                                                      <option value="" disabled>+ Assign team member…</option>
+                                                      {eligible.map(u => (
+                                                        <option key={u.UserID} value={u.Email}>{u.FullName}</option>
+                                                      ))}
+                                                    </select>
+                                                  );
+                                                })()}
+                                              </div>
+
+                                              {/* Leaders of this sub-team */}
+                                              <div>
+                                                <h6 className={`text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Sub-Team Leaders</h6>
+                                                {stLeaders.length === 0 ? (
+                                                  <p className={`text-xs italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>No leaders assigned.</p>
+                                                ) : (
+                                                  <div className="flex flex-wrap gap-2 mb-2">
+                                                    {stLeaders.map(email => {
+                                                      const u = users.find(x => x.Email.toLowerCase() === email.toLowerCase());
+                                                      return (
+                                                        <span key={email} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                                                          {u?.FullName ?? email}
+                                                          <button
+                                                            type="button"
+                                                            title="Remove as sub-team leader"
+                                                            onClick={() => {
+                                                              const updated = stLeaders.filter(e => e.toLowerCase() !== email.toLowerCase());
+                                                              onUpdateSubTeamLeaders?.(team.TeamID, st.SubTeamID, updated);
+                                                            }}
+                                                            className="opacity-60 hover:opacity-100 transition-opacity"
+                                                          >
+                                                            <X size={10} />
+                                                          </button>
+                                                        </span>
+                                                      );
+                                                    })}
+                                                  </div>
+                                                )}
+                                                {/* Assign leader dropdown — eligible = sub-team members not already leaders */}
+                                                {(() => {
+                                                  const eligible = stMembers.filter(u => !stLeaders.some(e => e.toLowerCase() === u.Email.toLowerCase()));
+                                                  if (eligible.length === 0) return null;
+                                                  return (
+                                                    <select
+                                                      defaultValue=""
+                                                      onChange={e => {
+                                                        if (!e.target.value) return;
+                                                        const updated = [...new Set([...stLeaders, e.target.value.toLowerCase()])];
+                                                        onUpdateSubTeamLeaders?.(team.TeamID, st.SubTeamID, updated);
+                                                        e.target.value = '';
+                                                      }}
+                                                      className={`w-full text-xs rounded-lg px-2 py-1.5 border focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}
+                                                    >
+                                                      <option value="" disabled>+ Assign sub-team leader…</option>
+                                                      {eligible.map(u => (
+                                                        <option key={u.UserID} value={u.Email}>{u.FullName}</option>
+                                                      ))}
+                                                    </select>
+                                                  );
+                                                })()}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+
+                                {/* Create sub-team form */}
+                                {subTeamError && (
+                                  <div className={`mb-3 p-3 text-xs rounded-lg ${isDarkMode ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-700'}`}>{subTeamError}</div>
+                                )}
+                                <div className={`border rounded-xl p-4 space-y-3 ${isDarkMode ? 'border-[#334155] bg-[#0F141F]' : 'border-slate-200 bg-slate-50'}`}>
+                                  <h5 className={`text-xs font-bold tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Create Sub-Team</h5>
+                                  <input
+                                    type="text"
+                                    value={newSubTeamName}
+                                    onChange={e => setNewSubTeamName(e.target.value)}
+                                    placeholder="Sub-team name…"
+                                    className={`w-full text-xs rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-indigo-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                  />
+                                  <input
+                                    type="text"
+                                    value={newSubTeamDesc}
+                                    onChange={e => setNewSubTeamDesc(e.target.value)}
+                                    placeholder="Description (optional)…"
+                                    className={`w-full text-xs rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-indigo-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      setSubTeamError(null);
+                                      const name = newSubTeamName.trim();
+                                      if (!name) { setSubTeamError('Sub-team name is required.'); return; }
+                                      if (subTeams.some(st => st.TeamID === team.TeamID && st.SubTeamName.toLowerCase() === name.toLowerCase() && st.Active)) {
+                                        setSubTeamError('A sub-team with that name already exists in this team.');
+                                        return;
+                                      }
+                                      const now = new Date().toISOString();
+                                      await onSaveSubTeam?.({
+                                        SubTeamID: `ST-${team.TeamID}-${Date.now()}`,
+                                        TeamID: team.TeamID,
+                                        SubTeamName: name,
+                                        Description: newSubTeamDesc.trim() || undefined,
+                                        Active: true,
+                                        CreatedAt: now,
+                                        UpdatedAt: now,
+                                        SubTeamLeaderEmails: [],
+                                      });
+                                      setNewSubTeamName('');
+                                      setNewSubTeamDesc('');
+                                    }}
+                                    className={`w-full py-2 text-xs font-bold rounded-lg border-none transition-colors cursor-pointer ${newSubTeamName.trim() ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`}
+                                    disabled={!newSubTeamName.trim()}
+                                  >
+                                    <Plus size={12} className="inline mr-1" />
+                                    Create Sub-Team
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })()}
 
                           {/* Divider */}
                           <div className={`h-px mb-8 ${isDarkMode ? 'bg-[#334155]' : 'bg-slate-200'}`} />
