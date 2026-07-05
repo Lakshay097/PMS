@@ -70,18 +70,20 @@ export function isTeamLeader(email: string, team: Team): boolean {
 /**
  * Returns the SubTeam the given user belongs to within a specific parent team,
  * or null if they are not assigned to any sub-team in that team.
- * Matches on user.SubTeamID (set when the admin assigns a user to a sub-team).
+ * With multi-membership, returns the first matching sub-team (for backward compatibility
+ * with single-membership code paths). Callers needing all sub-teams should use
+ * getSubTeamsForUser instead.
  */
 export function getSubTeamForUser(
   user: User,
   subTeams: SubTeam[],
   teamId: string
 ): SubTeam | null {
-  if (!user.SubTeamID) return null;
+  if (!user.SubTeamIDs || user.SubTeamIDs.length === 0) return null;
   return (
     subTeams.find(
       st =>
-        st.SubTeamID === user.SubTeamID &&
+        user.SubTeamIDs.includes(st.SubTeamID) &&
         st.TeamID === teamId &&
         st.Active
     ) ?? null
@@ -95,7 +97,7 @@ export function getMembersOfSubTeam(
   subTeamId: string,
   allUsers: User[]
 ): User[] {
-  return allUsers.filter(u => u.SubTeamID === subTeamId && u.Active);
+  return allUsers.filter(u => u.SubTeamIDs?.includes(subTeamId) && u.Active);
 }
 
 /**
