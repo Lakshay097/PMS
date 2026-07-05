@@ -480,8 +480,14 @@ export const dbService = {
     // Background async: Write to Firestore, then queue Sheets sync
     (async () => {
       try {
-        await setDoc(doc(db, 'users', user.Email), finalUser);
-        enqueueSheetsWrite('users', 'save', finalUser);
+        // Strip undefined fields — Firestore setDoc() rejects undefined values.
+        // This matters for optional fields like SubTeamID/SubTeamName which may
+        // be explicitly set to undefined when removing a user from a sub-team.
+        const persistableUser = Object.fromEntries(
+          Object.entries(finalUser).filter(([, v]) => v !== undefined)
+        ) as User;
+        await setDoc(doc(db, 'users', user.Email), persistableUser);
+        enqueueSheetsWrite('users', 'save', persistableUser);
         notifyChange('users', 'updated', user.UserID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveUser:', err);

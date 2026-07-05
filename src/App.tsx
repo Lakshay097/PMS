@@ -101,6 +101,8 @@ export default function App() {
     setTasks,
     teams,
     setTeams,
+    subTeams,
+    setSubTeams,
     templates,
     setTemplates,
     audits,
@@ -915,6 +917,7 @@ export default function App() {
         settings={settings}
         emailTemplates={emailTemplates}
         teams={teams}
+        subTeams={subTeams}
         reports={reports}
         teamSubmissions={teamSubmissions}
         syncStatus={syncStatus}
@@ -963,6 +966,62 @@ export default function App() {
             await logAudit('Team', teamData.TeamID, 'Created Team', '', JSON.stringify(teamData));
             // Trigger sync after action
             handleManualSync();
+          } catch (error) {
+            throw error;
+          }
+        }}
+        onSaveSubTeam={async (subTeam) => {
+          try {
+            await dbService.saveSubTeam(subTeam);
+          } catch (error) {
+            throw error;
+          }
+        }}
+        onDeleteSubTeam={async (subTeamId) => {
+          try {
+            await dbService.deleteSubTeam(subTeamId);
+            // Clear SubTeamID on any users that belonged to this sub-team.
+            // Use null (not undefined) so the field is actively cleared in
+            // Firestore rather than silently dropped by saveUser's sanitizer.
+            const affected = users.filter(u => u.SubTeamID === subTeamId);
+            for (const u of affected) {
+              await dbService.saveUser({ ...u, SubTeamID: null, SubTeamName: null } as User);
+            }
+          } catch (error) {
+            throw error;
+          }
+        }}
+        onUpdateSubTeamLeaders={async (teamId, subTeamId, leaderEmails) => {
+          try {
+            const key = `team_${teamId}_subteam_${subTeamId}_leaders`;
+            const settingExists = settings.some(s => s.Key === key);
+            const updatedSettings = settingExists
+              ? settings.map(s => (s.Key === key ? { ...s, Value: leaderEmails.join(',') } : s))
+              : [...settings, { Key: key, Value: leaderEmails.join(',') }];
+            setSettings(updatedSettings);
+            await dbService.saveSettings(updatedSettings);
+            // Update local subTeams state so the modal reflects new leaders immediately
+            setSubTeams(prev => prev.map(st =>
+              st.SubTeamID === subTeamId ? { ...st, SubTeamLeaderEmails: leaderEmails } : st
+            ));
+          } catch (error) {
+            throw error;
+          }
+        }}
+        onAssignUserToSubTeam={async (userEmail, subTeamId, subTeamName) => {
+          try {
+            const user = users.find(u => u.Email === userEmail);
+            if (user) {
+              // Use null (not undefined) when clearing sub-team membership so
+              // Firestore receives an explicit null field rather than silently
+              // dropping the key — undefined is stripped by saveUser's sanitizer
+              // and would leave a stale SubTeamID in Firestore on removal.
+              await dbService.saveUser({
+                ...user,
+                SubTeamID: subTeamId ?? null,
+                SubTeamName: subTeamName ?? null,
+              } as User);
+            }
           } catch (error) {
             throw error;
           }
