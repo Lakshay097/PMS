@@ -6,8 +6,8 @@ export interface User {
   ManagerEmail: string; // empty if Admin with no manager; settable for any role to represent the reporting chain
   TeamIDs: string[]; // Multiple teams support
   TeamNames: string[]; // Multiple team names for display
-  SubTeamID?: string;   // The sub-team this user belongs to within their primary team
-  SubTeamName?: string; // Display name of that sub-team
+  SubTeamIDs?: string[];   // Sub-teams this user belongs to (multi-membership)
+  SubTeamNames?: string[]; // Display names of those sub-teams
   Active: boolean;
   CanCreateFollowUp: boolean;
   CanCloseTask: boolean;
