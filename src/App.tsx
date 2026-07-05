@@ -1231,6 +1231,7 @@ export default function App() {
             onDeleteSubtask={handleDeleteSubtask}
             usersList={users}
             teamsList={teams}
+            subTeamsList={subTeams}
             isDarkMode={isDarkMode}
           />
         )}

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Calendar, User, FileText, Link as LinkIcon, History, AlertCircle, CheckCircle, TrendingUp, Edit2, Save, Trash, ShieldAlert, CornerRightDown, Upload, File, Image as ImageIcon } from 'lucide-react';
-import { Task, TaskReport, User as UserType, Team, Subtask } from '../../../types/index';
+import { Task, TaskReport, User as UserType, Team, Subtask, SubTeam } from '../../../types/index';
 import { ROLE, isAdminLevel } from '../../../constants/status';
 import { uploadFile } from '../../../api/upload';
 import { getAllSubordinates } from '../../../utils/userUtils';
+import { canAssignWithinTeam } from '../../../utils/subTeamUtils';
 
 // Helper function to derive a human-readable label and file extension from an
 // attachment URL, so downloadable notes/reports (PDF, PPT, Excel, etc.) show
@@ -68,6 +69,7 @@ interface TaskDrawerProps {
   onDeleteSubtask?: (subtaskId: string) => Promise<void>;
   usersList?: UserType[];
   teamsList?: Team[];
+  subTeamsList?: SubTeam[];
   isDarkMode?: boolean;
 }
 
@@ -87,6 +89,7 @@ export default function TaskDrawer({
   onDeleteSubtask,
   usersList = [],
   teamsList = [],
+  subTeamsList = [],
   isDarkMode = false,
 }: TaskDrawerProps) {
   const [activeTab, setActiveTab] = useState<'details' | 'history'>('details');
@@ -139,11 +142,17 @@ export default function TaskDrawer({
   // even though the prop type declares currentUser as non-nullable UserType.
   if (!isOpen || !task || !currentUser) return null;
 
+  // Filter assignable users based on team/sub-team scope
+  const assignableUsers = usersList.filter(user =>
+    canAssignWithinTeam(currentUser, user, subTeamsList)
+  );
+
   // Derived values that dereference currentUser/task — safe because they are
   // only reached after the guard above confirms both are non-null.
   const subordinateEmails = getAllSubordinates(currentUser.Email, usersList);
+  // For Sub-Team Leaders, filter subordinates to their visible sub-teams
   const subordinates = usersList.filter(u =>
-    u.Active && subordinateEmails.includes(u.Email)
+    u.Active && subordinateEmails.includes(u.Email) && canAssignWithinTeam(currentUser, u, subTeamsList)
   );
 
   // Filter reports specifically linked to this Task ID or its subtasks
@@ -375,10 +384,10 @@ export default function TaskDrawer({
                   <div className="space-y-1">
                     <label className={`text-[10px] font-bold tracking-wider block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Add / remove stakeholders</label>
                     <div className={`border rounded-lg p-3 max-h-40 overflow-y-auto space-y-1.5 shadow-inner ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-[#E2E8F0] bg-white'}`}>
-                      {usersList.length === 0 ? (
+                      {assignableUsers.length === 0 ? (
                         <div className={`${isDarkMode ? 'text-slate-500' : 'text-slate-400'} text-xs italic py-1`}>No stakeholders registered.</div>
                       ) : (
-                        usersList.filter(u => u.Active && u.Role === ROLE.STAKEHOLDER).map(user => {
+                        assignableUsers.filter(u => u.Active && u.Role === ROLE.STAKEHOLDER).map(user => {
                           const isChecked = stakeholderEmails.includes(user.Email);
                           return (
                             <label key={user.UserID} className={`flex items-center space-x-2.5 p-1.5 rounded-md cursor-pointer text-xs transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-200' : 'hover:bg-slate-100 text-slate-800'}`}>
@@ -798,14 +807,14 @@ export default function TaskDrawer({
                       />
                       
                       <div className={`border rounded-lg p-3 max-h-48 overflow-y-auto space-y-1.5 shadow-inner ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-[#CBD5E1] bg-white'}`}>
-                        {usersList.filter(u => u.Active && (adminUserSearch === '' || u.FullName.toLowerCase().includes(adminUserSearch.toLowerCase()) || u.Email.toLowerCase().includes(adminUserSearch.toLowerCase()))).length === 0 ? (
+                        {assignableUsers.filter(u => u.Active && (adminUserSearch === '' || u.FullName.toLowerCase().includes(adminUserSearch.toLowerCase()) || u.Email.toLowerCase().includes(adminUserSearch.toLowerCase()))).length === 0 ? (
                           <div className={`${isDarkMode ? 'text-slate-500' : 'text-slate-400'} text-xs italic py-1`}>No active users found.</div>
                         ) : (
                           <>
                             <div className={`flex items-center justify-between pb-1.5 border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-100'}`}>
                               <button
                                 type="button"
-                                onClick={() => setSelectedReassignUsers(usersList.filter(u => u.Active && (adminUserSearch === '' || u.FullName.toLowerCase().includes(adminUserSearch.toLowerCase()) || u.Email.toLowerCase().includes(adminUserSearch.toLowerCase()))).map(u => u.Email))}
+                                onClick={() => setSelectedReassignUsers(assignableUsers.filter(u => u.Active && (adminUserSearch === '' || u.FullName.toLowerCase().includes(adminUserSearch.toLowerCase()) || u.Email.toLowerCase().includes(adminUserSearch.toLowerCase()))).map(u => u.Email))}
                                 className={`text-[9px] font-semibold cursor-pointer border-none bg-transparent ${isDarkMode ? 'text-amber-400 hover:text-amber-300' : 'text-amber-700 hover:text-amber-900'}`}
                               >
                                 Select all
@@ -818,7 +827,7 @@ export default function TaskDrawer({
                                 Clear all
                               </button>
                             </div>
-                            {usersList.filter(u => u.Active && (adminUserSearch === '' || u.FullName.toLowerCase().includes(adminUserSearch.toLowerCase()) || u.Email.toLowerCase().includes(adminUserSearch.toLowerCase()))).map(user => {
+                            {assignableUsers.filter(u => u.Active && (adminUserSearch === '' || u.FullName.toLowerCase().includes(adminUserSearch.toLowerCase()) || u.Email.toLowerCase().includes(adminUserSearch.toLowerCase()))).map(user => {
                               const isChecked = selectedReassignUsers.includes(user.Email);
                               return (
                                 <label key={user.UserID} className={`flex items-center space-x-2.5 p-1.5 rounded-md cursor-pointer text-xs transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-200' : 'hover:bg-slate-100 text-slate-800'}`}>
@@ -924,7 +933,7 @@ export default function TaskDrawer({
                           onClick={() => {
                             if (reassignTeam && onUpdateTask) {
                               const teamObj = (teamsList || []).find(t => t.TeamID === reassignTeam);
-                              const teamMembers = usersList.filter(u => u.Active && u.TeamIDs.includes(reassignTeam));
+                              const teamMembers = assignableUsers.filter(u => u.Active && u.TeamIDs.includes(reassignTeam));
                               if (teamObj) {
                                 const commaEmails = teamMembers.map(u => u.Email).join(', ');
                                 onUpdateTask(task.TaskID, {
