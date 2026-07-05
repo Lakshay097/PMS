@@ -1299,11 +1299,13 @@ export default function Dashboard({
                 const groups: GroupEntry[] = [];
 
                 teamSubTeamList.forEach(st => {
-                  const members = filteredMembers.filter(u => u.SubTeamID === st.SubTeamID);
+                  // Multi-membership: include all users who belong to this sub-team
+                  const members = filteredMembers.filter(u => u.SubTeamIDs?.includes(st.SubTeamID));
                   groups.push({ label: st.SubTeamName, members, isSubTeam: true });
                 });
 
-                const unassigned = filteredMembers.filter(u => !u.SubTeamID || !teamSubTeamList.some(st => st.SubTeamID === u.SubTeamID));
+                // Unassigned: users with no sub-team assignments in this team
+                const unassigned = filteredMembers.filter(u => !u.SubTeamIDs || u.SubTeamIDs.length === 0 || !teamSubTeamList.some(st => u.SubTeamIDs?.includes(st.SubTeamID)));
                 if (unassigned.length > 0 || teamSubTeamList.length === 0) {
                   groups.push({ label: teamSubTeamList.length > 0 ? 'Unassigned' : 'Members', members: unassigned, isSubTeam: false });
                 }
@@ -1355,7 +1357,10 @@ export default function Dashboard({
                           ) : (
                             group.members.map(member => {
                               const isLeader = team.TeamLeaderEmails?.includes(member.Email);
-                              const subTeamObj = teamSubTeamList.find(st => st.SubTeamID === member.SubTeamID);
+                              // Multi-membership: check if user is a leader of ANY sub-team they belong to
+                              const subTeamObj = member.SubTeamIDs && member.SubTeamIDs.length > 0
+                                ? teamSubTeamList.find(st => member.SubTeamIDs?.includes(st.SubTeamID))
+                                : null;
                               const isSubLeader = subTeamObj?.SubTeamLeaderEmails?.some(
                                 e => e.toLowerCase() === member.Email.toLowerCase()
                               );
