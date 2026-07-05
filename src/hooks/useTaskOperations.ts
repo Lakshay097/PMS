@@ -201,6 +201,43 @@ export function useTaskOperations({
   }, [tasks, selectedTask, setSelectedTask, logAudit, currentUser]);
 
   const handleUpdateTask = useCallback(async (taskId: string, fields: Partial<Task>) => {
+    if (!currentUser) return;
+
+    // Gate assignment changes with canAssignWithinTeam check
+    if (fields.AssignedToEmail !== undefined || fields.AssignedToTeamIDs !== undefined) {
+      // Validate AssignedToEmail if being updated
+      if (fields.AssignedToEmail !== undefined) {
+        const emails = fields.AssignedToEmail
+          .split(',')
+          .map(e => e.trim())
+          .filter(Boolean);
+
+        const invalidAssignee = emails.find(email => {
+          const assignee = users.find(u => u.Email.toLowerCase() === email.toLowerCase());
+          return !assignee || !canAssignWithinTeam(currentUser, assignee, subTeams);
+        });
+
+        if (invalidAssignee) {
+          throw new Error(`Cannot assign task to ${invalidAssignee} outside your team scope.`);
+        }
+      }
+
+      // Validate AssignedToTeamIDs if being updated (independently load-bearing)
+      if (fields.AssignedToTeamIDs !== undefined) {
+        const assignerTeams = new Set(currentUser.TeamIDs || []);
+        const invalidTeamId = fields.AssignedToTeamIDs.find(teamId => {
+          // Admin can assign to any team
+          if (isAdminLevel(currentUser.Role)) return false;
+          // Stakeholders can assign to their own teams
+          return !assignerTeams.has(teamId);
+        });
+
+        if (invalidTeamId) {
+          throw new Error(`Cannot assign task to team ${invalidTeamId} outside your team scope.`);
+        }
+      }
+    }
+
     const nowStr = new Date().toISOString();
     const targetTask = tasks.find(t => t.TaskID === taskId);
 
@@ -228,7 +265,7 @@ export function useTaskOperations({
       await logAudit('Task', taskId, 'Updated Task Properties', '', JSON.stringify(fields));
       // Optimistic update handles UI refresh automatically
     }
-  }, [tasks, selectedTask, setSelectedTask, triggerNotification, logAudit]);
+  }, [tasks, selectedTask, setSelectedTask, triggerNotification, logAudit, currentUser, users, subTeams]);
 
   const handleCreateFollowUp = useCallback(async (parentTaskId: string, reason: string) => {
     if (!currentUser) return;
