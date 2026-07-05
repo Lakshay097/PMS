@@ -50,6 +50,17 @@ export enum OperationType {
   WRITE = 'write',
 }
 
+/**
+ * Strip undefined-valued keys from an object before Firestore write.
+ * Firestore setDoc() rejects undefined values, so we sanitize to prevent
+ * write failures. Preserves null and other falsy-but-valid values (0, '', false).
+ */
+function sanitizeForFirestore<T>(obj: T): T {
+  return Object.fromEntries(
+    Object.entries(obj as Record<string, unknown>).filter(([, v]) => v !== undefined)
+  ) as T;
+}
+
 // In-memory cache for performance (not persistence)
 // This cache is cleared on page refresh and is only for performance optimization
 const memoryCache = new Map<string, any[]>();
@@ -106,6 +117,7 @@ function enqueueSheetsWrite(collection: string, operation: 'save' | 'delete', da
 }
 
 // Background sync interval - flushes pending Sheets writes every 5 minutes
+// TODO: move to server-side sync controller to prevent multi-tab duplicate writes — approved for future work, not yet scheduled (see status report)
 let syncIntervalId: NodeJS.Timeout | null = null;
 
 export function startSheetsSyncInterval(): void {
@@ -480,12 +492,7 @@ export const dbService = {
     // Background async: Write to Firestore, then queue Sheets sync
     (async () => {
       try {
-        // Strip undefined fields — Firestore setDoc() rejects undefined values.
-        // This matters for optional fields like SubTeamID/SubTeamName which may
-        // be explicitly set to undefined when removing a user from a sub-team.
-        const persistableUser = Object.fromEntries(
-          Object.entries(finalUser).filter(([, v]) => v !== undefined)
-        ) as unknown as User;
+        const persistableUser = sanitizeForFirestore(finalUser) as unknown as User;
         await setDoc(doc(db, 'users', user.Email), persistableUser);
         enqueueSheetsWrite('users', 'save', persistableUser);
         notifyChange('users', 'updated', user.UserID).catch(() => {});
@@ -561,8 +568,9 @@ export const dbService = {
     // Background async: Write to Firestore, then queue Sheets sync
     (async () => {
       try {
-        await setDoc(doc(db, 'teams', team.TeamID), teamToSave);
-        enqueueSheetsWrite('teams', 'save', teamToSave);
+        const sanitizedTeam = sanitizeForFirestore(teamToSave);
+        await setDoc(doc(db, 'teams', team.TeamID), sanitizedTeam);
+        enqueueSheetsWrite('teams', 'save', sanitizedTeam);
         notifyChange('teams', 'updated', team.TeamID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveTeam:', err);
@@ -590,7 +598,8 @@ export const dbService = {
 
     (async () => {
       try {
-        await updateDoc(doc(db, 'teams', teamId), { Active: team.Active, UpdatedAt: now });
+        const sanitizedUpdate = sanitizeForFirestore({ Active: team.Active, UpdatedAt: now });
+        await updateDoc(doc(db, 'teams', teamId), sanitizedUpdate);
         enqueueSheetsWrite('teams', 'save', team);
         notifyChange('teams', 'updated', teamId).catch(() => {});
       } catch (err) {
@@ -663,8 +672,9 @@ export const dbService = {
 
     (async () => {
       try {
-        await setDoc(doc(db, 'templates', template.TemplateID), templateToSave);
-        enqueueSheetsWrite('templates', 'save', templateToSave);
+        const sanitizedTemplate = sanitizeForFirestore(templateToSave);
+        await setDoc(doc(db, 'templates', template.TemplateID), sanitizedTemplate);
+        enqueueSheetsWrite('templates', 'save', sanitizedTemplate);
         notifyChange('templates', 'updated', template.TemplateID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveTemplate:', err);
@@ -751,8 +761,9 @@ export const dbService = {
 
     (async () => {
       try {
-        await setDoc(doc(db, 'tasks', task.TaskID), finalTask);
-        enqueueSheetsWrite('tasks', 'save', finalTask);
+        const sanitizedTask = sanitizeForFirestore(finalTask);
+        await setDoc(doc(db, 'tasks', task.TaskID), sanitizedTask);
+        enqueueSheetsWrite('tasks', 'save', sanitizedTask);
         notifyChange('tasks', 'updated', task.TaskID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveTask:', err);
@@ -820,8 +831,9 @@ export const dbService = {
 
     (async () => {
       try {
-        await setDoc(doc(db, 'reports', report.ReportID), report);
-        enqueueSheetsWrite('reports', 'save', report);
+        const sanitizedReport = sanitizeForFirestore(report);
+        await setDoc(doc(db, 'reports', report.ReportID), sanitizedReport);
+        enqueueSheetsWrite('reports', 'save', sanitizedReport);
         notifyChange('reports', 'created', report.ReportID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveReport:', err);
@@ -859,8 +871,9 @@ export const dbService = {
 
     (async () => {
       try {
-        await setDoc(doc(db, 'followups', follow.FollowUpID), follow);
-        enqueueSheetsWrite('followups', 'save', follow);
+        const sanitizedFollowup = sanitizeForFirestore(follow);
+        await setDoc(doc(db, 'followups', follow.FollowUpID), sanitizedFollowup);
+        enqueueSheetsWrite('followups', 'save', sanitizedFollowup);
         notifyChange('followups', 'created', follow.FollowUpID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveFollowup:', err);
@@ -903,7 +916,7 @@ export const dbService = {
     (async () => {
       try {
         for (const setting of settingsList) {
-          await setDoc(doc(db, 'settings', setting.Key), setting);
+          await setDoc(doc(db, 'settings', setting.Key), sanitizeForFirestore(setting));
         }
         enqueueSheetsWrite('settings', 'save', settingsList);
         notifyChange('settings', 'updated', 'settings').catch(() => {});
@@ -943,7 +956,7 @@ export const dbService = {
     (async () => {
       try {
         for (const template of emailTemplatesList) {
-          await setDoc(doc(db, 'email_templates', template.Key), template);
+          await setDoc(doc(db, 'email_templates', template.Key), sanitizeForFirestore(template));
         }
         enqueueSheetsWrite('email_templates', 'save', emailTemplatesList);
         notifyChange('email_templates', 'updated', 'email_templates').catch(() => {});
@@ -995,8 +1008,9 @@ export const dbService = {
     // Background async: Write to Firestore, then queue Sheets sync
     (async () => {
       try {
-        await setDoc(doc(db, 'subtasks', subtask.SubtaskID), subtaskToSave);
-        enqueueSheetsWrite('subtasks', 'save', subtaskToSave);
+        const sanitizedSubtask = sanitizeForFirestore(subtaskToSave);
+        await setDoc(doc(db, 'subtasks', subtask.SubtaskID), sanitizedSubtask);
+        enqueueSheetsWrite('subtasks', 'save', sanitizedSubtask);
         notifyChange('subtasks', 'updated', subtask.SubtaskID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveSubtask:', err);
@@ -1075,8 +1089,9 @@ export const dbService = {
     // Background async: Write to Firestore, then queue Sheets sync
     (async () => {
       try {
-        await setDoc(doc(db, 'comments', comment.CommentID), comment);
-        enqueueSheetsWrite('comments', 'save', comment);
+        const sanitizedComment = sanitizeForFirestore(comment);
+        await setDoc(doc(db, 'comments', comment.CommentID), sanitizedComment);
+        enqueueSheetsWrite('comments', 'save', sanitizedComment);
         notifyChange('comments', 'created', comment.CommentID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveComment:', err);
@@ -1105,10 +1120,7 @@ export const dbService = {
   },
  
 async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
-    // Strip undefined fields — Firestore setDoc() rejects undefined values
-    const sanitizedSubmission = Object.fromEntries(
-      Object.entries(submission).filter(([, v]) => v !== undefined)
-    ) as TeamSubmission;
+    const sanitizedSubmission = sanitizeForFirestore(submission);
 
     // OPTIMISTIC UPDATE: Update cache and notify UI immediately
     const cached = getFromCache('teamSubmissions') as TeamSubmission[] || [];
@@ -1119,7 +1131,7 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
     (async () => {
       try {
         await setDoc(doc(db, 'team_submissions', submission.SubmissionID), sanitizedSubmission);
-        enqueueSheetsWrite('team_submissions', 'save', submission);
+        enqueueSheetsWrite('team_submissions', 'save', sanitizedSubmission);
         notifyChange('team_submissions', 'created', submission.SubmissionID).catch(() => {});
       } catch (err) {
         console.error('Firestore write failed — saveTeamSubmission:', err);
@@ -1189,10 +1201,7 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
     // Background async: Write to Firestore, then queue Sheets sync
     (async () => {
       try {
-        // Strip undefined fields — Firestore setDoc() rejects undefined values.
-        const sanitized = Object.fromEntries(
-          Object.entries(persistable).filter(([, v]) => v !== undefined)
-        );
+        const sanitized = sanitizeForFirestore(persistable);
         await setDoc(doc(db, 'sub_teams', subTeam.SubTeamID), sanitized);
         enqueueSheetsWrite('sub_teams', 'save', sanitized);
         notifyChange('sub_teams', 'updated', subTeam.SubTeamID).catch(() => {});
