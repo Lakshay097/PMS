@@ -983,12 +983,16 @@ export default function App() {
         onDeleteSubTeam={async (subTeamId) => {
           try {
             await dbService.deleteSubTeam(subTeamId);
-            // Clear SubTeamID on any users that belonged to this sub-team.
-            // Use null (not undefined) so the field is actively cleared in
-            // Firestore rather than silently dropped by saveUser's sanitizer.
-            const affected = users.filter(u => u.SubTeamID === subTeamId);
+            // Remove subTeamId from SubTeamIDs array for any users that belonged to this sub-team.
+            const affected = users.filter(u => u.SubTeamIDs?.includes(subTeamId));
             for (const u of affected) {
-              await dbService.saveUser({ ...u, SubTeamID: null, SubTeamName: null } as User);
+              const newSubTeamIDs = (u.SubTeamIDs || []).filter(id => id !== subTeamId);
+              const newSubTeamNames = (u.SubTeamNames || []).filter((_, idx) => u.SubTeamIDs?.[idx] !== subTeamId);
+              await dbService.saveUser({ 
+                ...u, 
+                SubTeamIDs: newSubTeamIDs, 
+                SubTeamNames: newSubTeamNames 
+              } as User);
             }
           } catch (error) {
             throw error;
@@ -1015,15 +1019,27 @@ export default function App() {
           try {
             const user = users.find(u => u.Email === userEmail);
             if (user) {
-              // Use null (not undefined) when clearing sub-team membership so
-              // Firestore receives an explicit null field rather than silently
-              // dropping the key — undefined is stripped by saveUser's sanitizer
-              // and would leave a stale SubTeamID in Firestore on removal.
-              await dbService.saveUser({
-                ...user,
-                SubTeamID: subTeamId ?? null,
-                SubTeamName: subTeamName ?? null,
-              } as User);
+              // Multi-membership: add or remove from arrays
+              const currentSubTeamIDs = user.SubTeamIDs || [];
+              const currentSubTeamNames = user.SubTeamNames || [];
+
+              if (subTeamId && subTeamName) {
+                // Add to sub-team (if not already present)
+                if (!currentSubTeamIDs.includes(subTeamId)) {
+                  await dbService.saveUser({
+                    ...user,
+                    SubTeamIDs: [...currentSubTeamIDs, subTeamId],
+                    SubTeamNames: [...currentSubTeamNames, subTeamName],
+                  } as User);
+                }
+              } else {
+                // Remove from all sub-teams (clear arrays)
+                await dbService.saveUser({
+                  ...user,
+                  SubTeamIDs: [],
+                  SubTeamNames: [],
+                } as User);
+              }
             }
           } catch (error) {
             throw error;
