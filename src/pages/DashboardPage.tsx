@@ -1,11 +1,13 @@
 import React from 'react';
-import { Task, User as UserType, TaskTemplate, AuditLog, AppSetting, Team, EmailTemplate } from '../types';
+import { Task, User as UserType, TaskTemplate, AuditLog, AppSetting, Team, SubTeam, EmailTemplate, TaskReport, TeamSubmission } from '../types';
 import Dashboard from '../components/features/dashboard/Dashboard';
 
 interface DashboardPageProps {
   tasks: Task[];
   currentUser: UserType;
-  onNewTask: (assigneeEmail?: string) => void;
+  // teamIds param was previously absent, causing it to be silently dropped at
+  // this boundary when App.tsx passed it (e.g. "Assign Task to Team" button).
+  onNewTask: (assigneeEmail?: string, teamIds?: string[]) => void;
   onTaskClick: (task: Task) => void;
   onLogout: () => void;
   templates?: TaskTemplate[];
@@ -29,6 +31,13 @@ interface DashboardPageProps {
   settings?: AppSetting[];
   emailTemplates?: EmailTemplate[];
   teams?: Team[];
+  subTeams?: SubTeam[];
+  // Props below were omitted from this interface since the file was created,
+  // causing App.tsx to silently drop them at the {...props} spread boundary.
+  reports?: TaskReport[];
+  teamSubmissions?: TeamSubmission[];
+  onAddTeamSubmission?: (submission: TeamSubmission) => void;
+  triggerNotification?: (type: string, message: string, emailSentTo: string) => void;
   onToggleUserStatus?: (email: string) => void;
   onUpdateUserRole?: (email: string, role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder') => void;
   onApproveUser?: (email: string) => void;
@@ -36,6 +45,10 @@ interface DashboardPageProps {
   onToggleTeamStatus?: (teamId: string) => void;
   onUpdateUserTeams?: (email: string, teamIDs: string[], teamNames: string[]) => Promise<void>;
   onDeleteTeam?: (teamId: string) => Promise<void>;
+  onSaveSubTeam?: (subTeam: SubTeam) => Promise<void>;
+  onDeleteSubTeam?: (subTeamId: string) => Promise<void>;
+  onUpdateSubTeamLeaders?: (teamId: string, subTeamId: string, leaderEmails: string[]) => Promise<void>;
+  onAssignUserToSubTeam?: (userEmail: string, subTeamId: string | null, subTeamName: string | null) => Promise<void>;
   onDeleteTask?: (taskId: string) => void;
   isDrawerOpen?: boolean;
   isTaskModalOpen?: boolean;
