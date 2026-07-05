@@ -49,6 +49,7 @@ interface DashboardPageProps {
   onDeleteSubTeam?: (subTeamId: string) => Promise<void>;
   onUpdateSubTeamLeaders?: (teamId: string, subTeamId: string, leaderEmails: string[]) => Promise<void>;
   onAssignUserToSubTeam?: (userEmail: string, subTeamId: string | null, subTeamName: string | null) => Promise<void>;
+  onRemoveUserFromSubTeam?: (userEmail: string, subTeamId: string) => Promise<void>;
   onDeleteTask?: (taskId: string) => void;
   isDrawerOpen?: boolean;
   isTaskModalOpen?: boolean;

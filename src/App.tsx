@@ -27,6 +27,7 @@ import { checkAndGenerateRecurringTasks, evaluateOverdueTasks } from './lib/task
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { useAuth } from './contexts/AuthContext';
 import { changePassword } from './api/auth';
+import { getVisibleSubTeamIds } from './utils/subTeamUtils';
 import InstallBanner from './components/InstallBanner';
 import OfflineBanner from './components/OfflineBanner';
 import UpdateBanner from './components/UpdateBanner';
@@ -478,6 +479,9 @@ export default function App() {
       ? getAllSubordinates(activeUser.Email, users)
       : [];
 
+    // Get visible sub-team IDs for Sub-Team Leader visibility
+    const visibleSubTeamIds = getVisibleSubTeamIds(activeUser, subTeams);
+
     const visible = (tasks || []).map(task => {
       // Dynamically derive Overdue state
       if (task.Status !== 'Closed' && task.Status !== 'Reviewed') {
@@ -507,6 +511,15 @@ export default function App() {
       }
       if (activeUser.Role === ROLE.SUB_STAKEHOLDER) {
         // Sub-stakeholders see tasks assigned to them
+        // Additionally, if they are a Sub-Team Leader, they see tasks for their sub-team members
+        if (visibleSubTeamIds.length > 0) {
+          // Check if task assignee is in any of the visible sub-teams
+          const assigneeUser = users.find(u => assignees.includes(u.Email?.toLowerCase() || ''));
+          if (assigneeUser && assigneeUser.SubTeamIDs) {
+            const hasVisibleSubTeam = assigneeUser.SubTeamIDs.some(stId => visibleSubTeamIds.includes(stId));
+            if (hasVisibleSubTeam) return true;
+          }
+        }
         return isAssignee;
       }
       return false;
@@ -1019,7 +1032,7 @@ export default function App() {
           try {
             const user = users.find(u => u.Email === userEmail);
             if (user) {
-              // Multi-membership: add or remove from arrays
+              // Multi-membership: add to arrays
               const currentSubTeamIDs = user.SubTeamIDs || [];
               const currentSubTeamNames = user.SubTeamNames || [];
 
@@ -1032,12 +1045,28 @@ export default function App() {
                     SubTeamNames: [...currentSubTeamNames, subTeamName],
                   } as User);
                 }
-              } else {
-                // Remove from all sub-teams (clear arrays)
+              }
+            }
+          } catch (error) {
+            throw error;
+          }
+        }}
+        onRemoveUserFromSubTeam={async (userEmail, subTeamId) => {
+          try {
+            const user = users.find(u => u.Email === userEmail);
+            if (user) {
+              // Remove only the specified subTeamId from the user's SubTeamIDs array
+              const currentSubTeamIDs = user.SubTeamIDs || [];
+              const currentSubTeamNames = user.SubTeamNames || [];
+
+              const subTeamIndex = currentSubTeamIDs.indexOf(subTeamId);
+              if (subTeamIndex !== -1) {
+                const newSubTeamIDs = currentSubTeamIDs.filter(id => id !== subTeamId);
+                const newSubTeamNames = currentSubTeamNames.filter((_, i) => i !== subTeamIndex);
                 await dbService.saveUser({
                   ...user,
-                  SubTeamIDs: [],
-                  SubTeamNames: [],
+                  SubTeamIDs: newSubTeamIDs,
+                  SubTeamNames: newSubTeamNames,
                 } as User);
               }
             }

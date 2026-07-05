@@ -50,6 +50,7 @@ interface AdminPanelProps {
   onDeleteSubTeam?: (subTeamId: string) => Promise<void>;
   onUpdateSubTeamLeaders?: (teamId: string, subTeamId: string, leaderEmails: string[]) => Promise<void>;
   onAssignUserToSubTeam?: (userEmail: string, subTeamId: string | null, subTeamName: string | null) => Promise<void>;
+  onRemoveUserFromSubTeam?: (userEmail: string, subTeamId: string) => Promise<void>;
   onSendInviteEmail?: (email: string, fullName: string, role: string) => void;
   onSyncDatabase?: () => void;
   isDarkMode?: boolean;
@@ -77,6 +78,7 @@ export default function AdminPanel({
   onDeleteSubTeam,
   onUpdateSubTeamLeaders,
   onAssignUserToSubTeam,
+  onRemoveUserFromSubTeam,
   onSendInviteEmail,
   onSyncDatabase,
   subTeams = [],
@@ -1579,7 +1581,7 @@ export default function AdminPanel({
                                                         <button
                                                           type="button"
                                                           title={`Remove ${u.FullName} from sub-team`}
-                                                          onClick={() => onAssignUserToSubTeam?.(u.Email, null, null)}
+                                                          onClick={() => onRemoveUserFromSubTeam?.(u.Email, st.SubTeamID)}
                                                           className="opacity-60 hover:opacity-100 transition-opacity"
                                                         >
                                                           <X size={10} />

@@ -1,6 +1,7 @@
                                                                           import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAllSubordinates } from '../../../utils/userUtils';
+import { getVisibleSubTeamIds } from '../../../utils/subTeamUtils';
 import { generateReportWithAttachments, AttachmentInfo } from '../../../utils/pdfGenerator';
 import {
   LayoutDashboard,
@@ -86,6 +87,7 @@ interface DashboardProps {
   onDeleteSubTeam?: (subTeamId: string) => Promise<void>;
   onUpdateSubTeamLeaders?: (teamId: string, subTeamId: string, leaderEmails: string[]) => Promise<void>;
   onAssignUserToSubTeam?: (userEmail: string, subTeamId: string | null, subTeamName: string | null) => Promise<void>;
+  onRemoveUserFromSubTeam?: (userEmail: string, subTeamId: string) => Promise<void>;
   onDeleteTask?: (taskId: string) => void;
   isDrawerOpen?: boolean;
   isTaskModalOpen?: boolean;
@@ -142,6 +144,7 @@ export default function Dashboard({
   onDeleteSubTeam,
   onUpdateSubTeamLeaders,
   onAssignUserToSubTeam,
+  onRemoveUserFromSubTeam,
   onDeleteTask,
   isDrawerOpen = false,
   isTaskModalOpen = false,
@@ -729,6 +732,9 @@ export default function Dashboard({
     
     const teamMemberEmails = myTeamMembers.map(u => u.Email.toLowerCase());
     
+    // Get visible sub-team IDs for Sub-Team Leader visibility
+    const visibleSubTeamIds = getVisibleSubTeamIds(currentUser, subTeams || []);
+    
     const roleFiltered = (tasks || []).filter(task => {
       // Admin: My Tasks = assigned to me, Team Tasks = all tasks, Assigned by Me = tasks I assigned
       if (isAdminLevel(currentUser.Role)) {
@@ -761,8 +767,21 @@ export default function Dashboard({
       }
       
       // Sub-stakeholder: My Tasks = assigned to me only
+      // Additionally, if they are a Sub-Team Leader, they see tasks for their sub-team members
       if (currentUser.Role === ROLE.SUB_STAKEHOLDER) {
-        return task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
+        const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
+        
+        // Check if task assignee is in any of the visible sub-teams
+        if (visibleSubTeamIds.length > 0) {
+          const assignees = (task.AssignedToEmail || '').split(',').map(e => e.trim().toLowerCase());
+          const assigneeUser = users?.find(u => assignees.includes(u.Email?.toLowerCase() || ''));
+          if (assigneeUser && assigneeUser.SubTeamIDs) {
+            const hasVisibleSubTeam = assigneeUser.SubTeamIDs.some(stId => visibleSubTeamIds.includes(stId));
+            if (hasVisibleSubTeam) return true;
+          }
+        }
+        
+        return assignedToMe;
       }
       
       return false;
@@ -1996,6 +2015,7 @@ export default function Dashboard({
       onDeleteSubTeam={onDeleteSubTeam}
       onUpdateSubTeamLeaders={onUpdateSubTeamLeaders}
       onAssignUserToSubTeam={onAssignUserToSubTeam}
+      onRemoveUserFromSubTeam={onRemoveUserFromSubTeam}
       onSyncDatabase={onSyncDatabase}
       onSendInviteEmail={(email, fullName, role) => {
         const inviteMessage = `Welcome to PMS! Your account has been created as ${role}. You can now log in with your credentials.`;
