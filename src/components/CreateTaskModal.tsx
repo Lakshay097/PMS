@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Calendar, ClipboardList, Repeat, UserPlus, Info, Users, CheckCircle, Upload, File, X as XIcon } from 'lucide-react';
-import { User, TaskTemplate, Task, TaskStatus, Team } from '../types';
+import { User, TaskTemplate, Task, TaskStatus, Team, SubTeam } from '../types';
 import { ROLE, isAdminLevel } from '../constants/status';
+import { canAssignWithinTeam } from '../utils/subTeamUtils';
 import { uploadFile } from '../api/upload';
 
 interface CreateTaskModalProps {
   currentUser: User;
   usersList: User[];
   teamsList?: Team[];
+  subTeamsList?: SubTeam[];
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: {
@@ -27,7 +29,7 @@ interface CreateTaskModalProps {
   preSelectedTeamIDs?: string[];
 }
 
-export default function CreateTaskModal({ currentUser, usersList, teamsList = [], isOpen, onClose, onSubmit, preSelectedAssignee, preSelectedTeamIDs }: CreateTaskModalProps) {
+export default function CreateTaskModal({ currentUser, usersList, teamsList = [], subTeamsList = [], isOpen, onClose, onSubmit, preSelectedAssignee, preSelectedTeamIDs }: CreateTaskModalProps) {
   const [taskType, setTaskType] = useState<'One-time' | 'Recurring'>('One-time');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -65,11 +67,16 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
   
   // Filter eligible assignees based on role
   // Rule: Admin can assign to anyone. Stakeholders can assign to other stakeholders, admins, or themselves
+  // Sub-Team Leaders can assign to users in their visible sub-teams (via canAssignWithinTeam)
   const filteredAssignees = usersList.filter(user => {
     if (!user.Active) return false;
     if (isAdminLevel(currentUser.Role)) return true;
     if (currentUser.Role === ROLE.STAKEHOLDER) {
       return isAdminLevel(user.Role) || user.Role === ROLE.STAKEHOLDER || user.Email.toLowerCase() === currentUser.Email.toLowerCase();
+    }
+    if (currentUser.Role === ROLE.SUB_STAKEHOLDER) {
+      // Use canAssignWithinTeam to check if assignment is allowed
+      return canAssignWithinTeam(currentUser, user, subTeamsList);
     }
     return false;
   });

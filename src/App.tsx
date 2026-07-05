@@ -592,6 +592,7 @@ export default function App() {
     tasks,
     users,
     currentUser: activeUser,
+    subTeams,
     syncDatabase: loadDatabase,
     silentSync,
     selectedTask,
@@ -1187,6 +1188,7 @@ export default function App() {
             currentUser={activeUser}
             usersList={users}
             teamsList={teams}
+            subTeamsList={subTeams}
             isOpen={isTaskModalOpen}
             onClose={() => {
               setIsTaskModalOpen(false);
