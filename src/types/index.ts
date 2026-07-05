@@ -109,6 +109,7 @@ export interface Task {
   FollowUpReason?: string; // stores the reason for the latest follow-up
   CompletionDate: string | null;
   CloseRemark: string | null;
+  ClosedInSubTeamIDs: string[] | null; // Sub-teams of task owner at closure time
   AttachmentLink: string;
   CreatedAt: string;
   UpdatedAt: string;

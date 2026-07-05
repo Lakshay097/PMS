@@ -117,6 +117,7 @@ export function useTaskOperations({
           FollowUpCount: 0,
           CompletionDate: null,
           CloseRemark: null,
+          ClosedInSubTeamIDs: null,
           AttachmentLink: data.AttachmentLink || '',
           CreatedAt: nowStr,
           UpdatedAt: nowStr,
@@ -169,12 +170,26 @@ export function useTaskOperations({
           : attachmentLink;
       }
 
+      // Record task-owner's SubTeamIDs at closure time (not the approver's)
+      const assigneeEmails = targetTask.AssignedToEmail
+        .split(',')
+        .map(e => e.trim())
+        .filter(Boolean);
+
+      const closedInSubTeamIDs = assigneeEmails.length > 0
+        ? assigneeEmails.flatMap(email => {
+            const assignee = users.find(u => u.Email.toLowerCase() === email.toLowerCase());
+            return assignee?.SubTeamIDs || [];
+          })
+        : null;
+
       const updatedTask: Task = {
         ...targetTask,
         Status: 'Closed' as TaskStatus,
         PercentComplete: 100,
         CompletionDate: nowStr.split('T')[0],
         CloseRemark: remark,
+        ClosedInSubTeamIDs: closedInSubTeamIDs,
         AttachmentLink: finalAttachment,
         UpdatedAt: nowStr
       };
@@ -198,7 +213,7 @@ export function useTaskOperations({
 
     await logAudit('Task', taskId, 'Task Cleared & Closed', '', JSON.stringify({ Remark: remark }));
     // Optimistic update handles UI refresh automatically
-  }, [tasks, selectedTask, setSelectedTask, logAudit, currentUser]);
+  }, [tasks, selectedTask, setSelectedTask, logAudit, currentUser, users]);
 
   const handleUpdateTask = useCallback(async (taskId: string, fields: Partial<Task>) => {
     if (!currentUser) return;
@@ -290,6 +305,7 @@ export function useTaskOperations({
       FollowUpReason: reason,           // store latest follow-up reason
       CompletionDate: '',               // clear completion date
       CloseRemark: '',                  // clear close remark
+      ClosedInSubTeamIDs: null,          // clear closure sub-team IDs
       DueDate: newDueStr,               // reset due date
       OriginalDueDate: parent.OriginalDueDate || parent.DueDate,
       EtaRequestCount: 0,               // reset ETA count

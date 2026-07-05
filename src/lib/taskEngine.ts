@@ -189,6 +189,7 @@ export async function checkAndGenerateRecurringTasks(
         FollowUpCount: 0,
         CompletionDate: null,
         CloseRemark: null,
+        ClosedInSubTeamIDs: null,
         AttachmentLink: '',
         CreatedAt: new Date().toISOString(),
         UpdatedAt: new Date().toISOString(),
