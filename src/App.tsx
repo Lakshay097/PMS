@@ -518,11 +518,14 @@ export default function App() {
   // useMemo: tasks list can be large, filter is O(n)
   const filteredTasks = useMemo(() => {
     if (!activeUser) return [];
+    // Pre-build email-to-name map for O(1) assignee name lookup (was O(users) per task)
+    const emailToNameMap = new Map(
+      users.map(u => [u.Email?.toLowerCase() || '', u.FullName])
+    );
     return getFilteredTasks().filter(task => {
     const assignees = (task.AssignedToEmail || '').split(',').map(e => e.trim());
     const assigneeNames = assignees.map(email => {
-      const found = users.find(u => u.Email?.toLowerCase() === email.toLowerCase());
-      return found ? found.FullName : email;
+      return emailToNameMap.get(email.toLowerCase()) || email;
     }).join(', ');
 
     // Text search - case-insensitive across all required fields
