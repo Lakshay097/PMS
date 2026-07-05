@@ -68,6 +68,40 @@ export function isTeamLeader(email: string, team: Team): boolean {
 // ─── Sub-team membership ──────────────────────────────────────────────────────
 
 /**
+ * Returns the UNION of all sub-team IDs the user can see:
+ *   1. All sub-team IDs where the user is a leader (SubTeamLeaderEmails)
+ *   2. All sub-team IDs in the user's own SubTeamIDs array (membership)
+ *
+ * This is the single authoritative function for Sub-Team Leader visibility
+ * in task/report filtering. Sub-Team Leaders see tasks/reports belonging to
+ * anyone whose SubTeamIDs overlaps with this result.
+ *
+ * @param user     - The user whose visibility we are computing
+ * @param subTeams - All sub-teams (already hydrated with SubTeamLeaderEmails)
+ * @returns        - Array of sub-team IDs the user can see (unique, no duplicates)
+ */
+export function getVisibleSubTeamIds(user: User, subTeams: SubTeam[]): string[] {
+  const result = new Set<string>();
+
+  // Add sub-teams where user is a leader
+  const userEmail = user.Email?.toLowerCase();
+  if (userEmail) {
+    subTeams.forEach(st => {
+      if (st.Active && st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === userEmail)) {
+        result.add(st.SubTeamID);
+      }
+    });
+  }
+
+  // Add sub-teams where user is a member
+  if (user.SubTeamIDs) {
+    user.SubTeamIDs.forEach(id => result.add(id));
+  }
+
+  return Array.from(result);
+}
+
+/**
  * Returns the SubTeam the given user belongs to within a specific parent team,
  * or null if they are not assigned to any sub-team in that team.
  * With multi-membership, returns the first matching sub-team (for backward compatibility
