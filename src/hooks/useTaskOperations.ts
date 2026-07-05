@@ -1,14 +1,16 @@
 import { useCallback } from 'react';
-import { Task, User, TaskTemplate, Subtask, Comment, FollowUp, TaskStatus } from '../types';
+import { Task, User, TaskTemplate, Subtask, Comment, FollowUp, TaskStatus, SubTeam } from '../types';
 import { dbService } from '../lib/dbService';
 import { checkAndGenerateRecurringTasks } from '../lib/taskEngine';
 import { ROLE, isAdminLevel } from '../constants/status';
+import { canAssignWithinTeam } from '../utils/subTeamUtils';
 import { triggerTaskAssignmentEmail, triggerTaskClosureEmail } from '../api/emailTrigger';
 
 interface UseTaskOperationsProps {
   tasks: Task[];
   users: User[];
   currentUser: User | null;
+  subTeams: SubTeam[];
   syncDatabase: () => Promise<void>;
   silentSync: () => Promise<void>;
   selectedTask: Task | null;
@@ -26,6 +28,7 @@ export function useTaskOperations({
   tasks,
   users,
   currentUser,
+  subTeams,
   syncDatabase,
   silentSync,
   selectedTask,
@@ -40,9 +43,16 @@ export function useTaskOperations({
 }: UseTaskOperationsProps) {
   const handleCreateTaskOrTemplate = useCallback(async (data: any) => {
     if (!currentUser) return;
-    
+
     const isTemplate = data.TaskType === 'Recurring';
     const nowStr = new Date().toISOString();
+
+    // Belt-and-suspenders check: verify assignment eligibility
+    const firstEmail = data.AssignedToEmail.split(',')[0]?.trim() || '';
+    const assignee = users.find(u => u.Email === firstEmail);
+    if (assignee && !canAssignWithinTeam(currentUser, assignee, subTeams)) {
+      throw new Error('Cannot assign task outside your team scope.');
+    }
 
     try {
       if (isTemplate) {
@@ -145,7 +155,7 @@ export function useTaskOperations({
     } catch (error) {
       throw error;
     }
-  }, [currentUser, users, triggerNotification, formatEmailTemplate, logAudit]);
+  }, [currentUser, users, subTeams, triggerNotification, formatEmailTemplate, logAudit]);
 
   const handleCloseTask = useCallback(async (taskId: string, remark: string, attachmentLink?: string) => {
     const nowStr = new Date().toISOString();
