@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const STATIC_CACHE_NAME = `taskflow-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE_NAME = `taskflow-dynamic-${CACHE_VERSION}`;
 
@@ -8,7 +8,7 @@ const PRECACHE_URLS = [
   '/index.html',
   '/manifest.json',
   '/offline.html',
-  // Icons
+  // Icons (in /icons/ directory)
   '/icons/icon-72x72.png',
   '/icons/icon-96x96.png',
   '/icons/icon-128x128.png',
@@ -17,6 +17,9 @@ const PRECACHE_URLS = [
   '/icons/icon-192x192.png',
   '/icons/icon-384x384.png',
   '/icons/icon-512x512.png',
+  // Root-level icons (for browser auto-favicon requests)
+  '/icon-192x192.png',
+  '/icon-512x512.png',
 ];
 
 // Install event - pre-cache static assets

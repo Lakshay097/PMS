@@ -336,8 +336,12 @@ export default function Dashboard({
               submissionId: submissionId,
             });
             uploadedUrls.push(uploadResult.webViewLink);
-          } catch (error) {
+          } catch (error: any) {
             console.error('Error uploading file:', error);
+            const errorMessage = error?.response?.data?.error || error?.message || `Failed to upload ${file.name}`;
+            setSubmissionError(errorMessage);
+            setIsSubmitting(false);
+            return; // Stop submission if any file upload fails
           }
         }
 
@@ -2034,6 +2038,16 @@ export default function Dashboard({
           (t.StakeholderEmails?.includes(currentUser.Email) && t.Active)
         );
 
+    // Get unsubmitted teams from settings (for Admin dashboard visibility on Saturday)
+    const unsubmittedTeamsSetting = settings.find(s => s.Key === 'unsubmitted_teams_this_week');
+    const unsubmittedTeamIds = unsubmittedTeamsSetting?.Value ? unsubmittedTeamsSetting.Value.split(',').filter(Boolean) : [];
+    
+    // Filter out teams that have submitted (even late) from the unsubmitted list
+    const submittedTeamIds = new Set(teamSubmissions.map(s => s.TeamID));
+    const unsubmittedTeams = teams.filter(t => 
+      unsubmittedTeamIds.includes(t.TeamID) && !submittedTeamIds.has(t.TeamID)
+    );
+
     return (
       <div className="space-y-4 sm:space-y-6">
         <div className={`border rounded-xl p-4 sm:p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
@@ -2051,6 +2065,30 @@ export default function Dashboard({
             )}
           </div>
 
+          {/* Admin-only: Show unsubmitted teams warning on Saturday */}
+          {isAdminLevel(currentUser.Role) && unsubmittedTeams.length > 0 && (
+            <div className={`mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/30' : 'bg-amber-50 border-amber-200'}`}>
+              <div className="flex items-start gap-2 sm:gap-3">
+                <AlertTriangle size={16} className={`shrink-0 mt-0.5 ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`} />
+                <div className="flex-1 min-w-0">
+                  <h4 className={`font-medium text-xs sm:text-sm ${isDarkMode ? 'text-amber-300' : 'text-amber-800'}`}>
+                    Unsubmitted Weekly Reports
+                  </h4>
+                  <p className={`text-[10px] sm:text-xs mt-1 ${isDarkMode ? 'text-amber-400/80' : 'text-amber-700'}`}>
+                    The following teams have not submitted their weekly report by Friday EOD:
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5 sm:gap-2">
+                    {unsubmittedTeams.map(team => (
+                      <span key={team.TeamID} className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium ${isDarkMode ? 'bg-amber-500/20 text-amber-300' : 'bg-amber-100 text-amber-800'}`}>
+                        {team.TeamName}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {visibleTeams.length === 0 ? (
             <div className={`p-8 sm:p-12 text-center text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
               {isAdminLevel(currentUser.Role) ? 'No teams available' : 'You are not assigned as a team leader to any team'}
@@ -2061,7 +2099,9 @@ export default function Dashboard({
                 const teamMembers = users.filter(u => u.TeamIDs.includes(team.TeamID));
                 const isTeamLeader = team.TeamLeaderEmails?.includes(currentUser.Email);
                 const canPost = isTeamLeader || isAdminLevel(currentUser.Role);
-                const filteredSubmissions = teamSubmissions.filter(s => s.TeamID === team.TeamID);
+                const filteredSubmissions = teamSubmissions
+                  .filter(s => s.TeamID === team.TeamID)
+                  .sort((a, b) => new Date(b.SubmittedAt).getTime() - new Date(a.SubmittedAt).getTime());
 
                 return (
                   <div key={team.TeamID} className={`border rounded-xl p-3 sm:p-4 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
