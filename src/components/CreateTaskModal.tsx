@@ -36,12 +36,25 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
   const [priority, setPriority] = useState<'Low' | 'Medium' | 'High' | 'Critical'>('Medium');
   const [recurrenceType, setRecurrenceType] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Half-yearly'>('Weekly');
   
+  // Track whether user has manually selected a day (for Weekly recurrence)
+  const [userSelectedDay, setUserSelectedDay] = useState(false);
+  const [manualWeeklyDay, setManualWeeklyDay] = useState<string>('');
+  
   // Schedule dates (defaulting to today + offset)
   const todayStr = new Date().toISOString().split('T')[0];
   const nextWeekStr = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
   
   const [startDate, setStartDate] = useState(todayStr);
   const [dueDate, setDueDate] = useState(nextWeekStr);
+  
+  // Compute the weekday name for Weekly recurrence based on start date
+  const getWeekdayName = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return weekdays[date.getDay()];
+  };
+  
+  const weeklyDayName = userSelectedDay && manualWeeklyDay ? manualWeeklyDay : getWeekdayName(startDate);
   
   // Set initial assignedToEmail based on preSelectedAssignee
   const [assignedToEmail, setAssignedToEmail] = useState(preSelectedAssignee || '');
@@ -63,6 +76,8 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
     } else if (isOpen) {
       setSelectedTeamIDs([]);
     }
+    // Reset user selection flag when modal opens
+    setUserSelectedDay(false);
   }, [isOpen, preSelectedAssignee, preSelectedTeamIDs]);
   
   // Filter eligible assignees based on role
@@ -543,16 +558,52 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                   </label>
                   <select
                     value={recurrenceType}
-                    onChange={(e) => setRecurrenceType(e.target.value as any)}
+                    onChange={(e) => {
+                      const newValue = e.target.value as any;
+                      setRecurrenceType(newValue);
+                      // Reset manual selection when switching recurrence types
+                      if (newValue !== 'Weekly') {
+                        setUserSelectedDay(false);
+                        setManualWeeklyDay('');
+                      } else {
+                        // When switching TO Weekly, allow auto-computation from start date
+                        setUserSelectedDay(false);
+                        setManualWeeklyDay('');
+                      }
+                    }}
                     className="w-full text-xs bg-white border border-[#E5E7EB] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                   >
                     <option value="Daily">Daily Interval</option>
-                    <option value="Weekly">Weekly (Every Monday)</option>
+                    <option value="Weekly">Weekly (Every {weeklyDayName})</option>
                     <option value="Monthly">Monthly Interval</option>
                     <option value="Quarterly">Quarterly Cycle</option>
                     <option value="Half-yearly">Half-yearly Cycle</option>
                   </select>
                 </div>
+
+                {recurrenceType === 'Weekly' && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+                      Weekly recurrence day
+                    </label>
+                    <select
+                      value={userSelectedDay && manualWeeklyDay ? manualWeeklyDay : getWeekdayName(startDate)}
+                      onChange={(e) => {
+                        setManualWeeklyDay(e.target.value);
+                        setUserSelectedDay(true);
+                      }}
+                      className="w-full text-xs bg-white border border-[#E5E7EB] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    >
+                      <option value="Sunday">Sunday</option>
+                      <option value="Monday">Monday</option>
+                      <option value="Tuesday">Tuesday</option>
+                      <option value="Wednesday">Wednesday</option>
+                      <option value="Thursday">Thursday</option>
+                      <option value="Friday">Friday</option>
+                      <option value="Saturday">Saturday</option>
+                    </select>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">

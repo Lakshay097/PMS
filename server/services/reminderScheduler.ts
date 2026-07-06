@@ -77,6 +77,17 @@ export function getLocalDateTimeInfo(): { weekday: string; dateStr: string; hour
  * Checks report submissions and sends email reminders to team leaders
  */
 export async function checkAndSendWeeklyReminders(): Promise<void> {
+  // Run Thursday reminder logic
+  await checkThursdayReminders();
+  
+  // Run Saturday check for unsubmitted reports
+  await checkSaturdayUnsubmittedReports();
+}
+
+/**
+ * Thursday: Send email reminders to team leaders for weekly reports
+ */
+async function checkThursdayReminders(): Promise<void> {
   // 1. Check intra-process lock
   if (isRunning) {
     logger.warn('ReminderScheduler: Execution skipped. A scheduler run is already in progress in this instance.');
@@ -320,6 +331,128 @@ export async function checkAndSendWeeklyReminders(): Promise<void> {
     logger.error('ReminderScheduler: Critical error in weekly report reminders scheduler:', err);
   } finally {
     isRunning = false;
+  }
+}
+
+/**
+ * Saturday: Check for unsubmitted weekly reports and flag them for Admin dashboard
+ * This is dashboard-visibility only - no email is sent to Admin
+ */
+async function checkSaturdayUnsubmittedReports(): Promise<void> {
+  try {
+    const timeInfo = getLocalDateTimeInfo();
+    const todayStr = timeInfo.dateStr;
+    const currentWeekday = timeInfo.weekday;
+
+    // Only run on Saturday
+    if (currentWeekday.toLowerCase() !== 'saturday') {
+      return;
+    }
+
+    const tokenData = await generateGoogleSheetsToken();
+    if (!tokenData || !tokenData.spreadsheetId) {
+      logger.error('ReminderScheduler: Saturday check - Failed to obtain Google Sheets access token');
+      return;
+    }
+
+    const spreadsheetId = tokenData.spreadsheetId;
+    const accessToken = tokenData.accessToken;
+
+    // Fetch settings to check if already ran today
+    const settingsRows = await fetchSheetValues(accessToken, spreadsheetId, 'settings!A:B');
+    if (!settingsRows) {
+      logger.error('ReminderScheduler: Saturday check - Failed to fetch settings sheet');
+      return;
+    }
+
+    const lastSaturdayCheck = getSettingValue(settingsRows, 'last_saturday_check_date', '');
+    
+    // Skip if already ran today
+    if (lastSaturdayCheck === todayStr) {
+      logger.info('ReminderScheduler: Saturday check already completed today');
+      return;
+    }
+
+    logger.info(`ReminderScheduler: Initiating Saturday check for unsubmitted reports. date=${todayStr}`);
+
+    // Calculate start of the reporting week (Saturday 00:00:00, after previous Friday deadline)
+    // This aligns with the Thursday email → Friday EOD deadline cycle
+    const getStartOfReportingWeek = (d: Date) => {
+      const date = new Date(d);
+      const day = date.getDay();
+      // If today is Saturday (6), start is today at 00:00:00
+      // If today is Sunday (0), start was yesterday (Saturday)
+      // Otherwise, calculate the most recent Saturday
+      const diff = day === 6 ? 0 : (day === 0 ? -1 : -(day - 6));
+      const saturday = new Date(date.setDate(date.getDate() + diff));
+      saturday.setHours(0, 0, 0, 0);
+      return saturday;
+    };
+    const startOfWeek = getStartOfReportingWeek(new Date());
+
+    // Fetch teams
+    const teamsRows = await fetchSheetValues(accessToken, spreadsheetId, 'teams!A:D');
+    if (!teamsRows || teamsRows.length <= 1) {
+      logger.warn('ReminderScheduler: Saturday check - No teams available');
+      return;
+    }
+
+    // Fetch submissions
+    const submissionsRows = await fetchSheetValues(accessToken, spreadsheetId, 'team_submissions!A:F');
+
+    // Compile set of TeamIDs that have submitted this week
+    const submittedTeamIds = new Set<string>();
+    if (submissionsRows && submissionsRows.length > 1) {
+      for (let i = 1; i < submissionsRows.length; i++) {
+        const row = submissionsRows[i];
+        const teamId = row[1];
+        const submittedAtStr = row[3];
+        if (teamId && submittedAtStr) {
+          try {
+            const submittedAtDate = new Date(submittedAtStr);
+            if (submittedAtDate >= startOfWeek) {
+              submittedTeamIds.add(teamId);
+            }
+          } catch (e) {
+            logger.error(`ReminderScheduler: Saturday check - Failed to parse submission date: ${submittedAtStr}`, e);
+          }
+        }
+      }
+    }
+
+    // Identify teams that haven't submitted
+    const unsubmittedTeams: string[] = [];
+    for (let i = 1; i < teamsRows.length; i++) {
+      const row = teamsRows[i];
+      const teamId = row[0];
+      const teamName = row[1];
+      const activeVal = row[3];
+
+      const isActive = activeVal === 'true' || activeVal === true;
+      if (!isActive || !teamId) continue;
+
+      if (!submittedTeamIds.has(teamId)) {
+        unsubmittedTeams.push(teamId);
+        logger.info(`ReminderScheduler: Saturday check - Team "${teamName}" (${teamId}) has not submitted this week`);
+      }
+    }
+
+    // Store unsubmitted teams in settings for Admin dashboard visibility
+    if (unsubmittedTeams.length > 0) {
+      const unsubmittedTeamsStr = unsubmittedTeams.join(',');
+      await saveSettingValue(accessToken, spreadsheetId, settingsRows, 'unsubmitted_teams_this_week', unsubmittedTeamsStr);
+      logger.info(`ReminderScheduler: Saturday check - Flagged ${unsubmittedTeams.length} unsubmitted teams for Admin dashboard`);
+    } else {
+      await saveSettingValue(accessToken, spreadsheetId, settingsRows, 'unsubmitted_teams_this_week', '');
+      logger.info('ReminderScheduler: Saturday check - All teams have submitted, no flags needed');
+    }
+
+    // Update last check date
+    await saveSettingValue(accessToken, spreadsheetId, settingsRows, 'last_saturday_check_date', todayStr);
+
+    logger.info('ReminderScheduler: Saturday check completed successfully');
+  } catch (err) {
+    logger.error('ReminderScheduler: Critical error in Saturday check:', err);
   }
 }
 

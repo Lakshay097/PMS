@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { User, Task, Team, SubTeam, TaskTemplate, AppSetting, TaskReport, FollowUp, Subtask, Comment, EmailTemplate, TeamSubmission } from '../types';
-import { dbService, initializeDatabaseWithRace, getPrimaryDatabase, forceClearAllCaches, getSyncStatus, subscribeToSyncStatus, startSheetsSyncInterval, stopSheetsSyncInterval, setDatabaseSwitchCallback, switchToFirestoreBackup, registerOptimisticCallback } from '../lib/dbService';
+import { dbService, initializeDatabaseWithRace, getPrimaryDatabase, forceClearAllCaches, getSyncStatus, subscribeToSyncStatus, setDatabaseSwitchCallback, switchToFirestoreBackup, registerOptimisticCallback } from '../lib/dbService';
 import { logger } from '../utils/logger';
 
 export function useDatabase(isAuthInitialized: boolean = false) {
@@ -104,8 +104,7 @@ export function useDatabase(isAuthInitialized: boolean = false) {
   useEffect(() => {
     if (isAuthInitialized) {
       loadDatabase();
-      // Start the background Sheets sync interval
-      startSheetsSyncInterval();
+      // Server-side Sheets sync is now handled by the server
     }
 
     // Subscribe to sync status changes
@@ -178,7 +177,6 @@ export function useDatabase(isAuthInitialized: boolean = false) {
       unsubscribeSettings();
       unsubscribeEmailTemplates();
       unsubscribeTeamSubmissions();
-      stopSheetsSyncInterval();
     };
   }, [isAuthInitialized]);
 

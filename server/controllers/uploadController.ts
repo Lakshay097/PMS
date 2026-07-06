@@ -40,10 +40,24 @@ function validateFileUpload(fileName: string, fileData: string, mimeType: string
     return { valid: false, error: "File size exceeds 10MB limit" };
   }
 
+  const fileExtension = fileName.split('.').pop()?.toLowerCase();
+  
+  logger.info(`File upload validation: fileName=${fileName}, mimeType=${mimeType}, fileExtension=${fileExtension}`);
+  logger.info(`Allowed MIME types: ${config.ALLOWED_MIME_TYPES.join(', ')}`);
+
+  // Check MIME type whitelist
   if (!config.ALLOWED_MIME_TYPES.includes(mimeType as any)) {
-    return { valid: false, error: "File type not allowed" };
+    // Fallback: check file extension for CSV files (browsers may send inconsistent MIME types)
+    if (fileExtension === 'csv') {
+      // Allow CSV files regardless of MIME type
+      logger.info(`CSV file allowed via extension fallback (MIME type was: ${mimeType})`);
+      return { valid: true };
+    }
+    logger.error(`File type rejected: MIME type ${mimeType} not in whitelist, extension ${fileExtension}`);
+    return { valid: false, error: `File type not allowed. Received MIME type: ${mimeType}` };
   }
 
+  logger.info(`File type allowed: MIME type ${mimeType} in whitelist`);
   return { valid: true };
 }
 

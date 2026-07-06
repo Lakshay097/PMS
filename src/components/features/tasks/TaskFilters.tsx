@@ -11,6 +11,7 @@ interface TaskFiltersProps {
   filterTeamIDs: string[];
   filterDateFrom: string;
   filterDateTo: string;
+  searchQuery: string;
   currentUser: UserType;
   users: UserType[];
   teams: Team[];
@@ -21,6 +22,7 @@ interface TaskFiltersProps {
   onFilterTeamIDsChange: (value: string[]) => void;
   onFilterDateFromChange: (value: string) => void;
   onFilterDateToChange: (value: string) => void;
+  onSearchQueryChange: (value: string) => void;
 }
 
 export default function TaskFilters({
@@ -30,6 +32,7 @@ export default function TaskFilters({
   filterTeamIDs,
   filterDateFrom,
   filterDateTo,
+  searchQuery,
   currentUser,
   users,
   teams,
@@ -40,10 +43,11 @@ export default function TaskFilters({
   onFilterTeamIDsChange,
   onFilterDateFromChange,
   onFilterDateToChange,
+  onSearchQueryChange,
 }: TaskFiltersProps) {
   const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
   const [isTeamDropdownOpen, setIsTeamDropdownOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [assigneeSearchQuery, setAssigneeSearchQuery] = useState('');
   const assigneeDropdownRef = useRef<HTMLDivElement>(null);
   const teamDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -87,10 +91,10 @@ export default function TaskFilters({
     }
 
     // Apply search filter
-    if (searchQuery) {
+    if (assigneeSearchQuery) {
       filteredUsers = filteredUsers.filter(u =>
-        u.FullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        u.Email.toLowerCase().includes(searchQuery.toLowerCase())
+        u.FullName.toLowerCase().includes(assigneeSearchQuery.toLowerCase()) ||
+        u.Email.toLowerCase().includes(assigneeSearchQuery.toLowerCase())
       );
     }
 
@@ -112,7 +116,7 @@ export default function TaskFilters({
     onFilterTeamIDsChange([]);
     onFilterDateFromChange('');
     onFilterDateToChange('');
-    setSearchQuery('');
+    setAssigneeSearchQuery('');
   };
 
   const toggleTeam = (teamId: string) => {
@@ -128,6 +132,21 @@ export default function TaskFilters({
         <Filter size={14} className="sm:size-4" />
         <span className="hidden sm:inline">Filters:</span>
         <span className="sm:hidden">Filter</span>
+      </div>
+      {/* Search Input */}
+      <div className="relative">
+        <Search size={14} className={`absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} sm:size-4`} />
+        <input
+          type="text"
+          placeholder="Search tasks..."
+          value={searchQuery}
+          onChange={(e) => onSearchQueryChange(e.target.value)}
+          className={`pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            isDarkMode 
+              ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' 
+              : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
+          }`}
+        />
       </div>
       <select
         value={filterStatus}
@@ -194,8 +213,8 @@ export default function TaskFilters({
                 <input
                   type="text"
                   placeholder="Search assignees..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={assigneeSearchQuery}
+                  onChange={(e) => setAssigneeSearchQuery(e.target.value)}
                   className={`w-full pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                     isDarkMode 
                       ? 'bg-[#0F141F] border border-[#334155] text-white placeholder-slate-500' 

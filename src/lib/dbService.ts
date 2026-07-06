@@ -1,6 +1,6 @@
 // Firestore-First, Sheets-Deferred Database Layer
 // All writes go to Firestore immediately for instant UI updates
-// Google Sheets sync runs in background every 5 minutes as a batch flush
+// Google Sheets sync is now handled server-side via API endpoints
 
 // TECH-DEBT: All writes happen client-side via dbService directly to Google Sheets.
 // Ideal architecture would have server-side controllers handling writes and broadcasting SSE events.
@@ -36,7 +36,7 @@ import {
 } from '../initialData';
 import { sheetsApi, HEADERS } from './sheetsService';
 import { logger } from '../utils/logger';
-import { notifyChange } from '../api/client';
+import { notifyChange, api } from '../api/client';
 import { db } from './firestoreConfig';
 import { doc, setDoc, updateDoc, deleteDoc, addDoc, collection, getDocs, getDoc, query, where } from 'firebase/firestore';
 
@@ -66,11 +66,7 @@ function sanitizeForFirestore<T>(obj: T): T {
 const memoryCache = new Map<string, any[]>();
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
-// Pending Sheets write queue for deferred sync
-// Structure: Map<collectionName, Array<{operation: 'save'|'delete', data: any}>>
-const pendingSheetsWrites = new Map<string, Array<{operation: 'save' | 'delete', data: any}>>();
-
-// Sync status for UI indicator
+// Sync status for UI indicator (now reflects server-side sync status)
 type SyncStatus = 'synced' | 'syncing' | 'error';
 let currentSyncStatus: SyncStatus = 'synced';
 const syncStatusListeners = new Set<(status: SyncStatus) => void>();
@@ -107,113 +103,15 @@ async function writeWithBackoff(fn: () => Promise<any>, retries = 3): Promise<an
   throw new Error('Max retries exceeded');
 }
 
-// Enqueue a Sheets write operation
-function enqueueSheetsWrite(collection: string, operation: 'save' | 'delete', data: any): void {
-  if (!pendingSheetsWrites.has(collection)) {
-    pendingSheetsWrites.set(collection, []);
-  }
-  pendingSheetsWrites.get(collection)!.push({ operation, data });
-  setSyncStatus('syncing');
-}
-
-// Background sync interval - flushes pending Sheets writes every 5 minutes
-// TODO: move to server-side sync controller to prevent multi-tab duplicate writes — approved for future work, not yet scheduled (see status report)
-let syncIntervalId: NodeJS.Timeout | null = null;
-
-export function startSheetsSyncInterval(): void {
-  if (syncIntervalId) {
-    console.log('Sheets sync interval already running');
-    return;
-  }
-
-  console.log('Starting Sheets sync interval (5 minutes)');
-  syncIntervalId = setInterval(async () => {
-    if (pendingSheetsWrites.size === 0) {
-      return; // No pending writes
-    }
-
-    console.log(`Flushing ${pendingSheetsWrites.size} collections to Sheets...`);
+// Enqueue a Sheets write operation - now calls server API instead of local queue
+async function enqueueSheetsWrite(collection: string, operation: 'save' | 'delete', data: any): Promise<void> {
+  try {
+    // Call server API to enqueue the write operation
+    await api.post('/sheets/enqueue-write', { collection, operation, data });
     setSyncStatus('syncing');
-
-    const collections = Array.from(pendingSheetsWrites.entries());
-    pendingSheetsWrites.clear();
-
-    for (const [collectionName, operations] of collections) {
-      try {
-        // Get current data from Firestore for this collection
-        let currentData: any[] = [];
-        switch (collectionName) {
-          case 'users':
-            currentData = await dbService.getUsers();
-            break;
-          case 'teams':
-            currentData = await dbService.getTeams();
-            break;
-          case 'sub_teams':
-            currentData = await dbService.getSubTeams();
-            break;
-          case 'templates':
-            currentData = await dbService.getTemplates();
-            break;
-          case 'tasks':
-            currentData = await dbService.getTasks();
-            break;
-          case 'reports':
-            currentData = await dbService.getReports();
-            break;
-          case 'followups':
-            currentData = await dbService.getFollowups();
-            break;
-          case 'settings':
-            currentData = await dbService.getSettings();
-            break;
-          case 'subtasks':
-            currentData = await dbService.getSubtasks();
-            break;
-          case 'comments':
-            currentData = await dbService.getComments();
-            break;
-          case 'team_submissions':
-            currentData = await dbService.getTeamSubmissions();
-            break;
-          default:
-            console.warn(`Unknown collection: ${collectionName}`);
-            continue;
-        }
-
-        // Apply pending operations to current data
-        for (const op of operations) {
-          if (op.operation === 'delete') {
-            const idField = getIdFieldForCollection(collectionName);
-            currentData = currentData.filter((item: any) => item[idField] !== op.data);
-          }
-          // 'save' operations are already reflected in currentData from Firestore
-        }
-
-        // Write entire collection to Sheets with backoff
-        await writeWithBackoff(() => sheetsApi.saveCollection(collectionName as any, currentData));
-        console.log(`Successfully synced ${collectionName} to Sheets`);
-
-      } catch (err) {
-        console.error(`Sheets sync failed for ${collectionName}:`, err);
-        // Re-enqueue failed operations
-        const existingOps = pendingSheetsWrites.get(collectionName) || [];
-        pendingSheetsWrites.set(collectionName, [...existingOps, ...operations]);
-        setSyncStatus('error');
-      }
-    }
-
-    if (pendingSheetsWrites.size === 0) {
-      setSyncStatus('synced');
-    }
-  }, 5 * 60 * 1000); // 5 minutes
-}
-
-export function stopSheetsSyncInterval(): void {
-  if (syncIntervalId) {
-    clearInterval(syncIntervalId);
-    syncIntervalId = null;
-    console.log('Stopped Sheets sync interval');
+  } catch (error) {
+    console.error('Failed to enqueue Sheets write to server:', error);
+    // Optionally implement local fallback or retry logic here
   }
 }
 

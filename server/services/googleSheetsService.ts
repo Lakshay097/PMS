@@ -339,3 +339,46 @@ export async function initializeTeamSubmissionsSheet(): Promise<boolean> {
   }
 }
 
+/**
+ * Saves an entire collection to Google Sheets by clearing and rewriting
+ * This is a server-side implementation for the sync controller
+ * @param accessToken - Google OAuth access token
+ * @param spreadsheetId - Google Sheets spreadsheet ID
+ * @param sheetName - Name of the sheet
+ * @param data - Array of objects to write (first row should be headers)
+ * @returns true if successful, false otherwise
+ */
+export async function saveCollection(
+  accessToken: string,
+  spreadsheetId: string,
+  sheetName: string,
+  data: any[]
+): Promise<boolean> {
+  try {
+    // Convert data to 2D array (including headers)
+    if (data.length === 0) {
+      logger.warn(`Attempted to save empty collection ${sheetName}`);
+      return true; // Nothing to save
+    }
+
+    const headers = Object.keys(data[0]);
+    const values = [headers, ...data.map(row => headers.map(header => row[header] || ''))];
+
+    // Clear the sheet first (write empty range to remove old data)
+    const clearRange = `${sheetName}!A2:Z9999`;
+    await updateSheetValues(accessToken, spreadsheetId, clearRange, []);
+
+    // Write new data (starting from row 2 to preserve headers)
+    const writeRange = `${sheetName}!A2:Z${values.length}`;
+    const success = await updateSheetValues(accessToken, spreadsheetId, writeRange, values.slice(1));
+
+    if (success) {
+      logger.info(`Saved ${data.length} records to ${sheetName}`);
+    }
+
+    return success;
+  } catch (err) {
+    logger.error(`Error saving collection ${sheetName}:`, err);
+    return false;
+  }
+}

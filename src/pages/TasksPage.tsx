@@ -9,11 +9,12 @@ interface TasksPageProps {
     status: string;
     priority: string;
     assignee: string;
+    searchQuery: string;
   };
   currentUser: UserType;
   users: UserType[];
   isDarkMode: boolean;
-  onFilterChange: (filterType: 'status' | 'priority' | 'assignee', value: string) => void;
+  onFilterChange: (filterType: 'status' | 'priority' | 'assignee' | 'searchQuery', value: string) => void;
   onTaskClick: (task: Task) => void;
   onNewTask: () => void;
   getPriorityColor: (priority: string) => string;
@@ -41,6 +42,7 @@ export default function TasksPage({
         filterTeamIDs={[]}
         filterDateFrom=""
         filterDateTo=""
+        searchQuery={filters.searchQuery || ''}
         currentUser={currentUser}
         users={users}
         teams={[]}
@@ -51,6 +53,7 @@ export default function TasksPage({
         onFilterTeamIDsChange={() => {}}
         onFilterDateFromChange={() => {}}
         onFilterDateToChange={() => {}}
+        onSearchQueryChange={(value) => onFilterChange('searchQuery', value)}
       />
       <TaskList
         tasks={tasks}

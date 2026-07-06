@@ -62,8 +62,16 @@ export const config = {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'text/csv',
+    'application/csv',
+    'text/comma-separated-values',
+    'application/vnd.ms-excel',
+    'application/vnd.ms-excel.sheet.macroEnabled.12',
     'image/jpeg',
     'image/png',
+    'image/gif',
+    'image/jpg',
     'text/plain'
   ] as const,
 

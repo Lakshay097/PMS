@@ -15,6 +15,8 @@ import { oauthRateLimiter, loginRateLimiter } from './middleware/rateLimiters';
 import * as gmailAuthController from './controllers/gmailAuthController';
 import { initializeTeamSubmissionsSheet } from './services/googleSheetsService';
 import { startReminderScheduler } from './services/reminderScheduler';
+import { startRecurringTaskScheduler } from './services/recurringTaskScheduler';
+import { startSheetsSyncInterval } from './services/sheetsSyncController';
 
 validateEnv();
 
@@ -25,6 +27,12 @@ async function startServer() {
 
   // Start automated email reminders scheduler
   startReminderScheduler();
+  
+  // Start recurring task generation scheduler
+  startRecurringTaskScheduler();
+
+  // Start server-side Sheets sync controller
+  startSheetsSyncInterval();
   const app = express();
 
   app.set('trust proxy', 1);

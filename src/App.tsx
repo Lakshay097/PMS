@@ -1163,7 +1163,9 @@ export default function App() {
         onAddTeamSubmission={async (submission) => {
           try {
             await dbService.saveTeamSubmission(submission);
-            setTeamSubmissions(prev => [...prev, submission]);
+            // Note: saveTeamSubmission already does optimistic update to cache
+            // and notifies listeners, so we don't need to manually add to state here
+            // to avoid duplicate entries
             handleManualSync();
           } catch (error) {
             throw error;
