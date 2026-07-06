@@ -845,27 +845,74 @@ export const dbService = {
     }
   },
 
-  async saveEmailTemplates(emailTemplatesList: EmailTemplate[]): Promise<void> {
-    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
-    setCache('email_templates', emailTemplatesList);
-    notifyOptimisticUpdate('email_templates', emailTemplatesList);
+  async saveEmailTemplate(template: EmailTemplate): Promise<void> {
+    const templates = await this.getEmailTemplates();
+    const idx = templates.findIndex(t => t.templateName === template.templateName);
+    const now = new Date().toISOString();
 
-    // Background async: Write to Firestore, then queue Sheets sync
+    const templateToSave = {
+      ...template,
+      updatedAt: now,
+    };
+
+    const finalTemplate = idx >= 0
+      ? { ...templates[idx], ...templateToSave }
+      : { ...templateToSave };
+
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    if (idx >= 0) {
+      templates[idx] = finalTemplate;
+    } else {
+      templates.push(finalTemplate);
+    }
+    setCache('email_templates', templates);
+    notifyOptimisticUpdate('email_templates', templates);
+
+    // Background async: Write to Firestore, then sync to Sheets via API
     (async () => {
       try {
-        for (const template of emailTemplatesList) {
-          await setDoc(doc(db, 'email_templates', template.Key), sanitizeForFirestore(template));
-        }
-        enqueueSheetsWrite('email_templates', 'save', emailTemplatesList);
-        notifyChange('email_templates', 'updated', 'email_templates').catch(() => {});
+        const sanitizedTemplate = sanitizeForFirestore(finalTemplate);
+        await setDoc(doc(db, 'email_templates', template.templateName), sanitizedTemplate);
+        
+        // Synchronous Sheets write for email templates (bypass queue for send-time correctness)
+        await api.post('/email/templates', {
+          templateName: template.templateName,
+          subject: template.subject,
+          body: template.body,
+        });
+        
+        notifyChange('email_templates', 'updated', template.templateName).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — saveEmailTemplates:', err);
+        console.error('Firestore write failed — saveEmailTemplate:', err);
         // Rollback optimistic update
         const rollback = await getDocs(collection(db, 'email_templates'));
         const rollbackData = rollback.docs.map(d => d.data() as EmailTemplate);
         setCache('email_templates', rollbackData);
         notifyOptimisticUpdate('email_templates', rollbackData);
-        throw new Error(`Failed to save email templates: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        throw new Error(`Failed to save email template: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+    })();
+  },
+
+  async deleteEmailTemplate(templateName: string): Promise<void> {
+    const templates = await this.getEmailTemplates();
+    const filtered = templates.filter(t => t.templateName !== templateName);
+
+    // OPTIMISTIC UPDATE: Update cache and notify UI immediately
+    setCache('email_templates', filtered);
+    notifyOptimisticUpdate('email_templates', filtered);
+
+    (async () => {
+      try {
+        await deleteDoc(doc(db, 'email_templates', templateName));
+        notifyChange('email_templates', 'deleted', templateName).catch(() => {});
+      } catch (err) {
+        console.error('Firestore write failed — deleteEmailTemplate:', err);
+        const rollback = await getDocs(collection(db, 'email_templates'));
+        const rollbackData = rollback.docs.map(d => d.data() as EmailTemplate);
+        setCache('email_templates', rollbackData);
+        notifyOptimisticUpdate('email_templates', rollbackData);
+        throw new Error(`Failed to delete email template: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
     })();
   },

@@ -1,7 +1,7 @@
                                                                           import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAllSubordinates } from '../../../utils/userUtils';
-import { getVisibleSubTeamIds } from '../../../utils/subTeamUtils';
+import { getVisibleSubTeamIds, isSubTeamLeader, isTeamLeader } from '../../../utils/subTeamUtils';
 import { generateReportWithAttachments, AttachmentInfo } from '../../../utils/pdfGenerator';
 import {
   LayoutDashboard,
@@ -188,6 +188,7 @@ export default function Dashboard({
   // Scheduled Tasks submission state
   const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
   const [submissionTeamId, setSubmissionTeamId] = useState<string | null>(null);
+  const [submissionSubTeamId, setSubmissionSubTeamId] = useState<string | null>(null);
   const [submissionNote, setSubmissionNote] = useState('');
   const [submissionFiles, setSubmissionFiles] = useState<Array<{ name: string; type: string; data: string }>>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -309,6 +310,16 @@ export default function Dashboard({
       return;
     }
 
+    // Permission check: sub-team leaders can only submit for their own sub-team
+    if (submissionSubTeamId) {
+      const subTeam = subTeams.find(st => st.SubTeamID === submissionSubTeamId);
+      if (!isSubTeamLeader(currentUser.Email, subTeam) && !isTeamLeader(currentUser.Email, teams.find(t => t.TeamID === submissionTeamId)) && !isAdminLevel(currentUser.Role)) {
+        setSubmissionError('You can only submit reports for your own sub-team');
+        setTimeout(() => setSubmissionError(null), 3000);
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     setSubmissionError(null);
 
@@ -354,6 +365,7 @@ export default function Dashboard({
       const newSubmission: TeamSubmission = {
         SubmissionID: submissionId,
         TeamID: submissionTeamId,
+        SubTeamID: submissionSubTeamId || undefined,
         SubmittedBy: currentUser.Email,
         SubmittedAt: new Date().toISOString(),
         Note: submissionNote.trim() || undefined,
@@ -369,6 +381,7 @@ export default function Dashboard({
       setTimeout(() => setSubmissionSuccess(false), 3000);
       setSubmissionModalOpen(false);
       setSubmissionTeamId(null);
+      setSubmissionSubTeamId(null);
 
     } catch (error) {
       console.error('Error submitting report:', error);
@@ -2262,6 +2275,7 @@ export default function Dashboard({
                     setSubmissionNote('');
                     setSubmissionFiles([]);
                     setSubmissionTeamId(null);
+                    setSubmissionSubTeamId(null);
                     setSubmissionError(null);
                   }}
                   className={`p-1 rounded-lg transition-colors shrink-0 ${isDarkMode ? 'hover:bg-[#1E293B] text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}
@@ -2276,6 +2290,54 @@ export default function Dashboard({
                     {submissionError}
                   </div>
                 )}
+
+                {/* Sub-team selection if applicable */}
+                {submissionTeamId && (() => {
+                  const team = teams.find(t => t.TeamID === submissionTeamId);
+                  const teamSubTeams = subTeams.filter(st => st.TeamID === submissionTeamId && st.Active);
+                  const reportRequirement = settings.find(s => s.Key === 'weekly_report_requirements')?.Value;
+                  let requirements: Record<string, { level: 'team' | 'subteam'; subTeamIds: string[] }> = {};
+                  try {
+                    if (reportRequirement) requirements = JSON.parse(reportRequirement);
+                  } catch (e) {}
+                  
+                  const teamConfig = requirements[submissionTeamId];
+                  
+                  // Show sub-team selection if:
+                  // 1. Team is configured for sub-team reports AND
+                  // 2. User is a sub-team leader OR team leader OR admin
+                  if (teamConfig?.level === 'subteam' && teamSubTeams.length > 0) {
+                    const userIsTeamLeader = isTeamLeader(currentUser.Email, team);
+                    const userIsSubTeamLeader = teamSubTeams.some(st => isSubTeamLeader(currentUser.Email, st));
+                    const userIsAdmin = isAdminLevel(currentUser.Role);
+                    
+                    if (userIsTeamLeader || userIsSubTeamLeader || userIsAdmin) {
+                      return (
+                        <div>
+                          <label className={`block text-xs sm:text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                            Select Sub-Team
+                          </label>
+                          <select
+                            value={submissionSubTeamId || ''}
+                            onChange={(e) => setSubmissionSubTeamId(e.target.value || null)}
+                            className={`w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
+                          >
+                            <option value="">Select a sub-team...</option>
+                            {teamSubTeams.map(st => (
+                              <option key={st.SubTeamID} value={st.SubTeamID}>
+                                {st.SubTeamName}
+                              </option>
+                            ))}
+                          </select>
+                          <p className={`text-[10px] mt-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                            {userIsSubTeamLeader && !userIsTeamLeader && !userIsAdmin ? 'You can only submit for your own sub-team' : 'Team leaders can submit for any sub-team'}
+                          </p>
+                        </div>
+                      );
+                    }
+                  }
+                  return null;
+                })()}
 
                 <div>
                   <label className={`block text-xs sm:text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>

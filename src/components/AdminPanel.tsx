@@ -2,16 +2,16 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { User as UserType, TaskTemplate, AppSetting, Team, SubTeam, EmailTemplate } from '../types';
 import { ROLE } from '../constants/status';
-import { 
-  Users, 
-  Repeat, 
-  History, 
-  Settings, 
-  Plus, 
-  Shield, 
-  Search, 
-  CheckSquare, 
-  Edit, 
+import {
+  Users,
+  Repeat,
+  History,
+  Settings,
+  Plus,
+  Shield,
+  Search,
+  CheckSquare,
+  Edit,
   Code,
   Mail,
   CheckCircle,
@@ -24,8 +24,21 @@ import {
   ChevronDown,
   FileSpreadsheet,
   Upload,
-  Layers
+  Layers,
+  Bold,
+  Italic,
+  Underline as UnderlineIcon,
+  Type,
+  Palette,
+  Save
 } from 'lucide-react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import { TextStyle } from '@tiptap/extension-text-style';
+import Color from '@tiptap/extension-color';
+import FontFamily from '@tiptap/extension-font-family';
+import UnderlineExtension from '@tiptap/extension-underline';
+import { dbService } from '../lib/dbService';
 
 interface AdminPanelProps {
   users: UserType[];
@@ -85,7 +98,7 @@ export default function AdminPanel({
   isDarkMode = false,
 }: AdminPanelProps) {
   // Master administrative tabs
-  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'teams' | 'templates' | 'email_templates'>('users');
+  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'teams' | 'templates' | 'email_templates' | 'report_requirements'>('users');
 
   // Auto-sync when the users tab is activated so pending registrations
   // that arrived after initial page load are visible immediately.
@@ -267,49 +280,95 @@ export default function AdminPanel({
 
   // Email template editor state
   const [selectedEmailTemplateKey, setSelectedEmailTemplateKey] = useState<string>('template_assigned_email');
-  const editorTextareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const activeEmailTemplate = emailTemplates.find(t => t.Key === selectedEmailTemplateKey);
-  const [tempEmailValue, setTempEmailValue] = useState(activeEmailTemplate?.Value || '');
-  const [emailFrequency, setEmailFrequency] = useState<'daily' | 'weekly' | 'monthly' | 'on_event'>(activeEmailTemplate?.Frequency || 'on_event');
-  const [emailSendTime, setEmailSendTime] = useState(activeEmailTemplate?.SendTime || '09:00');
-  const [emailTriggerCondition, setEmailTriggerCondition] = useState<'schedule' | 'event' | 'both'>(activeEmailTemplate?.TriggerCondition || 'event');
-  const [emailActive, setEmailActive] = useState(activeEmailTemplate?.Active !== false);
+  const [tempEmailSubject, setTempEmailSubject] = useState('');
+  const [tempEmailValue, setTempEmailValue] = useState('');
   const [emailSaveSuccess, setEmailSaveSuccess] = useState(false);
+  const [selectedFont, setSelectedFont] = useState('sans-serif');
+  const [showVariableDropdown, setShowVariableDropdown] = useState(false);
+  const [showColorDropdown, setShowColorDropdown] = useState(false);
 
-  // Trigger checkboxes state
-  const [triggerTaskAssignment, setTriggerTaskAssignment] = useState(false);
-  const [triggerTaskCompletion, setTriggerTaskCompletion] = useState(false);
-  const [triggerOverdue, setTriggerOverdue] = useState(false);
-  const [triggerScheduled, setTriggerScheduled] = useState(false);
+  // Weekly report requirements state
+  const [reportRequirements, setReportRequirements] = useState<Record<string, { level: 'team' | 'subteam'; subTeamIds: string[] }>>({});
+  const [reportRequirementsSaveSuccess, setReportRequirementsSaveSuccess] = useState(false);
+
+  // Tiptap editor for rich text
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      TextStyle,
+      Color,
+      FontFamily,
+      UnderlineExtension,
+    ],
+    content: tempEmailValue,
+    onUpdate: ({ editor }) => {
+      setTempEmailValue(editor.getHTML());
+    },
+    editorProps: {
+      attributes: {
+        class: 'focus:outline-none min-h-[300px] p-3 text-sm leading-relaxed',
+      },
+    },
+  });
+
+  // Update editor content when body changes from template selection
+  useEffect(() => {
+    if (editor && tempEmailValue !== editor.getHTML()) {
+      editor.commands.setContent(tempEmailValue);
+    }
+  }, [tempEmailValue, editor]);
 
   // Track settings Apply flashes
   const [settingSaveFlash, setSettingSaveFlash] = useState<string | null>(null);
   const [settingErrorFlash, setSettingErrorFlash] = useState<string | null>(null);
 
   // Default template content for each type
-  const getDefaultTemplateContent = (key: string): string => {
-    const defaults: Record<string, string> = {
-      'template_assigned_email': 'Hello {AssignedToEmail},\n\nYou have been assigned a new task:\n\nTask ID: {TaskID}\nTitle: {Title}\nDescription: {Description}\nPriority: {Priority}\nDue Date: {DueDate}\n\nPlease review and start working on this task.\n\nBest regards,\nPMS Team',
-      'template_completion_email': 'Hello {AssignedToEmail},\n\nThe following task has been completed:\n\nTask ID: {TaskID}\nTitle: {Title}\n\nGreat job! The task has been marked as complete.\n\nBest regards,\nPMS Team',
-      'template_delayed_email': 'URGENT: Task Overdue Alert\n\nHello {AssignedToEmail},\n\nThe following task is now overdue:\n\nTask ID: {TaskID}\nTitle: {Title}\nDue Date: {DueDate}\nPriority: {Priority}\n\nPlease address this immediately.\n\nBest regards,\nPMS Team',
-      'template_scheduled_reminder': 'Hello,\n\nThis is a reminder for team leaders of team "{TeamName}" to submit the weekly report (scheduled document) due tomorrow.\n\nPlease log in and submit the document:\n\nApp URL: <a href="{AppURL}" style="color: #3b82f6; text-decoration: underline;">{AppURL}</a>\n\nBest regards,\nPMS Team',
-      'report_submitted': 'Hello,\n\nA progress report has been submitted for the following task:\n\nTask: {Title}\nTask ID: {TaskID}\nReported By: {assigned_by}\nReported By Email: {assigned_by}\n\nReport Content:\n{report_content}\n\nBest regards,\nPMS Team',
-      'task_closed': 'Hello,\n\nThe following task has been marked as closed:\n\nTask: {Title}\nTask ID: {TaskID}\nClosed By: {AssignedByEmail}\nCompletion Date: {DueDate}\n\nClose Remarks:\n{ReportContent}\n\nBest regards,\nPMS Team'
+  const getDefaultTemplateContent = (key: string): { subject: string; body: string } => {
+    const defaults: Record<string, { subject: string; body: string }> = {
+      'template_assigned_email': {
+        subject: 'New task assigned: {Title}',
+        body: 'Hello {AssignedToEmail},\n\nYou have been assigned a new task:\n\nTask ID: {TaskID}\nTitle: {Title}\nDescription: {Description}\nPriority: {Priority}\nDue Date: {DueDate}\n\nPlease review and start working on this task.\n\nBest regards,\nPMS Team'
+      },
+      'template_delayed_email': {
+        subject: 'Task overdue: {Title}',
+        body: 'URGENT: Task Overdue Alert\n\nHello {AssignedToEmail},\n\nThe following task is now overdue:\n\nTask ID: {TaskID}\nTitle: {Title}\nDue Date: {DueDate}\nPriority: {Priority}\n\nPlease address this immediately.\n\nBest regards,\nPMS Team'
+      },
+      'template_scheduled_reminder': {
+        subject: 'Scheduled Document Reminder: Weekly Report for {TeamName}',
+        body: 'Hello,\n\nThis is a reminder for team leaders of team "{TeamName}" to submit the weekly report (scheduled document) due tomorrow.\n\nPlease log in and submit the document:\n\nApp URL: <a href="{AppURL}" style="color: #3b82f6; text-decoration: underline;">{AppURL}</a>\n\nBest regards,\nPMS Team'
+      },
+      'report_submitted': {
+        subject: 'Progress Report: {Title} [{TaskID}]',
+        body: 'Hello,\n\nA progress report has been submitted for the following task:\n\nTask: {Title}\nTask ID: {TaskID}\nReported By: {assigned_by}\nReported By Email: {assigned_by}\n\nReport Content:\n{report_content}\n\nBest regards,\nPMS Team'
+      },
+      'task_closed': {
+        subject: 'Task Closed: {Title} [{TaskID}]',
+        body: 'Hello,\n\nThe following task has been marked as closed:\n\nTask: {Title}\nTask ID: {TaskID}\nClosed By: {AssignedByEmail}\nCompletion Date: {DueDate}\n\nClose Remarks:\n{ReportContent}\n\nBest regards,\nPMS Team'
+      }
     };
-    return defaults[key] || '';
+    return defaults[key] || { subject: '', body: '' };
   };
 
   // Sync state whenever the selected email template type keys changes
   React.useEffect(() => {
-    const template = emailTemplates.find(t => t.Key === selectedEmailTemplateKey);
-    const freshVal = template?.Value || getDefaultTemplateContent(selectedEmailTemplateKey);
-    setTempEmailValue(freshVal);
-    setEmailFrequency(template?.Frequency || 'on_event');
-    setEmailSendTime(template?.SendTime || '09:00');
-    setEmailTriggerCondition(template?.TriggerCondition || 'event');
-    setEmailActive(template?.Active !== false);
+    const template = emailTemplates.find(t => t.templateName === selectedEmailTemplateKey);
+    const defaultContent = getDefaultTemplateContent(selectedEmailTemplateKey);
+    setTempEmailSubject(template?.subject || defaultContent.subject);
+    setTempEmailValue(template?.body || defaultContent.body);
   }, [selectedEmailTemplateKey, emailTemplates]);
+
+  // Load weekly report requirements from settings
+  React.useEffect(() => {
+    const requirementsSetting = settings.find(s => s.Key === 'weekly_report_requirements');
+    if (requirementsSetting && requirementsSetting.Value) {
+      try {
+        const parsed = JSON.parse(requirementsSetting.Value);
+        setReportRequirements(parsed);
+      } catch (e) {
+        console.error('Failed to parse weekly_report_requirements:', e);
+      }
+    }
+  }, [settings]);
 
   const handleUserCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -547,47 +606,78 @@ export default function AdminPanel({
   };
 
 
-  const handleSaveEmailTemplateValue = () => {
-    // Save the email template with all settings
-    const template = emailTemplates.find(t => t.Key === selectedEmailTemplateKey);
-    if (template) {
-      const updatedTemplate = {
-        ...template,
-        Value: tempEmailValue,
-        Frequency: emailFrequency,
-        SendTime: emailSendTime,
-        TriggerCondition: emailTriggerCondition,
-        Active: emailActive
+  const handleSaveEmailTemplateValue = async () => {
+    try {
+      const template = emailTemplates.find(t => t.templateName === selectedEmailTemplateKey);
+      
+      const serverTemplate = {
+        templateName: selectedEmailTemplateKey,
+        subject: tempEmailSubject,
+        body: tempEmailValue,
+        updatedAt: new Date().toISOString(),
       };
-      // Update the email template in the settings
-      onUpdateSetting(`${selectedEmailTemplateKey}_value`, tempEmailValue);
-      onUpdateSetting(`${selectedEmailTemplateKey}_frequency`, emailFrequency);
-      onUpdateSetting(`${selectedEmailTemplateKey}_sendTime`, emailSendTime);
-      onUpdateSetting(`${selectedEmailTemplateKey}_triggerCondition`, emailTriggerCondition);
-      onUpdateSetting(`${selectedEmailTemplateKey}_active`, emailActive.toString());
-    } else {
-      onUpdateSetting(selectedEmailTemplateKey, tempEmailValue);
+      
+      await dbService.saveEmailTemplate(serverTemplate);
+      
+      setEmailSaveSuccess(true);
+      setTimeout(() => setEmailSaveSuccess(false), 2500);
+    } catch (err) {
+      console.error('Error saving email template:', err);
+      alert('Failed to save template. Please try again.');
     }
-    setEmailSaveSuccess(true);
-    setTimeout(() => setEmailSaveSuccess(false), 2500);
   };
 
   const handleInsertToken = (token: string) => {
-    const textarea = editorTextareaRef.current;
-    if (!textarea) return;
+    if (editor) {
+      editor.chain().focus().insertContent(token).run();
+    }
+  };
 
-    const startPos = textarea.selectionStart;
-    const endPos = textarea.selectionEnd;
-    const text = tempEmailValue;
-    const updated = text.substring(0, startPos) + token + text.substring(endPos);
-    
-    setTempEmailValue(updated);
-    
-    // Focus back on textarea and set cursor
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(startPos + token.length, startPos + token.length);
-    }, 50);
+  const setFontFamily = (fontFamily: string) => {
+    if (editor) {
+      editor.chain().focus().setFontFamily(fontFamily).run();
+    }
+    setSelectedFont(fontFamily);
+  };
+
+  const setTextColor = (color: string) => {
+    if (editor) {
+      editor.chain().focus().setColor(color).run();
+    }
+  };
+
+  const handleReportRequirementChange = (teamId: string, level: 'team' | 'subteam') => {
+    setReportRequirements(prev => ({
+      ...prev,
+      [teamId]: { level, subTeamIds: level === 'subteam' ? prev[teamId]?.subTeamIds || [] : [] }
+    }));
+  };
+
+  const handleSubTeamToggle = (teamId: string, subTeamId: string) => {
+    setReportRequirements(prev => {
+      const current = prev[teamId];
+      if (!current || current.level !== 'subteam') return prev;
+      
+      const newSubTeamIds = current.subTeamIds.includes(subTeamId)
+        ? current.subTeamIds.filter(id => id !== subTeamId)
+        : [...current.subTeamIds, subTeamId];
+      
+      return {
+        ...prev,
+        [teamId]: { ...current, subTeamIds: newSubTeamIds }
+      };
+    });
+  };
+
+  const handleSaveReportRequirements = async () => {
+    try {
+      await onUpdateSetting('weekly_report_requirements', JSON.stringify(reportRequirements));
+      setReportRequirementsSaveSuccess(true);
+      setTimeout(() => setReportRequirementsSaveSuccess(false), 2500);
+    } catch (err) {
+      console.error('Error saving report requirements:', err);
+      alert('Failed to save report requirements. Please try again.');
+    }
   };
 
   // Mock template renderer for Live Preview
@@ -595,7 +685,7 @@ export default function AdminPanel({
     const isReport = selectedEmailTemplateKey === 'report_submitted';
     const reporterEmail = "sales.lead@PMS.com";
 
-    return tempEmailValue
+    const body = tempEmailValue
       .replace(/{TaskID}/g, "TSK-0842-DEMO")
       .replace(/{task_id}/g, "TSK-0842-DEMO")
       .replace(/{Title}/g, "Prepare Staging Environment Backups")
@@ -615,7 +705,16 @@ export default function AdminPanel({
       .replace(/{AssignedByName}/g, "Admin User")
       .replace(/{close_remark}/g, "All staging verification tests passed, backups verified.")
       .replace(/{closed_by}/g, "admin@PMS.com")
-      .replace(/{completion_date}/g, "2026-06-25");
+      .replace(/{completion_date}/g, "2026-06-25")
+      .replace(/{TeamName}/g, "Engineering Team")
+      .replace(/{AppURL}/g, "http://localhost:3000");
+
+    const subject = tempEmailSubject
+      .replace(/{Title}/g, "Prepare Staging Environment Backups")
+      .replace(/{TaskID}/g, "TSK-0842-DEMO")
+      .replace(/{TeamName}/g, "Engineering Team");
+
+    return { subject, body };
   };
 
   const getAvailableTokens = () => {
@@ -641,6 +740,13 @@ export default function AdminPanel({
         { token: "{closed_by}", desc: "Closed By User Email" },
         { token: "{close_remark}", desc: "Closure Remarks" },
         { token: "{completion_date}", desc: "Date Task Was Closed" },
+      ];
+    }
+    
+    if (selectedEmailTemplateKey === 'template_scheduled_reminder') {
+      return [
+        { token: "{TeamName}", desc: "Team Name" },
+        { token: "{AppURL}", desc: "Application URL" },
       ];
     }
     
@@ -719,6 +825,19 @@ export default function AdminPanel({
           >
             <Mail size={14} />
             <span className="hidden sm:inline">Email</span>
+          </button>
+          <button
+            onClick={() => setActiveAdminSubTab('report_requirements')}
+            className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
+              activeAdminSubTab === 'report_requirements'
+                ? 'bg-blue-500 text-white'
+                : isDarkMode
+                ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+            }`}
+          >
+            <FileText size={14} />
+            <span className="hidden sm:inline">Reports</span>
           </button>
         </div>
       </div>
@@ -2101,7 +2220,6 @@ export default function AdminPanel({
                   className={`bg-transparent border-none font-extrabold text-xs focus:ring-0 outline-none cursor-pointer ${isDarkMode ? 'text-emerald-400' : 'text-emerald-800'}`}
                 >
                   <option value="template_assigned_email">Task Assignment</option>
-                  <option value="template_completion_email">Task Completion</option>
                   <option value="template_delayed_email">Overdue Alert</option>
                   <option value="template_scheduled_reminder">Scheduled Report Reminder</option>
                   <option value="report_submitted">Report Submitted</option>
@@ -2123,8 +2241,73 @@ export default function AdminPanel({
                 </div>
 
                 <div className="space-y-1">
-                  <label className={`block text-[10px] font-mono font-black tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Email content template editor</label>
-                  <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Write custom text or HTML code. Click the visual tokens below to quickly inject placeholders at your current cursor!</p>
+                  <label className={`block text-[10px] font-mono font-black tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Email subject</label>
+                  <input
+                    type="text"
+                    value={tempEmailSubject}
+                    onChange={(e) => setTempEmailSubject(e.target.value)}
+                    className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500 ${isDarkMode ? 'bg-[#1E293B] border-[#475569] text-white' : 'bg-white border-[#E5E7EB] text-slate-800'}`}
+                    placeholder="Enter email subject..."
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className={`block text-[10px] font-mono font-black tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Email body template editor</label>
+                  <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Write custom text or HTML code. Use the toolbar below for formatting and click the visual tokens to inject placeholders.</p>
+                </div>
+
+                {/* Rich Text Toolbar */}
+                <div className={`flex flex-wrap gap-1 p-2 rounded-lg border ${isDarkMode ? 'bg-[#334155] border-[#475569]' : 'bg-slate-50 border-slate-150'}`}>
+                  <button
+                    onClick={() => editor?.chain().focus().toggleBold().run()}
+                    className={`p-1.5 rounded transition-all ${editor?.isActive('bold') ? 'bg-emerald-500/20 text-emerald-400' : isDarkMode ? 'text-slate-400 hover:bg-[#475569]' : 'text-slate-600 hover:bg-slate-200'}`}
+                    title="Bold"
+                  >
+                    <Bold size={14} />
+                  </button>
+                  <button
+                    onClick={() => editor?.chain().focus().toggleItalic().run()}
+                    className={`p-1.5 rounded transition-all ${editor?.isActive('italic') ? 'bg-emerald-500/20 text-emerald-400' : isDarkMode ? 'text-slate-400 hover:bg-[#475569]' : 'text-slate-600 hover:bg-slate-200'}`}
+                    title="Italic"
+                  >
+                    <Italic size={14} />
+                  </button>
+                  <button
+                    onClick={() => editor?.chain().focus().toggleUnderline().run()}
+                    className={`p-1.5 rounded transition-all ${editor?.isActive('underline') ? 'bg-emerald-500/20 text-emerald-400' : isDarkMode ? 'text-slate-400 hover:bg-[#475569]' : 'text-slate-600 hover:bg-slate-200'}`}
+                    title="Underline"
+                  >
+                    <UnderlineIcon size={14} />
+                  </button>
+                  <div className="w-px bg-slate-300 mx-1" />
+                  <select
+                    value={selectedFont}
+                    onChange={(e) => setFontFamily(e.target.value)}
+                    className={`text-xs px-2 py-1 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 ${isDarkMode ? 'bg-[#1E293B] border-[#475569] text-white' : 'bg-white border-[#E5E7EB] text-slate-800'}`}
+                  >
+                    <option value="sans-serif">Sans Serif</option>
+                    <option value="serif">Serif</option>
+                    <option value="monospace">Monospace</option>
+                  </select>
+                  <button
+                    onClick={() => setShowColorDropdown(!showColorDropdown)}
+                    className={`p-1.5 rounded transition-all ${isDarkMode ? 'text-slate-400 hover:bg-[#475569]' : 'text-slate-600 hover:bg-slate-200'}`}
+                    title="Text Color"
+                  >
+                    <Palette size={14} />
+                  </button>
+                  {showColorDropdown && (
+                    <div className={`absolute z-10 p-2 rounded-lg border grid grid-cols-4 gap-1 ${isDarkMode ? 'bg-[#1E293B] border-[#475569]' : 'bg-white border-slate-200'}`}>
+                      {['#000000', '#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899'].map(color => (
+                        <button
+                          key={color}
+                          onClick={() => { setTextColor(color); setShowColorDropdown(false); }}
+                          className="w-6 h-6 rounded border border-slate-200"
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Interactive Token badges list */}
@@ -2145,105 +2328,9 @@ export default function AdminPanel({
                   </div>
                 </div>
 
-                <div className="relative">
-                  <textarea
-                    ref={editorTextareaRef}
-                    value={tempEmailValue}
-                    onChange={(e) => setTempEmailValue(e.target.value)}
-                    rows={10}
-                    className="w-full bg-slate-900 border border-slate-800 text-emerald-400 font-mono text-xs p-4 rounded-xl focus:ring-1 focus:ring-emerald-500 focus:outline-none leading-relaxed transition-all resize-none shadow-inner"
-                    placeholder="Enter email template layout..."
-                  />
-                </div>
-
-                {/* Email Template Settings */}
-                <div className={`p-4 rounded-lg border space-y-4 ${isDarkMode ? 'bg-[#334155] border-[#475569]' : 'bg-slate-50 border-slate-150'}`}>
-                  <span className={`block text-[8px] font-black font-mono tracking-widest ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Email schedule settings</span>
-
-                  {/* Trigger Checkboxes */}
-                  <div>
-                    <label className={`block text-[10px] font-mono font-bold tracking-widest mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Send on:</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className={`flex items-center space-x-2 text-xs cursor-pointer ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                        <input
-                          type="checkbox"
-                          checked={triggerTaskAssignment}
-                          onChange={(e) => setTriggerTaskAssignment(e.target.checked)}
-                          className={`w-4 h-4 rounded cursor-pointer accent-emerald-600 focus:ring-2 focus:ring-emerald-500 ${isDarkMode ? 'border-[#475569] bg-[#334155]' : 'border-slate-300'}`}
-                        />
-                        <span>Task Assignment</span>
-                      </label>
-                      <label className={`flex items-center space-x-2 text-xs cursor-pointer ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                        <input
-                          type="checkbox"
-                          checked={triggerTaskCompletion}
-                          onChange={(e) => setTriggerTaskCompletion(e.target.checked)}
-                          className={`w-4 h-4 rounded cursor-pointer accent-emerald-600 focus:ring-2 focus:ring-emerald-500 ${isDarkMode ? 'border-[#475569] bg-[#334155]' : 'border-slate-300'}`}
-                        />
-                        <span>Task Completion</span>
-                      </label>
-                      <label className={`flex items-center space-x-2 text-xs cursor-pointer ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                        <input
-                          type="checkbox"
-                          checked={triggerOverdue}
-                          onChange={(e) => setTriggerOverdue(e.target.checked)}
-                          className={`w-4 h-4 rounded cursor-pointer accent-emerald-600 focus:ring-2 focus:ring-emerald-500 ${isDarkMode ? 'border-[#475569] bg-[#334155]' : 'border-slate-300'}`}
-                        />
-                        <span>Overdue</span>
-                      </label>
-                      <label className={`flex items-center space-x-2 text-xs cursor-pointer ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                        <input
-                          type="checkbox"
-                          checked={triggerScheduled}
-                          onChange={(e) => setTriggerScheduled(e.target.checked)}
-                          className={`w-4 h-4 rounded cursor-pointer accent-emerald-600 focus:ring-2 focus:ring-emerald-500 ${isDarkMode ? 'border-[#475569] bg-[#334155]' : 'border-slate-300'}`}
-                        />
-                        <span>Scheduled</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Schedule Settings (shown only when Scheduled is checked) */}
-                  {triggerScheduled && (
-                    <div className="grid grid-cols-2 gap-4 pt-2 border-t" style={{ borderColor: isDarkMode ? '#475569' : '#E5E7EB' }}>
-                      <div>
-                        <label className={`block text-[10px] font-mono font-bold tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Frequency</label>
-                        <select
-                          value={emailFrequency}
-                          onChange={(e) => setEmailFrequency(e.target.value as any)}
-                          className={`w-full text-xs rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#475569] text-white' : 'bg-white border-[#E5E7EB] text-slate-800'}`}
-                        >
-                          <option value="daily">Daily</option>
-                          <option value="weekly">Weekly</option>
-                          <option value="monthly">Monthly</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className={`block text-[10px] font-mono font-bold tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Send time (HH:MM)</label>
-                        <input
-                          type="time"
-                          value={emailSendTime}
-                          onChange={(e) => setEmailSendTime(e.target.value)}
-                          className={`w-full text-xs rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#475569] text-white' : 'bg-white border-[#E5E7EB] text-slate-800'}`}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Active Status */}
-                  <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: isDarkMode ? '#475569' : '#E5E7EB' }}>
-                    <label className={`block text-[10px] font-mono font-bold tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Status</label>
-                    <button
-                      onClick={() => setEmailActive(!emailActive)}
-                      className={`text-[10px] font-extrabold tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer ${
-                        emailActive
-                          ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
-                          : isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
-                      }`}
-                    >
-                      {emailActive ? 'Active' : 'Inactive'}
-                    </button>
-                  </div>
+                {/* Tiptap Editor */}
+                <div className={`border rounded-xl p-3 min-h-[300px] ${isDarkMode ? 'bg-[#1E293B] border-[#475569]' : 'bg-white border-slate-200'}`}>
+                  <EditorContent editor={editor} />
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -2279,29 +2366,148 @@ export default function AdminPanel({
                   </div>
 
                   {/* Simulated Mail Header */}
-                  <div className={`p-4 rounded-xl border space-y-2 font-mono text-[10px] leading-relaxed mb-4 ${isDarkMode ? 'bg-slate-900/80 border-[#1E293B] text-slate-300' : 'bg-slate-900/80 border-[#1E293B] text-slate-300'}`}>
-                    <div>
-                      <span className="text-slate-500 uppercase">From:</span> auto_alert@PMS.live
-                    </div>
-                    <div>
-                      <span className="text-slate-500 uppercase">To:</span> {selectedEmailTemplateKey === 'template_assigned_email' ? 'eng.director@PMS.com' : 'sales.lead@PMS.com, admin@PMS.com'}
-                    </div>
-                    <div>
-                      <span className="text-slate-500 uppercase">Subject:</span> {selectedEmailTemplateKey === 'template_assigned_email' 
-                        ? 'Simulated Alert Notification: [New Compliance Assignment]' 
-                        : 'Simulated Alert Notification: [URGENT DELAY WARNING]'
-                      }
-                    </div>
-                  </div>
+                  {(() => {
+                    const preview = getSimulatedEmailPreviewStr();
+                    return (
+                      <>
+                        <div className={`p-4 rounded-xl border space-y-2 font-mono text-[10px] leading-relaxed mb-4 ${isDarkMode ? 'bg-slate-900/80 border-[#1E293B] text-slate-300' : 'bg-slate-900/80 border-[#1E293B] text-slate-300'}`}>
+                          <div>
+                            <span className="text-slate-500 uppercase">From:</span> auto_alert@PMS.live
+                          </div>
+                          <div>
+                            <span className="text-slate-500 uppercase">To:</span> {selectedEmailTemplateKey === 'template_assigned_email' ? 'eng.director@PMS.com' : 'sales.lead@PMS.com, admin@PMS.com'}
+                          </div>
+                          <div>
+                            <span className="text-slate-500 uppercase">Subject:</span> {preview.subject || 'No subject'}
+                          </div>
+                        </div>
 
-                  {/* Mail Body Render Preview */}
-                  <div className="bg-white text-slate-800 p-5 rounded-xl min-h-[220px] shadow-inner font-sans border border-slate-200 whitespace-pre-wrap text-xs font-semibold leading-relaxed overflow-y-auto">
-                    {getSimulatedEmailPreviewStr() || <span className="text-slate-400 italic">No content configured. Type code inside the composer to view preview.</span>}
-                  </div>
+                        {/* Mail Body Render Preview */}
+                        <div className="bg-white text-slate-800 p-5 rounded-xl min-h-[220px] shadow-inner font-sans border border-slate-200 text-xs font-semibold leading-relaxed overflow-y-auto">
+                          <div dangerouslySetInnerHTML={{ __html: preview.body }} />
+                          {!preview.body && <span className="text-slate-400 italic">No content configured. Type code inside the composer to view preview.</span>}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className={`mt-4 pt-3 border-t text-[9.5px] font-mono font-medium leading-relaxed ${isDarkMode ? 'border-[#1E293B] text-slate-400' : 'border-[#1E293B] text-slate-400'}`}>
                   Notice: Real-time changes above dynamically replace tags inside the simulation thread. Submit or generate tasks to view actual live results in the simulated logs list!
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SUBTAB 5: Weekly Report Requirements Configuration */}
+        {activeAdminSubTab === 'report_requirements' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className={`border rounded-xl p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${isDarkMode ? 'bg-blue-500/10 border-blue-500/20' : 'bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border-blue-200'}`}>
+              <div>
+                <h4 className={`font-extrabold text-sm tracking-wider font-mono ${isDarkMode ? 'text-blue-400' : 'text-blue-900'}`}>Weekly Report Requirements</h4>
+                <p className={`text-xs mt-1 max-w-2xl ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Configure which teams and sub-teams are required to submit weekly reports. Team leaders can submit for whole team or sub-teams. Sub-team leaders can only submit for their own sub-team.
+                </p>
+              </div>
+              <button
+                onClick={handleSaveReportRequirements}
+                className={`px-4 py-2 rounded-lg text-xs font-bold tracking-wider transition-all cursor-pointer flex items-center space-x-2 ${
+                  isDarkMode 
+                    ? 'bg-blue-500 hover:bg-blue-600 text-white' 
+                    : 'bg-blue-500 hover:bg-blue-600 text-white'
+                }`}
+              >
+                <Save size={14} />
+                <span>Save Configuration</span>
+              </button>
+            </div>
+
+            {reportRequirementsSaveSuccess && (
+              <div className={`flex items-center space-x-2 text-xs font-bold animate-pulse ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                <CheckCircle size={14} />
+                <span>Configuration saved successfully!</span>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {teams.map(team => {
+                const teamRequirement = reportRequirements[team.TeamID];
+                const teamSubTeams = subTeams.filter(st => st.TeamID === team.TeamID && st.Active);
+                
+                return (
+                  <div key={team.TeamID} className={`border rounded-xl p-4 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-3 h-3 rounded-full ${team.Active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                        <h5 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{team.TeamName}</h5>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
+                          {team.TeamID}
+                        </span>
+                      </div>
+                      <select
+                        value={teamRequirement?.level || 'team'}
+                        onChange={(e) => handleReportRequirementChange(team.TeamID, e.target.value as 'team' | 'subteam')}
+                        className={`text-xs px-3 py-1.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer ${
+                          isDarkMode ? 'bg-[#0F141F] border-[#334155] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
+                        }`}
+                      >
+                        <option value="team">Whole Team Reports</option>
+                        <option value="subteam">Sub-Team Reports</option>
+                      </select>
+                    </div>
+
+                    {teamRequirement?.level === 'subteam' && teamSubTeams.length > 0 && (
+                      <div className="space-y-2">
+                        <label className={`text-[10px] font-mono font-bold tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                          Select sub-teams that must submit reports:
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {teamSubTeams.map(subTeam => (
+                            <label
+                              key={subTeam.SubTeamID}
+                              className={`flex items-center space-x-2 p-2 rounded-lg cursor-pointer transition-all ${
+                                teamRequirement.subTeamIds.includes(subTeam.SubTeamID)
+                                  ? isDarkMode ? 'bg-blue-500/20 border-blue-500/30' : 'bg-blue-50 border-blue-200'
+                                  : isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-slate-50 border-slate-200'
+                              } ${isDarkMode ? 'border' : 'border'}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={teamRequirement.subTeamIds.includes(subTeam.SubTeamID)}
+                                onChange={() => handleSubTeamToggle(team.TeamID, subTeam.SubTeamID)}
+                                className="w-4 h-4 rounded cursor-pointer accent-blue-600"
+                              />
+                              <span className={`text-xs ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                                {subTeam.SubTeamName}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {teamRequirement?.level === 'subteam' && teamSubTeams.length === 0 && (
+                      <p className={`text-xs italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                        No active sub-teams configured for this team.
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className={`p-4 rounded-lg border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20' : 'bg-amber-50 border-amber-200'}`}>
+              <div className="flex items-start space-x-3">
+                <Info size={16} className={isDarkMode ? 'text-amber-400' : 'text-amber-600'} />
+                <div className={`text-xs ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                  <p className="font-bold mb-1">How this works:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li><strong>Whole Team Reports:</strong> Team leaders receive reminders and can submit reports for the entire team.</li>
+                    <li><strong>Sub-Team Reports:</strong> Only selected sub-team leaders receive reminders and can submit reports for their specific sub-team.</li>
+                    <li><strong>Sub-team leader permissions:</strong> Can only submit reports for their own sub-team.</li>
+                    <li><strong>Team leader permissions:</strong> Can submit reports for whole team or any sub-team within their team.</li>
+                  </ul>
                 </div>
               </div>
             </div>

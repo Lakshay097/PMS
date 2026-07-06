@@ -40,6 +40,19 @@ PMS TaskFlow is an enterprise task management and compliance-reporting system. U
 │   ├── middleware/       JWT auth, error handler, rate limiters, logger, validation
 │   ├── routes/          Route definitions (mounted in routes/index.ts)
 │   ├── services/        Business logic and external API integrations
+│   │   ├── authService.ts              login(), createToken(), verifyToken()
+│   │   ├── googleSheetsService.ts      JWT auth + Sheets REST helpers (no googleapis)
+│   │   ├── firebaseAdmin.ts            Lazy Firebase Admin SDK init
+│   │   ├── sseService.ts               SSE connection pool + broadcaster
+│   │   ├── emailService.ts             Gmail send + thread continuity + fallback
+│   │   ├── emailTriggerService.ts      High-level email trigger functions
+│   │   ├── emailTemplateStorage.ts     Template CRUD in Sheets
+│   │   ├── emailLogService.ts          Email send log + thread ID storage
+│   │   ├── gmailOAuthService.ts        OAuth 2.0 helpers (stateless)
+│   │   ├── gmailTokenStorage.ts        Per-user Gmail token CRUD in Sheets
+│   │   ├── reminderScheduler.ts        Weekly scheduled-task reminder emails
+│   │   ├── recurringTaskScheduler.ts   Recurring task generation scheduler
+│   │   └── sheetsSyncController.ts     Server-side Sheets sync queue manager
 │   └── utils/           AppError class hierarchy, async wrapper, logger
 │
 ├── src/                 React frontend
@@ -49,6 +62,10 @@ PMS TaskFlow is an enterprise task management and compliance-reporting system. U
 │   │   ├── features/    Feature-scoped components (admin, auth, tasks, ...)
 │   │   ├── layout/      AppShell, Sidebar, TopBar
 │   │   ├── shared/      Generic reusable primitives (Modal, Drawer, badges, ...)
+│   │   ├── reports/     Reports page component
+│   │   ├── schedules/   Scheduled tasks page component
+│   │   ├── settings/    Settings page component
+│   │   ├── team/        Team directory page component
 │   │   └── ui/          Minimal atoms (Spinner)
 │   ├── constants/       Enums and static config
 │   ├── contexts/        React Context providers (AuthContext)
@@ -59,6 +76,9 @@ PMS TaskFlow is an enterprise task management and compliance-reporting system. U
 │   └── utils/           Pure utility functions
 │
 ├── scripts/             One-off operational scripts (not bundled)
+│   ├── migrate-plaintext-passwords.ts  One-time bcrypt migration (already run)
+│   ├── migrate-subteam-ids.ts          One-time sub-team membership migration
+│   └── generate-icons.js               PWA icon generator
 ├── public/              Static assets, service worker, PWA icons, manifest
 └── dist/                Build output (gitignored)
 ```
@@ -153,6 +173,7 @@ All routes are mounted under `/api` via `server/routes/index.ts`.
 | GET/DELETE | `/api/auth/gmail/status` | JWT | Gmail connection status |
 | POST | `/api/email/trigger/*` | JWT | Fire event-driven emails |
 | GET/POST | `/api/email/templates` | JWT | Read/write email templates |
+| POST | `/api/sheets/sync` | JWT | Trigger server-side Sheets sync (centralized queue) |
 
 ---
 
@@ -243,3 +264,4 @@ gcloud builds submit --config cloudbuild.yaml
 - `src/lib/syncQueue.ts` is implemented but not wired into `dbService` failure paths (noted in code as `TECH-DEBT`).
 - Sub-Teams feature (7-task spec) is in progress. Tasks 1–4 committed. Task 4 (Admin UI) is working — the "admin panel fails to load" symptom was caused by a stale service worker cache (SW registered locally because `NODE_ENV=production` in `.env` makes `import.meta.env.PROD` true, which triggers SW registration). Unregistering the SW + hard reload resolved the symptom without code changes. Separately, `DashboardPageProps` was found to be missing `reports`, `teamSubmissions`, `onAddTeamSubmission`, `triggerNotification`, `subTeams`, and the four sub-team callbacks; `onNewTask` was also missing the `teamIds` param — all silently dropped at the page boundary since the file was created. Fixed in commit `869a829`.
 - **Open item — NODE_ENV:** `NODE_ENV=production` in `.env` causes the service worker to register during local dev, producing stale-bundle cache issues on every bundle change. Decision pending: change to `NODE_ENV=development` for local work to stop SW registration. Do not change without explicit decision — it affects `import.meta.env.PROD`/`DEV` guards throughout the app.
+- **Server-side Sheets sync:** `server/services/sheetsSyncController.ts` implements a centralized Sheets write queue to prevent multi-tab race conditions, but uses in-memory storage. In production, this should be replaced with a persistent queue (Redis, database, etc.) to survive process restarts.

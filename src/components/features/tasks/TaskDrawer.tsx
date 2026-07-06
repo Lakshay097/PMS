@@ -5,7 +5,7 @@ import { Task, TaskReport, User as UserType, Team, Subtask, SubTeam } from '../.
 import { ROLE, isAdminLevel } from '../../../constants/status';
 import { uploadFile } from '../../../api/upload';
 import { getAllSubordinates } from '../../../utils/userUtils';
-import { canAssignWithinTeam } from '../../../utils/subTeamUtils';
+import { canAssignWithinTeam, isSubTeamLeader, isTeamLeader } from '../../../utils/subTeamUtils';
 
 // Helper function to derive a human-readable label and file extension from an
 // attachment URL, so downloadable notes/reports (PDF, PPT, Excel, etc.) show

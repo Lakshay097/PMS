@@ -41,6 +41,7 @@ d:\PMS - Copy (2)\
 │
 ├── scripts/
 │   ├── migrate-plaintext-passwords.ts  One-time bcrypt migration (already run)
+│   ├── migrate-subteam-ids.ts          One-time sub-team membership migration
 │   └── generate-icons.js               PWA icon generator
 │
 ├── server/                             Express.js backend
@@ -83,7 +84,9 @@ d:\PMS - Copy (2)\
 │   │   ├── emailLogService.ts          Email send log + thread ID storage
 │   │   ├── gmailOAuthService.ts        OAuth 2.0 helpers (stateless)
 │   │   ├── gmailTokenStorage.ts        Per-user Gmail token CRUD in Sheets
-│   │   └── reminderScheduler.ts        Weekly scheduled-task reminder emails
+│   │   ├── reminderScheduler.ts        Weekly scheduled-task reminder emails
+│   │   ├── recurringTaskScheduler.ts   Recurring task generation scheduler
+│   │   └── sheetsSyncController.ts     Server-side Sheets sync queue manager
 │   └── utils/
 │       ├── AppError.ts                 Typed HTTP error class hierarchy
 │       ├── asyncWrapper.ts             async route handler error forwarding
@@ -213,6 +216,18 @@ d:\PMS - Copy (2)\
         ├── dashboard/
         │   └── OverviewDashboard.tsx   Alternative overview (KPIs, timeline, workload)
         │
+        ├── reports/
+        │   └── ReportsPage.tsx         Reports page component
+        │
+        ├── schedules/
+        │   └── SchedulesPage.tsx       Scheduled tasks page component
+        │
+        ├── settings/
+        │   └── SettingsPage.tsx        Settings page component
+        │
+        ├── team/
+        │   └── TeamDirectory.tsx       Team directory page component
+        │
         ├── layout/
         │   ├── AppShell.tsx            Layout wrapper (not used — Dashboard has own sidebar)
         │   ├── Sidebar.tsx             Nav sidebar (used by AppShell)
@@ -333,6 +348,8 @@ Request handlers. Each receives `(req, res)`, calls a service, and sends the res
 | `gmailOAuthService.ts` | `getGmailAuthUrl()`, `exchangeCodeForTokens()`, `getUserEmail()`, `refreshAccessToken()`. Pure OAuth 2.0 helpers — no state |
 | `gmailTokenStorage.ts` | Reads/writes Gmail OAuth tokens (refresh token, access token, expiry) to the `user_tokens` Sheets tab. `initializeUserTokensSheet()`, `saveGmailToken()`, `getGmailToken()`, `updateGmailAccessToken()`, `deleteGmailToken()`, `isGmailConnected()` |
 | `reminderScheduler.ts` | `startReminderScheduler()` — starts an hourly interval. `checkAndSendWeeklyReminders()` — on the configured reminder day (default: Thursday), reads teams from Sheets, skips teams that already submitted this week, sends reminder emails to team leaders via Gmail, persists run status in Sheets settings to prevent duplicate sends across process restarts |
+| `recurringTaskScheduler.ts` | `startRecurringTaskScheduler()` — starts an hourly interval. `checkAndGenerateRecurringTasks()` — iterates active templates, computes cycle keys, creates tasks for new cycles. Includes rate limit handling with exponential backoff. Uses Sheets settings for configuration |
+| `sheetsSyncController.ts` | Server-side Sheets sync queue manager. `enqueueSheetsWrite()` — queues write operations. `startSheetsSyncInterval()` — flushes queue every 5 minutes. Centralizes Sheets writes to prevent multi-tab race conditions. Uses in-memory queue (should be persistent in production) |
 
 ### server/utils/
 
@@ -542,6 +559,30 @@ Thin passthrough wrappers. Each page imports one feature component and spreads a
 | `AddUserModal.tsx` | Modal form to create a user directly (admin use) |
 | `EmailTemplatesEditor.tsx` | Rich editor for email templates with token insertion |
 
+### src/components/reports/
+
+| File | Purpose |
+|---|---|
+| `ReportsPage.tsx` | Reports page component with report list, filters, and detail views |
+
+### src/components/schedules/
+
+| File | Purpose |
+|---|---|
+| `SchedulesPage.tsx` | Scheduled tasks page component with weekly submission flow |
+
+### src/components/settings/
+
+| File | Purpose |
+|---|---|
+| `SettingsPage.tsx` | Settings page component with user preferences and configuration options |
+
+### src/components/team/
+
+| File | Purpose |
+|---|---|
+| `TeamDirectory.tsx` | Team directory page component with roster grouped by sub-team |
+
 ### src/components/features/tasks/
 
 | File | Purpose |
@@ -619,6 +660,7 @@ Generic, reusable UI primitives with no business logic.
 | File | Purpose |
 |---|---|
 | `migrate-plaintext-passwords.ts` | One-time migration: audits Sheets `users!M` for plaintext passwords and hashes them in-place (Sheets + Firestore). Run with `npx tsx scripts/migrate-plaintext-passwords.ts` (audit only) or `--execute` flag (writes). Already run on 2026-07-03 — 21 passwords hashed, 0 remaining. Safe to re-run (idempotent). Keep as operational audit artifact |
+| `migrate-subteam-ids.ts` | One-time migration: converts User.SubTeamID/SubTeamName (singular) to SubTeamIDs/SubTeamNames (array) for multi-membership support. Run with `npx tsx scripts/migrate-subteam-ids.ts` (audit only) or `--execute` flag (writes). Idempotent — skips users already using array format |
 | `generate-icons.js` | One-off script to generate PWA icon PNGs at various sizes |
 
 ---

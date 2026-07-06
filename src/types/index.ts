@@ -58,6 +58,7 @@ export interface Team {
 export interface TeamSubmission {
   SubmissionID: string;
   TeamID: string;
+  SubTeamID?: string; // Optional: for sub-team level submissions
   SubmittedBy: string;
   SubmittedAt: string;
   Note?: string;
@@ -152,14 +153,10 @@ export interface AppSetting {
 }
 
 export interface EmailTemplate {
-  Key: string;
-  Value: string;
-  Subject?: string;
-  Description?: string;
-  Frequency?: 'daily' | 'weekly' | 'monthly' | 'on_event';
-  SendTime?: string; // HH:MM format
-  TriggerCondition?: 'schedule' | 'event' | 'both';
-  Active?: boolean;
+  templateName: string;
+  subject: string;
+  body: string;
+  updatedAt?: string;
 }
 
 export interface SystemAlert {

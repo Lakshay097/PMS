@@ -192,8 +192,42 @@ async function checkThursdayReminders(): Promise<void> {
       return;
     }
 
+    // Fetch sub-teams
+    const subTeamsRows = await fetchSheetValues(accessToken, spreadsheetId, 'sub_teams!A:G');
+    const subTeamsMap = new Map<string, Array<{ subTeamId: string; subTeamName: string; leaderEmails: string[] }>>();
+    if (subTeamsRows && subTeamsRows.length > 1) {
+      for (let i = 1; i < subTeamsRows.length; i++) {
+        const row = subTeamsRows[i];
+        const teamId = row[1];
+        const subTeamId = row[0];
+        const subTeamName = row[2];
+        const active = row[6];
+        if (teamId && subTeamId && active === 'true') {
+          if (!subTeamsMap.has(teamId)) {
+            subTeamsMap.set(teamId, []);
+          }
+          subTeamsMap.get(teamId)!.push({
+            subTeamId,
+            subTeamName,
+            leaderEmails: row[5] ? row[5].split(',').map((e: string) => e.trim()).filter(Boolean) : []
+          });
+        }
+      }
+    }
+
+    // Fetch weekly report requirements configuration
+    const requirementsSetting = getSettingValue(settingsRows, 'weekly_report_requirements', '');
+    let requirements: Record<string, { level: 'team' | 'subteam'; subTeamIds: string[] }> = {};
+    try {
+      if (requirementsSetting) {
+        requirements = JSON.parse(requirementsSetting);
+      }
+    } catch (e) {
+      logger.error('ReminderScheduler: Failed to parse weekly_report_requirements', e);
+    }
+
     // Fetch submissions
-    const submissionsRows = await fetchSheetValues(accessToken, spreadsheetId, 'team_submissions!A:F');
+    const submissionsRows = await fetchSheetValues(accessToken, spreadsheetId, 'team_submissions!A:G');
 
     // Calculate start of current week (Monday 00:00:00)
     const getStartOfWeek = (d: Date) => {
@@ -206,18 +240,23 @@ async function checkThursdayReminders(): Promise<void> {
     };
     const startOfWeek = getStartOfWeek(new Date());
 
-    // Compile set of TeamIDs that have submitted this week
+    // Compile set of TeamIDs and SubTeamIDs that have submitted this week
     const submittedTeamIds = new Set<string>();
+    const submittedSubTeamIds = new Set<string>();
     if (submissionsRows && submissionsRows.length > 1) {
       for (let i = 1; i < submissionsRows.length; i++) {
         const row = submissionsRows[i];
         const teamId = row[1];
+        const subTeamId = row[2]; // SubTeamID column
         const submittedAtStr = row[3];
         if (teamId && submittedAtStr) {
           try {
             const submittedAtDate = new Date(submittedAtStr);
             if (submittedAtDate >= startOfWeek) {
               submittedTeamIds.add(teamId);
+              if (subTeamId) {
+                submittedSubTeamIds.add(subTeamId);
+              }
             }
           } catch (e) {
             logger.error(`ReminderScheduler: Failed to parse submission date: ${submittedAtStr}`, e);
@@ -247,73 +286,159 @@ async function checkThursdayReminders(): Promise<void> {
       const isActive = activeVal === 'true' || activeVal === true;
       if (!isActive || !teamId) continue;
 
-      // Skip if already submitted
-      if (submittedTeamIds.has(teamId)) {
+      const teamConfig = requirements[teamId];
+
+      // If team is not configured for reports, skip
+      if (!teamConfig) {
+        logger.info(`ReminderScheduler: Team "${teamName}" (${teamId}) not configured for weekly reports, skipping`);
         continue;
       }
 
-      // Skip if reminder was already successfully sent to this team today
-      if (sentTeamIds.has(teamId)) {
-        continue;
-      }
+      // Handle team-level reports
+      if (teamConfig.level === 'team') {
+        // Skip if already submitted at team level
+        if (submittedTeamIds.has(teamId)) {
+          continue;
+        }
 
-      // Fetch leaders
-      const leaderSettingKey = `team_${teamId}_leaders`;
-      const leaderEmailsStr = getSettingValue(settingsRows, leaderSettingKey, '');
+        // Skip if reminder was already successfully sent to this team today
+        if (sentTeamIds.has(teamId)) {
+          continue;
+        }
 
-      if (!leaderEmailsStr) {
-        logger.warn(`ReminderScheduler: No leaders configured for team "${teamName}" (${teamId}). Skipping configuration warning.`);
-        continue;
-      }
+        // Fetch team leaders
+        const leaderSettingKey = `team_${teamId}_leaders`;
+        const leaderEmailsStr = getSettingValue(settingsRows, leaderSettingKey, '');
 
-      const leaderEmails = leaderEmailsStr
-        .split(',')
-        .map(e => e.trim())
-        .filter(Boolean);
+        if (!leaderEmailsStr) {
+          logger.warn(`ReminderScheduler: No leaders configured for team "${teamName}" (${teamId}). Skipping.`);
+          continue;
+        }
 
-      if (leaderEmails.length === 0) {
-        logger.warn(`ReminderScheduler: Blank leaders configured for team "${teamName}" (${teamId}). Skipping configuration warning.`);
-        continue;
-      }
+        const leaderEmails = leaderEmailsStr
+          .split(',')
+          .map(e => e.trim())
+          .filter(Boolean);
 
-      let teamSendSuccess = true;
+        if (leaderEmails.length === 0) {
+          logger.warn(`ReminderScheduler: Blank leaders configured for team "${teamName}" (${teamId}). Skipping.`);
+          continue;
+        }
 
-      // Wrap sending for each team to isolate configuration/transient errors
-      for (const leaderEmail of leaderEmails) {
-        try {
-          logger.info(`ReminderScheduler: Sending weekly report reminder to ${leaderEmail} for team "${teamName}"`);
-          const appUrl = config.APP_URL || 'http://localhost:3000';
-          const success = await sendEmailAsUser(
-            senderEmail,
-            leaderEmail,
-            '', // pre-built subject is empty so it triggers template subject variables replacement
-            '', // body is empty so it triggers template body
-            'template_scheduled_reminder',
-            {
-              TeamName: teamName,
-              AppURL: appUrl
+        let teamSendSuccess = true;
+
+        // Send to team leaders
+        for (const leaderEmail of leaderEmails) {
+          try {
+            logger.info(`ReminderScheduler: Sending weekly report reminder to ${leaderEmail} for team "${teamName}"`);
+            const appUrl = config.APP_URL || 'http://localhost:3000';
+            const success = await sendEmailAsUser(
+              senderEmail,
+              leaderEmail,
+              '', // pre-built subject is empty so it triggers template subject variables replacement
+              '', // body is empty so it triggers template body
+              'template_scheduled_reminder',
+              {
+                TeamName: teamName,
+                AppURL: appUrl
+              }
+            );
+
+            if (success) {
+              emailsSentCount++;
+            } else {
+              teamSendSuccess = false;
+              hasOverallTransients = true;
             }
-          );
-
-          if (success) {
-            emailsSentCount++;
-          } else {
-            // sendEmailAsUser returns false if sending failed (Gmail API transient error)
+          } catch (err) {
+            logger.error(`ReminderScheduler: Failed to send reminder email to ${leaderEmail} for team "${teamName}"`, err);
             teamSendSuccess = false;
             hasOverallTransients = true;
           }
-        } catch (err) {
-          logger.error(`ReminderScheduler: Failed to send reminder email to ${leaderEmail} for team "${teamName}"`, err);
-          teamSendSuccess = false;
-          hasOverallTransients = true;
         }
-      }
 
-      // If sending to all leaders succeeded, record it immediately in Google Sheets to prevent duplicates
-      if (teamSendSuccess) {
-        sentTeamIds.add(teamId);
-        const newSentTeamsStr = Array.from(sentTeamIds).join(',');
-        await saveSettingValue(accessToken, spreadsheetId, settingsRows, 'last_weekly_reminder_sent_teams', newSentTeamsStr);
+        // If sending to all leaders succeeded, record it immediately in Google Sheets to prevent duplicates
+        if (teamSendSuccess) {
+          sentTeamIds.add(teamId);
+          const newSentTeamsStr = Array.from(sentTeamIds).join(',');
+          await saveSettingValue(accessToken, spreadsheetId, settingsRows, 'last_weekly_reminder_sent_teams', newSentTeamsStr);
+        }
+      } else if (teamConfig.level === 'subteam') {
+        // Handle sub-team level reports
+        const teamSubTeams = subTeamsMap.get(teamId) || [];
+        const requiredSubTeamIds = teamConfig.subTeamIds || [];
+
+        for (const subTeam of teamSubTeams) {
+          // Skip if this sub-team is not required to submit
+          if (!requiredSubTeamIds.includes(subTeam.subTeamId)) {
+            continue;
+          }
+
+          // Skip if already submitted for this sub-team
+          if (submittedSubTeamIds.has(subTeam.subTeamId)) {
+            continue;
+          }
+
+          // Skip if reminder was already sent for this sub-team today
+          const sentKey = `${teamId}:${subTeam.subTeamId}`;
+          if (sentTeamIds.has(sentKey)) {
+            continue;
+          }
+
+          // Use sub-team leaders if configured, otherwise fall back to team leaders
+          const leaderEmails = subTeam.leaderEmails.length > 0 
+            ? subTeam.leaderEmails 
+            : (() => {
+                const leaderSettingKey = `team_${teamId}_leaders`;
+                const leaderEmailsStr = getSettingValue(settingsRows, leaderSettingKey, '');
+                return leaderEmailsStr ? leaderEmailsStr.split(',').map(e => e.trim()).filter(Boolean) : [];
+              })();
+
+          if (leaderEmails.length === 0) {
+            logger.warn(`ReminderScheduler: No leaders configured for sub-team "${subTeam.subTeamName}" (${subTeam.subTeamId}). Skipping.`);
+            continue;
+          }
+
+          let subTeamSendSuccess = true;
+
+          // Send to sub-team leaders
+          for (const leaderEmail of leaderEmails) {
+            try {
+              logger.info(`ReminderScheduler: Sending weekly report reminder to ${leaderEmail} for sub-team "${subTeam.subTeamName}" of team "${teamName}"`);
+              const appUrl = config.APP_URL || 'http://localhost:3000';
+              const success = await sendEmailAsUser(
+                senderEmail,
+                leaderEmail,
+                '',
+                '',
+                'template_scheduled_reminder',
+                {
+                  TeamName: teamName,
+                  SubTeamName: subTeam.subTeamName,
+                  AppURL: appUrl
+                }
+              );
+
+              if (success) {
+                emailsSentCount++;
+              } else {
+                subTeamSendSuccess = false;
+                hasOverallTransients = true;
+              }
+            } catch (err) {
+              logger.error(`ReminderScheduler: Failed to send reminder email to ${leaderEmail} for sub-team "${subTeam.subTeamName}"`, err);
+              subTeamSendSuccess = false;
+              hasOverallTransients = true;
+            }
+          }
+
+          // If sending to all leaders succeeded, record it immediately in Google Sheets to prevent duplicates
+          if (subTeamSendSuccess) {
+            sentTeamIds.add(sentKey);
+            const newSentTeamsStr = Array.from(sentTeamIds).join(',');
+            await saveSettingValue(accessToken, spreadsheetId, settingsRows, 'last_weekly_reminder_sent_teams', newSentTeamsStr);
+          }
+        }
       }
     }
 
