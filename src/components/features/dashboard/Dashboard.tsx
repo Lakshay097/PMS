@@ -387,7 +387,12 @@ export default function Dashboard({
   // Check if current user is a team leader for any team
   const isUserTeamLeader = () => {
     if (isAdminLevel(currentUser.Role)) return true;
-    return teams.some(team => team.TeamLeaderEmails?.includes(currentUser.Email));
+    const isTeamLeader = teams.some(team => team.TeamLeaderEmails?.includes(currentUser.Email));
+    // Also check if user is a sub-team leader for any sub-team
+    const isSubTeamLeader = subTeams?.some(st => 
+      st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase())
+    );
+    return isTeamLeader || isSubTeamLeader;
   };
 
   // Persist sidebar collapse state
@@ -1184,6 +1189,7 @@ export default function Dashboard({
             filterTeamIDs={filterTeamIDs}
             filterDateFrom={filterDateFrom}
             filterDateTo={filterDateTo}
+            searchQuery={searchQuery}
             currentUser={currentUser}
             users={users}
             teams={teams}
@@ -1194,6 +1200,7 @@ export default function Dashboard({
             onFilterTeamIDsChange={setFilterTeamIDs}
             onFilterDateFromChange={setFilterDateFrom}
             onFilterDateToChange={setFilterDateTo}
+            onSearchQueryChange={setSearchQuery}
           />
           <TaskList
             tasks={getFilteredTasks()}
@@ -1705,6 +1712,22 @@ export default function Dashboard({
               <span>Filters:</span>
             </div>
 
+            {/* Search Input for Reports */}
+            <div className="relative">
+              <Search size={14} className={`absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} sm:size-4`} />
+              <input
+                type="text"
+                placeholder="Search reports..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={`pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  isDarkMode 
+                    ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' 
+                    : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
+                }`}
+              />
+            </div>
+
             {/* Team Filter for Reports */}
             <MultiselectDropdown
               label="Teams"
@@ -2031,12 +2054,20 @@ export default function Dashboard({
 
   const renderScheduledTasks = () => {
     // Filter teams based on user role - Admin sees all, Team Leader or Stakeholder see their own
+    // Sub-team leaders can also see their parent teams
     const visibleTeams = isAdminLevel(currentUser.Role)
       ? teams.filter(t => t.Active)
-      : teams.filter(t => 
-          (t.TeamLeaderEmails?.includes(currentUser.Email) && t.Active) ||
-          (t.StakeholderEmails?.includes(currentUser.Email) && t.Active)
-        );
+      : teams.filter(t => {
+          if (!t.Active) return false;
+          const isTeamLeader = t.TeamLeaderEmails?.includes(currentUser.Email);
+          const isStakeholder = t.StakeholderEmails?.includes(currentUser.Email);
+          // Check if user is a sub-team leader for any sub-team within this team
+          const teamSubTeams = subTeams?.filter(st => st.TeamID === t.TeamID) || [];
+          const isSubTeamLeader = teamSubTeams.some(st => 
+            st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase())
+          );
+          return isTeamLeader || isStakeholder || isSubTeamLeader;
+        });
 
     // Get unsubmitted teams from settings (for Admin dashboard visibility on Saturday)
     const unsubmittedTeamsSetting = settings.find(s => s.Key === 'unsubmitted_teams_this_week');
@@ -2098,7 +2129,12 @@ export default function Dashboard({
               {visibleTeams.map(team => {
                 const teamMembers = users.filter(u => u.TeamIDs.includes(team.TeamID));
                 const isTeamLeader = team.TeamLeaderEmails?.includes(currentUser.Email);
-                const canPost = isTeamLeader || isAdminLevel(currentUser.Role);
+                // Check if user is a sub-team leader for any sub-team within this team
+                const teamSubTeams = subTeams?.filter(st => st.TeamID === team.TeamID) || [];
+                const isSubTeamLeader = teamSubTeams.some(st => 
+                  st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase())
+                );
+                const canPost = isTeamLeader || isSubTeamLeader || isAdminLevel(currentUser.Role);
                 const filteredSubmissions = teamSubmissions
                   .filter(s => s.TeamID === team.TeamID)
                   .sort((a, b) => new Date(b.SubmittedAt).getTime() - new Date(a.SubmittedAt).getTime());

@@ -665,74 +665,61 @@ export default function AdminPanel({
   return (
     <div className={`rounded-xl border overflow-hidden font-sans ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
       
-      {/* Integrated Header - matches Dashboard style */}
+      {/* Tab Navigation - scrollable on mobile */}
       <div className={`px-4 md:px-6 py-4 border-b border-[#E5E7EB] ${isDarkMode ? 'border-[#1E293B]' : ''}`}>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex items-center space-x-3">
-            <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-blue-500/10' : 'bg-blue-100'}`}>
-              <Shield className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} size={20} />
-            </div>
-            <div>
-              <h3 className={`font-bold text-base md:text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Admin Panel</h3>
-              <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Manage users, teams & templates</p>
-            </div>
-          </div>
-
-          {/* Tab Navigation - scrollable on mobile */}
-          <div className={`flex rounded-lg p-1 gap-1 overflow-x-auto w-full sm:w-auto ${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-100'}`}>
-            <button
-              onClick={() => setActiveAdminSubTab('users')}
-              className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
-                activeAdminSubTab === 'users'
-                  ? 'bg-blue-500 text-white'
-                  : isDarkMode
-                  ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-              }`}
-            >
-              <Users size={14} />
-              <span className="hidden sm:inline">Users</span>
-            </button>
-            <button
-              onClick={() => setActiveAdminSubTab('teams')}
-              className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
-                activeAdminSubTab === 'teams'
-                  ? 'bg-blue-500 text-white'
-                  : isDarkMode
-                  ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-              }`}
-            >
-              <Users size={14} />
-              <span className="hidden sm:inline">Teams</span>
-            </button>
-            <button
-              onClick={() => setActiveAdminSubTab('templates')}
-              className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
-                activeAdminSubTab === 'templates'
-                  ? 'bg-blue-500 text-white'
-                  : isDarkMode
-                  ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-              }`}
-            >
-              <Repeat size={14} />
-              <span className="hidden sm:inline">Templates</span>
-            </button>
-            <button
-              onClick={() => setActiveAdminSubTab('email_templates')}
-              className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
-                activeAdminSubTab === 'email_templates'
-                  ? 'bg-blue-500 text-white'
-                  : isDarkMode
-                  ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-              }`}
-            >
-              <Mail size={14} />
-              <span className="hidden sm:inline">Email</span>
-            </button>
-          </div>
+        <div className={`flex rounded-lg p-1 gap-1 overflow-x-auto w-full sm:w-auto ${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-100'}`}>
+          <button
+            onClick={() => setActiveAdminSubTab('users')}
+            className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
+              activeAdminSubTab === 'users'
+                ? 'bg-blue-500 text-white'
+                : isDarkMode
+                ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+            }`}
+          >
+            <Users size={14} />
+            <span className="hidden sm:inline">Users</span>
+          </button>
+          <button
+            onClick={() => setActiveAdminSubTab('teams')}
+            className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
+              activeAdminSubTab === 'teams'
+                ? 'bg-blue-500 text-white'
+                : isDarkMode
+                ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+            }`}
+          >
+            <Users size={14} />
+            <span className="hidden sm:inline">Teams</span>
+          </button>
+          <button
+            onClick={() => setActiveAdminSubTab('templates')}
+            className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
+              activeAdminSubTab === 'templates'
+                ? 'bg-blue-500 text-white'
+                : isDarkMode
+                ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+            }`}
+          >
+            <Repeat size={14} />
+            <span className="hidden sm:inline">Templates</span>
+          </button>
+          <button
+            onClick={() => setActiveAdminSubTab('email_templates')}
+            className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
+              activeAdminSubTab === 'email_templates'
+                ? 'bg-blue-500 text-white'
+                : isDarkMode
+                ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+            }`}
+          >
+            <Mail size={14} />
+            <span className="hidden sm:inline">Email</span>
+          </button>
         </div>
       </div>
 
@@ -867,8 +854,8 @@ export default function AdminPanel({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8">
               
               {/* Modern Provisioning Form */}
-              <div className={`border rounded-xl p-6 space-y-5 shadow-sm h-fit ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}>
-                <div className={`flex items-center space-x-3 border-b pb-4 ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
+              <div className={`border rounded-xl p-5 space-y-4 shadow-sm h-fit ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}>
+                <div className={`flex items-center space-x-3 border-b pb-3 ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
                   <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-blue-500/10' : 'bg-blue-100'}`}>
                     <Plus size={18} className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} />
                   </div>
@@ -876,7 +863,7 @@ export default function AdminPanel({
                 </div>
 
                 {/* Bulk CSV Upload Section */}
-                <div className={`p-4 rounded-xl border space-y-3 ${isDarkMode ? 'bg-[#334155]/50 border-[#475569]' : 'bg-slate-50/80 border-slate-200'}`}>
+                <div className={`p-3 rounded-xl border space-y-2 ${isDarkMode ? 'bg-[#334155]/50 border-[#475569]' : 'bg-slate-50/80 border-slate-200'}`}>
                   <div className={`flex items-center justify-between gap-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                     <div className="flex items-center gap-2">
                       <FileSpreadsheet size={14} className={isDarkMode ? 'text-purple-400' : 'text-purple-600'} />
@@ -885,15 +872,15 @@ export default function AdminPanel({
                     <button
                       type="button"
                       onClick={downloadCSVTemplate}
-                      className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition-colors shrink-0 ${isDarkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+                      className={`text-[10px] font-bold px-2 py-1 rounded-lg transition-colors shrink-0 ${isDarkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
                     >
                       Download Template
                     </button>
                   </div>
-                  <label className={`flex flex-col items-center justify-center gap-2 p-4 rounded-lg border-2 border-dashed cursor-pointer transition-colors ${isDarkMode ? 'border-[#475569] hover:border-blue-500/50 bg-[#1E293B]/50' : 'border-slate-300 hover:border-blue-400 bg-white'}`}>
-                    <Upload size={18} className={isDarkMode ? 'text-slate-400' : 'text-slate-500'} />
+                  <label className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg border-2 border-dashed cursor-pointer transition-colors ${isDarkMode ? 'border-[#475569] hover:border-blue-500/50 bg-[#1E293B]/50' : 'border-slate-300 hover:border-blue-400 bg-white'}`}>
+                    <Upload size={16} className={isDarkMode ? 'text-slate-400' : 'text-slate-500'} />
                     <span className={`text-xs font-medium ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-                      {csvFile ? csvFile.name : 'Drop CSV file or click to browse'}
+                      {csvFile ? csvFile.name : 'Drop CSV or click'}
                     </span>
                     <input
                       type="file"
@@ -907,9 +894,9 @@ export default function AdminPanel({
                       <div className={`text-xs font-bold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                         Preview ({csvPreview.length} rows):
                       </div>
-                      <div className={`max-h-32 overflow-y-auto text-xs p-2 rounded border ${isDarkMode ? 'bg-[#0F141F] border-[#475569]' : 'bg-white border-slate-200'}`}>
+                      <div className={`max-h-24 overflow-y-auto text-xs p-2 rounded border ${isDarkMode ? 'bg-[#0F141F] border-[#475569]' : 'bg-white border-slate-200'}`}>
                         {csvPreview.slice(0, 5).map((row, i) => (
-                          <div key={i} className={`py-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                          <div key={i} className={`py-0.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                             {row['Full Name']} ({row['Email']})
                           </div>
                         ))}
@@ -923,14 +910,14 @@ export default function AdminPanel({
                         type="button"
                         onClick={handleCSVUpload}
                         disabled={isProcessingCsv}
-                        className={`w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white font-bold text-xs py-2 rounded-lg transition-colors`}
+                        className={`w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white font-bold text-xs py-1.5 rounded-lg transition-colors`}
                       >
                         {isProcessingCsv ? 'Processing...' : 'Import Users'}
                       </button>
                     </div>
                   )}
                   {csvUploadResult && (
-                    <div className={`p-3 rounded-lg text-xs ${csvUploadResult.failed === 0 ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
+                    <div className={`p-2 rounded-lg text-xs ${csvUploadResult.failed === 0 ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
                       {csvUploadResult.success} imported, {csvUploadResult.failed} failed
                       {csvUploadResult.failed > 0 && (
                         <button
@@ -946,59 +933,88 @@ export default function AdminPanel({
                 </div>
                 
                 {userSuccessMessage && (
-                  <div className={`p-4 text-sm rounded-xl font-semibold flex items-center gap-2 ${isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-800 bg-emerald-50 border-emerald-200'}`}>
+                  <div className={`p-3 text-sm rounded-xl font-semibold flex items-center gap-2 ${isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-800 bg-emerald-50 border-emerald-200'}`}>
                     <CheckCircle size={16} className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} />
                     <span>{userSuccessMessage}</span>
                   </div>
                 )}
 
-                <form onSubmit={handleUserCreateSubmit} className="space-y-4">
+                <form onSubmit={handleUserCreateSubmit} className="space-y-3">
                   <div>
-                    <label className={`block text-xs font-semibold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Full name</label>
+                    <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Full name</label>
                     <input
                       type="text"
                       required
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Rachel Zane"
-                      className={`w-full text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                      placeholder="e.g. Rachel Zane"
+                      className={`w-full text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-600' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-500'}`}
                     />
                   </div>
 
                   <div>
-                    <label className={`block text-xs font-semibold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Email address</label>
+                    <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Email address</label>
                     <input
                       type="email"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="rachel@PMS.com"
-                      className={`w-full text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                      placeholder="e.g. rachel@PMS.com"
+                      className={`w-full text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-600' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-500'}`}
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className={`block text-xs font-semibold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Role</label>
+                      <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Role</label>
                       <div className="relative">
                       <select
                         value={role}
                         onChange={(e) => setRole(e.target.value as any)}
-                        className={`w-full text-sm rounded-xl pl-4 pr-9 py-3 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
+                        className={`w-full text-sm rounded-xl pl-3 pr-8 py-2.5 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
                       >
                         <option value="Admin">Admin</option>
                         <option value="Stakeholder">Stakeholder</option>
                       </select>
-                      <ChevronDown size={16} className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} />
+                      <ChevronDown size={14} className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} />
                       </div>
                     </div>
 
                     <div>
-                      <label className={`block text-xs font-semibold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Teams</label>
-                      <div className={`space-y-2 max-h-32 overflow-y-auto border rounded-xl p-3 ${isDarkMode ? 'border-[#475569] bg-[#334155]' : 'border-slate-200 bg-slate-50'}`}>
+                      <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Manager email</label>
+                      <input
+                        type="email"
+                        value={managerEmail}
+                        onChange={(e) => setManagerEmail(e.target.value)}
+                        placeholder="e.g. sales.lead@PMS.com"
+                        className={`w-full text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-600' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-500'}`}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Teams</label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const dropdown = document.getElementById('teams-dropdown');
+                          if (dropdown) {
+                            dropdown.classList.toggle('hidden');
+                          }
+                        }}
+                        className={`w-full text-sm rounded-xl px-3 py-2.5 border appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all cursor-pointer text-left flex items-center justify-between ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
+                      >
+                        <span>{teamSelections.length === 0 ? 'Select teams' : `${teamSelections.length} selected`}</span>
+                        <ChevronDown size={14} className={isDarkMode ? 'text-slate-400' : 'text-slate-400'} />
+                      </button>
+                      <div
+                        id="teams-dropdown"
+                        className={`absolute z-10 w-full mt-1 border rounded-xl shadow-lg max-h-48 overflow-y-auto hidden ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}
+                      >
                         {teams.length > 0 ? (
                           teams.map(t => (
-                            <label key={t.TeamID} className="flex items-center space-x-2 text-sm cursor-pointer">
+                            <label key={t.TeamID} className="flex items-center space-x-2 px-3 py-2 hover:bg-slate-100 dark:hover:bg-[#334155] cursor-pointer">
                               <input
                                 type="checkbox"
                                 value={t.TeamID}
@@ -1012,44 +1028,50 @@ export default function AdminPanel({
                                 }}
                                 className={`w-4 h-4 rounded cursor-pointer accent-[#2563EB] focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'border-[#475569] bg-[#334155]' : 'border-slate-300'}`}
                               />
-                              <span className={isDarkMode ? 'text-slate-300' : 'text-slate-700'}>{t.TeamName}</span>
+                              <span className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{t.TeamName}</span>
                             </label>
                           ))
                         ) : (
-                          <p className={`text-sm italic p-2 ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>No teams available</p>
+                          <p className={`text-sm italic p-3 ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>No teams available</p>
                         )}
                       </div>
                     </div>
+                    {teamSelections.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {teamSelections.map(teamId => {
+                          const team = teams.find(t => t.TeamID === teamId);
+                          return team ? (
+                            <span key={teamId} className={`inline-flex items-center gap-1 border text-[10px] font-bold px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
+                              {team.TeamName}
+                              <button
+                                type="button"
+                                onClick={() => setTeamSelections(teamSelections.filter(id => id !== teamId))}
+                                className="ml-0.5 rounded-full hover:opacity-70"
+                              >
+                                <X size={9} />
+                              </button>
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
                   </div>
 
-                  {role === 'Stakeholder' && (
-                    <div>
-                      <label className={`block text-xs font-semibold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Manager email</label>
-                      <input
-                        type="email"
-                        value={managerEmail}
-                        onChange={(e) => setManagerEmail(e.target.value)}
-                        placeholder="sales.lead@PMS.com"
-                        className={`w-full text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'}`}
-                      />
-                    </div>
-                  )}
-
                   <div>
-                    <label className={`block text-xs font-semibold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Password</label>
+                    <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Password</label>
                     <input
                       type="password"
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••"
-                      className={`w-full text-sm rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                      placeholder="e.g. ••••••"
+                      className={`w-full text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-600' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-500'}`}
                     />
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-3 text-sm font-bold transition-all duration-200 shadow-md cursor-pointer border-none flex items-center justify-center space-x-2"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-2.5 text-sm font-bold transition-all duration-200 shadow-md cursor-pointer border-none flex items-center justify-center space-x-2"
                   >
                     <Plus size={16} />
                     <span>Create user</span>
@@ -1067,55 +1089,82 @@ export default function AdminPanel({
                       value={userSearchText}
                       onChange={(e) => setUserSearchText(e.target.value)}
                       placeholder="Search mapping name, email, or role..."
-                      className={`w-full text-xs rounded-lg pl-9 pr-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' : 'bg-white border-[#E5E7EB] text-slate-800 placeholder-slate-400'}`}
+                      className={`w-full text-xs rounded-lg pl-9 pr-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-600' : 'bg-white border-[#E5E7EB] text-slate-800 placeholder-slate-500'}`}
                     />
                   </div>
-                  <span className={`text-[10px] font-bold tracking-widest font-mono ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>
-                    Session Authorization: {users.length} Identities
-                  </span>
-                </div>
-
-                <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`} style={{ height: 'calc(100vh - 300px)', minHeight: '400px' }}>
-                  <div className="h-full overflow-y-auto">
-                    <table className="w-full text-sm">
-                      <thead className={`${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-50'} sticky top-0 z-10`}>
-                        <tr>
-                          <th className={`px-4 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>User</th>
-                          <th className={`px-4 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Teams</th>
-                          <th className={`px-4 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Manager</th>
-                          <th className={`px-4 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Role</th>
-                          <th className={`px-4 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className={`divide-y ${isDarkMode ? 'divide-[#334155]' : 'divide-slate-200'}`}>
-                      {users
-                        .filter(u =>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-bold tracking-widest font-mono ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>
+                      {users.length} users
+                    </span>
+                    {userSearchText && (
+                      <span className={`text-[10px] font-medium ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                        • {users.filter(u =>
                           u.FullName.toLowerCase().includes(userSearchText.toLowerCase()) ||
                           u.Email.toLowerCase().includes(userSearchText.toLowerCase()) ||
                           u.Role.toLowerCase().includes(userSearchText.toLowerCase())
-                        )
-                        .map(user => {
+                        ).length} results
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                  <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
+                    <table className="w-full text-sm" style={{ tableLayout: 'fixed', width: '100%' }}>
+                      <thead className={`${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-50'} sticky top-0 z-10`}>
+                        <tr>
+                          <th className={`px-3 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '20%', minWidth: 0 }}>User</th>
+                          <th className={`px-3 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '25%', minWidth: 0 }}>Teams</th>
+                          <th className={`px-3 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '18%', minWidth: 0 }}>Manager</th>
+                          <th className={`px-3 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '22%', minWidth: 0 }}>Role</th>
+                          <th className={`px-3 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '15%', minWidth: 0 }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className={`divide-y ${isDarkMode ? 'divide-[#334155]' : 'divide-slate-200'}`}>
+                      {(() => {
+                        const filteredUsers = users.filter(u =>
+                          u.FullName.toLowerCase().includes(userSearchText.toLowerCase()) ||
+                          u.Email.toLowerCase().includes(userSearchText.toLowerCase()) ||
+                          u.Role.toLowerCase().includes(userSearchText.toLowerCase())
+                        );
+
+                        if (filteredUsers.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan={5} className="px-4 py-12 text-center">
+                                <div className="flex flex-col items-center justify-center space-y-3">
+                                  <Users size={40} className={isDarkMode ? 'text-slate-600' : 'text-slate-300'} />
+                                  <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                    {userSearchText ? 'No users match your search' : 'No users found'}
+                                  </p>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return filteredUsers.map(user => {
                           const isBanned = !user.Active;
                           return (
                             <tr 
                               key={user.UserID}
                               className={`transition-colors ${isDarkMode ? 'hover:bg-[#1E293B]/60' : 'hover:bg-slate-50'} ${isBanned ? isDarkMode ? 'bg-red-500/5' : 'bg-red-50/30' : ''}`}
                             >
-                              <td className="px-4 py-3">
-                                <div>
-                                  <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{user.FullName}</div>
-                                  <div className={`text-xs font-mono ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{user.Email}</div>
-                                  <div className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{user.UserID}</div>
+                              <td className="px-3 py-3" style={{ minWidth: 0 }}>
+                                <div className="min-w-0">
+                                  <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'} truncate`}>{user.FullName}</div>
+                                  <div className={`text-xs font-mono ${isDarkMode ? 'text-blue-400' : 'text-blue-600'} truncate`}>{user.Email}</div>
+                                  <div className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'} truncate`}>{user.UserID}</div>
                                 </div>
                               </td>
-                              <td className="px-4 py-3">
+                              <td className="px-3 py-3" style={{ minWidth: 0 }}>
                                 {/* Editable team assignments — Admin can add/remove teams per user */}
-                                <div className="space-y-1 min-w-[160px]">
+                                <div className="space-y-1.5 min-w-0">
                                   <div className="flex flex-wrap gap-1">
                                     {(user.TeamNames || []).map((tName, i) => {
                                       const tId = (user.TeamIDs || [])[i];
                                       return (
-                                        <span key={i} className={`inline-flex items-center gap-1 border text-[10px] font-bold px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
+                                        <span key={i} className={`inline-flex items-center gap-1 border text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
                                           {tName}
                                           <button
                                             type="button"
@@ -1142,37 +1191,39 @@ export default function AdminPanel({
                                       }
                                       e.target.value = '';
                                     }}
-                                    className={`w-full text-[10px] rounded px-1.5 py-0.5 border focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}
+                                    className={`w-full text-[10px] rounded px-1 py-0.5 border focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer min-w-0 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}
+                                    style={{ minWidth: 0 }}
                                   >
-                                    <option value="" disabled>+ Add team</option>
+                                    <option value="" disabled>+ Add</option>
                                     {teams.filter(t => t.Active && !(user.TeamIDs || []).includes(t.TeamID)).map(t => (
                                       <option key={t.TeamID} value={t.TeamID}>{t.TeamName}</option>
                                     ))}
                                   </select>
                                 </div>
                               </td>
-                              <td className="px-4 py-3">
+                              <td className="px-3 py-3" style={{ minWidth: 0 }}>
                                 {user.ManagerEmail ? (
-                                  <span className={`text-xs font-mono ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{user.ManagerEmail}</span>
+                                  <span className={`text-xs font-mono block truncate ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} title={user.ManagerEmail}>{user.ManagerEmail}</span>
                                 ) : (
-                                  <span className={`text-xs italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Direct</span>
+                                  <span className={`text-xs italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} title="Reports directly to Super Admin">—</span>
                                 )}
                               </td>
-                              <td className="px-4 py-3">
-                                <div className="relative inline-block">
+                              <td className="px-3 py-3" style={{ minWidth: 0 }}>
+                                <div className="relative inline-block min-w-0">
                                 <select
                                   value={user.Role}
                                   onChange={(e) => onUpdateUserRole(user.Email, e.target.value as any)}
-                                  className={`text-xs uppercase font-bold pl-2 pr-6 py-1 rounded border appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer ${isDarkMode ? 'bg-[#1E293B] text-white' : 'bg-white'} ${getRoleBadgeColor(user.Role, isDarkMode)}`}
+                                  className={`text-xs uppercase font-bold pl-1.5 pr-5 py-1 rounded border appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer min-w-0 ${isDarkMode ? 'bg-[#1E293B] text-white border-[#334155]' : 'bg-white text-slate-800 border-slate-200'}`}
+                                  style={{ minWidth: 0 }}
                                 >
                                   <option value="Admin">Admin</option>
                                   <option value="Stakeholder">Stakeholder</option>
                                   <option value="Sub-stakeholder">Sub-stakeholder</option>
                                 </select>
-                                <ChevronDown size={12} className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 opacity-60" />
+                                <ChevronDown size={10} className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 opacity-60" />
                                 </div>
                               </td>
-                              <td className="px-4 py-3">
+                              <td className="px-3 py-3" style={{ minWidth: 0 }}>
                                 <button
                                   onClick={() => onToggleUserStatus(user.Email)}
                                   className={`text-[10px] font-extrabold tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer ${
@@ -1186,7 +1237,8 @@ export default function AdminPanel({
                               </td>
                             </tr>
                           );
-                        })}
+                        });
+                      })()}
                     </tbody>
                   </table>
                   </div>
@@ -1198,49 +1250,49 @@ export default function AdminPanel({
 
         {/* SUBTAB 2: Teams Management */}
         {activeAdminSubTab === 'teams' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8">
               {/* Add Team Form */}
-              <div className={`border rounded-xl p-5 space-y-4 shadow-sm h-fit ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0]'}`}>
+              <div className={`border rounded-xl p-4 space-y-3 shadow-sm h-fit ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0]'}`}>
                 <div className={`flex items-center space-x-1.5 border-b pb-2 ${isDarkMode ? 'border-[#334155] text-white' : 'border-[#E2E8F0] text-[#0F172A]'}`}>
                   <Plus size={16} className={isDarkMode ? 'text-blue-400' : 'text-[#2563EB]'} />
                   <h4 className={`font-extrabold text-xs font-mono ${isDarkMode ? 'text-white' : 'text-[#010915]'}`}>Create new team</h4>
                 </div>
 
                 {teamSuccessMessage && (
-                  <div className={`p-3 text-xs rounded-lg font-semibold flex items-center gap-1 animate-pulse ${isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-800 bg-emerald-50 border-emerald-150'}`}>
+                  <div className={`p-2.5 text-xs rounded-lg font-semibold flex items-center gap-1 animate-pulse ${isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-800 bg-emerald-50 border-emerald-150'}`}>
                     <CheckCircle size={14} className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} />
                     <span>{teamSuccessMessage}</span>
                   </div>
                 )}
 
-                <form onSubmit={handleTeamCreateSubmit} className="space-y-4">
+                <form onSubmit={handleTeamCreateSubmit} className="space-y-2.5">
                   <div>
-                    <label className={`block text-[9.5px] font-bold tracking-widest mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Team name</label>
+                    <label className={`block text-[9.5px] font-bold tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Team name</label>
                     <input
                       type="text"
                       required
                       value={teamName}
                       onChange={(e) => setTeamName(e.target.value)}
                       placeholder="e.g. Engineering Team"
-                      className={`w-full text-xs rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-white border-[#E5E7EB] text-slate-800 placeholder-slate-400'}`}
+                      className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-600' : 'bg-white border-[#E5E7EB] text-slate-800 placeholder-slate-500'}`}
                     />
                   </div>
 
                   <div>
-                    <label className={`block text-[9.5px] font-bold tracking-widest mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Description (optional)</label>
+                    <label className={`block text-[9.5px] font-bold tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Description (optional)</label>
                     <textarea
                       value={teamDescription}
                       onChange={(e) => setTeamDescription(e.target.value)}
-                      placeholder="Team description and purpose..."
-                      rows={3}
-                      className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans resize-none ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-white border-[#E5E7EB] text-slate-800 placeholder-slate-400'}`}
+                      placeholder="e.g. Team description and purpose..."
+                      rows={2}
+                      className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans resize-none ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-600' : 'bg-white border-[#E5E7EB] text-slate-800 placeholder-slate-500'}`}
                     />
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-xs font-extrabold tracking-widest transition-all duration-150 shadow-md cursor-pointer border-none flex items-center justify-center space-x-1"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-xs font-extrabold tracking-widest transition-all duration-150 shadow-md cursor-pointer border-none flex items-center justify-center space-x-1"
                   >
                     <Plus size={14} />
                     <span>Create team</span>
@@ -1255,14 +1307,14 @@ export default function AdminPanel({
                 </div>
 
                 <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm" style={{ tableLayout: 'fixed', width: '100%' }}>
                     <thead className={`${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-50'}`}>
                       <tr>
-                        <th className={`px-4 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Team</th>
-                        <th className={`px-4 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Description</th>
-                        <th className={`px-4 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Members</th>
-                        <th className={`px-4 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Status</th>
-                        <th className={`px-4 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Actions</th>
+                        <th className={`px-3 py-2 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '22%', minWidth: 0 }}>Team</th>
+                        <th className={`px-3 py-2 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '23%', minWidth: 0 }}>Description</th>
+                        <th className={`px-3 py-2 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '15%', minWidth: 0 }}>Members</th>
+                        <th className={`px-3 py-2 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '15%', minWidth: 0 }}>Status</th>
+                        <th className={`px-3 py-2 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '25%', minWidth: 0 }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody className={`divide-y ${isDarkMode ? 'divide-[#334155]' : 'divide-slate-200'}`}>
@@ -1270,24 +1322,24 @@ export default function AdminPanel({
                         const teamUsers = users.filter(u => u.TeamIDs.includes(team.TeamID));
                         return (
                           <tr key={team.TeamID} className={`transition-colors ${isDarkMode ? 'hover:bg-[#1E293B]/60' : 'hover:bg-slate-50'}`}>
-                            <td className="px-4 py-3">
-                              <div>
-                                <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{team.TeamName}</div>
-                                <div className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{team.TeamID}</div>
+                            <td className="px-3 py-2" style={{ minWidth: 0 }}>
+                              <div className="min-w-0">
+                                <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'} truncate`}>{team.TeamName}</div>
+                                <div className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'} truncate`}>{team.TeamID}</div>
                               </div>
                             </td>
-                            <td className="px-4 py-3">
-                              <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{team.Description || 'No description'}</span>
+                            <td className="px-3 py-2" style={{ minWidth: 0 }}>
+                              <span className={`text-xs block truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} title={team.Description || 'No description'}>{team.Description || 'No description'}</span>
                             </td>
-                            <td className="px-4 py-3">
-                              <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded-full ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-[#2563EB]/10 text-[#2563EB]'}`}>
-                                {teamUsers.length} members
+                            <td className="px-3 py-2" style={{ minWidth: 0 }}>
+                              <span className={`text-xs font-extrabold px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-[#2563EB]/10 text-[#2563EB]'}`}>
+                                {teamUsers.length}
                               </span>
                             </td>
-                            <td className="px-4 py-3">
+                            <td className="px-3 py-2" style={{ minWidth: 0 }}>
                               <button
                                 onClick={() => onToggleTeamStatus(team.TeamID)}
-                                className={`text-[10px] font-extrabold tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer ${
+                                className={`text-[10px] font-extrabold tracking-widest py-1 px-2.5 rounded-lg border transition-all cursor-pointer ${
                                     team.Active
                                     ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
                                     : isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
@@ -1296,8 +1348,8 @@ export default function AdminPanel({
                                 {team.Active ? 'Active' : 'Inactive'}
                               </button>
                             </td>
-                            <td className="px-4 py-3">
-                              <div className="flex gap-1.5">
+                            <td className="px-3 py-2" style={{ minWidth: 0 }}>
+                              <div className="flex gap-1">
                                 <button
                                   type="button"
                                   onClick={async () => {
@@ -1309,7 +1361,7 @@ export default function AdminPanel({
 
                                     // Read leaders/stakeholders directly from team object (which is updated by App.tsx)
                                     // instead of settings, since onUpdateSetting only updates team state, not settings array
-                                    const teamData = teams.find(t => t.TeamID === team.TeamID);
+                                    const teamData = teams.find(t => t.TeamID === expandedTeamId);
                                     const leadersFromTeam = teamData?.TeamLeaderEmails || [];
                                     const stakeholdersFromTeam = teamData?.StakeholderEmails || [];
 
@@ -1318,7 +1370,7 @@ export default function AdminPanel({
                                     setCurrentTeamLeaders(leadersFromTeam);
                                     setCurrentTeamStakeholders(stakeholdersFromTeam);
                                   }}
-                                  className={`px-2.5 py-1.5 text-[10px] font-bold tracking-wider rounded-lg border transition-colors cursor-pointer ${isDarkMode ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'}`}
+                                  className={`px-2 py-1 text-[10px] font-bold tracking-wider rounded-lg border transition-colors cursor-pointer ${isDarkMode ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'}`}
                                 >
                                   Manage
                                 </button>
@@ -1329,7 +1381,7 @@ export default function AdminPanel({
                                       onDeleteTeam(team.TeamID);
                                     }
                                   }}
-                                  className={`px-2.5 py-1.5 text-[10px] font-bold tracking-wider rounded-lg border transition-colors cursor-pointer ${isDarkMode ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30' : 'bg-red-50 hover:bg-red-100 text-red-700 border-red-200'}`}
+                                  className={`px-2 py-1 text-[10px] font-bold tracking-wider rounded-lg border transition-colors cursor-pointer ${isDarkMode ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30' : 'bg-red-50 hover:bg-red-100 text-red-700 border-red-200'}`}
                                 >
                                   Delete
                                 </button>
@@ -1684,15 +1736,15 @@ export default function AdminPanel({
                                     type="text"
                                     value={newSubTeamName}
                                     onChange={e => setNewSubTeamName(e.target.value)}
-                                    placeholder="Sub-team name…"
-                                    className={`w-full text-xs rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-indigo-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                    placeholder="e.g. Sub-team name…"
+                                    className={`w-full text-xs rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-indigo-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-600' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-500'}`}
                                   />
                                   <input
                                     type="text"
                                     value={newSubTeamDesc}
                                     onChange={e => setNewSubTeamDesc(e.target.value)}
-                                    placeholder="Description (optional)…"
-                                    className={`w-full text-xs rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-indigo-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                    placeholder="e.g. Description (optional)…"
+                                    className={`w-full text-xs rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-indigo-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-600' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-500'}`}
                                   />
                                   <button
                                     type="button"
@@ -1842,7 +1894,7 @@ export default function AdminPanel({
                       value={tempTitle}
                       onChange={(e) => setTempTitle(e.target.value)}
                       placeholder="e.g. Fortnightly SOC2 Assets Audit"
-                      className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-white border-[#E2E8F0] text-slate-800 placeholder-slate-400'}`}
+                      className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-600' : 'bg-white border-[#E2E8F0] text-slate-800 placeholder-slate-500'}`}
                     />
                   </div>
 
@@ -1852,9 +1904,9 @@ export default function AdminPanel({
                       required
                       value={tempDesc}
                       onChange={(e) => setTempDesc(e.target.value)}
-                      placeholder="Identify active cluster nodes, map pending anomalies, and verify signature certificates..."
+                      placeholder="e.g. Identify active cluster nodes, map pending anomalies, and verify signature certificates..."
                       rows={3}
-                      className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans resize-none ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-white border-[#E5E7EB] text-slate-800 placeholder-slate-400'}`}
+                      className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans resize-none ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-600' : 'bg-white border-[#E5E7EB] text-slate-800 placeholder-slate-500'}`}
                     />
                   </div>
 
@@ -1946,7 +1998,7 @@ export default function AdminPanel({
                       value={templateSearchText}
                       onChange={(e) => setTemplateSearchText(e.target.value)}
                       placeholder="Search blueprints title or recipient..."
-                      className={`w-full text-xs rounded-lg pl-9 pr-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' : 'bg-white border-[#E5E7EB] text-slate-800 placeholder-slate-400'}`}
+                      className={`w-full text-xs rounded-lg pl-9 pr-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-600' : 'bg-white border-[#E5E7EB] text-slate-800 placeholder-slate-500'}`}
                     />
                   </div>
                   <span className={`text-[10px] font-bold tracking-widest font-mono ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>
