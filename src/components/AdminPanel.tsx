@@ -1518,6 +1518,37 @@ export default function AdminPanel({
                   )}
                 </div>
 
+                {/* Unassigned Users Section */}
+                {(() => {
+                  const unassignedUsers = users.filter(u => u.Active && (!u.TeamIDs || u.TeamIDs.length === 0));
+                  if (unassignedUsers.length === 0) return null;
+                  return (
+                    <div className={`mt-6 border rounded-xl overflow-hidden ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                      <div className={`px-4 py-3 border-b ${isDarkMode ? 'border-[#334155] bg-[#1E293B]' : 'border-slate-200 bg-slate-50'}`}>
+                        <h4 className={`font-extrabold text-sm font-mono ${isDarkMode ? 'text-white' : 'text-[#0F172A]'}`}>Unassigned Users ({unassignedUsers.length})</h4>
+                      </div>
+                      <div className={`divide-y ${isDarkMode ? 'divide-[#334155]' : 'divide-slate-200'}`}>
+                        {unassignedUsers.map(u => (
+                          <div key={u.UserID} className={`px-4 py-3 flex items-center justify-between ${isDarkMode ? 'hover:bg-[#1E293B]/60' : 'hover:bg-slate-50'}`}>
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${isDarkMode ? 'bg-slate-500/20 text-slate-400' : 'bg-slate-100 text-slate-600'}`}>
+                                {(u.FullName || '').split(' ').map(n => n[0]).join('').toUpperCase()}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className={`font-medium text-sm truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{u.FullName}</div>
+                                <div className={`text-xs truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{u.Email}</div>
+                              </div>
+                            </div>
+                            <span className={`text-xs font-bold px-2 py-1 rounded-full ${isDarkMode ? 'bg-slate-500/10 text-slate-400' : 'bg-slate-100 text-slate-600'}`}>
+                              {u.Role}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Team Management Drawer */}
                 {expandedTeamId && (() => {
                   const team = teams.find(t => t.TeamID === expandedTeamId);

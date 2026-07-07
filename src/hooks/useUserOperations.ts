@@ -22,8 +22,14 @@ export function useUserOperations({
   const handleUpdateUserTeams = useCallback(async (email: string, teamIDs: string[], teamNames: string[]) => {
     const foundUser = users.find(u => u.Email === email);
     if (foundUser) {
+      // Also clear single TeamID/TeamName fields when all teams are removed
+      const primaryTeamID = teamIDs.length > 0 ? teamIDs[0] : '';
+      const primaryTeamName = teamNames.length > 0 ? teamNames[0] : '';
+      
       const updatedUser = {
         ...foundUser,
+        TeamID: primaryTeamID,
+        TeamName: primaryTeamName,
         TeamIDs: teamIDs,
         TeamNames: teamNames,
         UpdatedAt: new Date().toISOString()
