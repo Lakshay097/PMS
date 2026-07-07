@@ -156,34 +156,30 @@ export async function accountRequestHandler(req: Request, res: Response): Promis
     throw new InternalServerError("Failed to submit account request");
   }
 
-  // Mirror into Firestore so the Admin Panel (which reads Firestore) can see this pending request.
+  // Write to Firestore so the Admin Panel (which reads Firestore) can see this pending request.
+  // This is mandatory - Admin Panel reads from Firestore for visibility, not Sheets.
   // Password is stored here too so that the background Firestore→Sheets sync never overwrites
   // column M with an empty string.
-  try {
-    await firestoreAdmin.collection('users').doc(normalizedEmail).set({
-      UserID: newUserId,
-      FullName: fullName,
-      Email: normalizedEmail,
-      Role: role,
-      ManagerEmail: normalizedManagerEmail,
-      TeamID: resolvedTeamId,
-      TeamName: resolvedTeamName,
-      TeamIDs: resolvedTeamId ? [resolvedTeamId] : [],
-      TeamNames: resolvedTeamName ? [resolvedTeamName] : [],
-      Active: false,
-      CanCreateFollowUp: true,
-      CanCloseTask: true,
-      CreatedAt: now,
-      UpdatedAt: now,
-      Password: hashedPassword,   // keep in sync so Sheets sync round-trips correctly
-      ApprovalStatus: 'pending',
-      RequestedBy: normalizedEmail,
-      RequestedAt: now,
-    });
-  } catch (firestoreErr) {
-    console.error("Failed to mirror pending user into Firestore:", firestoreErr);
-    // Don't fail the whole request if this mirror write fails - Sheets is still source of truth
-  }
+  await firestoreAdmin.collection('users').doc(normalizedEmail).set({
+    UserID: newUserId,
+    FullName: fullName,
+    Email: normalizedEmail,
+    Role: role,
+    ManagerEmail: normalizedManagerEmail,
+    TeamID: resolvedTeamId,
+    TeamName: resolvedTeamName,
+    TeamIDs: resolvedTeamId ? [resolvedTeamId] : [],
+    TeamNames: resolvedTeamName ? [resolvedTeamName] : [],
+    Active: false,
+    CanCreateFollowUp: true,
+    CanCloseTask: true,
+    CreatedAt: now,
+    UpdatedAt: now,
+    Password: hashedPassword,   // keep in sync so Sheets sync round-trips correctly
+    ApprovalStatus: 'pending',
+    RequestedBy: normalizedEmail,
+    RequestedAt: now,
+  });
 
   res.json({
     success: true,
