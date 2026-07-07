@@ -100,7 +100,7 @@ export default function TaskCreationForm({
       priority: 'Medium',
       assigneeEmail: '',
       assignedByEmail: '',
-      teamId: '',
+      teamIds: [],  
       attachmentLink: '',
     });
     setErrors({});

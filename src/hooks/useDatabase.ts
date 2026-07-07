@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Task, Team, SubTeam, TaskTemplate, AppSetting, TaskReport, FollowUp, Subtask, Comment, EmailTemplate, TeamSubmission } from '../types';
+import { User, Task, Team, SubTeam, TaskTemplate, AppSetting, TaskReport, FollowUp, Subtask, Comment, EmailTemplate, TeamSubmission, AuditLog } from '../types';
 import { dbService, initializeDatabaseWithRace, getPrimaryDatabase, forceClearAllCaches, getSyncStatus, subscribeToSyncStatus, setDatabaseSwitchCallback, switchToFirestoreBackup, registerOptimisticCallback } from '../lib/dbService';
 import { logger } from '../utils/logger';
 
@@ -9,7 +9,7 @@ export function useDatabase(isAuthInitialized: boolean = false) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [subTeams, setSubTeams] = useState<SubTeam[]>([]);
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
-  const [audits, setAudits] = useState<AppSetting[]>([]);
+  const [audits, setAudits] = useState<AuditLog[]>([]);
   const [settings, setSettings] = useState<AppSetting[]>([]);
   const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
   const [reports, setReports] = useState<TaskReport[]>([]);
@@ -46,7 +46,7 @@ export function useDatabase(isAuthInitialized: boolean = false) {
       setTeams(data.teams);
       setSubTeams(data.subTeams || []);
       setTemplates(data.templates);
-      setAudits(data.settings);
+      setAudits(data.audits);
       setSettings(data.settings);
       setEmailTemplates(data.emailTemplates || []);
       setReports(data.reports);
@@ -84,7 +84,7 @@ export function useDatabase(isAuthInitialized: boolean = false) {
       setTeams(data.teams);
       setSubTeams(data.subTeams || []);
       setTemplates(data.templates);
-      setAudits(data.settings);
+      setAudits(data.audits);
       setSettings(data.settings);
       setEmailTemplates(data.emailTemplates || []);
       setReports(data.reports);
@@ -151,6 +151,9 @@ export function useDatabase(isAuthInitialized: boolean = false) {
 
     const unsubscribeSettings = registerOptimisticCallback<AppSetting>('settings', (data) => {
       setSettings(data);
+    });
+
+    const unsubscribeAudits = registerOptimisticCallback<AuditLog>('auditlogs', (data) => {
       setAudits(data);
     });
 
@@ -177,6 +180,7 @@ export function useDatabase(isAuthInitialized: boolean = false) {
       unsubscribeSettings();
       unsubscribeEmailTemplates();
       unsubscribeTeamSubmissions();
+      unsubscribeAudits();
     };
   }, [isAuthInitialized]);
 

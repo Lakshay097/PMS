@@ -535,6 +535,11 @@ export default function App() {
     const emailToNameMap = new Map(
       users.map(u => [u.Email?.toLowerCase() || '', u.FullName])
     );
+    // FIX: Task has TeamID but no TeamName field — look the name up from `teams`
+    // instead of referencing a property that doesn't exist on Task.
+    const teamIdToNameMap = new Map(
+      teams.map(t => [t.TeamID, t.TeamName])
+    );
     return getFilteredTasks().filter(task => {
     const assignees = (task.AssignedToEmail || '').split(',').map(e => e.trim());
     const assigneeNames = assignees.map(email => {
@@ -550,7 +555,7 @@ export default function App() {
       (task.AssignedByEmail?.toLowerCase().includes(searchLower) || false) ||
       (task.Description?.toLowerCase().includes(searchLower) || false) ||
       (task.TeamID?.toLowerCase().includes(searchLower) || false) ||
-      (task.TeamName?.toLowerCase().includes(searchLower) || false) ||
+      (teamIdToNameMap.get(task.TeamID || '')?.toLowerCase().includes(searchLower) || false) ||
       (assigneeNames.toLowerCase().includes(searchLower) || false)
     );
 
@@ -1373,7 +1378,3 @@ export default function App() {
     </div>
   );
 }
-
-
-
-

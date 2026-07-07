@@ -17,7 +17,7 @@ const COLLECTION_TO_QUERY_KEY: Record<string, string> = {
 export function useRealtimeSync(token: string | null) {
   const queryClient = useQueryClient();
   const esRef = useRef<EventSource | null>(null);
-  const reconnectRef = useRef<ReturnType<typeof setTimeout>>();
+  const reconnectRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const backoff = useRef(1000);
   const lastHeartbeat = useRef(Date.now());
 

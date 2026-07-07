@@ -21,7 +21,8 @@ import {
   Subtask,
   Comment,
   EmailTemplate,
-  TeamSubmission
+  TeamSubmission,
+  AuditLog          
 } from '../types';
 import {
   INITIAL_USERS,
@@ -38,7 +39,7 @@ import { sheetsApi, HEADERS } from './sheetsService';
 import { logger } from '../utils/logger';
 import { notifyChange, api } from '../api/client';
 import { db } from './firestoreConfig';
-import { doc, setDoc, updateDoc, deleteDoc, addDoc, collection, getDocs, getDoc, query, where } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, deleteDoc, addDoc, collection, getDocs, getDoc, query, where, orderBy, limit } from 'firebase/firestore';
 
 // Operation Types for Audit & Error Hooks
 export enum OperationType {
@@ -128,7 +129,8 @@ function getIdFieldForCollection(collection: string): string {
     settings: 'Key',
     subtasks: 'SubtaskID',
     comments: 'CommentID',
-    team_submissions: 'SubmissionID'
+    team_submissions: 'SubmissionID',
+    auditlogs: 'LogID'      
   };
   return idFields[collection] || 'ID';
 }
@@ -830,6 +832,29 @@ export const dbService = {
     })();
   },
 
+// Audit Logs — read-only, append-only collection (writes happen via logAction())
+  async getAudits(): Promise<AuditLog[]> {
+    const cached = getFromCache<AuditLog>('auditlogs');
+    if (cached) return cached;
+
+    try {
+      // Cap to the most recent 200 entries — auditlogs is append-only and
+      // unbounded, unlike the other collections, so we avoid pulling the
+      // full history on every load.
+      const auditQuery = query(
+        collection(db, 'auditlogs'),
+        orderBy('ActionDateTime', 'desc'),
+        limit(200)
+      );
+      const snapshot = await getDocs(auditQuery);
+      const audits = snapshot.docs.map(doc => doc.data() as AuditLog);
+      setCache('auditlogs', audits);
+      return audits;
+    } catch (error) {
+      throw new Error(`Failed to load audit logs from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  },
+
   // Email Templates
   async getEmailTemplates(): Promise<EmailTemplate[]> {
     const cached = getFromCache<EmailTemplate>('email_templates');
@@ -1200,6 +1225,7 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
     subtasks: Subtask[];
     comments: Comment[];
     teamSubmissions: TeamSubmission[];
+    audits: AuditLog[];  
   }> {
     // Read all collections from Firestore in parallel
     const [
@@ -1214,7 +1240,8 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
       followupsSnapshot,
       subtasksSnapshot,
       commentsSnapshot,
-      teamSubmissionsSnapshot
+      teamSubmissionsSnapshot,
+      auditsSnapshot  
     ] = await Promise.all([
       getDocs(collection(db, 'users')),
       getDocs(collection(db, 'tasks')),
@@ -1227,7 +1254,8 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
       getDocs(collection(db, 'followups')),
       getDocs(collection(db, 'subtasks')),
       getDocs(collection(db, 'comments')),
-      getDocs(collection(db, 'team_submissions'))
+      getDocs(collection(db, 'team_submissions')),
+      getDocs(query(collection(db, 'auditlogs'), orderBy('ActionDateTime', 'desc'), limit(200)))
     ]);
 
     // Apply the same data transformations as individual getters
@@ -1289,6 +1317,7 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
     const subtasks: Subtask[] = subtasksSnapshot.docs.map(doc => doc.data() as Subtask);
     const comments: Comment[] = commentsSnapshot.docs.map(doc => doc.data() as Comment);
     const teamSubmissions: TeamSubmission[] = teamSubmissionsSnapshot.docs.map(doc => doc.data() as TeamSubmission);
+    const audits: AuditLog[] = auditsSnapshot.docs.map(doc => doc.data() as AuditLog);
 
     // Populate cache for each collection so subsequent
     // individual reads hit cache, not Firestore
@@ -1304,6 +1333,7 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
     setCache('subtasks', subtasks);
     setCache('comments', comments);
     setCache('teamSubmissions', teamSubmissions);
+    setCache('auditlogs', audits);
 
     return {
       users,
@@ -1317,7 +1347,8 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
       followups,
       subtasks,
       comments,
-      teamSubmissions
+      teamSubmissions,
+      audits
     };
   },
 
@@ -1374,6 +1405,9 @@ async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
               break;
             case 'comments':
               result = await this.getComments();
+              break;
+            case 'auditlogs':
+              result = await this.getAudits();
               break;
             default:
               console.warn(`Unknown collection: ${collection}`);

@@ -19,7 +19,7 @@ interface UseTaskOperationsProps {
   formatEmailTemplate: (key: string, task: Partial<Task>) => string;
   logAudit: (entity: string, id: string, action: string, oldValue: string, newValue: string) => Promise<void>;
   setIsSimulatingRecurrence: (isSimulating: boolean) => void;
-  setSimulationMessage: (message: { type: string; text: string } | null) => void;
+  setSimulationMessage: (message: { type: "error" | "success" | "info"; text: string } | null) => void;
   setSubtasks: (subtasks: Subtask[]) => void;
   subtasks: Subtask[];
 }
