@@ -87,7 +87,8 @@ export async function accountRequestHandler(req: Request, res: Response): Promis
 
   // Check if email already exists
   for (const row of existingUsers) {
-    if (row[2] === normalizedEmail) { // Email is in column 3 (index 2)
+    const existingEmail = row[2] ? String(row[2]).toLowerCase().trim() : '';
+    if (existingEmail === normalizedEmail) { // Email is in column 3 (index 2)
       throw new BadRequestError("An account with this email already exists");
     }
   }

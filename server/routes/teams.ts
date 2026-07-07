@@ -21,7 +21,6 @@ router.get(
     }
 
     const rows = await fetchSheetValues(tokenData.accessToken, tokenData.spreadsheetId, 'teams!A:D');
-    logger.info(`Teams from Sheets: ${JSON.stringify(rows)}`);
     if (!rows || rows.length <= 1) {
       return res.json({ success: true, teams: [] });
     }
@@ -32,8 +31,6 @@ router.get(
       Active: row[3] === 'true' || row[3] === true || row[3] === 'TRUE' || row[3] === '1' || row[3] === 1,
     })).filter(t => t.Active && t.TeamID && t.TeamName)
       .sort((a, b) => a.TeamName.localeCompare(b.TeamName));
-
-    logger.info(`Filtered teams: ${JSON.stringify(teams)}`);
 
     res.json({ success: true, teams });
   })
