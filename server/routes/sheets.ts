@@ -45,6 +45,16 @@ router.post('/flush', authenticateToken, asyncWrapper(async (req: AuthRequest, r
 }));
 
 /**
+ * POST /api/sheets/full-sync/:collection
+ * Full sync a collection from Firestore to Sheets (admin only)
+ */
+router.post('/full-sync/:collection', authenticateToken, asyncWrapper(async (req: AuthRequest, res) => {
+  const { collection } = req.params;
+  await sheetsSyncController.fullSyncCollection(collection as any);
+  res.json({ success: true, message: `Full sync completed for ${collection}` });
+}));
+
+/**
  * GET /api/sheets/:spreadsheetId/metadata
  * Get spreadsheet metadata
  */

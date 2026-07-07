@@ -954,7 +954,14 @@ export default function App() {
         isAddTeamModalOpen={isAddTeamModalOpen}
         onAddUser={async (userData) => {
           try {
-            await dbService.saveUser(userData);
+            // Hash password before saving to ensure it's never stored in plaintext
+            const bcrypt = await import('bcrypt');
+            const hashedPassword = await bcrypt.hash(userData.Password || '', 12);
+            const userDataWithHashedPassword = {
+              ...userData,
+              Password: hashedPassword
+            };
+            await dbService.saveUser(userDataWithHashedPassword);
             // Trigger sync after action
             handleManualSync();
           } catch (error) {
@@ -1329,7 +1336,9 @@ export default function App() {
           <AddUserModal
             isOpen={isAddUserModalOpen}
             onClose={() => setIsAddUserModalOpen(false)}
-            onSave={(userData) => {
+            onSave={async (userData) => {
+              const bcrypt = await import('bcrypt');
+              const hashedPassword = await bcrypt.hash(userData.Password || '', 12);
               const newUser: User = {
                 UserID: `USR-${Date.now()}`,
                 FullName: userData.FullName,
@@ -1343,7 +1352,7 @@ export default function App() {
                 CanCloseTask: isAdminLevel(userData.Role) || userData.Role === ROLE.STAKEHOLDER,
                 CreatedAt: new Date().toISOString(),
                 UpdatedAt: new Date().toISOString(),
-                Password: userData.Password,
+                Password: hashedPassword,
               };
               setUsers(prev => [...prev, newUser]);
             }}

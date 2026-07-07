@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { asyncWrapper } from '../utils/asyncWrapper';
 import { generateGoogleSheetsToken, fetchSheetValues } from '../services/googleSheetsService';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
@@ -20,6 +21,7 @@ router.get(
     }
 
     const rows = await fetchSheetValues(tokenData.accessToken, tokenData.spreadsheetId, 'teams!A:D');
+    logger.info(`Teams from Sheets: ${JSON.stringify(rows)}`);
     if (!rows || rows.length <= 1) {
       return res.json({ success: true, teams: [] });
     }
@@ -27,9 +29,11 @@ router.get(
     const teams = rows.slice(1).map(row => ({
       TeamID: row[0] as string,
       TeamName: row[1] as string,
-      Active: row[3] === 'true' || row[3] === true,
+      Active: row[3] === 'true' || row[3] === true || row[3] === 'TRUE' || row[3] === '1' || row[3] === 1,
     })).filter(t => t.Active && t.TeamID && t.TeamName)
       .sort((a, b) => a.TeamName.localeCompare(b.TeamName));
+
+    logger.info(`Filtered teams: ${JSON.stringify(teams)}`);
 
     res.json({ success: true, teams });
   })
