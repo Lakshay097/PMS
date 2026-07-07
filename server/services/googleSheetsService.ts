@@ -51,7 +51,7 @@ export async function generateGoogleSheetsToken(): Promise<GoogleSheetsTokenResp
 
     const sign = crypto.createSign("RSA-SHA256");
     sign.update(`${base64UrlHeader}.${base64UrlPayload}`);
-    
+
     const formattedKey = privateKey.replace(/\\n/g, "\n");
     const signature = sign.sign(formattedKey, "base64url");
 
@@ -122,7 +122,22 @@ export async function fetchSheetValues(
 }
 
 /**
- * Appends values to a Google Sheets range
+ * Appends values to a Google Sheets range.
+ *
+ * FIX (2026-07): the Sheets API defaults `insertDataOption` to `OVERWRITE`
+ * when it is not specified. Under OVERWRITE, if the API's table-detection
+ * heuristic considers an existing row still "open" (e.g. it has blank
+ * trailing cells — true for older approved users whose ApprovalStatus /
+ * RequestedBy / RequestedAt / ApprovedBy / ApprovedAt columns were blank),
+ * the appended row's values can be written INTO that existing row's blank
+ * cells instead of a genuinely new row being created below the table.
+ *
+ * This was the root cause of new account-request data (e.g. a new user's
+ * RequestedBy/RequestedAt) landing inside an unrelated existing user's row.
+ *
+ * Explicitly forcing `insertDataOption=INSERT_ROWS` guarantees a new
+ * physical row is always inserted, regardless of blank cells elsewhere.
+ *
  * @param accessToken - Google OAuth access token
  * @param spreadsheetId - Google Sheets spreadsheet ID
  * @param range - Sheet range (e.g., 'users')
@@ -137,7 +152,7 @@ export async function appendSheetValues(
 ): Promise<boolean> {
   try {
     const res = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=RAW`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
       {
         method: 'POST',
         headers: {
@@ -276,7 +291,7 @@ export async function fetchRowByFilter(
 ): Promise<string[] | null> {
   try {
     const values = await fetchSheetValues(accessToken, spreadsheetId, `${sheetName}!A:Z`);
-    
+
     if (!values || values.length < 2) {
       return null;
     }
@@ -309,10 +324,10 @@ export async function initializeTeamSubmissionsSheet(): Promise<boolean> {
     }
 
     const spreadsheetId = tokenData.spreadsheetId;
-    
+
     // Check if team_submissions sheet exists by trying to fetch it
     const existingValues = await fetchSheetValues(tokenData.accessToken, spreadsheetId, 'team_submissions!A1:F1');
-    
+
     if (existingValues && existingValues.length > 0) {
       // Sheet already exists with headers
       return true;
@@ -327,17 +342,44 @@ export async function initializeTeamSubmissionsSheet(): Promise<boolean> {
     ];
 
     const success = await appendSheetValues(tokenData.accessToken, spreadsheetId, 'team_submissions', headers);
-    
+
     if (success) {
       logger.info('Initialized team_submissions sheet');
     }
-    
+
     return success;
   } catch (err) {
     logger.error('Error initializing team_submissions sheet:', err);
     return false;
   }
 }
+
+/**
+ * FIX (2026-07): saveCollection() used to derive column headers from
+ * `Object.keys(data[0])` — the first object in whatever array happened to
+ * be passed in. If that object was missing a field another record had
+ * (e.g. a pending user without ApprovedBy yet), every row would be
+ * serialized against the WRONG header set, silently misaligning columns
+ * for every other record in the write. This is one of the mechanisms that
+ * could blank out or shift a user's Password column during a full-collection
+ * sync. Use a fixed, explicit schema per sheet instead — this must be kept
+ * in sync with the client-side HEADERS map in src/lib/sheetsService.ts.
+ */
+export const SERVER_HEADERS: Record<string, string[]> = {
+  users: ['UserID', 'FullName', 'Email', 'Role', 'ManagerEmail', 'TeamID', 'TeamName', 'Active', 'CanCreateFollowUp', 'CanCloseTask', 'CreatedAt', 'UpdatedAt', 'Password', 'ApprovalStatus', 'RequestedBy', 'RequestedAt', 'ApprovedBy', 'ApprovedAt'],
+  teams: ['TeamID', 'TeamName', 'StakeholderEmail', 'Active'],
+  sub_teams: ['SubTeamID', 'TeamID', 'SubTeamName', 'Active'],
+  templates: ['TemplateID', 'Title', 'Description', 'Category', 'Priority', 'RecurrenceType', 'StartDate', 'NextGenerationDate', 'LastGeneratedDate', 'AssignedByEmail', 'AssignedToEmail', 'AssignedToRole', 'TeamID', 'Active', 'CreatedAt', 'UpdatedAt'],
+  tasks: ['TaskID', 'TemplateID', 'ParentTaskID', 'Title', 'Description', 'Category', 'Priority', 'TaskType', 'RecurrenceType', 'CycleKey', 'StartDate', 'DueDate', 'AssignedByEmail', 'AssignedToEmail', 'AssignedToRole', 'TeamID', 'Status', 'PercentComplete', 'LastReportSummary', 'RequiresFollowUp', 'FollowUpCount', 'FollowUpReason', 'CompletionDate', 'CloseRemark', 'AttachmentLink', 'CreatedAt', 'UpdatedAt', 'Active'],
+  reports: ['ReportID', 'TaskID', 'SubtaskID', 'SubmittedByEmail', 'ReportDate', 'StatusUpdate', 'WorkSummary', 'PercentComplete', 'Blockers', 'NextAction', 'AttachmentLink', 'CreatedAt'],
+  followups: ['FollowUpID', 'ParentTaskID', 'NewTaskID', 'FollowUpNumber', 'CreatedByEmail', 'Reason', 'CreatedAt', 'Status'],
+  auditlogs: ['LogID', 'EntityType', 'EntityID', 'Action', 'OldValueJSON', 'NewValueJSON', 'ActionByEmail', 'ActionDateTime'],
+  settings: ['Key', 'Value'],
+  email_templates: ['Key', 'Value', 'Subject', 'Description'],
+  subtasks: ['SubtaskID', 'TaskID', 'Title', 'AssignedTo', 'DueDate', 'CreatedBy', 'LastReportSummary', 'Completed', 'CreatedAt'],
+  comments: ['CommentID', 'TaskID', 'Comment', 'CreatedAt', 'CreatedBy'],
+  team_submissions: ['SubmissionID', 'TeamID', 'SubmittedBy', 'SubmittedAt', 'Note', 'AttachmentLinks']
+};
 
 /**
  * Saves an entire collection to Google Sheets by clearing and rewriting
@@ -361,8 +403,10 @@ export async function saveCollection(
       return true; // Nothing to save
     }
 
-    const headers = Object.keys(data[0]);
-    const values = [headers, ...data.map(row => headers.map(header => row[header] || ''))];
+    // Use the fixed schema for this sheet if we have one; fall back to the
+    // old (unsafe) behavior only for unrecognized sheet names.
+    const headers = SERVER_HEADERS[sheetName] || Object.keys(data[0]);
+    const values = [headers, ...data.map(row => headers.map(header => row[header] ?? ''))];
 
     // Clear the sheet first (write empty range to remove old data)
     const clearRange = `${sheetName}!A2:Z9999`;

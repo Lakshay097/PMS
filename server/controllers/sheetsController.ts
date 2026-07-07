@@ -349,7 +349,7 @@ export async function appendValuesHandler(req: Request, res: Response) {
       return res.status(400).json({ error: "Google Service Account credentials not provided" });
     }
 
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=${valueInputOption}`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=${valueInputOption}&insertDataOption=INSERT_ROWS`;
     
     const response = await queueRequest(() => fetchWithRetry(url, {
       method: 'POST',
