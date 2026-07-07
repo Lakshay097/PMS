@@ -1,4 +1,4 @@
-                                                                          import React, { useState, useEffect } from 'react';
+                                                                          import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAllSubordinates } from '../../../utils/userUtils';
 import { getVisibleSubTeamIds, isSubTeamLeader, isTeamLeader } from '../../../utils/subTeamUtils';
@@ -738,7 +738,7 @@ export default function Dashboard({
     }
   };
 
-  const getFilteredTasks = () => {
+  const filteredTasks = useMemo(() => {
     // First apply role-based filtering using taskSubView
     const subView = currentUser.Role === ROLE.SUB_STAKEHOLDER ? 'my-tasks' : taskSubView;
     
@@ -867,7 +867,7 @@ export default function Dashboard({
     });
 
     return sorted;
-  };
+  }, [tasks, currentUser, users, subTeams, taskSubView, filterStatus, filterPriority, filterAssignee, filterTeamIDs, filterDateFrom, filterDateTo, searchQuery]);
 
   const renderOverview = () => (
     <div className="space-y-6 sm:space-y-8">
@@ -1137,7 +1137,7 @@ export default function Dashboard({
           </div>
           <button
             onClick={() => onNewTask()}
-            className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            className="flex items-center space-x-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
             <Plus size={16} />
             <span>{taskContentType === 'schedules' ? 'Create Schedule' : 'Create Task'}</span>
@@ -1216,13 +1216,13 @@ export default function Dashboard({
             onSearchQueryChange={setSearchQuery}
           />
           <TaskList
-            tasks={getFilteredTasks()}
+            tasks={filteredTasks}
             onTaskClick={onTaskClick}
             isDarkMode={isDarkMode}
             getPriorityColor={getPriorityColor}
             getStatusColor={getStatusColor}
             currentUser={currentUser}
-            taskSubView={currentUser.Role === ROLE.SUB_STAKEHOLDER ? 'my-tasks' : taskSubView}
+            taskSubView={taskSubView}
             onDeleteTask={onDeleteTask}
           />
         </>
@@ -2755,7 +2755,7 @@ export default function Dashboard({
       </aside>
 
       {/* Main Content */}
-      <main className={`flex-1 overflow-y-auto transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'md:ml-16' : 'md:ml-64'}`}>
+      <main className={`flex-1 overflow-y-auto transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'md:ml-16' : 'md:ml-64'} ${isDarkMode ? 'bg-[#0F141F]' : 'bg-white'}`}>
         {/* Header */}
         <header className={`px-4 md:px-8 py-4 md:py-5 sticky top-0 z-30 border-b ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
           <div className="flex items-center justify-between">
@@ -2799,7 +2799,7 @@ export default function Dashboard({
               {/* Profile Button */}
               <button
                 onClick={onEditProfile}
-                className={`p-2 md:p-2.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
+                className={`p-2 md:p-2.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-gray-100 text-slate-600 hover:text-slate-900'}`}
                 title="Profile"
               >
                 <User size={20} />

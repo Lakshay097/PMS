@@ -1276,7 +1276,10 @@ export default function App() {
               setUsers(prev => prev.map(u => u.UserID === activeUser.UserID ? { ...u, ...updatedUser } : u));
               setActiveUser(prev => prev ? { ...prev, ...updatedUser } : null);
             }}
-            onChangePassword={() => setIsChangePasswordModalOpen(true)}
+            onChangePassword={() => {
+              setIsEditProfileModalOpen(false);
+              setIsChangePasswordModalOpen(true);
+            }}
             isDarkMode={isDarkMode}
             onToggleTheme={() => setIsDarkMode(!isDarkMode)}
           />

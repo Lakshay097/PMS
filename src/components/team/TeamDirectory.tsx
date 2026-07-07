@@ -108,7 +108,7 @@ export default function TeamDirectory({ users, currentUser, onInviteUser, onUser
             active={teamFilter === 'all'}
             onClick={() => setTeamFilter('all')}
           />
-          {teams.map(team => (
+          {teams.filter(team => team).map(team => (
             <div key={team}>
               <FilterChip
                 label={team}

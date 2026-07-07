@@ -11,7 +11,7 @@ interface TaskListProps {
   getStatusColor: (status: string) => string;
   emptyMessage?: string;
   currentUser?: UserType;
-  taskSubView?: 'my-tasks' | 'team-tasks';
+  taskSubView?: 'my-tasks' | 'team-tasks' | 'assigned-by-me';
   onDeleteTask?: (taskId: string) => void;
 }
 
@@ -26,39 +26,11 @@ export default function TaskList({
   taskSubView = 'my-tasks',
   onDeleteTask,
 }: TaskListProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const filteredTasks = tasks.filter(task => {
-    const searchLower = searchQuery.toLowerCase();
-    return (
-      task.Title?.toLowerCase().includes(searchLower) ||
-      task.TaskID?.toLowerCase().includes(searchLower) ||
-      task.AssignedToEmail?.toLowerCase().includes(searchLower)
-    );
-  });
-
   return (
     <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
-      {/* Search bar */}
-      <div className={`p-3 sm:p-4 border-b border-[#E5E7EB] ${isDarkMode ? 'border-[#1E293B]' : ''}`}>
-        <div className="relative">
-          <Search size={14} className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} />
-          <input
-            type="text"
-            placeholder="Search by title, ID, or assignee..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className={`w-full pl-8 sm:pl-9 pr-3 sm:pr-4 py-2 text-xs sm:text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              isDarkMode 
-                ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' 
-                : 'bg-slate-50 border-[#E5E7EB] text-slate-800 placeholder-slate-400'
-            }`}
-          />
-        </div>
-      </div>
       <div className={`divide-y ${isDarkMode ? 'divide-[#1E293B]' : 'divide-slate-200'}`}>
         {/* PERF-CHECK: if list exceeds 50 items, add @tanstack/react-virtual */}
-        {filteredTasks.map((task) => {
+        {tasks.map((task) => {
           const taskIsSubStakeholder = currentUser && currentUser.Role === 'Stakeholder' && taskSubView === 'team-tasks' && 
             !task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase()) &&
             !task.AssignedByEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
@@ -126,9 +98,9 @@ export default function TaskList({
             </div>
           );
         })}
-        {filteredTasks.length === 0 && (
+        {tasks.length === 0 && (
           <div className={`p-8 sm:p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-            {searchQuery ? 'No tasks match your search' : emptyMessage}
+            {emptyMessage}
           </div>
         )}
       </div>

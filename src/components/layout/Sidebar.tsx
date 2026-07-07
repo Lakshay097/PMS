@@ -68,9 +68,10 @@ export default function Sidebar({ currentView, onViewChange, isCollapsed = false
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-screen bg-surface border-r border-[var(--color-border)] flex flex-col transition-all duration-300 z-30 ${
+      className={`fixed left-0 top-0 h-screen border-r border-[var(--color-border)] flex flex-col transition-all duration-300 z-30 ${
         isCollapsed ? 'w-[72px]' : 'w-[240px]'
       }`}
+      style={{ backgroundColor: 'var(--color-background)' }}
     >
       {/* Logo and workspace */}
       <div className="p-4 border-b border-[var(--color-border)] flex-shrink-0">

@@ -12,6 +12,7 @@ export interface TaskAssignmentTriggerRequest {
     Description: string;
     DueDate: string;
     Priority: string;
+    AttachmentLink?: string;
   };
 }
 

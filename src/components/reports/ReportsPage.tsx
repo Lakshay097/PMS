@@ -123,7 +123,7 @@ export default function ReportsPage({ auditLogs }: ReportsPageProps) {
             active={actorFilter === 'all'}
             onClick={() => setActorFilter('all')}
           />
-          {actors.map(actor => (
+          {actors.filter(actor => actor).map(actor => (
             <div key={actor}>
               <FilterChip
                 label={actor}
@@ -141,7 +141,7 @@ export default function ReportsPage({ auditLogs }: ReportsPageProps) {
             active={eventTypeFilter === 'all'}
             onClick={() => setEventTypeFilter('all')}
           />
-          {eventTypes.slice(0, 5).map(type => (
+          {eventTypes.slice(0, 5).filter(type => type).map(type => (
             <div key={type}>
               <FilterChip
                 label={type}

@@ -112,6 +112,9 @@ export async function triggerTaskAssignmentEmail(
           AssignedToName: assignedToName,
           AssignedByEmail: assignerEmail,
           AssignedByName: assignedByName,
+          // FIX: attachment/URL was never passed to the template, so it could
+          // never appear in the assignment email regardless of what the task had.
+          AttachmentLink: task.AttachmentLink || '',
         },
         threadInfo?.threadId,
         threadInfo?.messageId,

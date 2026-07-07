@@ -18,6 +18,17 @@ export default function EditProfileModal({ isOpen, onClose, currentUser, onSave,
   const [email, setEmail] = useState(currentUser.Email);
   const [teamName, setTeamName] = useState(currentUser.TeamName);
 
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () =>{
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   const handleChangePasswordClick = () => {
     if (onChangePassword) {
       onChangePassword();

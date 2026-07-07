@@ -1,44 +1,19 @@
 import { Router } from 'express';
-import { asyncWrapper } from '../utils/asyncWrapper';
 import { authenticateToken } from '../middleware/auth';
-import { oauthRateLimiter } from '../middleware/rateLimiters';
-import * as emailTriggerController from '../controllers/emailTriggerController';
+import {
+  triggerTaskAssignmentHandler,
+  triggerTaskDueSoonHandler,
+  triggerTaskOverdueHandler,
+  triggerReportSubmissionHandler,
+  triggerTaskClosureHandler,
+} from '../controllers/emailTriggerController';
 
 const router = Router();
 
-/**
- * POST /api/email/trigger/task-assignment
- * Triggers task assignment email (protected)
- * Rate limited: 20 failed requests per 15 minutes per IP
- */
-router.post('/email/trigger/task-assignment', oauthRateLimiter, authenticateToken, asyncWrapper(emailTriggerController.triggerTaskAssignmentHandler));
-
-/**
- * POST /api/email/trigger/task-due-soon
- * Triggers task due soon email (protected)
- * Rate limited: 20 failed requests per 15 minutes per IP
- */
-router.post('/email/trigger/task-due-soon', oauthRateLimiter, authenticateToken, asyncWrapper(emailTriggerController.triggerTaskDueSoonHandler));
-
-/**
- * POST /api/email/trigger/task-overdue
- * Triggers task overdue email (protected)
- * Rate limited: 20 failed requests per 15 minutes per IP
- */
-router.post('/email/trigger/task-overdue', oauthRateLimiter, authenticateToken, asyncWrapper(emailTriggerController.triggerTaskOverdueHandler));
-
-/**
- * POST /api/email/trigger/report-submission
- * Triggers report submission email (protected)
- * Rate limited: 20 failed requests per 15 minutes per IP
- */
-router.post('/email/trigger/report-submission', oauthRateLimiter, authenticateToken, asyncWrapper(emailTriggerController.triggerReportSubmissionHandler));
-
-/**
- * POST /api/email/trigger/task-closed
- * Triggers task closure email (protected)
- * Rate limited: 20 failed requests per 15 minutes per IP
- */
-router.post('/email/trigger/task-closed', oauthRateLimiter, authenticateToken, asyncWrapper(emailTriggerController.triggerTaskClosureHandler));
+router.post('/task-assignment', authenticateToken, triggerTaskAssignmentHandler);
+router.post('/task-due-soon', authenticateToken, triggerTaskDueSoonHandler);
+router.post('/task-overdue', authenticateToken, triggerTaskOverdueHandler);
+router.post('/report-submission', authenticateToken, triggerReportSubmissionHandler);
+router.post('/task-closed', authenticateToken, triggerTaskClosureHandler);
 
 export default router;

@@ -37,7 +37,6 @@ import StarterKit from '@tiptap/starter-kit';
 import { TextStyle } from '@tiptap/extension-text-style';
 import Color from '@tiptap/extension-color';
 import FontFamily from '@tiptap/extension-font-family';
-import UnderlineExtension from '@tiptap/extension-underline';
 import { dbService } from '../lib/dbService';
 
 interface AdminPanelProps {
@@ -298,7 +297,6 @@ export default function AdminPanel({
       TextStyle,
       Color,
       FontFamily,
-      UnderlineExtension,
     ],
     content: tempEmailValue,
     onUpdate: ({ editor }) => {
