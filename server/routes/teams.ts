@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { asyncWrapper } from '../utils/asyncWrapper';
-import { firestoreAdmin } from '../services/firebaseAdmin';
+import { generateGoogleSheetsToken, fetchSheetValues } from '../services/googleSheetsService';
 
 const router = Router();
 
@@ -9,22 +9,26 @@ const router = Router();
  * Public endpoint — no auth required.
  * Returns the name and ID of every active team so the registration form
  * can offer a team dropdown without exposing any user or task data.
+ * Reads from Google Sheets (source of truth) instead of Firestore.
  */
 router.get(
   '/teams/public',
   asyncWrapper(async (_req: Request, res: Response) => {
-    const snapshot = await firestoreAdmin.collection('teams').get();
+    const tokenData = await generateGoogleSheetsToken();
+    if (!tokenData || !tokenData.spreadsheetId) {
+      return res.status(500).json({ success: false, error: 'Failed to access Google Sheets' });
+    }
 
-    const teams = snapshot.docs
-      .map(doc => {
-        const data = doc.data();
-        return {
-          TeamID:   data.TeamID   as string,
-          TeamName: data.TeamName as string,
-          Active:   data.Active   as boolean,
-        };
-      })
-      .filter(t => t.Active)
+    const rows = await fetchSheetValues(tokenData.accessToken, tokenData.spreadsheetId, 'teams!A:D');
+    if (!rows || rows.length <= 1) {
+      return res.json({ success: true, teams: [] });
+    }
+
+    const teams = rows.slice(1).map(row => ({
+      TeamID: row[0] as string,
+      TeamName: row[1] as string,
+      Active: row[3] === 'true' || row[3] === true,
+    })).filter(t => t.Active && t.TeamID && t.TeamName)
       .sort((a, b) => a.TeamName.localeCompare(b.TeamName));
 
     res.json({ success: true, teams });
