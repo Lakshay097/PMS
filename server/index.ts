@@ -95,22 +95,26 @@ async function startServer() {
     
     // Serve static files with correct MIME types
     app.use(express.static(distPath, {
-      index: false,
-      setHeaders: (res, filePath) => {
-        const mimeType = mime.lookup(filePath);
-        if (mimeType) {
-          res.setHeader('Content-Type', mimeType);
-        }
+    index: false,
+    setHeaders: (res, filePath) => {
+      const mimeType = mime.lookup(filePath);
+      if (mimeType) {
+        res.setHeader('Content-Type', mimeType);
       }
-    }));
+      if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    }
+  }));
     
     app.get("*", (req, res) => {
-      if (req.path.startsWith('/api/')) {
-        res.status(404).send('Not Found');
-        return;
-      }
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+    if (req.path.startsWith('/api/')) {
+      res.status(404).send('Not Found');
+      return;
+    }
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.sendFile(path.join(distPath, "index.html"));
+  });
   }
 
   app.use(notFoundHandler);

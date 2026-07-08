@@ -131,6 +131,30 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Navigation requests (HTML shell) - Network First.
+// This is the critical fix: the HTML must always be fetched fresh so it
+// references the latest content-hashed /assets/*.js and *.css filenames.
+// Cache is used only as an offline fallback, never as the primary source.
+if (request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
+        if (response.ok) {
+          const responseToCache = response.clone();
+          caches.open(STATIC_CACHE_NAME).then((cache) => {
+            cache.put(request, responseToCache);
+          });
+        }
+        return response;
+      })
+      .catch(async () => {
+        const cachedResponse = await caches.match(request);
+        return cachedResponse || caches.match('/offline.html');
+      })
+  );
+  return;
+}
+
   // All other GET requests - Cache First with network fallback
   event.respondWith(
     caches.match(request)
