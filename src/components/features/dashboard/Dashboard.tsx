@@ -186,6 +186,7 @@ export default function Dashboard({
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailLoading, setGmailLoading] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [collapsedTeamIds, setCollapsedTeamIds] = useState<Set<string>>(new Set((teams || []).filter(t => t.Active).map(t => t.TeamID)));
 
   // Scheduled Tasks submission state
   const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
@@ -1355,11 +1356,34 @@ export default function Dashboard({
                   groups.push({ label: teamSubTeamList.length > 0 ? 'Unassigned' : 'Members', members: unassigned, isSubTeam: false });
                 }
 
+                const isCollapsed = collapsedTeamIds.has(team.TeamID);
+                const toggleCollapse = () => {
+                  setCollapsedTeamIds(prev => {
+                    const next = new Set(prev);
+                    if (next.has(team.TeamID)) {
+                      next.delete(team.TeamID);
+                    } else {
+                      next.add(team.TeamID);
+                    }
+                    return next;
+                  });
+                };
+
                 return (
                   <div key={team.TeamID} className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
                     {/* Team header */}
                     <div className={`flex items-center justify-between px-5 py-3 ${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-50'}`}>
                       <div className="flex items-center gap-3">
+                        <button
+                          onClick={toggleCollapse}
+                          className="flex items-center justify-center w-6 h-6 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                        >
+                          {isCollapsed ? (
+                            <ChevronRight size={16} className={isDarkMode ? 'text-slate-400' : 'text-slate-600'} />
+                          ) : (
+                            <ChevronDown size={16} className={isDarkMode ? 'text-slate-400' : 'text-slate-600'} />
+                          )}
+                        </button>
                         <h4 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{team.TeamName}</h4>
                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${isDarkMode ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
                           {allTeamMembers.length} member{allTeamMembers.length !== 1 ? 's' : ''}
@@ -1382,81 +1406,129 @@ export default function Dashboard({
 
                     {/* Member groups */}
                     <div className={`divide-y ${isDarkMode ? 'divide-[#1E293B]' : 'divide-slate-100'}`}>
-                      {groups.map(group => (
-                        <div key={group.label}>
-                          {/* Sub-team label — only show when there are actual sub-teams */}
-                          {teamSubTeamList.length > 0 && (
-                            <div className={`px-5 py-2 flex items-center gap-2 ${isDarkMode ? 'bg-[#0F141F]/60' : 'bg-slate-50/80'}`}>
+                      {isCollapsed ? (
+                        // Collapsed view: show only team leaders and sub-teams
+                        <>
+                          {/* Team leaders */}
+                          {allTeamMembers.filter(m => team.TeamLeaderEmails?.includes(m.Email)).map(member => (
+                            <div key={member.Email} className={`px-5 py-3 flex items-center justify-between hover:bg-opacity-50 transition-colors ${isDarkMode ? 'hover:bg-[#1E293B]/40' : 'hover:bg-slate-50'}`}>
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                  <User className="text-white" size={14} />
+                                </div>
+                                <div>
+                                  <div className={`font-medium text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                    {member.FullName}
+                                  </div>
+                                  <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{member.Email}</div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                                  Team Leader
+                                </span>
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded border ${
+                                  member.Role === ROLE.ADMIN
+                                    ? isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200'
+                                    : member.Role === ROLE.STAKEHOLDER
+                                    ? isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-700 border-blue-200'
+                                    : isDarkMode ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-slate-50 text-slate-700 border-slate-200'
+                                }`}>
+                                  {member.Role}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                          {/* Sub-teams (just names, no members) */}
+                          {teamSubTeamList.map(st => (
+                            <div key={st.SubTeamID} className={`px-5 py-2 flex items-center gap-2 ${isDarkMode ? 'bg-[#0F141F]/60' : 'bg-slate-50/80'}`}>
                               <span className={`text-[10px] font-bold tracking-widest uppercase ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                                {group.label}
+                                {st.SubTeamName}
                               </span>
                               <span className={`text-[10px] ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
-                                ({group.members.length})
+                                ({allTeamMembers.filter(m => m.SubTeamIDs?.includes(st.SubTeamID)).length} members)
                               </span>
                             </div>
-                          )}
-                          {group.members.length === 0 ? (
-                            <div className={`px-5 py-3 text-xs italic ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
-                              No members in this sub-team
-                            </div>
-                          ) : (
-                            group.members.map(member => {
-                              const isLeader = team.TeamLeaderEmails?.includes(member.Email);
-                              // Multi-membership: check if user is a leader of ANY sub-team they belong to
-                              const subTeamObj = member.SubTeamIDs && member.SubTeamIDs.length > 0
-                                ? teamSubTeamList.find(st => member.SubTeamIDs?.includes(st.SubTeamID))
-                                : null;
-                              const isSubLeader = subTeamObj?.SubTeamLeaderEmails?.some(
-                                e => e.toLowerCase() === member.Email.toLowerCase()
-                              );
-                              return (
-                                <div key={member.Email} className={`px-5 py-3 flex items-center justify-between hover:bg-opacity-50 transition-colors ${isDarkMode ? 'hover:bg-[#1E293B]/40' : 'hover:bg-slate-50'}`}>
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
-                                      <User className="text-white" size={14} />
-                                    </div>
-                                    <div>
-                                      <div className={`font-medium text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                                        {member.FullName}
+                          ))}
+                        </>
+                      ) : (
+                        // Expanded view: show all members grouped by sub-team
+                        groups.map(group => (
+                          <div key={group.label}>
+                            {/* Sub-team label — only show when there are actual sub-teams */}
+                            {teamSubTeamList.length > 0 && (
+                              <div className={`px-5 py-2 flex items-center gap-2 ${isDarkMode ? 'bg-[#0F141F]/60' : 'bg-slate-50/80'}`}>
+                                <span className={`text-[10px] font-bold tracking-widest uppercase ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                  {group.label}
+                                </span>
+                                <span className={`text-[10px] ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
+                                  ({group.members.length})
+                                </span>
+                              </div>
+                            )}
+                            {group.members.length === 0 ? (
+                              <div className={`px-5 py-3 text-xs italic ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
+                                No members in this sub-team
+                              </div>
+                            ) : (
+                              group.members.map(member => {
+                                const isLeader = team.TeamLeaderEmails?.includes(member.Email);
+                                // Multi-membership: check if user is a leader of ANY sub-team they belong to
+                                const subTeamObj = member.SubTeamIDs && member.SubTeamIDs.length > 0
+                                  ? teamSubTeamList.find(st => member.SubTeamIDs?.includes(st.SubTeamID))
+                                  : null;
+                                const isSubLeader = subTeamObj?.SubTeamLeaderEmails?.some(
+                                  e => e.toLowerCase() === member.Email.toLowerCase()
+                                );
+                                return (
+                                  <div key={member.Email} className={`px-5 py-3 flex items-center justify-between hover:bg-opacity-50 transition-colors ${isDarkMode ? 'hover:bg-[#1E293B]/40' : 'hover:bg-slate-50'}`}>
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <User className="text-white" size={14} />
                                       </div>
-                                      <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{member.Email}</div>
+                                      <div>
+                                        <div className={`font-medium text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                          {member.FullName}
+                                        </div>
+                                        <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{member.Email}</div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                      {isLeader && (
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                                          Team Leader
+                                        </span>
+                                      )}
+                                      {isSubLeader && (
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
+                                          Sub-Team Leader
+                                        </span>
+                                      )}
+                                      <span className={`text-xs font-bold px-2 py-0.5 rounded border ${
+                                        member.Role === ROLE.ADMIN
+                                          ? isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200'
+                                          : member.Role === ROLE.STAKEHOLDER
+                                          ? isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-700 border-blue-200'
+                                          : isDarkMode ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-slate-50 text-slate-700 border-slate-200'
+                                      }`}>
+                                        {member.Role}
+                                      </span>
+                                      {isAdminLevel(currentUser.Role) && member.Role === ROLE.STAKEHOLDER && (
+                                        <button
+                                          onClick={() => onNewTask(member.Email)}
+                                          className="text-xs font-medium px-2 py-1 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 transition-colors"
+                                        >
+                                          Assign Task
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
-                                  <div className="flex items-center gap-2 flex-shrink-0">
-                                    {isLeader && (
-                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
-                                        Team Leader
-                                      </span>
-                                    )}
-                                    {isSubLeader && (
-                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
-                                        Sub-Team Leader
-                                      </span>
-                                    )}
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded border ${
-                                      member.Role === ROLE.ADMIN
-                                        ? isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200'
-                                        : member.Role === ROLE.STAKEHOLDER
-                                        ? isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-700 border-blue-200'
-                                        : isDarkMode ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-slate-50 text-slate-700 border-slate-200'
-                                    }`}>
-                                      {member.Role}
-                                    </span>
-                                    {isAdminLevel(currentUser.Role) && member.Role === ROLE.STAKEHOLDER && (
-                                      <button
-                                        onClick={() => onNewTask(member.Email)}
-                                        className="text-xs font-medium px-2 py-1 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 transition-colors"
-                                      >
-                                        Assign Task
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      ))}
+                                );
+                              })
+                            )}
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 );
