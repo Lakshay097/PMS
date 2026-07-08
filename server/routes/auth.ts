@@ -31,4 +31,10 @@ router.post('/approve-user', authenticateToken, asyncWrapper(authController.appr
  */
 router.post('/change-password', authenticateToken, asyncWrapper(authController.changePasswordHandler));
 
+/**
+ * POST /api/bulk-upload-users
+ * Protected endpoint to bulk upload users via CSV (Admin only)
+ */
+router.post('/bulk-upload-users', authenticateToken, asyncWrapper(authController.bulkUploadUsersHandler));
+
 export default router;

@@ -92,3 +92,28 @@ export async function approveUser(data: ApproveUserRequest): Promise<ApproveUser
 export async function changePassword(data: ChangePasswordRequest): Promise<ChangePasswordResponse> {
   return api.post<ChangePasswordResponse>('/change-password', data);
 }
+
+export interface BulkUserUploadRequest {
+  users: Array<{
+    FullName: string;
+    Email: string;
+    Role: string;
+    ManagerEmail: string;
+    TeamName: string;
+    Password: string;
+  }>;
+}
+
+export interface BulkUserUploadResponse {
+  success: boolean;
+  message: string;
+  results: {
+    success: number;
+    failed: number;
+    errors: Array<{ email: string; error: string }>;
+  };
+}
+
+export async function bulkUploadUsers(data: BulkUserUploadRequest): Promise<BulkUserUploadResponse> {
+  return api.post<BulkUserUploadResponse>('/bulk-upload-users', data);
+}

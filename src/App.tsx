@@ -299,17 +299,24 @@ export default function App() {
   const [newProfilePassword, setNewProfilePassword] = useState('');
   const [passwordChangeSuccess, setPasswordChangeSuccess] = useState(false);
 
-  const handleUpdatePassword = async (newPass: string) => {
+  const handleUpdatePassword = async (oldPassword: string, newPassword: string) => {
     if (!activeUser) return;
-    const updatedUser = { ...activeUser, Password: newPass, UpdatedAt: new Date().toISOString() };
-    await dbService.saveUser(updatedUser);
-    await dbService.logAction('User', activeUser.UserID, 'Password/Security Code changed by User via Profile', activeUser.Email, null, { email: activeUser.Email });
-    setPasswordChangeSuccess(true);
-    setTimeout(() => {
-      setPasswordChangeSuccess(false);
-      setIsEditingPassword(false);
-    }, 2500);
-    // Optimistic update handles UI refresh automatically
+    try {
+      const result = await changePassword({ oldPassword, newPassword });
+      if (result.success) {
+        await dbService.logAction('User', activeUser.UserID, 'Password/Security Code changed by User via Profile', activeUser.Email, null, { email: activeUser.Email });
+        setPasswordChangeSuccess(true);
+        setTimeout(() => {
+          setPasswordChangeSuccess(false);
+          setIsEditingPassword(false);
+        }, 2500);
+      } else {
+        throw new Error(result.message || 'Failed to change password');
+      }
+    } catch (error) {
+      logger.error('Password change error:', error);
+      throw error;
+    }
   };
 
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
@@ -1189,6 +1196,7 @@ export default function App() {
         isSyncing={dbIsSyncing}
         lastSyncTime={lastSyncTime}
         dbConnectionStatus={dbConnectionStatus}
+        onRefreshUsers={silentSync}
       />
         </Suspense>
       </ErrorBoundary>

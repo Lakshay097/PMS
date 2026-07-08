@@ -25,54 +25,101 @@ export function getVisibleTasks(tasks: Task[], activeUser: any, currentView: str
   if (!tasks) return [];
   
   const today = getCurrentLocalDate();
+  const userEmail = activeUser.Email?.toLowerCase() || '';
   
-  // Get hierarchical subordinates for the current user (if they are a stakeholder)
-  const subStakeholderEmails = activeUser.Role === ROLE.STAKEHOLDER 
+  // Get hierarchical subordinates for the current user (if they are a stakeholder/team leader)
+  const subStakeholderEmails = activeUser.Role === ROLE.STAKEHOLDER || activeUser.Role === ROLE.TEAM_LEADER
     ? getAllSubordinates(activeUser.Email, users)
+    : [];
+  
+  // Get team members for Team Leader (excluding themselves)
+  const teamMemberEmails = activeUser.Role === ROLE.TEAM_LEADER
+    ? users.filter(u => 
+        u.TeamIDs?.some(tid => activeUser.TeamIDs?.includes(tid)) && 
+        u.Email?.toLowerCase() !== userEmail &&
+        u.Active
+      ).map(u => u.Email.toLowerCase())
+    : [];
+  
+  // Get sub-team members for Sub-Stakeholder (if they are a sub-team leader)
+  const subTeamMemberEmails = activeUser.Role === ROLE.SUB_STAKEHOLDER
+    ? users.filter(u => 
+        u.SubTeamIDs?.some(stid => activeUser.SubTeamIDs?.includes(stid)) &&
+        u.Email?.toLowerCase() !== userEmail &&
+        u.Active
+      ).map(u => u.Email.toLowerCase())
     : [];
   
   const afterRoleFilter = tasks.filter(task => {
     // Admin sees everything
     if (isAdminLevel(activeUser.Role)) return true;
     
+    // Team Leader sees their assigned tasks, tasks they assigned, and team members' tasks (excluding own)
+    if (activeUser.Role === ROLE.TEAM_LEADER) {
+      const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(userEmail);
+      const assignedByMe = task.AssignedByEmail?.toLowerCase() === userEmail;
+      const assignedToTeamMember = task.AssignedToEmail?.toLowerCase().split(',').some(email => 
+        teamMemberEmails.includes(email.trim().toLowerCase())
+      );
+      return assignedToMe || assignedByMe || assignedToTeamMember;
+    }
+    
     // Stakeholders see their assigned tasks, tasks they assigned, and their hierarchical sub-stakeholder tasks
     if (activeUser.Role === ROLE.STAKEHOLDER) {
-      const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(activeUser.Email.toLowerCase());
-      const assignedByMe = task.AssignedByEmail?.toLowerCase() === activeUser.Email.toLowerCase();
+      const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(userEmail);
+      const assignedByMe = task.AssignedByEmail?.toLowerCase() === userEmail;
       const assignedToSubStakeholder = task.AssignedToEmail?.toLowerCase().split(',').some(email => 
         subStakeholderEmails.includes(email.trim().toLowerCase())
       );
       return assignedToMe || assignedByMe || assignedToSubStakeholder;
     }
     
-    // Sub-stakeholders see only their assigned tasks
+    // Sub-Stakeholders see their assigned tasks and their sub-team members' tasks
     if (activeUser.Role === ROLE.SUB_STAKEHOLDER) {
-      return task.AssignedToEmail?.toLowerCase().includes(activeUser.Email.toLowerCase());
+      const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(userEmail);
+      const assignedByMe = task.AssignedByEmail?.toLowerCase() === userEmail;
+      const assignedToSubTeamMember = task.AssignedToEmail?.toLowerCase().split(',').some(email => 
+        subTeamMemberEmails.includes(email.trim().toLowerCase())
+      );
+      return assignedToMe || assignedByMe || assignedToSubTeamMember;
     }
     
-    return false;
+    // Regular members see only their assigned tasks
+    return task.AssignedToEmail?.toLowerCase().includes(userEmail);
   });
   
   const afterViewFilter = afterRoleFilter.filter(task => {
     // Apply view filters
     if (currentView === 'my-tasks') {
       // My Tasks: Only tasks assigned directly to me
-      return task.AssignedToEmail?.toLowerCase().includes(activeUser.Email.toLowerCase());
+      return task.AssignedToEmail?.toLowerCase().includes(userEmail);
     }
     if (currentView === 'team-tasks') {
-      // Team Tasks: For Admin - all tasks, for Stakeholder - their tasks + sub-stakeholder tasks
+      // Team Tasks: For Admin - all tasks
       if (isAdminLevel(activeUser.Role)) {
-        return true; // Admin sees all tasks in team view
+        return true;
       }
+      // Team Leader: team members' tasks (excludes own)
+      if (activeUser.Role === ROLE.TEAM_LEADER) {
+        return task.AssignedToEmail?.toLowerCase().split(',').some(email => 
+          teamMemberEmails.includes(email.trim().toLowerCase())
+        );
+      }
+      // Stakeholder: tasks they assigned
       if (activeUser.Role === ROLE.STAKEHOLDER) {
-        // Stakeholders only see tasks they assigned
-        return task.AssignedByEmail?.toLowerCase() === activeUser.Email.toLowerCase();
+        return task.AssignedByEmail?.toLowerCase() === userEmail;
       }
-      // Sub-stakeholder only sees their own tasks
-      return task.AssignedToEmail?.toLowerCase().includes(activeUser.Email.toLowerCase());
+      // Sub-Stakeholder: sub-team members' tasks (excludes own)
+      if (activeUser.Role === ROLE.SUB_STAKEHOLDER) {
+        return task.AssignedToEmail?.toLowerCase().split(',').some(email => 
+          subTeamMemberEmails.includes(email.trim().toLowerCase())
+        );
+      }
+      // Regular members don't see team tasks
+      return false;
     }
     if (currentView === 'assigned-by-me') {
-      return task.AssignedByEmail?.toLowerCase() === activeUser.Email.toLowerCase();
+      return task.AssignedByEmail?.toLowerCase() === userEmail;
     }
     return true;
   });

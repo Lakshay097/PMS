@@ -402,3 +402,201 @@ export async function changePasswordHandler(req: AuthRequest, res: Response): Pr
     message: "Password changed successfully"
   });
 }
+
+/**
+ * Bulk user upload request body
+ */
+interface BulkUserUploadRequestBody {
+  users: Array<{
+    FullName: string;
+    Email: string;
+    Role: string;
+    ManagerEmail: string;
+    TeamName: string;
+    Password: string;
+  }>;
+}
+
+/**
+ * POST /api/bulk-upload-users
+ * Protected endpoint to bulk upload users via CSV
+ */
+export async function bulkUploadUsersHandler(req: AuthRequest, res: Response): Promise<void> {
+  const { users: usersToUpload } = req.body as BulkUserUploadRequestBody;
+
+  if (!usersToUpload || !Array.isArray(usersToUpload)) {
+    throw new BadRequestError("Users array is required");
+  }
+
+  if (usersToUpload.length === 0) {
+    throw new BadRequestError("At least one user must be provided");
+  }
+
+  // Get Google Sheets access token
+  const tokenData = await generateGoogleSheetsToken();
+  if (!tokenData) {
+    throw new InternalServerError("Failed to authenticate with Google Sheets");
+  }
+
+  const spreadsheetId = tokenData.spreadsheetId;
+  if (!spreadsheetId) {
+    throw new InternalServerError("Spreadsheet ID not found");
+  }
+
+  // Fetch existing users to check for duplicates
+  const usersRange = 'users!A:R';
+  const existingUsers = await fetchSheetValues(tokenData.accessToken, spreadsheetId, usersRange);
+
+  if (!existingUsers) {
+    throw new InternalServerError("Failed to fetch existing users");
+  }
+
+  const existingEmails = new Set(
+    existingUsers.slice(1).map(row => row[2]?.toLowerCase()).filter(Boolean)
+  );
+
+  const results = {
+    success: 0,
+    failed: 0,
+    errors: [] as Array<{ email: string; error: string }>
+  };
+
+  const now = new Date().toISOString();
+  const rowsToAppend: any[][] = [];
+
+  for (const user of usersToUpload) {
+    const normalizedEmail = user.Email.toLowerCase();
+    const normalizedManagerEmail = user.ManagerEmail?.toLowerCase() || '';
+
+    // Validate required fields
+    if (!user.FullName || !user.Email || !user.Role || !user.Password) {
+      results.failed++;
+      results.errors.push({
+        email: user.Email || 'unknown',
+        error: 'Missing required fields (FullName, Email, Role, or Password)'
+      });
+      continue;
+    }
+
+    // Check for duplicate email
+    if (existingEmails.has(normalizedEmail)) {
+      results.failed++;
+      results.errors.push({
+        email: user.Email,
+        error: 'User with this email already exists'
+      });
+      continue;
+    }
+
+    // Validate password length
+    if (user.Password.length < 6) {
+      results.failed++;
+      results.errors.push({
+        email: user.Email,
+        error: 'Password must be at least 6 characters'
+      });
+      continue;
+    }
+
+    // Validate role
+    const validRoles = ['Admin', 'Stakeholder', 'Sub-stakeholder', 'Team Leader'];
+    if (!validRoles.includes(user.Role)) {
+      results.failed++;
+      results.errors.push({
+        email: user.Email,
+        error: `Invalid role. Must be one of: ${validRoles.join(', ')}`
+      });
+      continue;
+    }
+
+    // Determine role based on manager email if not explicitly set
+    let role = user.Role;
+    if (role === 'Sub-stakeholder' && !normalizedManagerEmail) {
+      results.failed++;
+      results.errors.push({
+        email: user.Email,
+        error: 'Manager email is required for Sub-stakeholders'
+      });
+      continue;
+    }
+
+    // Generate user ID
+    const newUserId = generateUserId();
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(user.Password, parseInt(process.env.BCRYPT_ROUNDS || '12'));
+
+    // Create user row
+    const userRow = [
+      newUserId,                    // UserID (A)
+      user.FullName,                // FullName (B)
+      normalizedEmail,              // Email (C)
+      role,                         // Role (D)
+      normalizedManagerEmail,       // ManagerEmail (E)
+      '',                           // TeamID (F) - will be resolved by admin
+      user.TeamName || '',          // TeamName (G)
+      'true',                       // Active (H) - auto-activate for bulk upload
+      'true',                       // CanCreateFollowUp (I)
+      'true',                       // CanCloseTask (J)
+      now,                          // CreatedAt (K)
+      now,                          // UpdatedAt (L)
+      hashedPassword,               // Password (M) - bcrypt hash
+      'approved',                   // ApprovalStatus (N) - auto-approved for bulk upload
+      req.user?.email || 'system',  // RequestedBy (O)
+      now,                          // RequestedAt (P)
+      req.user?.email || 'system',  // ApprovedBy (Q)
+      now                           // ApprovedAt (R)
+    ];
+
+    rowsToAppend.push(userRow);
+    existingEmails.add(normalizedEmail); // Prevent duplicates within the same batch
+    results.success++;
+  }
+
+  // Append all valid users to Google Sheets
+  if (rowsToAppend.length > 0) {
+    const success = await appendSheetValues(tokenData.accessToken, spreadsheetId, 'users', rowsToAppend);
+
+    if (!success) {
+      throw new InternalServerError("Failed to append users to Google Sheets");
+    }
+
+    // Also write to Firestore for Admin Panel visibility
+    for (let i = 0; i < rowsToAppend.length; i++) {
+      const row = rowsToAppend[i];
+      try {
+        await firestoreAdmin.collection('users').doc(row[2]).set({
+          UserID: row[0],
+          FullName: row[1],
+          Email: row[2],
+          Role: row[3],
+          ManagerEmail: row[4],
+          TeamID: row[5],
+          TeamName: row[6],
+          Active: row[7] === 'true',
+          CanCreateFollowUp: row[8] === 'true',
+          CanCloseTask: row[9] === 'true',
+          CreatedAt: row[10],
+          UpdatedAt: row[11],
+          Password: row[12],
+          ApprovalStatus: row[13],
+          RequestedBy: row[14],
+          RequestedAt: row[15],
+          ApprovedBy: row[16],
+          ApprovedAt: row[17],
+          TeamIDs: row[5] ? [row[5]] : [],
+          TeamNames: row[6] ? [row[6]] : [],
+        });
+      } catch (firestoreErr) {
+        console.error(`Failed to write user ${row[2]} to Firestore:`, firestoreErr);
+        // Non-fatal: Sheets is the source of truth
+      }
+    }
+  }
+
+  res.json({
+    success: true,
+    message: `Bulk upload completed: ${results.success} users added, ${results.failed} failed`,
+    results
+  });
+}

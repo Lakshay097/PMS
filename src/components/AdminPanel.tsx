@@ -65,6 +65,7 @@ interface AdminPanelProps {
   onRemoveUserFromSubTeam?: (userEmail: string, subTeamId: string) => Promise<void>;
   onSendInviteEmail?: (email: string, fullName: string, role: string) => void;
   onSyncDatabase?: () => void;
+  onRefreshUsers?: () => Promise<void>;
   isDarkMode?: boolean;
 }
 
@@ -93,6 +94,7 @@ export default function AdminPanel({
   onRemoveUserFromSubTeam,
   onSendInviteEmail,
   onSyncDatabase,
+  onRefreshUsers,
   subTeams = [],
   isDarkMode = false,
 }: AdminPanelProps) {
@@ -490,46 +492,47 @@ export default function AdminPanel({
     if (!csvPreview.length) return;
     
     setIsProcessingCsv(true);
-    const errors: any[] = [];
-    let successCount = 0;
     
-    for (const row of csvPreview) {
-      const validation = validateCSVRow(row);
-      if (!validation.valid) {
-        errors.push({ ...row, error: validation.error });
-        continue;
-      }
+    try {
+      const { bulkUploadUsers } = await import('../api/auth');
       
-      try {
-        const newId = `USR-${Math.floor(100 + Math.random() * 899)}`;
-        const newUser = {
-          UserID: newId,
-          FullName: row['Full Name'],
-          Email: row['Email'].toLowerCase(),
-          Role: row['Role'] || 'Stakeholder',
-          ManagerEmail: row['Manager Email'] || '',
-          TeamIDs: [],
-          TeamNames: [],
-          Active: true,
-          CanCreateFollowUp: true,
-          CanCloseTask: true,
-          Password: row['Password'] || 'temp123',
-          CreatedAt: new Date().toISOString(),
-          UpdatedAt: new Date().toISOString()
-        };
+      const usersToUpload = csvPreview.map(row => ({
+        FullName: row['Full Name'],
+        Email: row['Email'],
+        Role: row['Role'] || 'Stakeholder',
+        ManagerEmail: row['Manager Email'] || '',
+        TeamName: row['Team Name'] || '',
+        Password: row['Password'] || 'temp123'
+      }));
+      
+      const result = await bulkUploadUsers({ users: usersToUpload });
+      
+      if (result.success) {
+        setCsvErrors(result.results.errors.map(err => ({
+          'Full Name': err.email,
+          'Email': err.email,
+          error: err.error
+        })));
+        setCsvUploadResult({ 
+          success: result.results.success, 
+          failed: result.results.failed 
+        });
         
-        onAddUser(newUser);
-        successCount++;
-      } catch (error) {
-        errors.push({ ...row, error: 'Failed to create user' });
+        // Refresh the user list after successful upload
+        await onRefreshUsers?.();
       }
+    } catch (error: any) {
+      console.error('CSV upload error:', error);
+      setCsvErrors(csvPreview.map(row => ({
+        ...row,
+        error: error?.message || 'Upload failed'
+      })));
+      setCsvUploadResult({ success: 0, failed: csvPreview.length });
+    } finally {
+      setIsProcessingCsv(false);
+      setCsvPreview([]);
+      setCsvFile(null);
     }
-    
-    setCsvErrors(errors);
-    setCsvUploadResult({ success: successCount, failed: errors.length });
-    setIsProcessingCsv(false);
-    setCsvPreview([]);
-    setCsvFile(null);
   };
 
   const downloadCSVTemplate = () => {

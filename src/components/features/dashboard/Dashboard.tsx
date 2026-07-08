@@ -103,6 +103,7 @@ interface DashboardProps {
   teamSubmissions?: TeamSubmission[];
   onAddTeamSubmission?: (submission: TeamSubmission) => void;
   triggerNotification?: (type: string, message: string, emailSentTo: string) => void;
+  onRefreshUsers?: () => Promise<void>;
 }
 
 export default function Dashboard({
@@ -160,6 +161,7 @@ export default function Dashboard({
   teamSubmissions = [],
   onAddTeamSubmission = () => {},
   triggerNotification = () => {},
+  onRefreshUsers,
 }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState<'overview' | 'tasks' | 'team' | 'reports' | 'admin' | 'settings' | 'scheduled-tasks'>('overview');
@@ -2057,6 +2059,7 @@ export default function Dashboard({
       onAssignUserToSubTeam={onAssignUserToSubTeam}
       onRemoveUserFromSubTeam={onRemoveUserFromSubTeam}
       onSyncDatabase={onSyncDatabase}
+      onRefreshUsers={onRefreshUsers}
       onSendInviteEmail={(email, fullName, role) => {
         const inviteMessage = `Welcome to PMS! Your account has been created as ${role}. You can now log in with your credentials.`;
         triggerNotification('Task Assignment', inviteMessage, email);

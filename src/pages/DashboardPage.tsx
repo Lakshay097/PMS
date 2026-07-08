@@ -61,6 +61,7 @@ interface DashboardPageProps {
   isAddUserModalOpen?: boolean;
   isAddTeamModalOpen?: boolean;
   syncStatus?: 'synced' | 'syncing' | 'error';
+  onRefreshUsers?: () => Promise<void>;
 }
 
 export default function DashboardPage(props: DashboardPageProps) {

@@ -25,6 +25,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "bcrypt": "^6.0.0",
     "cloudinary": "^2.10.0",
+    "csv-parse": "^7.0.1",
     "dompurify": "^3.2.3",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",

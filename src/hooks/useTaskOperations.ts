@@ -50,7 +50,7 @@ export function useTaskOperations({
     // Belt-and-suspenders check: verify assignment eligibility
     const firstEmail = data.AssignedToEmail.split(',')[0]?.trim() || '';
     const assignee = users.find(u => u.Email === firstEmail);
-    if (assignee && !canAssignWithinTeam(currentUser, assignee, subTeams)) {
+    if (assignee && !canAssignWithinTeam(currentUser, assignee, subTeams, users)) {
       throw new Error('Cannot assign task outside your team scope.');
     }
 
@@ -229,7 +229,7 @@ export function useTaskOperations({
 
         const invalidAssignee = emails.find(email => {
           const assignee = users.find(u => u.Email.toLowerCase() === email.toLowerCase());
-          return !assignee || !canAssignWithinTeam(currentUser, assignee, subTeams);
+          return !assignee || !canAssignWithinTeam(currentUser, assignee, subTeams, users);
         });
 
         if (invalidAssignee) {

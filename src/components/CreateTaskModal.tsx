@@ -80,20 +80,33 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
     setUserSelectedDay(false);
   }, [isOpen, preSelectedAssignee, preSelectedTeamIDs]);
   
-  // Filter eligible assignees based on role
-  // Rule: Admin can assign to anyone. Stakeholders can assign to other stakeholders, admins, or themselves
-  // Sub-Team Leaders can assign to users in their visible sub-teams (via canAssignWithinTeam)
+  // Filter eligible assignees based on role and parent team
+  // Rule: Admin can assign to anyone. Other roles can only assign within their parent teams
   const filteredAssignees = usersList.filter(user => {
     if (!user.Active) return false;
+    
+    // Admins can assign to anyone
     if (isAdminLevel(currentUser.Role)) return true;
+    
+    // For non-admin users, restrict to users in the same parent team
+    const currentUserTeams = new Set(currentUser.TeamIDs || []);
+    const userInSameTeam = (user.TeamIDs || []).some(tid => currentUserTeams.has(tid));
+    
+    if (!userInSameTeam) return false;
+    
     if (currentUser.Role === ROLE.STAKEHOLDER) {
       return isAdminLevel(user.Role) || user.Role === ROLE.STAKEHOLDER || user.Email.toLowerCase() === currentUser.Email.toLowerCase();
     }
     if (currentUser.Role === ROLE.SUB_STAKEHOLDER) {
       // Use canAssignWithinTeam to check if assignment is allowed
-      return canAssignWithinTeam(currentUser, user, subTeamsList);
+      return canAssignWithinTeam(currentUser, user, subTeamsList, usersList);
     }
-    return false;
+    if (currentUser.Role === ROLE.TEAM_LEADER) {
+      // Team leaders can assign to anyone in their team (already filtered above)
+      return true;
+    }
+    // Regular members can assign to anyone in their team (already filtered above)
+    return true;
   });
 
   const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
@@ -106,6 +119,16 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
   const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; type: string; data: string }>>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [validationError, setValidationError] = useState('');
+
+  // Filter visible teams based on user's parent team membership
+  const currentUserTeams = new Set(currentUser.TeamIDs || []);
+  const visibleTeams = teamsList.filter(t => {
+    if (!t.Active) return false;
+    // Admins see all teams
+    if (isAdminLevel(currentUser.Role)) return true;
+    // Non-admins only see teams they belong to
+    return currentUserTeams.has(t.TeamID);
+  });
 
   // Auto-generate title from priority, description and date
   useEffect(() => {
@@ -437,10 +460,10 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                   />
                   {showTeamDropdown && teamSearchQuery && (
                     <div className="absolute z-10 w-full mt-1 bg-white border border-[#E2E8F0] rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                      {teamsList.filter(t => t.Active && t.TeamName.toLowerCase().includes(teamSearchQuery.toLowerCase())).length === 0 ? (
+                      {visibleTeams.filter(t => t.TeamName.toLowerCase().includes(teamSearchQuery.toLowerCase())).length === 0 ? (
                         <div className="p-3 text-slate-400 text-xs italic">No teams found.</div>
                       ) : (
-                        teamsList.filter(t => t.Active && t.TeamName.toLowerCase().includes(teamSearchQuery.toLowerCase())).map(team => {
+                        visibleTeams.filter(t => t.TeamName.toLowerCase().includes(teamSearchQuery.toLowerCase())).map(team => {
                           const isSelected = selectedTeamIDs.includes(team.TeamID);
                           const teamUsers = usersList.filter(u => u.TeamIDs.includes(team.TeamID) && u.Active);
                           return (
@@ -449,7 +472,6 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                               onClick={() => {
                                 if (!isSelected) {
                                   setSelectedTeamIDs([...selectedTeamIDs, team.TeamID]);
-                                  // Auto-select all team members
                                   const teamMemberEmails = teamUsers.map(u => u.Email);
                                   setSelectedEmails([...new Set([...selectedEmails, ...teamMemberEmails])]);
                                 }
