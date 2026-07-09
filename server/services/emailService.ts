@@ -5,6 +5,7 @@ import { refreshAccessToken } from './gmailOAuthService';
 import { replaceTemplateVariables } from './emailTemplateStorage';
 import { logEmailSuccess, logEmailFailure, logEmailRetry, updateTaskEmailThreadId } from './emailLogService';
 import { getEmailTemplate } from './emailTemplateStorage';
+import { firestoreAdmin } from './firebaseAdmin';
 
 export interface EmailOptions {
   to: string;
@@ -100,6 +101,7 @@ async function sendEmailViaGmail(
  * @param templateVars  - Variables to substitute in the template.
  * @param threadId      - Real Gmail threadId from task_email_threads (empty string on first send).
  * @param messageId     - Last Gmail messageId for In-Reply-To (empty string on first send).
+ * @returns { success, gmailThreadId?, gmailMessageId? } - Success flag plus Gmail thread/message IDs if successful.
  */
 export async function sendEmailAsUser(
   senderEmail: string,
@@ -110,14 +112,19 @@ export async function sendEmailAsUser(
   templateVars?: Record<string, string>,
   threadId?: string,
   messageId?: string,
-  taskId?: string
-): Promise<boolean> {
+  taskId?: string,
+  teamId?: string,
+  subTeamId?: string,
+  emailType?: 'thursday_reminder' | 'proof_email',
+  weekOf?: string
+): Promise<{ success: boolean; usedFallback: boolean; gmailThreadId?: string; gmailMessageId?: string }> {
   try {
     const token = await getGmailToken(senderEmail);
 
     if (!token || !token.refreshToken) {
       logger.warn(`No Gmail token for ${senderEmail}, using fallback`);
-      return sendFallbackEmail(senderEmail, toEmail, subject, body);
+      const fallbackResult = await sendFallbackEmail(senderEmail, toEmail, subject, body, teamId, subTeamId, emailType, weekOf);
+      return { success: fallbackResult, usedFallback: true };
     }
 
     // Refresh token if expired
@@ -130,7 +137,8 @@ export async function sendEmailAsUser(
         logger.error(`Token refresh failed for ${senderEmail}, disconnecting`);
         await deleteGmailToken(senderEmail);
         await logEmailFailure(senderEmail, toEmail, subject, 'Token refresh failed');
-        return sendFallbackEmail(senderEmail, toEmail, subject, body);
+        const fallbackResult = await sendFallbackEmail(senderEmail, toEmail, subject, body, teamId, subTeamId, emailType, weekOf);
+        return { success: fallbackResult, usedFallback: true };
       }
       accessToken = refreshed.access_token;
       await updateGmailAccessToken(senderEmail, accessToken, refreshed.expires_in);
@@ -195,7 +203,7 @@ export async function sendEmailAsUser(
       if (taskId && result.gmailThreadId && result.gmailMessageId) {
         await updateTaskEmailThreadId(taskId, result.gmailThreadId, result.gmailMessageId);
       }
-      return true;
+      return { success: true, usedFallback: false, gmailThreadId: result.gmailThreadId, gmailMessageId: result.gmailMessageId };
     }
 
     // Retry once with a fresh token
@@ -210,15 +218,18 @@ export async function sendEmailAsUser(
         if (taskId && retry.gmailThreadId && retry.gmailMessageId) {
           await updateTaskEmailThreadId(taskId, retry.gmailThreadId, retry.gmailMessageId);
         }
-        return true;
+        return { success: true, usedFallback: false, gmailThreadId: retry.gmailThreadId, gmailMessageId: retry.gmailMessageId };
       }
     }
 
-    return false;
+    // Final fallback after retry exhausted
+    const fallbackResult = await sendFallbackEmail(senderEmail, toEmail, subject, body, teamId, subTeamId, emailType, weekOf);
+    return { success: fallbackResult, usedFallback: true };
   } catch (err) {
     logger.error(`Error sending email as ${senderEmail}:`, err);
     await logEmailFailure(senderEmail, toEmail, subject, String(err));
-    return false;
+    const fallbackResult = await sendFallbackEmail(senderEmail, toEmail, subject, body, teamId, subTeamId, emailType, weekOf);
+    return { success: fallbackResult, usedFallback: true };
   }
 }
 
@@ -226,11 +237,34 @@ async function sendFallbackEmail(
   originalSender: string,
   toEmail: string,
   subject: string,
-  body: string
+  body: string,
+  teamId?: string,
+  subTeamId?: string,
+  type?: 'thursday_reminder' | 'proof_email',
+  weekOf?: string
 ): Promise<boolean> {
   try {
     logger.info(`FALLBACK EMAIL (not sent): Reply-To=${originalSender}, To=${toEmail}, Subject=${subject}`);
     await logEmailSuccess(config.DEFAULT_FALLBACK_EMAIL, toEmail, subject);
+
+    // Write to email_delivery_failures collection for visibility
+    if (teamId && type && weekOf) {
+      try {
+        await firestoreAdmin.collection('email_delivery_failures').add({
+          teamId,
+          subTeamId: subTeamId || null,
+          type,
+          intendedRecipient: toEmail,
+          weekOf,
+          timestamp: new Date().toISOString(),
+          reason: 'Gmail OAuth token not found or invalid - using fallback (email not actually sent)'
+        });
+        logger.info(`Logged email delivery failure to Firestore: teamId=${teamId}, type=${type}, recipient=${toEmail}`);
+      } catch (firebaseErr) {
+        logger.error('Failed to log email delivery failure to Firestore:', firebaseErr);
+      }
+    }
+
     return true;
   } catch (err) {
     logger.error('Fallback email error:', err);

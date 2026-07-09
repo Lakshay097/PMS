@@ -47,9 +47,8 @@ type CollectionName =
   | 'comments'
   | 'team_submissions';
 
-// In-memory queue for pending Sheets writes
-// In production, this should be replaced with a persistent queue (Redis, database, etc.)
-const pendingSheetsWrites = new Map<CollectionName, SheetsWriteOperation[]>();
+// Firestore-backed queue for pending Sheets writes
+const SHEETS_SYNC_QUEUE_COLLECTION = 'sheets_sync_queue';
 
 // Sync interval ID
 let syncIntervalId: NodeJS.Timeout | null = null;
@@ -74,28 +73,49 @@ function getIdFieldForCollection(collection: string): string {
 }
 
 /**
- * Enqueue a Sheets write operation
+ * Enqueue a Sheets write operation to Firestore
  */
-export function enqueueSheetsWrite(collection: CollectionName, operation: 'save' | 'delete', data: any): void {
-  if (!pendingSheetsWrites.has(collection)) {
-    pendingSheetsWrites.set(collection, []);
+export async function enqueueSheetsWrite(collection: CollectionName, operation: 'save' | 'delete', data: any): Promise<void> {
+  try {
+    const docRef = firestoreAdmin.collection(SHEETS_SYNC_QUEUE_COLLECTION).doc();
+    await docRef.set({
+      collection,
+      operation,
+      data,
+      timestamp: Date.now(),
+      status: 'pending'
+    });
+    logger.info(`Enqueued ${operation} operation for ${collection} to Firestore`);
+  } catch (err) {
+    logger.error(`Failed to enqueue Sheets write operation for ${collection}:`, err);
+    throw err;
   }
-  pendingSheetsWrites.get(collection)!.push({
-    operation,
-    data,
-    timestamp: Date.now()
-  });
-  logger.info(`Enqueued ${operation} operation for ${collection}`);
 }
 
 /**
- * Get the current queue status
+ * Get the current queue status from Firestore
  */
-export function getSyncQueueStatus(): { collection: string; pendingCount: number }[] {
-  return Array.from(pendingSheetsWrites.entries()).map(([collection, operations]) => ({
-    collection,
-    pendingCount: operations.length
-  }));
+export async function getSyncQueueStatus(): Promise<{ collection: string; pendingCount: number }[]> {
+  try {
+    const snapshot = await firestoreAdmin.collection(SHEETS_SYNC_QUEUE_COLLECTION)
+      .where('status', '==', 'pending')
+      .get();
+    
+    const statusMap = new Map<string, number>();
+    snapshot.docs.forEach(doc => {
+      const data = doc.data();
+      const collection = data.collection;
+      statusMap.set(collection, (statusMap.get(collection) || 0) + 1);
+    });
+    
+    return Array.from(statusMap.entries()).map(([collection, pendingCount]) => ({
+      collection,
+      pendingCount
+    }));
+  } catch (err) {
+    logger.error('Failed to get sync queue status:', err);
+    return [];
+  }
 }
 
 /**
@@ -180,32 +200,78 @@ async function flushCollection(collection: CollectionName, operations: SheetsWri
 
   } catch (err) {
     logger.error(`Sheets sync failed for ${collection}:`, err);
-    // Re-enqueue failed operations
-    const existingOps = pendingSheetsWrites.get(collection) || [];
-    pendingSheetsWrites.set(collection, [...existingOps, ...operations]);
+    // Re-enqueue failed operations to Firestore
+    for (const op of operations) {
+      await enqueueSheetsWrite(collection, op.operation, op.data);
+    }
     throw err;
   }
 }
 
 /**
- * Flush all pending writes to Sheets
+ * Flush all pending writes to Sheets from Firestore
  */
-function flushAllPendingWrites(): void {
-  if (pendingSheetsWrites.size === 0) {
-    logger.info('No pending Sheets writes to flush');
-    return;
-  }
+async function flushAllPendingWrites(): Promise<void> {
+  try {
+    const snapshot = await firestoreAdmin.collection(SHEETS_SYNC_QUEUE_COLLECTION)
+      .where('status', '==', 'pending')
+      .get();
 
-  logger.info(`Flushing ${pendingSheetsWrites.size} collections to Sheets...`);
+    if (snapshot.empty) {
+      logger.info('No pending Sheets writes to flush');
+      return;
+    }
 
-  const collections = Array.from(pendingSheetsWrites.entries());
-  pendingSheetsWrites.clear();
+    logger.info(`Flushing ${snapshot.size} pending operations to Sheets...`);
 
-  collections.forEach(([collection, operations]) => {
-    flushCollection(collection, operations).catch(err => {
-      logger.error(`Failed to flush ${collection}:`, err);
+    // Group operations by collection
+    const operationsByCollection = new Map<CollectionName, SheetsWriteOperation[]>();
+    const docIds: string[] = [];
+
+    snapshot.docs.forEach(doc => {
+      const data = doc.data();
+      const collection = data.collection as CollectionName;
+      if (!operationsByCollection.has(collection)) {
+        operationsByCollection.set(collection, []);
+      }
+      operationsByCollection.get(collection)!.push({
+        operation: data.operation,
+        data: data.data,
+        timestamp: data.timestamp
+      });
+      docIds.push(doc.id);
     });
-  });
+
+    // Mark all as processing to prevent duplicate processing
+    const batch = firestoreAdmin.batch();
+    docIds.forEach(docId => {
+      const docRef = firestoreAdmin.collection(SHEETS_SYNC_QUEUE_COLLECTION).doc(docId);
+      batch.update(docRef, { status: 'processing' });
+    });
+    await batch.commit();
+
+    // Process each collection
+    for (const [collection, operations] of operationsByCollection.entries()) {
+      try {
+        await flushCollection(collection, operations);
+        // Delete successfully processed operations
+        for (const docId of docIds) {
+          await firestoreAdmin.collection(SHEETS_SYNC_QUEUE_COLLECTION).doc(docId).delete();
+        }
+      } catch (err) {
+        logger.error(`Failed to flush ${collection}:`, err);
+        // Reset status back to pending for failed operations
+        const resetBatch = firestoreAdmin.batch();
+        docIds.forEach(docId => {
+          const docRef = firestoreAdmin.collection(SHEETS_SYNC_QUEUE_COLLECTION).doc(docId);
+          resetBatch.update(docRef, { status: 'pending' });
+        });
+        await resetBatch.commit();
+      }
+    }
+  } catch (err) {
+    logger.error('Failed to flush pending writes:', err);
+  }
 }
 
 /**

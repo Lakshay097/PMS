@@ -4,9 +4,9 @@
  * ONE-TIME, HIGHLY DESTRUCTIVE SCRIPT.
  * Deletes every user NOT present in the given CSV, from BOTH Firestore and Google Sheets.
  *
- * CSV format required (only email column matters):
- *   email,team
- *   john@x.com,Expansion
+ * CSV format required (only Email column matters):
+ *   Name,Email,ManagerMail,Role,Team
+ *   Aman Dubey,aman@pw.live,rajeev.1@pw.live,Team Leader,Expansion - Aman
  *
  * Usage (ALWAYS dry-run first):
  *   npx ts-node -r dotenv/config scripts/delete-users-not-in-csv.ts ./data/team-assignments.csv --dry-run
@@ -196,13 +196,30 @@ async function updateSheetValues(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+function isBlankOrNA(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  return v === "" || v === "#n/a";
+}
+
 function loadCsvEmails(filePath: string): Set<string> {
   const raw = fs.readFileSync(filePath, "utf-8");
   const records = parse(raw, { columns: true, skip_empty_lines: true, trim: true }) as Record<string, string>[];
   const emails = new Set<string>();
+
+  // Case-insensitive header lookup
+  const headers = Object.keys(records[0] || {});
+  const emailHeader = headers.find((h) => h.trim().toLowerCase() === "email");
+
+  if (!emailHeader) {
+    console.error(`CSV is missing an "Email" column. Found columns: ${headers.join(", ") || "(none)"}`);
+    process.exit(1);
+  }
+
   for (const r of records) {
-    const email = (r.email || "").toLowerCase().trim();
-    if (email) emails.add(email);
+    const email = (r[emailHeader] || "").toLowerCase().trim();
+    if (email && !isBlankOrNA(email)) {
+      emails.add(email);
+    }
   }
   return emails;
 }

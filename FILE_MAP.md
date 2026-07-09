@@ -42,6 +42,8 @@ d:\PMS - Copy (2)\
 ├── scripts/
 │   ├── migrate-plaintext-passwords.ts  One-time bcrypt migration (already run)
 │   ├── migrate-subteam-ids.ts          One-time sub-team membership migration
+│   ├── bulk-assign-team.ts            Bulk assign users to teams based on manager chain
+│   ├── delete-users-not-in-csv.ts      Delete users not present in reference CSV
 │   └── generate-icons.js               PWA icon generator
 │
 ├── server/                             Express.js backend
@@ -661,6 +663,8 @@ Generic, reusable UI primitives with no business logic.
 |---|---|
 | `migrate-plaintext-passwords.ts` | One-time migration: audits Sheets `users!M` for plaintext passwords and hashes them in-place (Sheets + Firestore). Run with `npx tsx scripts/migrate-plaintext-passwords.ts` (audit only) or `--execute` flag (writes). Already run on 2026-07-03 — 21 passwords hashed, 0 remaining. Safe to re-run (idempotent). Keep as operational audit artifact |
 | `migrate-subteam-ids.ts` | One-time migration: converts User.SubTeamID/SubTeamName (singular) to SubTeamIDs/SubTeamNames (array) for multi-membership support. Run with `npx tsx scripts/migrate-subteam-ids.ts` (audit only) or `--execute` flag (writes). Idempotent — skips users already using array format |
+| `bulk-assign-team.ts` | Bulk assign users to teams based on manager chain resolution. Reads CSV with Name/Email/ManagerMail/Role/Team columns, walks up manager hierarchy to resolve team assignments, writes TeamIDs/TeamNames to Firestore (TeamIDs/TeamNames arrays) and Google Sheets (TeamID/TeamName columns). Supports dry-run mode. Handles leaders (use their own team), admins (skipped), and multi-team cells (uses first team) |
+| `delete-users-not-in-csv.ts` | Delete users not present in reference CSV from both Firestore and Google Sheets. Reads CSV with Email column, compares against Firestore users and Sheets rows, deletes users not in CSV (with protected emails/roles safelist). Always writes JSON backup before deletion. Requires --confirm-delete flag for actual deletion |
 | `generate-icons.js` | One-off script to generate PWA icon PNGs at various sizes |
 
 ---

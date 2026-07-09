@@ -30,7 +30,8 @@ import {
   Underline as UnderlineIcon,
   Type,
   Palette,
-  Save
+  Save,
+  Loader2
 } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -38,6 +39,8 @@ import { TextStyle } from '@tiptap/extension-text-style';
 import Color from '@tiptap/extension-color';
 import FontFamily from '@tiptap/extension-font-family';
 import { dbService } from '../lib/dbService';
+import { getUnsubmittedTeams, getEmailDeliveryFailures, EmailDeliveryFailure } from '../api/teamReminder';
+import { UnsubmittedTeam } from '../api/teamReminder';
 
 interface AdminPanelProps {
   users: UserType[];
@@ -99,7 +102,7 @@ export default function AdminPanel({
   isDarkMode = false,
 }: AdminPanelProps) {
   // Master administrative tabs
-  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'teams' | 'templates' | 'email_templates' | 'report_requirements'>('users');
+  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'teams' | 'templates' | 'email_templates' | 'report_requirements' | 'missing_reports'>('users');
 
   // Auto-sync when the users tab is activated so pending registrations
   // that arrived after initial page load are visible immediately.
@@ -108,6 +111,31 @@ export default function AdminPanel({
       onSyncDatabase();
     }
   }, [activeAdminSubTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load unsubmitted teams when missing_reports tab is activated
+  useEffect(() => {
+    if (activeAdminSubTab === 'missing_reports') {
+      loadUnsubmittedTeams();
+    }
+  }, [activeAdminSubTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadUnsubmittedTeams = async () => {
+    setIsLoadingUnsubmitted(true);
+    setIsLoadingFailures(true);
+    try {
+      const [unsubmittedResponse, failuresResponse] = await Promise.all([
+        getUnsubmittedTeams(),
+        getEmailDeliveryFailures()
+      ]);
+      setUnsubmittedTeams(unsubmittedResponse.unsubmittedTeams);
+      setEmailDeliveryFailures(failuresResponse.failures);
+    } catch (error) {
+      console.error('Failed to load missing reports data:', error);
+    } finally {
+      setIsLoadingUnsubmitted(false);
+      setIsLoadingFailures(false);
+    }
+  };
   
   // Create User state
   const [fullName, setFullName] = useState('');
@@ -143,6 +171,12 @@ export default function AdminPanel({
   const [newSubTeamDesc, setNewSubTeamDesc] = useState('');
   const [subTeamError, setSubTeamError] = useState<string | null>(null);
   const [expandedSubTeamId, setExpandedSubTeamId] = useState<string | null>(null);
+
+  // Missing Reports state
+  const [unsubmittedTeams, setUnsubmittedTeams] = useState<UnsubmittedTeam[]>([]);
+  const [isLoadingUnsubmitted, setIsLoadingUnsubmitted] = useState(false);
+  const [emailDeliveryFailures, setEmailDeliveryFailures] = useState<EmailDeliveryFailure[]>([]);
+  const [isLoadingFailures, setIsLoadingFailures] = useState(false);
 
   // Keep modal-local leader/stakeholder state in sync with the teams prop.
   // Without this, currentTeamLeaders is only loaded once when the modal opens
@@ -839,6 +873,19 @@ export default function AdminPanel({
           >
             <FileText size={14} />
             <span className="hidden sm:inline">Reports</span>
+          </button>
+          <button
+            onClick={() => setActiveAdminSubTab('missing_reports')}
+            className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
+              activeAdminSubTab === 'missing_reports'
+                ? 'bg-blue-500 text-white'
+                : isDarkMode
+                ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+            }`}
+          >
+            <AlertCircle size={14} />
+            <span className="hidden sm:inline">Missing Reports</span>
           </button>
         </div>
       </div>
@@ -2543,6 +2590,129 @@ export default function AdminPanel({
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* SUBTAB 6: Missing Reports This Week */}
+        {activeAdminSubTab === 'missing_reports' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className={`border rounded-xl p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${isDarkMode ? 'bg-red-500/10 border-red-500/20' : 'bg-gradient-to-r from-red-500/10 to-orange-500/10 border-red-200'}`}>
+              <div>
+                <h4 className={`font-extrabold text-sm tracking-wider font-mono ${isDarkMode ? 'text-red-400' : 'text-red-900'}`}>Missing Reports This Week</h4>
+                <p className={`text-xs mt-1 max-w-2xl ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Teams that have not submitted their weekly PPT report this week, or where proof emails failed to send.
+                </p>
+              </div>
+              <button
+                onClick={loadUnsubmittedTeams}
+                disabled={isLoadingUnsubmitted || isLoadingFailures}
+                className={`px-4 py-2 rounded-lg text-xs font-bold tracking-wider transition-all cursor-pointer flex items-center space-x-2 ${
+                  isDarkMode 
+                    ? 'bg-red-500 hover:bg-red-600 text-white' 
+                    : 'bg-red-500 hover:bg-red-600 text-white'
+                } ${(isLoadingUnsubmitted || isLoadingFailures) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <RefreshCw size={14} className={(isLoadingUnsubmitted || isLoadingFailures) ? 'animate-spin' : ''} />
+                <span>Refresh</span>
+              </button>
+            </div>
+
+            {(isLoadingUnsubmitted || isLoadingFailures) ? (
+              <div className={`flex items-center justify-center py-12 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                <div className="animate-spin mr-3">
+                  <RefreshCw size={20} />
+                </div>
+                <span className="text-sm">Loading missing reports...</span>
+              </div>
+            ) : unsubmittedTeams.length === 0 && emailDeliveryFailures.length === 0 ? (
+              <div className={`border rounded-xl p-8 text-center ${isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-200'}`}>
+                <div className={`flex items-center justify-center space-x-3 mb-3 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                  <CheckCircle size={24} />
+                  <h5 className={`font-bold text-sm ${isDarkMode ? 'text-emerald-400' : 'text-emerald-800'}`}>All Reports Submitted</h5>
+                </div>
+                <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                  All teams have submitted their weekly reports with confirmed proof emails. Great job!
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Email Delivery Failures Section */}
+                {emailDeliveryFailures.length > 0 && (
+                  <div className="space-y-3">
+                    <div className={`text-xs font-mono font-bold tracking-widest mb-2 ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>
+                      {emailDeliveryFailures.length} EMAIL DELIVERY FAILURE(S)
+                    </div>
+                    {emailDeliveryFailures.map((failure, index) => {
+                      const team = teams.find(t => t.TeamID === failure.teamId);
+                      const teamName = team?.TeamName || failure.teamId;
+                      return (
+                        <div
+                          key={index}
+                          className={`border rounded-xl p-4 hover:shadow-md transition-all ${isDarkMode ? 'bg-[#1E293B] border-orange-500/20' : 'bg-white border-orange-200'}`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center space-x-3">
+                              <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-orange-500/20' : 'bg-orange-100'}`}>
+                                <AlertCircle size={16} className={isDarkMode ? 'text-orange-400' : 'text-orange-600'} />
+                              </div>
+                              <div>
+                                <div className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                                  {teamName}
+                                </div>
+                                <div className={`text-[10px] font-mono mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                  {failure.teamId}
+                                </div>
+                              </div>
+                            </div>
+                            <div className={`text-[10px] font-bold px-2 py-1 rounded ${isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-700'}`}>
+                              Email Failed
+                            </div>
+                          </div>
+                          <div className={`text-xs mt-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                            <div><strong>Type:</strong> {failure.type === 'thursday_reminder' ? 'Thursday Reminder' : 'Proof Email'}</div>
+                            <div><strong>To:</strong> {failure.intendedRecipient}</div>
+                            <div><strong>Reason:</strong> {failure.reason}</div>
+                            <div><strong>Time:</strong> {new Date(failure.timestamp).toLocaleString()}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Unsubmitted Teams Section */}
+                {unsubmittedTeams.length > 0 && (
+                  <div className="space-y-3">
+                    <div className={`text-xs font-mono font-bold tracking-widest mb-2 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                      {unsubmittedTeams.length} TEAM(S) NOT SUBMITTED
+                    </div>
+                    {unsubmittedTeams.map(team => (
+                      <div
+                        key={team.teamId}
+                        className={`border rounded-xl p-4 flex items-center justify-between hover:shadow-md transition-all ${isDarkMode ? 'bg-[#1E293B] border-red-500/20' : 'bg-white border-red-200'}`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-red-500/20' : 'bg-red-100'}`}>
+                            <AlertCircle size={16} className={isDarkMode ? 'text-red-400' : 'text-red-600'} />
+                          </div>
+                          <div>
+                            <div className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                              {team.teamName}
+                            </div>
+                            <div className={`text-[10px] font-mono mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                              {team.teamId}
+                            </div>
+                          </div>
+                        </div>
+                        <div className={`text-[10px] font-bold px-2 py-1 rounded ${isDarkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700'}`}>
+                          Not Submitted
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

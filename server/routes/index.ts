@@ -7,6 +7,7 @@ import gmailAuthRoutes from './gmailAuth';
 import emailTriggerRoutes from './emailTrigger';
 import emailTemplateRoutes from './emailTemplate';
 import teamsRoutes from './teams';
+import teamReminderRoutes from './teamReminder';
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.use('/auth', gmailAuthRoutes);
 router.use('/', emailTriggerRoutes);
 router.use('/', emailTemplateRoutes);
 router.use('/', teamsRoutes);
+router.use('/', teamReminderRoutes);
 
 export default router;

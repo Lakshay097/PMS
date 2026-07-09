@@ -78,6 +78,8 @@ PMS TaskFlow is an enterprise task management and compliance-reporting system. U
 ├── scripts/             One-off operational scripts (not bundled)
 │   ├── migrate-plaintext-passwords.ts  One-time bcrypt migration (already run)
 │   ├── migrate-subteam-ids.ts          One-time sub-team membership migration
+│   ├── bulk-assign-team.ts            Bulk assign users to teams based on manager chain
+│   ├── delete-users-not-in-csv.ts      Delete users not present in reference CSV
 │   └── generate-icons.js               PWA icon generator
 ├── public/              Static assets, service worker, PWA icons, manifest
 └── dist/                Build output (gitignored)
@@ -256,12 +258,13 @@ gcloud builds submit --config cloudbuild.yaml
 
 ## Known Issues / Technical Debt
 
-- `Architecture.md` was previously stale (described old Sheets-only architecture). This version is accurate.
+- ~~`Architecture.md` was previously stale (described old Sheets-only architecture). This version is accurate.~~ **RESOLVED**
 - `NODE_ENV=production` in `.env` causes `import.meta.env.DEV = false` locally — breaks `DEV`-guarded code paths and registers the service worker in dev mode. Change to `NODE_ENV=development` for local development.
 - `FIREBASE_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` are required by the Firebase Admin SDK (server) but not listed in `.env.example`.
 - `src/api/tasks.ts`, `src/api/users.ts`, `src/api/reports.ts`, `src/api/teams.ts` are REST wrappers that reference server endpoints which do not exist. They are not used by the running app — all data access goes through `dbService`. They exist as scaffolding stubs.
 - No test framework is configured. Zero test coverage.
 - `src/lib/syncQueue.ts` is implemented but not wired into `dbService` failure paths (noted in code as `TECH-DEBT`).
-- Sub-Teams feature (7-task spec) is in progress. Tasks 1–4 committed. Task 4 (Admin UI) is working — the "admin panel fails to load" symptom was caused by a stale service worker cache (SW registered locally because `NODE_ENV=production` in `.env` makes `import.meta.env.PROD` true, which triggers SW registration). Unregistering the SW + hard reload resolved the symptom without code changes. Separately, `DashboardPageProps` was found to be missing `reports`, `teamSubmissions`, `onAddTeamSubmission`, `triggerNotification`, `subTeams`, and the four sub-team callbacks; `onNewTask` was also missing the `teamIds` param — all silently dropped at the page boundary since the file was created. Fixed in commit `869a829`.
+- ~~Sub-Teams feature (7-task spec) is in progress. Tasks 1–4 committed. Task 4 (Admin UI) is working — the "admin panel fails to load" symptom was caused by a stale service worker cache (SW registered locally because `NODE_ENV=production` in `.env` makes `import.meta.env.PROD` true, which triggers SW registration). Unregistering the SW + hard reload resolved the symptom without code changes. Separately, `DashboardPageProps` was found to be missing `reports`, `teamSubmissions`, `onAddTeamSubmission`, `triggerNotification`, `subTeams`, and the four sub-team callbacks; `onNewTask` was also missing the `teamIds` param — all silently dropped at the page boundary since the file was created. Fixed in commit `869a829`.~~ **RESOLVED**
 - **Open item — NODE_ENV:** `NODE_ENV=production` in `.env` causes the service worker to register during local dev, producing stale-bundle cache issues on every bundle change. Decision pending: change to `NODE_ENV=development` for local work to stop SW registration. Do not change without explicit decision — it affects `import.meta.env.PROD`/`DEV` guards throughout the app.
 - **Server-side Sheets sync:** `server/services/sheetsSyncController.ts` implements a centralized Sheets write queue to prevent multi-tab race conditions, but uses in-memory storage. In production, this should be replaced with a persistent queue (Redis, database, etc.) to survive process restarts.
+- **Password migration:** Three user accounts still store passwords in plaintext in Google Sheets (rajeev.1@pw.live, utsav@pw.live, lakshay.kumar@pw.live). Only admin@pw.live uses bcrypt hashing. The `authService.ts` login function has a fallback to handle both, but a one-time migration is needed to hash all plaintext passwords and remove the plaintext fallback branch for security.

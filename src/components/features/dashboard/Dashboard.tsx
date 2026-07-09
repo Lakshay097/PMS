@@ -47,6 +47,7 @@ import MultiselectDropdown from '../../shared/MultiselectDropdown';
 import BulkActionBar from '../../shared/BulkActionBar';
 import { useRowSelection } from '../../../hooks/useRowSelection';
 import { uploadFile } from '../../../api/upload';
+import { sendProofEmail } from '../../../api/teamReminder';
 
 interface DashboardProps {
   tasks: Task[];
@@ -376,6 +377,45 @@ export default function Dashboard({
       };
 
       onAddTeamSubmission(newSubmission);
+
+      // Send proof email with threading
+      try {
+        const team = teams.find(t => t.TeamID === submissionTeamId);
+        const teamName = team?.TeamName || 'Unknown Team';
+        
+        // Get leader emails
+        let leaderEmails: string[] = [];
+        if (submissionSubTeamId) {
+          const subTeam = subTeams?.find(st => st.SubTeamID === submissionSubTeamId);
+          leaderEmails = subTeam?.SubTeamLeaderEmails || [];
+          if (leaderEmails.length === 0) {
+            leaderEmails = team?.TeamLeaderEmails || [];
+          }
+        } else {
+          leaderEmails = team?.TeamLeaderEmails || [];
+        }
+
+        if (leaderEmails.length > 0) {
+          const subTeamName = submissionSubTeamId 
+            ? subTeams?.find(st => st.SubTeamID === submissionSubTeamId)?.SubTeamName 
+            : undefined;
+
+          await sendProofEmail({
+            teamId: submissionTeamId,
+            subTeamId: submissionSubTeamId,
+            teamName,
+            subTeamName,
+            leaderEmails,
+            attachmentLinks: attachmentLinks || '',
+            note: submissionNote.trim() || undefined,
+            submittedBy: currentUser.Email
+          });
+          console.log('Proof email sent successfully');
+        }
+      } catch (emailError) {
+        console.error('Failed to send proof email:', emailError);
+        // Don't fail the submission if email fails
+      }
 
       // Reset state
       setSubmissionNote('');

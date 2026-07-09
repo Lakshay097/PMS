@@ -21,7 +21,7 @@ import {
   INITIAL_SETTINGS
 } from './initialData';
 import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AppSetting, TaskStatus, SystemAlert, Subtask, Comment, TeamSubmission } from './types/index';
-import { dbService, initializeDatabase } from './lib/dbService';
+import { dbService, initializeDatabase, setOfflineSaveNotification } from './lib/dbService';
 import { initAuth, sheetsApi } from './lib/sheetsService';
 import { checkAndGenerateRecurringTasks, evaluateOverdueTasks } from './lib/taskEngine';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
@@ -368,6 +368,15 @@ export default function App() {
       loadDatabase();
     }
   }, [isAuthInitialized]);
+
+  // Wire up offline save notification callback
+  useEffect(() => {
+    console.log('[DEBUG] Registering offline save notification callback');
+    setOfflineSaveNotification((message: string) => {
+      console.log('[DEBUG] Offline save notification triggered:', message);
+      setSimulationMessage({ type: 'info', text: message });
+    });
+  }, []);
 
   // Debug logging to identify email mismatches
   useEffect(() => {

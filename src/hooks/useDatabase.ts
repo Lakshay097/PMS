@@ -102,6 +102,7 @@ export function useDatabase(isAuthInitialized: boolean = false) {
   };
 
   useEffect(() => {
+    console.log('[DEBUG] useDatabase useEffect running, isAuthInitialized:', isAuthInitialized);
     if (isAuthInitialized) {
       loadDatabase();
       // Server-side Sheets sync is now handled by the server
@@ -114,59 +115,73 @@ export function useDatabase(isAuthInitialized: boolean = false) {
 
     // Subscribe to optimistic updates for instant UI feedback
     const unsubscribeUsers = registerOptimisticCallback<User>('users', (data) => {
+      console.log('[DEBUG] Optimistic update callback triggered for users');
       setUsers(data);
     });
     
     const unsubscribeTasks = registerOptimisticCallback<Task>('tasks', (data) => {
+      console.log('[DEBUG] Optimistic update callback triggered for tasks');
       setTasks(data);
     });
     
     const unsubscribeTeams = registerOptimisticCallback<Team>('teams', (data) => {
+      console.log('[DEBUG] Optimistic update callback triggered for teams');
       setTeams(data);
     });
     
     const unsubscribeTemplates = registerOptimisticCallback<TaskTemplate>('templates', (data) => {
+      console.log('[DEBUG] Optimistic update callback triggered for templates');
       setTemplates(data);
     });
     
     const unsubscribeReports = registerOptimisticCallback<TaskReport>('reports', (data) => {
+      console.log('[DEBUG] Optimistic update callback triggered for reports');
       setReports(data);
     });
     
     const unsubscribeFollowups = registerOptimisticCallback<FollowUp>('followups', (data) => {
+      console.log('[DEBUG] Optimistic update callback triggered for followups');
       setFollowUps(data);
     });
 
     const unsubscribeSubtasks = registerOptimisticCallback<Subtask>('subtasks', (data) => {
+      console.log('[DEBUG] Optimistic update callback triggered for subtasks');
       setSubtasks(data);
     });
 
     const unsubscribeComments = registerOptimisticCallback<Comment>('comments', (data) => {
+      console.log('[DEBUG] Optimistic update callback triggered for comments');
       setComments(data);
     });
 
     const unsubscribeSubTeams = registerOptimisticCallback<SubTeam>('sub_teams', (data) => {
+      console.log('[DEBUG] Optimistic update callback triggered for sub_teams');
       setSubTeams(data);
     });
 
     const unsubscribeSettings = registerOptimisticCallback<AppSetting>('settings', (data) => {
+      console.log('[DEBUG] Optimistic update callback triggered for settings');
       setSettings(data);
     });
 
     const unsubscribeAudits = registerOptimisticCallback<AuditLog>('auditlogs', (data) => {
+      console.log('[DEBUG] Optimistic update callback triggered for auditlogs');
       setAudits(data);
     });
 
     const unsubscribeEmailTemplates = registerOptimisticCallback<EmailTemplate>('email_templates', (data) => {
+      console.log('[DEBUG] Optimistic update callback triggered for email_templates');
       setEmailTemplates(data);
     });
 
     const unsubscribeTeamSubmissions = registerOptimisticCallback<TeamSubmission>('teamSubmissions', (data) => {
+      console.log('[DEBUG] Optimistic update callback triggered for teamSubmissions');
       setTeamSubmissions(data);
     });
 
     // Cleanup on unmount
     return () => {
+      console.log('[DEBUG] useDatabase cleanup running');
       unsubscribeSyncStatus();
       unsubscribeUsers();
       unsubscribeTasks();

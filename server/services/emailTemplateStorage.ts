@@ -35,8 +35,14 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
   },
   {
     templateName: 'template_scheduled_reminder',
-    subject: 'Scheduled Document Reminder: Weekly Report for {TeamName}',
-    body: 'Hello,\n\nThis is a reminder for team leaders of team "{TeamName}" to submit the weekly report (scheduled document) due tomorrow.\n\nPlease log in and submit the document:\n\nApp URL: <a href="{AppURL}" style="color: #3b82f6; text-decoration: underline;">{AppURL}</a>\n\nBest regards,\nPMS Team',
+    subject: 'Weekly Report Reminder: Submit PPT by Friday for {TeamName}',
+    body: 'Hello,\n\nThis is a reminder for team leaders of team "{TeamName}" to submit the weekly PPT report by Friday.\n\nPlease log in and upload your PPT:\n\nApp URL: <a href="{AppURL}" style="color: #3b82f6; text-decoration: underline;">{AppURL}</a>\n\nBest regards,\nPMS Team',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    templateName: 'template_proof_email',
+    subject: 'Weekly Report Proof: {DisplayName}',
+    body: 'Weekly report proof of submission for {DisplayName}\n\nSubmitted by: {SubmittedBy}\nSubmitted at: {SubmittedAt}\n\n{NoteSection}{AttachmentsSection}',
     updatedAt: new Date().toISOString(),
   },
 ];

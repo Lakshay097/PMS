@@ -17,6 +17,7 @@ import { initializeTeamSubmissionsSheet } from './services/googleSheetsService';
 import { startReminderScheduler } from './services/reminderScheduler';
 import { startRecurringTaskScheduler } from './services/recurringTaskScheduler';
 import { startSheetsSyncInterval } from './services/sheetsSyncController';
+import { isGmailConnected } from './services/gmailTokenStorage';
 
 validateEnv();
 
@@ -24,6 +25,16 @@ async function startServer() {
   // Initialize email-related sheets
   await gmailAuthController.initializeEmailSheets();
   await initializeTeamSubmissionsSheet();
+
+  // Check if system sender email has valid Gmail OAuth token
+  const senderEmail = config.SYSTEM_SENDER_EMAIL;
+  const isSenderConnected = await isGmailConnected(senderEmail);
+  if (!isSenderConnected) {
+    logger.error(`CRITICAL: System sender email "${senderEmail}" does not have a valid Gmail OAuth token. Email sending will fail. Please connect this account via OAuth flow.`);
+    logger.error(`To fix: Navigate to the app's Gmail connection page as "${senderEmail}" and complete the OAuth flow.`);
+  } else {
+    logger.info(`System sender email "${senderEmail}" has valid Gmail OAuth token.`);
+  }
 
   // Start automated email reminders scheduler
   startReminderScheduler();
