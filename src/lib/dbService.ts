@@ -337,16 +337,9 @@ export function registerOptimisticCallback<T>(
   if (!optimisticCallbacks.has(collectionName)) {
     optimisticCallbacks.set(collectionName, new Set());
   }
-  const callbacks = optimisticCallbacks.get(collectionName)!;
-  const beforeCount = callbacks.size;
-  callbacks.add(callback);
-  const afterCount = callbacks.size;
-  console.log(`[DEBUG] registerOptimisticCallback: ${collectionName} - before: ${beforeCount}, after: ${afterCount}`);
+  optimisticCallbacks.get(collectionName)!.add(callback);
   return () => {
-    const beforeDelete = callbacks.size;
-    callbacks.delete(callback);
-    const afterDelete = callbacks.size;
-    console.log(`[DEBUG] unregisterOptimisticCallback: ${collectionName} - before: ${beforeDelete}, after: ${afterDelete}`);
+    optimisticCallbacks.get(collectionName)?.delete(callback);
   };
 }
 

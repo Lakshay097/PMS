@@ -371,9 +371,7 @@ export default function App() {
 
   // Wire up offline save notification callback
   useEffect(() => {
-    console.log('[DEBUG] Registering offline save notification callback');
     setOfflineSaveNotification((message: string) => {
-      console.log('[DEBUG] Offline save notification triggered:', message);
       setSimulationMessage({ type: 'info', text: message });
     });
   }, []);
