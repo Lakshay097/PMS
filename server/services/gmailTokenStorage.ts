@@ -295,11 +295,8 @@ export async function isGmailConnected(userEmail: string): Promise<boolean> {
   const token = await getGmailToken(userEmail);
   if (!token) return false;
   if (!token.refreshToken || token.refreshToken.length === 0) return false;
-  // Check if access token is expired - if it is, the refresh token might also be invalid
-  const now = new Date();
-  const tokenExpiry = new Date(token.tokenExpiry);
-  // If access token is expired by more than 7 days, consider the connection stale
-  const daysSinceExpiry = (now.getTime() - tokenExpiry.getTime()) / (1000 * 60 * 60 * 24);
-  if (daysSinceExpiry > 7) return false;
+  // Refresh tokens are long-lived and can be used to get new access tokens
+  // Only check if a refresh token exists - don't check access token expiry
+  // The emailService will handle token refresh when needed
   return true;
 }

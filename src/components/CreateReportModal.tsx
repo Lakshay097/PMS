@@ -60,6 +60,9 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
 
     setIsSubmitting(true);
     try {
+      // Generate a reportId for upload validation
+      const reportId = `RPT-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+
       // Upload each attached file and collect real, openable URLs
       const uploadedUrls: string[] = [];
       for (const file of uploadedFiles) {
@@ -68,11 +71,16 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
             fileName: file.name,
             fileData: file.data,
             mimeType: file.type,
-            taskId: task.TaskID
+            taskId: task.TaskID,
+            reportId: reportId
           });
           uploadedUrls.push(uploadData.webViewLink);
-        } catch (uploadError) {
+        } catch (uploadError: any) {
           console.error('Failed to upload file during report submission:', uploadError);
+          const errorMessage = uploadError?.response?.data?.error || uploadError?.message || `Failed to upload ${file.name}`;
+          alert(`Document upload failed: ${errorMessage}. Please remove the file and try again.`);
+          setIsSubmitting(false);
+          return; // Stop submission if any file upload fails
         }
       }
 

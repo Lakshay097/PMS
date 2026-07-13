@@ -123,51 +123,74 @@ export async function sendProofEmail(req: AuthRequest, res: Response): Promise<v
     const ccRecipients = ['utsav@pw.live'];
     const senderEmail = config.SYSTEM_SENDER_EMAIL;
 
-    // Send to each leader with threading
-    let successCount = 0;
-    let fallbackCount = 0;
-    for (const leaderEmail of leaderEmails) {
-      try {
-        const result = await sendEmailAsUser(
-          senderEmail,
-          leaderEmail,
-          emailSubject,
-          emailBody,
-          undefined, // no template (we already replaced variables)
-          undefined,
-          threadId,
-          messageId,
-          undefined, // taskId
-          teamId,
-          subTeamId,
-          'proof_email',
-          weekOf
-        );
-
-        if (result.success) {
-          if (result.usedFallback) {
-            fallbackCount++;
-            logger.warn(`Proof email to ${leaderEmail} used fallback (not actually sent)`);
-          } else {
-            successCount++;
-            logger.info(`Proof email sent successfully to ${leaderEmail}`);
-          }
-        } else {
-          logger.error(`Failed to send proof email to ${leaderEmail}`);
-        }
-      } catch (err) {
-        logger.error(`Error sending proof email to ${leaderEmail}`, err);
-      }
+    // FIX: Send ONE email to all leaders in a single thread instead of looping
+    // First leader is the primary recipient, rest are CC'd to create a shared thread
+    if (leaderEmails.length === 0) {
+      logger.warn('No leader emails provided for proof email');
+      res.json({
+        success: false,
+        sentToCount: 0,
+        fallbackCount: 0,
+        totalRecipients: 0,
+        usedFallback: false,
+        threadId: threadId || null
+      });
+      return;
     }
 
-    res.json({
-      success: successCount > 0,
-      sentToCount: successCount,
-      fallbackCount,
-      totalRecipients: leaderEmails.length,
-      usedFallback,
-      threadId: threadId || null
-    });
+    const primaryRecipient = leaderEmails[0];
+    const ccLeaderEmails = leaderEmails.slice(1);
+
+    logger.info(`Sending single proof email to ${primaryRecipient} with CC: ${ccLeaderEmails.join(', ')}`);
+
+    try {
+      const result = await sendEmailAsUser(
+        senderEmail,
+        primaryRecipient,
+        emailSubject,
+        emailBody,
+        undefined, // no template (we already replaced variables)
+        undefined,
+        threadId,
+        messageId,
+        undefined, // taskId
+        teamId,
+        subTeamId,
+        weekOf,
+        'proof_email',
+        ccLeaderEmails
+      );
+
+      if (result.success) {
+        if (result.usedFallback) {
+          logger.warn(`Proof email used fallback (not actually sent)`);
+          res.json({
+            success: false,
+            sentToCount: 0,
+            fallbackCount: leaderEmails.length,
+            totalRecipients: leaderEmails.length,
+            usedFallback: true,
+            threadId: threadId || null
+          });
+        } else {
+          logger.info(`Proof email sent successfully to all leaders in shared thread`);
+          res.json({
+            success: true,
+            sentToCount: leaderEmails.length,
+            fallbackCount: 0,
+            totalRecipients: leaderEmails.length,
+            usedFallback: false,
+            threadId: result.gmailThreadId || threadId || null
+          });
+        }
+      } else {
+        logger.error(`Failed to send proof email`);
+        res.status(500).json({ error: 'Failed to send proof email' });
+      }
+    } catch (err) {
+      logger.error(`Error sending proof email`, err);
+      res.status(500).json({ error: 'Failed to send proof email' });
+    }
   } catch (error) {
     logger.error('Error sending proof email:', error);
     res.status(500).json({ error: 'Failed to send proof email' });
@@ -262,3 +285,4 @@ export async function getEmailDeliveryFailures(req: AuthRequest, res: Response):
     res.status(500).json({ error: 'Failed to fetch email delivery failures' });
   }
 }
+

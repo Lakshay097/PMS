@@ -227,16 +227,25 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
       setIsUploading(true);
       const uploadedUrls: string[] = [];
 
+      // Generate a temporary taskId for upload (will be replaced by actual taskId after task creation)
+      const tempTaskId = `TEMP-${Date.now()}`;
+
       for (const file of uploadedFiles) {
         try {
           const uploadResult = await uploadFile({
             fileName: file.name,
             fileData: file.data,
             mimeType: file.type,
+            taskId: tempTaskId,
+            reportId: tempTaskId, // Use same temp ID as reportId for validation
           });
           uploadedUrls.push(uploadResult.webViewLink);
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error uploading file:', error);
+          const errorMessage = error?.response?.data?.error || error?.message || `Failed to upload ${file.name}`;
+          setValidationError(`Document upload failed: ${errorMessage}. Please remove the file and try again.`);
+          setIsUploading(false);
+          return; // Stop submission if any file upload fails
         }
       }
 

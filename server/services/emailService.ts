@@ -9,11 +9,13 @@ import { firestoreAdmin } from './firebaseAdmin';
 
 export interface EmailOptions {
   to: string;
+  cc?: string[];  // CC recipients for shared threading
   subject: string;
   text?: string;
   html?: string;
   replyTo?: string;
-  references?: string;  // Gmail threadId for threading
+  gmailThreadId?: string;  // Gmail API threadId for threading
+  references?: string;  // RFC Message-ID chain for References header
   inReplyTo?: string;   // Last messageId for In-Reply-To header
 }
 
@@ -23,17 +25,35 @@ export interface EmailOptions {
  */
 function encodeEmail(email: EmailOptions): { raw: string; messageId: string } {
   const messageId = `<${Date.now()}-${Math.random().toString(36).substr(2, 9)}@pms.taskflow>`;
+  
+  // RFC 2822 requires Date header
+  const dateHeader = new Date().toUTCString();
+  
+  // Build References header - if we have references, use them; otherwise use inReplyTo
+  // References should contain the full thread history for proper Gmail threading
+  const references = email.references || email.inReplyTo;
+  
   const headers = [
+    `Date: ${dateHeader}`,
     `To: ${email.to}`,
+    email.cc && email.cc.length > 0 ? `Cc: ${email.cc.join(', ')}` : '',
     email.replyTo ? `Reply-To: ${email.replyTo}` : '',
     `Subject: ${email.subject}`,
     `Message-ID: ${messageId}`,
-    // Threading headers — always set when we have a prior messageId
+    // Threading headers
     email.inReplyTo ? `In-Reply-To: ${email.inReplyTo}` : '',
-    email.inReplyTo ? `References: ${email.inReplyTo}` : '',
+    references ? `References: ${references}` : '',
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=utf-8',
   ].filter(Boolean).join('\r\n');
+
+  logger.info(`Email headers being sent:`);
+  logger.info(`  Date: ${dateHeader}`);
+  logger.info(`  Message-ID: ${messageId}`);
+  logger.info(`  Subject: ${email.subject}`);
+  logger.info(`  In-Reply-To: ${email.inReplyTo || 'none'}`);
+  logger.info(`  References: ${references || 'none'}`);
+  logger.info(`  Gmail Thread ID: ${email.gmailThreadId || 'none'}`);
 
   const raw = Buffer.from(headers + '\r\n\r\n' + (email.html || email.text || ''))
     .toString('base64')
@@ -45,25 +65,61 @@ function encodeEmail(email: EmailOptions): { raw: string; messageId: string } {
 }
 
 /**
+ * Fetches the actual Message-ID header from Gmail after sending.
+ * Gmail may rewrite or reformat the Message-ID, so we need to retrieve what Gmail actually stored.
+ */
+async function getGmailStoredMessageId(
+  accessToken: string,
+  gmailMessageId: string
+): Promise<string | null> {
+  try {
+    // Wait a moment for Gmail to index the message
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${gmailMessageId}?format=metadata&metadataHeaders=Message-ID`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error(`Failed to fetch Gmail message metadata: ${response.status} - ${errorText}`);
+      return null;
+    }
+
+    const data = await response.json();
+    const headers = data.payload?.headers || [];
+    const messageIdHeader = headers.find((h: any) => h.name === 'Message-ID');
+    
+    logger.info(`Gmail message metadata fetched, headers count: ${headers.length}`);
+    return messageIdHeader?.value || null;
+  } catch (err) {
+    logger.error('Error fetching Gmail stored Message-ID:', err);
+    return null;
+  }
+}
+
+/**
  * Sends via Gmail API.
- * FIX: Always pass threadId to Gmail when we have a real one (non-empty, not a placeholder).
+ * FIX: Pass threadId to Gmail API when available - RFC headers alone are insufficient for Gmail threading.
  * Returns { success, gmailThreadId, gmailMessageId } so the caller can persist them.
  */
 async function sendEmailViaGmail(
   accessToken: string,
   email: EmailOptions
-): Promise<{ success: boolean; gmailThreadId?: string; gmailMessageId?: string }> {
+): Promise<{ success: boolean; gmailThreadId?: string; gmailMessageId?: string; storedMessageId?: string }> {
   try {
     const { raw, messageId: outboundMessageId } = encodeEmail(email);
 
-    // FIX: Include threadId in the Gmail API body whenever we have a real Gmail threadId.
-    // A real threadId is non-empty and does NOT contain '@pms.taskflow' (our placeholder format).
-    const hasRealThreadId = email.references && !email.references.includes('@pms.taskflow') && email.references.trim() !== '';
-
+    // FIX: Pass threadId to Gmail API when available (same approach as task emails)
+    // Gmail uses this to thread emails together. RFC headers alone are insufficient.
     const body: Record<string, string> = { raw };
-    if (hasRealThreadId) {
-      body.threadId = email.references!;
+    if (email.gmailThreadId) {
+      body.threadId = email.gmailThreadId;
     }
+
+    logger.info(`Gmail API request body: ${JSON.stringify(body)}`);
 
     const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
       method: 'POST',
@@ -81,8 +137,20 @@ async function sendEmailViaGmail(
     }
 
     const data = await response.json();
-    logger.info(`Gmail send OK: threadId=${data.threadId}, messageId=${data.id}`);
-    return { success: true, gmailThreadId: data.threadId, gmailMessageId: data.id };
+    logger.info(`Gmail send OK: threadId=${data.threadId}, apiMessageId=${data.id}, rfcMessageId=${outboundMessageId}`);
+
+    // FIX: Fetch the actual Message-ID that Gmail stored
+    const storedMessageId = await getGmailStoredMessageId(accessToken, data.id);
+    if (storedMessageId) {
+      logger.info(`Gmail stored Message-ID: ${storedMessageId}`);
+    } else {
+      logger.warn(`Could not fetch Gmail stored Message-ID, using generated: ${outboundMessageId}`);
+    }
+
+    // Return the Gmail-stored Message-ID if available, otherwise use our generated one
+    const finalMessageId = storedMessageId || outboundMessageId;
+
+    return { success: true, gmailThreadId: data.threadId, gmailMessageId: finalMessageId, storedMessageId };
   } catch (err) {
     logger.error('Error sending email via Gmail:', err);
     return { success: false };
@@ -115,9 +183,10 @@ export async function sendEmailAsUser(
   taskId?: string,
   teamId?: string,
   subTeamId?: string,
-  emailType?: 'thursday_reminder' | 'proof_email',
-  weekOf?: string
-): Promise<{ success: boolean; usedFallback: boolean; gmailThreadId?: string; gmailMessageId?: string }> {
+  weekOf?: string,
+  emailType?: 'thursday_reminder' | 'proof_email' | 'report_reminder',
+  ccEmails?: string[]
+): Promise<{ success: boolean; usedFallback: boolean; gmailThreadId?: string; gmailMessageId?: string; storedMessageId?: string }> {
   try {
     const token = await getGmailToken(senderEmail);
 
@@ -166,12 +235,10 @@ export async function sendEmailAsUser(
           .filter(line => line !== '')
           .join('<br>');
 
-        // Only override subject when caller didn't supply one
-        if (!subject || subject.trim() === '') {
-          const originalSubject = template.subject;
-          subject = replaceTemplateVariables(template.subject, templateVars);
-          logger.info(`Subject before: ${originalSubject}, after: ${subject}`);
-        }
+        // Always replace subject variables when using a template
+        const originalSubject = subject;
+        subject = replaceTemplateVariables(template.subject, templateVars);
+        logger.info(`Subject before: ${originalSubject}, after: ${subject}`);
 
         // Warn if any placeholders remain unreplaced
         const unreplaced = [...emailBody.matchAll(/\{[^}]+\}/g)].map(m => m[0]);
@@ -183,11 +250,12 @@ export async function sendEmailAsUser(
 
     const email: EmailOptions = {
       to: toEmail,
+      cc: ccEmails,
       subject,
       html: emailBody,
       replyTo: senderEmail,
-      references: threadId || undefined,   // real Gmail threadId (empty = first send)
-      inReplyTo: messageId || undefined,    // last Gmail messageId for In-Reply-To header
+      gmailThreadId: threadId || undefined,  // Gmail API threadId for threading
+      inReplyTo: messageId || undefined,    // last RFC Message-ID for In-Reply-To header
     };
 
     logger.info(`Sending email: taskId=${taskId}, threadId=${threadId || 'NEW'}, inReplyTo=${messageId || 'none'}`);
@@ -201,9 +269,16 @@ export async function sendEmailAsUser(
       // FIX: After every successful send, persist the real Gmail threadId + messageId
       // so all subsequent emails for this task chain into the same Gmail thread.
       if (taskId && result.gmailThreadId && result.gmailMessageId) {
-        await updateTaskEmailThreadId(taskId, result.gmailThreadId, result.gmailMessageId);
+        if (emailType === 'report_reminder') {
+          // For report reminders, use the teamId-based thread persistence
+          const { updateReportReminderThreadId } = await import('./reportReminderScheduler');
+          await updateReportReminderThreadId(taskId, toEmail, result.gmailThreadId, result.gmailMessageId);
+        } else {
+          // For task emails, use the Google Sheets-based thread persistence
+          await updateTaskEmailThreadId(taskId, result.gmailThreadId, result.gmailMessageId);
+        }
       }
-      return { success: true, usedFallback: false, gmailThreadId: result.gmailThreadId, gmailMessageId: result.gmailMessageId };
+      return { success: true, usedFallback: false, gmailThreadId: result.gmailThreadId, gmailMessageId: result.gmailMessageId, storedMessageId: result.storedMessageId };
     }
 
     // Retry once with a fresh token
@@ -240,7 +315,7 @@ async function sendFallbackEmail(
   body: string,
   teamId?: string,
   subTeamId?: string,
-  type?: 'thursday_reminder' | 'proof_email',
+  type?: 'thursday_reminder' | 'proof_email' | 'report_reminder',
   weekOf?: string
 ): Promise<boolean> {
   try {
