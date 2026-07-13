@@ -2213,7 +2213,7 @@ export default function Dashboard({
         <div className={`border rounded-xl p-4 sm:p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
             <div>
-              <h3 className={`font-semibold text-base sm:text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Scheduled Tasks</h3>
+              <h3 className={`font-semibold text-base sm:text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Scheduled Reports</h3>
               <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                 Weekly report submissions by team
               </p>
@@ -2259,13 +2259,13 @@ export default function Dashboard({
                 const teamMembers = users.filter(u => u.TeamIDs.includes(team.TeamID));
                 const isTeamLeader = team.TeamLeaderEmails?.includes(currentUser.Email);
                 // Check if user is a sub-team leader for any sub-team within this team
-                const teamSubTeams = subTeams?.filter(st => st.TeamID === team.TeamID) || [];
+                const teamSubTeams = subTeams?.filter(st => st.TeamID === team.TeamID && st.Active) || [];
                 const isSubTeamLeader = teamSubTeams.some(st => 
                   st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase())
                 );
                 const canPost = isTeamLeader || isSubTeamLeader || isAdminLevel(currentUser.Role);
                 const filteredSubmissions = teamSubmissions
-                  .filter(s => s.TeamID === team.TeamID)
+                  .filter(s => s.TeamID === team.TeamID && !s.SubTeamID)
                   .sort((a, b) => new Date(b.SubmittedAt).getTime() - new Date(a.SubmittedAt).getTime());
 
                 return (
@@ -2286,6 +2286,7 @@ export default function Dashboard({
                         <button
                           onClick={() => {
                             setSubmissionTeamId(team.TeamID);
+                            setSubmissionSubTeamId(null);
                             setSubmissionModalOpen(true);
                           }}
                           className="bg-emerald-500 hover:bg-emerald-600 text-white px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-medium transition-colors flex items-center gap-1 shrink-0"
@@ -2364,6 +2365,87 @@ export default function Dashboard({
                         </div>
                       )}
                     </div>
+
+                    {/* Sub-teams */}
+                    {teamSubTeams.length > 0 && (
+                      <div className={`mt-3 sm:mt-4 pt-3 sm:pt-4 border-t ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                        <p className={`text-xs font-medium mb-2 sm:mb-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                          Sub-teams
+                        </p>
+                        <div className="space-y-2 sm:space-y-3">
+                          {teamSubTeams.map(subTeam => {
+                            const subTeamMembers = users.filter(u => u.SubTeamIDs?.includes(subTeam.SubTeamID));
+                            const isSubTeamLeader = subTeam.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase());
+                            const canPostSubTeam = isSubTeamLeader || isTeamLeader || isAdminLevel(currentUser.Role);
+                            const subTeamSubmissions = teamSubmissions
+                              .filter(s => s.TeamID === team.TeamID && s.SubTeamID === subTeam.SubTeamID)
+                              .sort((a, b) => new Date(b.SubmittedAt).getTime() - new Date(a.SubmittedAt).getTime());
+
+                            return (
+                              <div key={subTeam.SubTeamID} className={`border rounded-lg p-2 sm:p-3 ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-white border-slate-200'}`}>
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-purple-500/20' : 'bg-purple-100'}`}>
+                                      <Users size={10} className={`shrink-0 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`} />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <h5 className={`text-xs sm:text-sm font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                        {subTeam.SubTeamName}
+                                      </h5>
+                                      <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                        {subTeamMembers.length} member{subTeamMembers.length !== 1 ? 's' : ''}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  {canPostSubTeam && (
+                                    <button
+                                      onClick={() => {
+                                        setSubmissionTeamId(team.TeamID);
+                                        setSubmissionSubTeamId(subTeam.SubTeamID);
+                                        setSubmissionModalOpen(true);
+                                      }}
+                                      className="bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-0.5 sm:py-1 rounded text-[10px] font-medium transition-colors flex items-center gap-1 shrink-0"
+                                    >
+                                      <Plus size={10} className="shrink-0" />
+                                      <span>Submit</span>
+                                    </button>
+                                  )}
+                                </div>
+                                {subTeamSubmissions.length > 0 && (
+                                  <div className={`mt-2 pt-2 border-t ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-100'}`}>
+                                    {subTeamSubmissions.slice(0, 2).map(submission => {
+                                      const submitter = users.find(u => u.Email === submission.SubmittedBy);
+                                      return (
+                                        <div key={submission.SubmissionID} className={`p-2 rounded mb-1 last:mb-0 ${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-50'}`}>
+                                          <div className="flex items-center gap-2">
+                                            <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
+                                              <User size={10} className={`shrink-0 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                              <p className={`text-[10px] sm:text-xs font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                                {submitter?.FullName || submission.SubmittedBy}
+                                              </p>
+                                              <p className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                                {new Date(submission.SubmittedAt).toLocaleDateString()}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                    {subTeamSubmissions.length > 2 && (
+                                      <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                        +{subTeamSubmissions.length - 2} more submission{subTeamSubmissions.length - 2 !== 1 ? 's' : ''}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -2813,10 +2895,10 @@ export default function Dashboard({
                     className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${
                       activeView === 'scheduled-tasks' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                     }`}
-                    title={isSidebarCollapsed ? 'Scheduled Tasks' : ''}
+                    title={isSidebarCollapsed ? 'Scheduled Reports' : ''}
                   >
                     <Calendar size={18} />
-                    {!isSidebarCollapsed && <span className="font-medium text-sm">Scheduled Tasks</span>}
+                    {!isSidebarCollapsed && <span className="font-medium text-sm">Scheduled Reports</span>}
                   </button>
                 </li>
               )}
