@@ -29,24 +29,27 @@ interface TeamConfig {
 
 // Map entity names to their reminder/meeting days and entity type
 const ENTITY_SCHEDULE_MAP: Record<string, { reminderDay: string; meetingDay: string; entityType: 'team' | 'subteam' }> = {
-  // Team-level entities (7 teams)
+  // Team-level entities
+  'Ecom - SST': { reminderDay: 'Monday', meetingDay: 'Tuesday', entityType: 'team' },
   'Business Excellence': { reminderDay: 'Friday', meetingDay: 'Monday', entityType: 'team' },
-  'Infra Office/Corparate': { reminderDay: 'Thursday', meetingDay: 'Saturday', entityType: 'team' },
+  'Infra Office/Corparate': { reminderDay: 'Friday', meetingDay: 'Saturday', entityType: 'team' },
   'Expansion': { reminderDay: 'Friday', meetingDay: 'Saturday', entityType: 'team' },
-  'Supply Chain Management': { reminderDay: 'Friday', meetingDay: 'Saturday', entityType: 'team' },
+  'SCM': { reminderDay: 'Friday', meetingDay: 'Saturday', entityType: 'team' },
   'Expansion-School': { reminderDay: 'Friday', meetingDay: 'Saturday', entityType: 'team' },
   'Travel Desk': { reminderDay: 'Friday', meetingDay: 'Saturday', entityType: 'team' },
+  'Ecom - ERP & Tools': { reminderDay: 'Friday', meetingDay: 'Monday', entityType: 'team' },
+  'Ecom - Planning': { reminderDay: 'Monday', meetingDay: 'Tuesday', entityType: 'team' },
+  'Ecom - Printing': { reminderDay: 'Tuesday', meetingDay: 'Wednesday', entityType: 'team' },
+  'Ecom - Purchase': { reminderDay: 'Tuesday', meetingDay: 'Wednesday', entityType: 'team' },
+  'Ecom - Billing': { reminderDay: 'Tuesday', meetingDay: 'Wednesday', entityType: 'team' },
+  'Warehouse': { reminderDay: 'Friday', meetingDay: 'Monday', entityType: 'team' },
+  'Ecom - KAM': { reminderDay: 'Wednesday', meetingDay: 'Thursday', entityType: 'team' },
   'ATL/BTL Marketing': { reminderDay: 'Wednesday', meetingDay: 'Thursday', entityType: 'team' },
 
-  // Sub-team-level entities under E-Com (8 sub-teams)
-  'Ecom SST': { reminderDay: 'Monday', meetingDay: 'Tuesday', entityType: 'subteam' },
-  'Ecom ERP and tools': { reminderDay: 'Friday', meetingDay: 'Monday', entityType: 'subteam' },
-  'Ecom Planning': { reminderDay: 'Monday', meetingDay: 'Tuesday', entityType: 'subteam' },
-  'Ecom Printing': { reminderDay: 'Tuesday', meetingDay: 'Wednesday', entityType: 'subteam' },
-  'Ecom Purchase': { reminderDay: 'Tuesday', meetingDay: 'Wednesday', entityType: 'subteam' },
-  'Ecom Billing and Complaince': { reminderDay: 'Tuesday', meetingDay: 'Wednesday', entityType: 'subteam' },
-  'Ecom Warehouse': { reminderDay: 'Friday', meetingDay: 'Monday', entityType: 'subteam' },
-  'Ecom DFT': { reminderDay: 'Wednesday', meetingDay: 'Thursday', entityType: 'subteam' },
+  // Sub-team-level entities under Expansion (inherit parent schedule)
+  'Akshay': { reminderDay: 'Friday', meetingDay: 'Saturday', entityType: 'subteam' },
+  'Aman': { reminderDay: 'Friday', meetingDay: 'Saturday', entityType: 'subteam' },
+  'MEP': { reminderDay: 'Friday', meetingDay: 'Saturday', entityType: 'subteam' },
 };
 
 async function seedTeamReportConfig() {
@@ -79,16 +82,16 @@ async function seedTeamReportConfig() {
     
     console.log(`✅ Found ${entities.length} team-level entities\n`);
 
-    // Step 2: Fetch sub-teams under E-Com
-    console.log('Step 2: Fetching sub-teams under E-Com...');
-    const eComSnapshot = await firestoreAdmin.collection('teams')
-      .where('TeamName', '==', 'E-Com')
+    // Step 2: Fetch sub-teams under Expansion
+    console.log('Step 2: Fetching sub-teams under Expansion...');
+    const expansionSnapshot = await firestoreAdmin.collection('teams')
+      .where('TeamName', '==', 'Expansion')
       .get();
 
-    if (!eComSnapshot.empty) {
-      const eComId = eComSnapshot.docs[0].id;
+    if (!expansionSnapshot.empty) {
+      const expansionId = expansionSnapshot.docs[0].id;
       const subTeamsSnapshot = await firestoreAdmin.collection('sub_teams')
-        .where('TeamID', '==', eComId)
+        .where('TeamID', '==', expansionId)
         .get();
 
       subTeamsSnapshot.forEach(doc => {
@@ -104,12 +107,12 @@ async function seedTeamReportConfig() {
             reminderDay: schedule.reminderDay,
             meetingDay: schedule.meetingDay,
             entityType: 'subteam',
-            parentTeamId: eComId,
+            parentTeamId: expansionId,
           });
         }
       });
 
-      console.log(`✅ Found ${subTeamsSnapshot.size} sub-teams under E-Com\n`);
+      console.log(`✅ Found ${subTeamsSnapshot.size} sub-teams under Expansion\n`);
     }
 
     console.log(`✅ Total entities to configure: ${entities.length}\n`);

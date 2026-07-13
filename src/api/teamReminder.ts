@@ -52,6 +52,22 @@ export interface EmailDeliveryFailuresResponse {
   weekOf: string;
 }
 
+export interface TeamReportConfig {
+  teamId: string;
+  teamName: string;
+  reminderDay: string;
+  meetingDay: string;
+  active: boolean;
+  updatedAt: string;
+  entityType?: 'team' | 'subteam';
+  parentTeamId?: string;
+}
+
+export interface TeamReportConfigsResponse {
+  success: boolean;
+  configs: TeamReportConfig[];
+}
+
 export async function getTeamReminderThread(teamId: string, weekOf: string): Promise<TeamReminderThreadResponse> {
   return api.get<TeamReminderThreadResponse>(`/team-reminder-thread/${teamId}/${weekOf}`);
 }
@@ -66,4 +82,12 @@ export async function getUnsubmittedTeams(): Promise<UnsubmittedTeamsResponse> {
 
 export async function getEmailDeliveryFailures(): Promise<EmailDeliveryFailuresResponse> {
   return api.get<EmailDeliveryFailuresResponse>('/email-delivery-failures');
+}
+
+export async function getTeamReportConfigs(): Promise<TeamReportConfigsResponse> {
+  return api.get<TeamReportConfigsResponse>('/report-reminders/config');
+}
+
+export async function updateTeamReportConfig(teamId: string, reminderDay: string, meetingDay: string): Promise<{ success: boolean; message: string }> {
+  return api.put<{ success: boolean; message: string }>(`/report-reminders/config/${teamId}`, { reminderDay, meetingDay });
 }

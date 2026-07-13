@@ -40,7 +40,7 @@ import { TextStyle } from '@tiptap/extension-text-style';
 import Color from '@tiptap/extension-color';
 import FontFamily from '@tiptap/extension-font-family';
 import { dbService } from '../lib/dbService';
-import { getUnsubmittedTeams, getEmailDeliveryFailures, EmailDeliveryFailure } from '../api/teamReminder';
+import { getUnsubmittedTeams, getEmailDeliveryFailures, EmailDeliveryFailure, getTeamReportConfigs, updateTeamReportConfig, TeamReportConfig } from '../api/teamReminder';
 import { UnsubmittedTeam } from '../api/teamReminder';
 
 interface AdminPanelProps {
@@ -455,6 +455,31 @@ export default function AdminPanel({
     }
   }, [settings]);
 
+  // Load team report configs from Firestore when report_config tab is activated
+  React.useEffect(() => {
+    if (activeAdminSubTab === 'report_config') {
+      loadTeamReportConfigs();
+    }
+  }, [activeAdminSubTab]);
+
+  const loadTeamReportConfigs = async () => {
+    try {
+      const response = await getTeamReportConfigs();
+      if (response.success && response.configs) {
+        const configsMap: Record<string, { reminderDay: string; meetingDay: string }> = {};
+        response.configs.forEach(config => {
+          configsMap[config.teamId] = {
+            reminderDay: config.reminderDay,
+            meetingDay: config.meetingDay
+          };
+        });
+        setTeamReportConfigs(configsMap);
+      }
+    } catch (error) {
+      console.error('Failed to load team report configs:', error);
+    }
+  };
+
   const handleUserCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !email.trim() || !password.trim()) return;
@@ -763,6 +788,24 @@ export default function AdminPanel({
     } catch (err) {
       console.error('Error saving report requirements:', err);
       alert('Failed to save report requirements. Please try again.');
+    }
+  };
+
+  const handleSaveTeamReportConfig = async (teamId: string, reminderDay: string, meetingDay: string) => {
+    try {
+      const result = await updateTeamReportConfig(teamId, reminderDay, meetingDay);
+      if (result.success) {
+        setTeamReportConfigs(prev => ({
+          ...prev,
+          [teamId]: { reminderDay, meetingDay }
+        }));
+        setEditingReportConfigTeamId(null);
+      } else {
+        alert('Failed to save team report configuration. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error saving team report config:', error);
+      alert('Failed to save team report configuration. Please try again.');
     }
   };
 
@@ -2230,13 +2273,7 @@ export default function AdminPanel({
                             </div>
                             {editingReportConfigTeamId === configKey ? (
                               <button
-                                onClick={() => {
-                                  setTeamReportConfigs(prev => ({
-                                    ...prev,
-                                    [configKey]: { reminderDay: editingReminderDay, meetingDay: editingMeetingDay }
-                                  }));
-                                  setEditingReportConfigTeamId(null);
-                                }}
+                                onClick={() => handleSaveTeamReportConfig(configKey, editingReminderDay, editingMeetingDay)}
                                 className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
                               >
                                 Save
@@ -2314,13 +2351,7 @@ export default function AdminPanel({
                         </div>
                         {editingReportConfigTeamId === team.TeamID ? (
                           <button
-                            onClick={() => {
-                              setTeamReportConfigs(prev => ({
-                                ...prev,
-                                [team.TeamID]: { reminderDay: editingReminderDay, meetingDay: editingMeetingDay }
-                              }));
-                              setEditingReportConfigTeamId(null);
-                            }}
+                            onClick={() => handleSaveTeamReportConfig(team.TeamID, editingReminderDay, editingMeetingDay)}
                             className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
                           >
                             Save
