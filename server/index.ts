@@ -17,6 +17,7 @@ import { initializeTeamSubmissionsSheet } from './services/googleSheetsService';
 import { startReminderScheduler } from './services/reminderScheduler';
 import { startRecurringTaskScheduler } from './services/recurringTaskScheduler';
 import { startSheetsSyncInterval } from './services/sheetsSyncController';
+import { checkAndSendReportReminders } from './services/reportReminderScheduler';
 import { isGmailConnected } from './services/gmailTokenStorage';
 
 validateEnv();
@@ -38,7 +39,17 @@ async function startServer() {
 
   // Start automated email reminders scheduler
   startReminderScheduler();
-  
+
+  // Start report reminder scheduler (runs every hour)
+  logger.info('Starting report reminder scheduler (hourly check)');
+  setInterval(async () => {
+    try {
+      await checkAndSendReportReminders();
+    } catch (error) {
+      logger.error('Error in scheduled report reminder check:', error);
+    }
+  }, 60 * 60 * 1000); // Run every hour
+
   // Start recurring task generation scheduler
   startRecurringTaskScheduler();
 
