@@ -2207,86 +2207,185 @@ export default function AdminPanel({
               </p>
               
               <div className="space-y-4">
-                {teams.map(team => (
-                  <div key={team.TeamID} className={`border rounded-lg p-4 ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{team.TeamName}</div>
-                        <div className={`text-xs font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{team.TeamID}</div>
+                {teams.map(team => {
+                  const teamReq = reportRequirements[team.TeamID];
+                  const isSubteamReporting = teamReq?.level === 'subteam';
+                  
+                  if (isSubteamReporting && teamReq?.subTeamIds && teamReq.subTeamIds.length > 0) {
+                    // Show individual sub-teams instead of parent team
+                    return teamReq.subTeamIds.map(subTeamId => {
+                      const subTeam = subTeams.find(st => st.SubTeamID === subTeamId && st.Active);
+                      if (!subTeam) return null;
+                      
+                      const configKey = `${team.TeamID}_${subTeam.SubTeamID}`;
+                      
+                      return (
+                        <div key={configKey} className={`border rounded-lg p-4 ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{subTeam.SubTeamName}</div>
+                              <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                {team.TeamName} · {subTeam.SubTeamID}
+                              </div>
+                            </div>
+                            {editingReportConfigTeamId === configKey ? (
+                              <button
+                                onClick={() => {
+                                  setTeamReportConfigs(prev => ({
+                                    ...prev,
+                                    [configKey]: { reminderDay: editingReminderDay, meetingDay: editingMeetingDay }
+                                  }));
+                                  setEditingReportConfigTeamId(null);
+                                }}
+                                className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
+                              >
+                                Save
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setEditingReportConfigTeamId(configKey);
+                                  const config = teamReportConfigs[configKey] || { reminderDay: 'Thursday', meetingDay: 'Friday' };
+                                  setEditingReminderDay(config.reminderDay);
+                                  setEditingMeetingDay(config.meetingDay);
+                                }}
+                                className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
+                              >
+                                Edit
+                              </button>
+                            )}
+                          </div>
+                          
+                          {editingReportConfigTeamId === configKey ? (
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className={`block text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Reminder Day</label>
+                                <select
+                                  value={editingReminderDay}
+                                  onChange={(e) => setEditingReminderDay(e.target.value)}
+                                  className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                >
+                                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                                    <option key={day} value={day}>{day}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label className={`block text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Meeting Day</label>
+                                <select
+                                  value={editingMeetingDay}
+                                  onChange={(e) => setEditingMeetingDay(e.target.value)}
+                                  className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                                >
+                                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                                    <option key={day} value={day}>{day}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex gap-6">
+                              <div>
+                                <span className={`text-xs font-bold block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Reminder Day</span>
+                                <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                  {teamReportConfigs[configKey]?.reminderDay || 'Thursday'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className={`text-xs font-bold block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Meeting Day</span>
+                                <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                  {teamReportConfigs[configKey]?.meetingDay || 'Friday'}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  }
+                  
+                  // Show parent team (team-level reporting or no config)
+                  return (
+                    <div key={team.TeamID} className={`border rounded-lg p-4 ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{team.TeamName}</div>
+                          <div className={`text-xs font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{team.TeamID}</div>
+                        </div>
+                        {editingReportConfigTeamId === team.TeamID ? (
+                          <button
+                            onClick={() => {
+                              setTeamReportConfigs(prev => ({
+                                ...prev,
+                                [team.TeamID]: { reminderDay: editingReminderDay, meetingDay: editingMeetingDay }
+                              }));
+                              setEditingReportConfigTeamId(null);
+                            }}
+                            className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
+                          >
+                            Save
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setEditingReportConfigTeamId(team.TeamID);
+                              const config = teamReportConfigs[team.TeamID] || { reminderDay: 'Thursday', meetingDay: 'Friday' };
+                              setEditingReminderDay(config.reminderDay);
+                              setEditingMeetingDay(config.meetingDay);
+                            }}
+                            className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
+                          >
+                            Edit
+                          </button>
+                        )}
                       </div>
+                      
                       {editingReportConfigTeamId === team.TeamID ? (
-                        <button
-                          onClick={() => {
-                            setTeamReportConfigs(prev => ({
-                              ...prev,
-                              [team.TeamID]: { reminderDay: editingReminderDay, meetingDay: editingMeetingDay }
-                            }));
-                            setEditingReportConfigTeamId(null);
-                          }}
-                          className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
-                        >
-                          Save
-                        </button>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className={`block text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Reminder Day</label>
+                            <select
+                              value={editingReminderDay}
+                              onChange={(e) => setEditingReminderDay(e.target.value)}
+                              className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                            >
+                              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                                <option key={day} value={day}>{day}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className={`block text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Meeting Day</label>
+                            <select
+                              value={editingMeetingDay}
+                              onChange={(e) => setEditingMeetingDay(e.target.value)}
+                              className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                            >
+                              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                                <option key={day} value={day}>{day}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
                       ) : (
-                        <button
-                          onClick={() => {
-                            setEditingReportConfigTeamId(team.TeamID);
-                            const config = teamReportConfigs[team.TeamID] || { reminderDay: 'Thursday', meetingDay: 'Friday' };
-                            setEditingReminderDay(config.reminderDay);
-                            setEditingMeetingDay(config.meetingDay);
-                          }}
-                          className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
-                        >
-                          Edit
-                        </button>
+                        <div className="flex gap-6">
+                          <div>
+                            <span className={`text-xs font-bold block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Reminder Day</span>
+                            <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                              {teamReportConfigs[team.TeamID]?.reminderDay || 'Thursday'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className={`text-xs font-bold block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Meeting Day</span>
+                            <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                              {teamReportConfigs[team.TeamID]?.meetingDay || 'Friday'}
+                            </span>
+                          </div>
+                        </div>
                       )}
                     </div>
-                    
-                    {editingReportConfigTeamId === team.TeamID ? (
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className={`block text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Reminder Day</label>
-                          <select
-                            value={editingReminderDay}
-                            onChange={(e) => setEditingReminderDay(e.target.value)}
-                            className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                          >
-                            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
-                              <option key={day} value={day}>{day}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className={`block text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Meeting Day</label>
-                          <select
-                            value={editingMeetingDay}
-                            onChange={(e) => setEditingMeetingDay(e.target.value)}
-                            className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                          >
-                            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
-                              <option key={day} value={day}>{day}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex gap-6">
-                        <div>
-                          <span className={`text-xs font-bold block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Reminder Day</span>
-                          <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                            {teamReportConfigs[team.TeamID]?.reminderDay || 'Thursday'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className={`text-xs font-bold block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Meeting Day</span>
-                          <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                            {teamReportConfigs[team.TeamID]?.meetingDay || 'Friday'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>

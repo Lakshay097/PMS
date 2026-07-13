@@ -2180,6 +2180,7 @@ export default function Dashboard({
       onToggleTeamStatus={onToggleTeamStatus || (() => {})}
       onUpdateUserTeams={onUpdateUserTeams || (() => {})}
       onDeleteTeam={onDeleteTeam || (() => {})}
+      onRenameTeam={onRenameTeam}
       onSaveSubTeam={onSaveSubTeam}
       onDeleteSubTeam={onDeleteSubTeam}
       onUpdateSubTeamLeaders={onUpdateSubTeamLeaders}
@@ -2983,7 +2984,9 @@ export default function Dashboard({
                 <h2 className={`text-lg font-bold capitalize ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{activeView}</h2>
               </div>
               <div className="hidden sm:block">
-                <h2 className={`text-xl md:text-2xl font-bold capitalize ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{activeView}</h2>
+                <h2 className={`text-xl md:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                  {activeView === 'scheduled-tasks' ? 'Scheduled Reports (Review Document)' : activeView === 'overview' ? 'Overview' : activeView.charAt(0).toUpperCase() + activeView.slice(1)}
+                </h2>
                 <p className={`text-xs md:text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Welcome back, {currentUser.FullName || currentUser.Email}</p>
               </div>
             </div>
