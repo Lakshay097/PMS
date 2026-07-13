@@ -4,6 +4,7 @@ import { BadRequestError, InternalServerError } from '../utils/AppError';
 import { AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { v2 as cloudinary } from 'cloudinary';
+import crypto from 'crypto';
 
 /**
  * Configure Cloudinary
@@ -13,6 +14,13 @@ cloudinary.config({
   api_key: config.CLOUDINARY_API_KEY,
   api_secret: config.CLOUDINARY_API_SECRET,
 });
+
+// Log config details for debugging
+logger.info(`Cloudinary configured: cloud_name=${config.CLOUDINARY_CLOUD_NAME}, api_key=${config.CLOUDINARY_API_KEY}, api_secret_length=${config.CLOUDINARY_API_SECRET?.length || 0}`);
+logger.info(`Cloudinary secret fingerprint: ${crypto.createHash('sha256').update(config.CLOUDINARY_API_SECRET || '').digest('hex').substring(0, 12)}`);
+logger.info(`Cloudinary secret first 4 chars: ${(config.CLOUDINARY_API_SECRET || '').substring(0, 4)}`);
+logger.info(`Cloudinary secret last 4 chars: ${(config.CLOUDINARY_API_SECRET || '').slice(-4)}`);
+logger.info(`Cloudinary secret hex: ${Buffer.from(config.CLOUDINARY_API_SECRET || '').toString('hex')}`);
 
 /**
  * Upload file request body
@@ -174,10 +182,24 @@ export async function uploadFileHandler(req: AuthRequest, res: Response): Promis
       webContentLink: uploadResult.secure_url,
       uploadedAt: new Date().toISOString()
     });
-  } catch (error) {
-    logger.error(`Cloudinary upload failed: ${JSON.stringify(error, null, 2)}`);
+  } catch (error: any) {
+    logger.error(`Cloudinary upload failed: ${error?.message || JSON.stringify(error)}`);
+    if (error?.http_code) logger.error(`HTTP Code: ${error.http_code}`);
+    if (error?.code) logger.error(`Cloudinary Code: ${error.code}`);
     logger.error(`Cloudinary config: cloud_name=${config.CLOUDINARY_CLOUD_NAME}, api_key=${config.CLOUDINARY_API_KEY}, api_secret=${config.CLOUDINARY_API_SECRET ? 'SET' : 'NOT_SET'}`);
     logger.error(`Upload details: folder=${folder}, fileName=${fileName}, fileSize=${buffer.length}, mimeType=${mimeType}`);
+
+    // Manual signature recomputation for debugging
+    if (error?.message?.includes('Invalid Signature') && error?.message?.includes('String to sign')) {
+      const match = error.message.match(/String to sign - '([^']+)'/);
+      if (match) {
+        const stringToSign = match[1];
+        const manualSig = crypto.createHash('sha1').update(stringToSign + config.CLOUDINARY_API_SECRET).digest('hex');
+        logger.error(`Manual signature recomputation: ${manualSig}`);
+        logger.error(`String to sign: ${stringToSign}`);
+      }
+    }
+
     throw new InternalServerError("Failed to upload file to Cloudinary");
   }
 }

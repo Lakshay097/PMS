@@ -46,7 +46,7 @@ steps:
       - '--set-env-vars=VITE_FIREBASE_APP_ID=1:1086239964586:web:239a15d2885b99d8c87fd3'
       - '--set-env-vars=CLOUDINARY_CLOUD_NAME=dumxy0zvl'
       - '--set-env-vars=CLOUDINARY_API_KEY=355736528862449'
-      - '--set-secrets=CLOUDINARY_API_SECRET=CLOUDINARY_API_SECRET:latest'
+      - '--set-secrets=CLOUDINARY_API_SECRET=CLOUDINARY_API_SECRET:4'
 
 options:
   machineType: 'E2_HIGHCPU_8'
