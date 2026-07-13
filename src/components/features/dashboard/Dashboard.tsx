@@ -765,6 +765,20 @@ export default function Dashboard({
     return () => window.removeEventListener('popstate', handlePopState);
   }, [onViewChange]);
 
+  // Update document title based on active view
+  useEffect(() => {
+    const titles: Record<string, string> = {
+      'overview': 'PMS TaskFlow - Dashboard',
+      'tasks': 'PMS TaskFlow - Tasks',
+      'team': 'PMS TaskFlow - Team',
+      'reports': 'PMS TaskFlow - Reports',
+      'admin': 'PMS TaskFlow - Admin',
+      'settings': 'PMS TaskFlow - Settings',
+      'scheduled-tasks': 'PMS TaskFlow - Scheduled Reports (Review Document)',
+    };
+    document.title = titles[activeView] || 'PMS TaskFlow';
+  }, [activeView]);
+
   // Get team members based on user role with hierarchical visibility
   const getTeamMembers = () => {
     if (isAdminLevel(currentUser.Role)) {
