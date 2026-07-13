@@ -19,6 +19,18 @@ interface TaskDetailDrawerProps {
 
 type TabType = 'overview' | 'updates' | 'subtasks' | 'comments' | 'files' | 'history';
 
+// Helper function to extract filename from URL
+function getFileNameFromUrl(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    const pathname = urlObj.pathname;
+    const fileName = pathname.split('/').pop();
+    return fileName || url;
+  } catch {
+    return url;
+  }
+}
+
 export default function TaskDetailDrawer({
   isOpen,
   onClose,
@@ -133,14 +145,22 @@ export default function TaskDetailDrawer({
             {task.AttachmentLink && (
               <div>
                 <h3 className="text-sm font-medium text-[#0f172a] mb-2">Attachments</h3>
-                <a
-                  href={task.AttachmentLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-[var(--color-accent)] hover:underline"
-                >
-                  {task.AttachmentLink}
-                </a>
+                <div className="space-y-1">
+                  {task.AttachmentLink.split(',').map((link, idx) => {
+                    const fileName = getFileNameFromUrl(link.trim());
+                    return (
+                      <a
+                        key={idx}
+                        href={link.trim()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-sm text-[var(--color-accent)] hover:underline"
+                      >
+                        {fileName}
+                      </a>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
@@ -197,17 +217,20 @@ export default function TaskDetailDrawer({
                           <div className="text-sm">
                             <strong className="text-[#0f172a]">Attachments:</strong>
                             <div className="mt-1 space-y-1">
-                              {report.AttachmentLink.split(',').map((link, idx) => (
-                                <a
-                                  key={idx}
-                                  href={link.trim()}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="block text-xs text-[var(--color-accent)] hover:underline"
-                                >
-                                  {link.trim()}
-                                </a>
-                              ))}
+                              {report.AttachmentLink.split(',').map((link, idx) => {
+                                const fileName = getFileNameFromUrl(link.trim());
+                                return (
+                                  <a
+                                    key={idx}
+                                    href={link.trim()}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block text-xs text-[var(--color-accent)] hover:underline"
+                                  >
+                                    {fileName}
+                                  </a>
+                                );
+                              })}
                             </div>
                           </div>
                         )}
