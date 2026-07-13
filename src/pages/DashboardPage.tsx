@@ -45,6 +45,7 @@ interface DashboardPageProps {
   onToggleTeamStatus?: (teamId: string) => void;
   onUpdateUserTeams?: (email: string, teamIDs: string[], teamNames: string[]) => Promise<void>;
   onDeleteTeam?: (teamId: string) => Promise<void>;
+  onRenameTeam?: (teamId: string, newName: string) => Promise<void>;
   onSaveSubTeam?: (subTeam: SubTeam) => Promise<void>;
   onDeleteSubTeam?: (subTeamId: string) => Promise<void>;
   onUpdateSubTeamLeaders?: (teamId: string, subTeamId: string, leaderEmails: string[]) => Promise<void>;

@@ -641,7 +641,7 @@ export default function App() {
   });
 
   // Team operations hook
-  const { handleDeleteTeam } = useTeamOperations({
+  const { handleDeleteTeam, handleRenameTeam } = useTeamOperations({
     teams,
     users,
     syncDatabase: loadDatabase,
@@ -1185,6 +1185,7 @@ export default function App() {
         onApproveUser={handleApproveUser}
         onUpdateUserTeams={handleUpdateUserTeams}
         onDeleteTeam={handleDeleteTeam}
+        onRenameTeam={handleRenameTeam}
         onDeleteTask={handleDeleteTask}
         onAddTeamSubmission={async (submission) => {
           try {

@@ -12,6 +12,7 @@ import {
   Search,
   CheckSquare,
   Edit,
+  Edit2,
   Code,
   Mail,
   CheckCircle,
@@ -61,6 +62,7 @@ interface AdminPanelProps {
   onToggleTeamStatus: (teamId: string) => void;
   onUpdateUserTeams: (email: string, teamIDs: string[], teamNames: string[]) => void;
   onDeleteTeam: (teamId: string) => void;
+  onRenameTeam?: (teamId: string, newName: string) => void;
   onSaveSubTeam?: (subTeam: SubTeam) => Promise<void>;
   onDeleteSubTeam?: (subTeamId: string) => Promise<void>;
   onUpdateSubTeamLeaders?: (teamId: string, subTeamId: string, leaderEmails: string[]) => Promise<void>;
@@ -90,6 +92,7 @@ export default function AdminPanel({
   onToggleTeamStatus,
   onUpdateUserTeams,
   onDeleteTeam,
+  onRenameTeam,
   onSaveSubTeam,
   onDeleteSubTeam,
   onUpdateSubTeamLeaders,
@@ -102,7 +105,7 @@ export default function AdminPanel({
   isDarkMode = false,
 }: AdminPanelProps) {
   // Master administrative tabs
-  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'teams' | 'templates' | 'email_templates' | 'report_requirements' | 'missing_reports'>('users');
+  const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'teams' | 'templates' | 'email_templates' | 'report_requirements' | 'report_config' | 'missing_reports'>('users');
 
   // Auto-sync when the users tab is activated so pending registrations
   // that arrived after initial page load are visible immediately.
@@ -165,6 +168,10 @@ export default function AdminPanel({
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [currentTeamLeaders, setCurrentTeamLeaders] = useState<string[]>([]);
   const [currentTeamStakeholders, setCurrentTeamStakeholders] = useState<string[]>([]);
+
+  // Team rename state
+  const [renamingTeamId, setRenamingTeamId] = useState<string | null>(null);
+  const [newTeamName, setNewTeamName] = useState('');
 
   // Sub-team management state — tracks which team's sub-teams are being managed
   const [newSubTeamName, setNewSubTeamName] = useState('');
@@ -299,6 +306,37 @@ export default function AdminPanel({
     }
   };
 
+  const handleRenameTeam = async (teamId: string, newName: string) => {
+    if (!newName.trim()) {
+      alert('Team name cannot be empty');
+      return;
+    }
+    if (!onRenameTeam) {
+      alert('Rename functionality not available');
+      return;
+    }
+    try {
+      await onRenameTeam(teamId, newName.trim());
+      setRenamingTeamId(null);
+      setNewTeamName('');
+      setTeamSuccessMessage(`Team renamed successfully`);
+      setTimeout(() => setTeamSuccessMessage(null), 3000);
+    } catch (error) {
+      console.error('[handleRenameTeam] Error:', error);
+      alert('Failed to rename team. Please try again.');
+    }
+  };
+
+  const startRenameTeam = (teamId: string, currentName: string) => {
+    setRenamingTeamId(teamId);
+    setNewTeamName(currentName);
+  };
+
+  const cancelRenameTeam = () => {
+    setRenamingTeamId(null);
+    setNewTeamName('');
+  };
+
   // Search filter inputs
   const [userSearchText, setUserSearchText] = useState('');
   const [templateSearchText, setTemplateSearchText] = useState('');
@@ -325,6 +363,19 @@ export default function AdminPanel({
   // Weekly report requirements state
   const [reportRequirements, setReportRequirements] = useState<Record<string, { level: 'team' | 'subteam'; subTeamIds: string[] }>>({});
   const [reportRequirementsSaveSuccess, setReportRequirementsSaveSuccess] = useState(false);
+
+  // Report configuration state
+  const [teamReportConfigs, setTeamReportConfigs] = useState<Record<string, { reminderDay: string; meetingDay: string }>>({});
+  const [editingReportConfigTeamId, setEditingReportConfigTeamId] = useState<string | null>(null);
+  const [editingReminderDay, setEditingReminderDay] = useState('Thursday');
+  const [editingMeetingDay, setEditingMeetingDay] = useState('Friday');
+
+  // Calculate teams that need attention (no leaders or stakeholders)
+  const teamsNeedingAttention = teams.filter(team => {
+    const hasLeaders = team.TeamLeaderEmails && team.TeamLeaderEmails.length > 0;
+    const hasStakeholders = team.StakeholderEmails && team.StakeholderEmails.length > 0;
+    return team.Active && !hasLeaders && !hasStakeholders;
+  });
 
   // Tiptap editor for rich text
   const editor = useEditor({
@@ -875,6 +926,19 @@ export default function AdminPanel({
             <span className="hidden sm:inline">Reports</span>
           </button>
           <button
+            onClick={() => setActiveAdminSubTab('report_config')}
+            className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
+              activeAdminSubTab === 'report_config'
+                ? 'bg-blue-500 text-white'
+                : isDarkMode
+                ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+            }`}
+          >
+            <Settings size={14} />
+            <span className="hidden sm:inline">Report Config</span>
+          </button>
+          <button
             onClick={() => setActiveAdminSubTab('missing_reports')}
             className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
               activeAdminSubTab === 'missing_reports'
@@ -1276,15 +1340,15 @@ export default function AdminPanel({
                 </div>
 
                 <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
-                  <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
-                    <table className="w-full text-sm" style={{ tableLayout: 'fixed', width: '100%' }}>
+                  <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
+                    <table className="w-full text-sm">
                       <thead className={`${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-50'} sticky top-0 z-10`}>
                         <tr>
-                          <th className={`px-3 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '20%', minWidth: 0 }}>User</th>
-                          <th className={`px-3 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '25%', minWidth: 0 }}>Teams</th>
-                          <th className={`px-3 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '18%', minWidth: 0 }}>Manager</th>
-                          <th className={`px-3 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '22%', minWidth: 0 }}>Role</th>
-                          <th className={`px-3 py-3 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '15%', minWidth: 0 }}>Status</th>
+                          <th className={`px-3 py-3 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>User</th>
+                          <th className={`px-3 py-3 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Teams</th>
+                          <th className={`px-3 py-3 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Manager</th>
+                          <th className={`px-3 py-3 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Role</th>
+                          <th className={`px-3 py-3 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Status</th>
                         </tr>
                       </thead>
                       <tbody className={`divide-y ${isDarkMode ? 'divide-[#334155]' : 'divide-slate-200'}`}>
@@ -1418,6 +1482,48 @@ export default function AdminPanel({
         {/* SUBTAB 2: Teams Management */}
         {activeAdminSubTab === 'teams' && (
           <div className="space-y-4">
+            {/* Needs Attention Banner */}
+            {teamsNeedingAttention.length > 0 && (
+              <div className={`border rounded-xl p-4 ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20' : 'bg-amber-50 border-amber-200'}`}>
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-amber-500/20' : 'bg-amber-100'}`}>
+                    <AlertCircle size={18} className={isDarkMode ? 'text-amber-400' : 'text-amber-600'} />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className={`font-bold text-sm ${isDarkMode ? 'text-amber-400' : 'text-amber-800'}`}>
+                      {teamsNeedingAttention.length} Team(s) Need Attention
+                    </h4>
+                    <p className={`text-xs mt-1 ${isDarkMode ? 'text-amber-400/80' : 'text-amber-700'}`}>
+                      These teams have no team leaders or stakeholders assigned. Report emails cannot be sent until recipients are assigned.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const firstTeam = teamsNeedingAttention[0];
+                      setExpandedTeamId(firstTeam.TeamID);
+                      setSelectedUsersToAdd(new Set());
+                      setSelectedTeamLeaders(new Set());
+                      setSelectedTeamStakeholders(new Set());
+                      setMemberSearchQuery('');
+                      setCurrentTeamLeaders(firstTeam.TeamLeaderEmails || []);
+                      setCurrentTeamStakeholders(firstTeam.StakeholderEmails || []);
+                    }}
+                    className={`text-xs px-3 py-1.5 rounded font-bold ${isDarkMode ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
+                  >
+                    Fix Now
+                  </button>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {teamsNeedingAttention.map(team => (
+                    <div key={team.TeamID} className={`text-xs flex items-center gap-2 ${isDarkMode ? 'text-amber-400/80' : 'text-amber-700'}`}>
+                      <span className={`font-medium ${isDarkMode ? 'text-amber-400' : 'text-amber-800'}`}>{team.TeamName}</span>
+                      <span className={`font-mono ${isDarkMode ? 'text-amber-400/60' : 'text-amber-600'}`}>({team.TeamID})</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8">
               {/* Add Team Form */}
               <div className={`border rounded-xl p-4 space-y-3 shadow-sm h-fit ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0]'}`}>
@@ -1474,16 +1580,17 @@ export default function AdminPanel({
                 </div>
 
                 <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
-                  <table className="w-full text-sm" style={{ tableLayout: 'fixed', width: '100%' }}>
-                    <thead className={`${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-50'}`}>
-                      <tr>
-                        <th className={`px-3 py-2 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '22%', minWidth: 0 }}>Team</th>
-                        <th className={`px-3 py-2 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '23%', minWidth: 0 }}>Description</th>
-                        <th className={`px-3 py-2 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '15%', minWidth: 0 }}>Members</th>
-                        <th className={`px-3 py-2 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '15%', minWidth: 0 }}>Status</th>
-                        <th className={`px-3 py-2 text-left font-bold text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} style={{ width: '25%', minWidth: 0 }}>Actions</th>
-                      </tr>
-                    </thead>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className={`${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-50'}`}>
+                        <tr>
+                          <th className={`px-3 py-2 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Team</th>
+                          <th className={`px-3 py-2 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Description</th>
+                          <th className={`px-3 py-2 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Members</th>
+                          <th className={`px-3 py-2 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Status</th>
+                          <th className={`px-3 py-2 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Actions</th>
+                        </tr>
+                      </thead>
                     <tbody className={`divide-y ${isDarkMode ? 'divide-[#334155]' : 'divide-slate-200'}`}>
                       {teams.map(team => {
                         const teamUsers = users.filter(u => u.TeamIDs.includes(team.TeamID));
@@ -1491,7 +1598,44 @@ export default function AdminPanel({
                           <tr key={team.TeamID} className={`transition-colors ${isDarkMode ? 'hover:bg-[#1E293B]/60' : 'hover:bg-slate-50'}`}>
                             <td className="px-3 py-2" style={{ minWidth: 0 }}>
                               <div className="min-w-0">
-                                <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'} truncate`}>{team.TeamName}</div>
+                                {renamingTeamId === team.TeamID ? (
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="text"
+                                      value={newTeamName}
+                                      onChange={(e) => setNewTeamName(e.target.value)}
+                                      className={`text-xs font-bold px-2 py-1 rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+                                      autoFocus
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleRenameTeam(team.TeamID, newTeamName);
+                                        if (e.key === 'Escape') cancelRenameTeam();
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => handleRenameTeam(team.TeamID, newTeamName)}
+                                      className={`text-[10px] px-2 py-1 rounded font-bold ${isDarkMode ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      onClick={cancelRenameTeam}
+                                      className={`text-[10px] px-2 py-1 rounded font-bold ${isDarkMode ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'} truncate`}>{team.TeamName}</div>
+                                    <button
+                                      onClick={() => startRenameTeam(team.TeamID, team.TeamName)}
+                                      className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-slate-200 dark:hover:bg-[#334155] transition-colors ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}
+                                      title="Rename team"
+                                    >
+                                      <Edit size={12} />
+                                    </button>
+                                  </div>
+                                )}
                                 <div className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'} truncate`}>{team.TeamID}</div>
                               </div>
                             </td>
@@ -1519,23 +1663,20 @@ export default function AdminPanel({
                               <div className="flex gap-1">
                                 <button
                                   type="button"
-                                  onClick={async () => {
+                                  onClick={() => {
                                     setExpandedTeamId(team.TeamID);
                                     setSelectedUsersToAdd(new Set());
                                     setSelectedTeamLeaders(new Set());
                                     setSelectedTeamStakeholders(new Set());
                                     setMemberSearchQuery('');
 
-                                    // Read leaders/stakeholders directly from team object (which is updated by App.tsx)
-                                    // instead of settings, since onUpdateSetting only updates team state, not settings array
-                                    const teamData = teams.find(t => t.TeamID === expandedTeamId);
-                                    const leadersFromTeam = teamData?.TeamLeaderEmails || [];
-                                    const stakeholdersFromTeam = teamData?.StakeholderEmails || [];
-
-                                    console.log('[Modal Open] Loading leaders from team state for team:', team.TeamID, 'leaders:', leadersFromTeam, 'stakeholders:', stakeholdersFromTeam);
-
-                                    setCurrentTeamLeaders(leadersFromTeam);
-                                    setCurrentTeamStakeholders(stakeholdersFromTeam);
+                                    // Leaders/stakeholders are kept in sync by the
+                                    // useEffect watching [teams, expandedTeamId] above,
+                                    // which reads from the current `teams` prop whenever
+                                    // expandedTeamId changes (avoids stale-closure bugs
+                                    // from reading state set earlier in this same handler).
+                                    setCurrentTeamLeaders(team.TeamLeaderEmails || []);
+                                    setCurrentTeamStakeholders(team.StakeholderEmails || []);
                                   }}
                                   className={`px-2 py-1 text-[10px] font-bold tracking-wider rounded-lg border transition-colors cursor-pointer ${isDarkMode ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'}`}
                                 >
@@ -2053,8 +2194,103 @@ export default function AdminPanel({
               </div>
             </div>
           </div>
+        </div>
         )}
 
+        {/* SUBTAB: Report Configuration */}
+        {activeAdminSubTab === 'report_config' && (
+          <div className="space-y-6">
+            <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}>
+              <h3 className={`font-bold text-lg mb-4 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Team Report Configuration</h3>
+              <p className={`text-sm mb-6 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                Configure reminder and meeting days for each team's weekly report schedule.
+              </p>
+              
+              <div className="space-y-4">
+                {teams.map(team => (
+                  <div key={team.TeamID} className={`border rounded-lg p-4 ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{team.TeamName}</div>
+                        <div className={`text-xs font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{team.TeamID}</div>
+                      </div>
+                      {editingReportConfigTeamId === team.TeamID ? (
+                        <button
+                          onClick={() => {
+                            setTeamReportConfigs(prev => ({
+                              ...prev,
+                              [team.TeamID]: { reminderDay: editingReminderDay, meetingDay: editingMeetingDay }
+                            }));
+                            setEditingReportConfigTeamId(null);
+                          }}
+                          className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
+                        >
+                          Save
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setEditingReportConfigTeamId(team.TeamID);
+                            const config = teamReportConfigs[team.TeamID] || { reminderDay: 'Thursday', meetingDay: 'Friday' };
+                            setEditingReminderDay(config.reminderDay);
+                            setEditingMeetingDay(config.meetingDay);
+                          }}
+                          className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
+                        >
+                          Edit
+                        </button>
+                      )}
+                    </div>
+                    
+                    {editingReportConfigTeamId === team.TeamID ? (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className={`block text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Reminder Day</label>
+                          <select
+                            value={editingReminderDay}
+                            onChange={(e) => setEditingReminderDay(e.target.value)}
+                            className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                          >
+                            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                              <option key={day} value={day}>{day}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className={`block text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Meeting Day</label>
+                          <select
+                            value={editingMeetingDay}
+                            onChange={(e) => setEditingMeetingDay(e.target.value)}
+                            className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                          >
+                            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                              <option key={day} value={day}>{day}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-6">
+                        <div>
+                          <span className={`text-xs font-bold block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Reminder Day</span>
+                          <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                            {teamReportConfigs[team.TeamID]?.reminderDay || 'Thursday'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className={`text-xs font-bold block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Meeting Day</span>
+                          <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                            {teamReportConfigs[team.TeamID]?.meetingDay || 'Friday'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* SUBTAB 4: Recurrence Blueprints Scheduler */}
         {activeAdminSubTab === 'templates' && (

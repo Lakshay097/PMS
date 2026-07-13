@@ -358,8 +358,8 @@ async function checkThursdayReminders(): Promise<void> {
               undefined, // taskId
               teamId,
               null, // subTeamId
-              'thursday_reminder',
-              weekOf
+              weekOf,
+              'thursday_reminder'
             );
 
             if (result.success) {
@@ -463,8 +463,8 @@ async function checkThursdayReminders(): Promise<void> {
                 undefined, // taskId
                 teamId,
                 subTeam.subTeamId,
-                'thursday_reminder',
-                weekOf
+                weekOf,
+                'thursday_reminder'
               );
 
               if (result.success) {
@@ -676,3 +676,4 @@ export function startReminderScheduler(): void {
     });
   }, 60 * 60 * 1000);
 }
+

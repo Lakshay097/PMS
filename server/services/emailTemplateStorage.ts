@@ -45,6 +45,30 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
     body: 'Weekly report proof of submission for {DisplayName}\n\nSubmitted by: {SubmittedBy}\nSubmitted at: {SubmittedAt}\n\n{NoteSection}{AttachmentsSection}',
     updatedAt: new Date().toISOString(),
   },
+  {
+    templateName: 'template_report_onboarding',
+    subject: 'Welcome to Weekly Reports - {TeamName}',
+    body: 'Hello,\n\nWelcome to the weekly reporting process for team "{TeamName}".\n\nYour meeting is scheduled for {day}.\n\nPlease submit your report by the deadline.\n\nLogin credentials:\nEmail: {OfficialWorkMail}\nPassword: {TemporaryPassword}\n\nApp URL: <a href="{AppURL}" style="color: #3b82f6; text-decoration: underline;">{AppURL}</a>\n\nBest regards,\nPMS Team',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    templateName: 'template_report_reminder',
+    subject: 'Weekly Report Reminder - {TeamName}',
+    body: 'Hello,\n\nThis is a reminder for team "{TeamName}" to submit your weekly report.\n\nYour meeting is scheduled for {day}.\n\nPlease log in and submit your report:\n\nApp URL: <a href="{AppURL}" style="color: #3b82f6; text-decoration: underline;">{AppURL}</a>\n\nBest regards,\nPMS Team',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    templateName: 'template_scheduled_report_first',
+    subject: 'Scheduled Report Submission - {TeamName}',
+    body: 'Hello,\n\nTo ensure timely preparation for scheduled review meetings, please submit your review document through the portal at least one day before the scheduled meeting that is on {day} (PPT preferred).\n\nPlease use the following credentials to access the application for first time users:\n\nEmail: {OfficialWorkMail}\nTemporary Password: {TemporaryPassword}\n\nFor security reasons, please change your password after your first login.\n\nApplication URL: <a href="{AppURL}" style="color: #3b82f6; text-decoration: underline;">{AppURL}</a>\n\n<strong>Important:</strong> Please coordinate to select the time of the meeting.\n\nThank you for your cooperation.\n\nBest regards',
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    templateName: 'template_scheduled_report_reminder',
+    subject: 'Scheduled Report Submission - {TeamName}',
+    body: 'Hello,\n\nThis is a reminder to submit the scheduled report for {TeamName} at least one day before the scheduled review meeting (PPT preferred).\n\nMeeting is on {day}\n\nPlease log in and upload the report using the link below:\n\nApp URL: <a href="{AppURL}" style="color: #3b82f6; text-decoration: underline;">{AppURL}</a>\n\nTimely submission will help ensure the process runs smoothly.\n\nThank you for your cooperation.\n\nBest regards',
+    updatedAt: new Date().toISOString(),
+  },
 ];
 
 export async function initializeEmailTemplatesSheet(): Promise<boolean> {
@@ -204,6 +228,10 @@ export function replaceTemplateVariables(
     ['due_date',        ['due_date', 'DueDate']],
     ['priority',        ['priority', 'Priority']],
     ['assigned_to',     ['assigned_to', 'AssignedToEmail']],
+    ['TeamName',        ['TeamName', 'team_name', 'teamName']],
+    ['day',             ['day', 'meeting_day', 'meetingDay']],
+    ['OfficialWorkMail',['OfficialWorkMail', 'official_work_mail', 'officialWorkMail']],
+    ['TemporaryPassword',['TemporaryPassword', 'temporary_password', 'temporaryPassword']],
   ];
 
   for (const [standardKey, aliasKeys] of mappings) {

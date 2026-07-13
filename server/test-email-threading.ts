@@ -43,8 +43,8 @@ async function testEmailThreading() {
     undefined, // taskId
     testTeamId,
     null, // subTeamId
-    'thursday_reminder',
-    weekOf
+    weekOf,
+    'thursday_reminder'
   );
 
   console.log(`Reminder result:`, {
@@ -101,16 +101,21 @@ async function testEmailThreading() {
 
   // Step 2: Send proof email (threaded)
   console.log('Step 2: Sending proof email (threaded)...');
-  let proofEmailBody = `Weekly report proof of submission for ${testTeamName}\n\n`;
-  proofEmailBody += `Submitted by: Test User\n`;
-  proofEmailBody += `Submitted at: ${new Date().toLocaleString()}\n\n`;
-  proofEmailBody += `Note: This is a test email for threading verification.\n`;
-  proofEmailBody += `Attachments: https://example.com/test.pdf\n`;
+
+  let proofEmailBody = `Hello,<br>`;
+  proofEmailBody += `To ensure timely preparation for scheduled review meetings, please submit your review document through the portal at least one day before the scheduled meeting (PowerPoint presentation preferred).<br>`;
+  proofEmailBody += `Please use the following credentials to access the application:<br>`;
+  proofEmailBody += `Email: lakshay.kumar@pw.live<br>`;
+  proofEmailBody += `Temporary Password: 123456<br>`;
+  proofEmailBody += `For security reasons, please change your password after your first login.<br>`;
+  proofEmailBody += `Application URL: https://pms-taskflow-556944241861.us-central1.run.app/<br>`;
+  proofEmailBody += `Thank you for your cooperation.<br>`;
+  proofEmailBody += `Best regards`;
 
   const proofResult = await sendEmailAsUser(
     senderEmail,
     testRecipient,
-    `Weekly Report Proof: ${testTeamName}`,
+    `Weekly Review Docment submission`,
     proofEmailBody,
     undefined, // no template
     undefined,
@@ -119,8 +124,8 @@ async function testEmailThreading() {
     undefined, // taskId
     testTeamId,
     undefined, // subTeamId
-    'proof_email',
-    weekOf
+    weekOf,
+    'proof_email'
   );
 
   console.log(`Proof email result:`, {
