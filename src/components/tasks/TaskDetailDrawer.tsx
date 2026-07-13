@@ -25,7 +25,15 @@ function getFileNameFromUrl(url: string): string {
     const urlObj = new URL(url);
     const pathname = urlObj.pathname;
     const fileName = pathname.split('/').pop();
-    return fileName || url;
+    // If filename is empty or just a slash, use the full URL
+    if (!fileName || fileName === '/') {
+      return url;
+    }
+    // If filename doesn't have an extension, it might be a short URL, use full URL
+    if (!fileName.includes('.')) {
+      return url;
+    }
+    return fileName;
   } catch {
     return url;
   }
