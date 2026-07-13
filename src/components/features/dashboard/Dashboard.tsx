@@ -143,6 +143,7 @@ export default function Dashboard({
   onToggleTeamStatus,
   onUpdateUserTeams,
   onDeleteTeam,
+  onRenameTeam,
   onSaveSubTeam,
   onDeleteSubTeam,
   onUpdateSubTeamLeaders,
@@ -2180,7 +2181,7 @@ export default function Dashboard({
       onToggleTeamStatus={onToggleTeamStatus || (() => {})}
       onUpdateUserTeams={onUpdateUserTeams || (() => {})}
       onDeleteTeam={onDeleteTeam || (() => {})}
-      onRenameTeam={onRenameTeam}
+      onRenameTeam={onRenameTeam || (() => {})}
       onSaveSubTeam={onSaveSubTeam}
       onDeleteSubTeam={onDeleteSubTeam}
       onUpdateSubTeamLeaders={onUpdateSubTeamLeaders}
