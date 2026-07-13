@@ -176,6 +176,8 @@ export async function uploadFileHandler(req: AuthRequest, res: Response): Promis
     });
   } catch (error) {
     logger.error(`Cloudinary upload failed: ${JSON.stringify(error, null, 2)}`);
+    logger.error(`Cloudinary config: cloud_name=${config.CLOUDINARY_CLOUD_NAME}, api_key=${config.CLOUDINARY_API_KEY}, api_secret=${config.CLOUDINARY_API_SECRET ? 'SET' : 'NOT_SET'}`);
+    logger.error(`Upload details: folder=${folder}, fileName=${fileName}, fileSize=${buffer.length}, mimeType=${mimeType}`);
     throw new InternalServerError("Failed to upload file to Cloudinary");
   }
 }
