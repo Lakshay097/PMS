@@ -1,0 +1,1439 @@
+{
+  "summary": {
+    "total": 95,
+    "added": 95,
+    "skipped": 0,
+    "conflicts": 0,
+    "missingEmails": 0,
+    "notInNewData": 91
+  },
+  "conflicts": [],
+  "missingEmails": [],
+  "notInNewData": [
+    "Aman Dubey",
+    "Sourabh Rathi",
+    "Yashvardhan Singh Chauhan",
+    "Sourav .",
+    "Girraj Singh Chauhan",
+    "Arpit Shukla",
+    "Utsav Raj",
+    "Vicky Gupta",
+    "Vishal Kumar",
+    "Shivani Soni",
+    "Yarmalwar Sangameshwar",
+    "Garima Bhatia",
+    "Kartik Meena",
+    "Rajeev .",
+    "Gaurav Kumar",
+    "Firoz Husain",
+    "varun kumar kushwaha",
+    "Akshay Jain",
+    "Awneesh Mishra",
+    "Ankur Tyagi",
+    "Karthik M",
+    "Niraj Kumar Yadav",
+    "Yogesh Uniyal",
+    "Tejpal Gothwal",
+    "Deepak Kumar Mishra",
+    "Manish Bhardwaj",
+    "Shubham Shukla",
+    "Vipul Kumar",
+    "Harsh Mandhata",
+    "Prakarsh Panwar",
+    "Lakshay Kumar",
+    "Kuheli Sen",
+    "Yash Kapoor",
+    "Shalini Singh",
+    "Sarvjeet Vishwakarma",
+    "Abhishek Das",
+    "Shubham Shukla",
+    "Vipul Kumar",
+    "Harsh Mandhata",
+    "AYUSH  YADAV",
+    "Dileep Kumar",
+    "Nirbhay Singh",
+    "Poonam Yadav",
+    "Prakarsh Panwar",
+    "Lakshay Kumar",
+    "Kuheli Sen",
+    "Yash Kapoor",
+    "Shalini Singh",
+    "Anubhav Mohanty",
+    "Sarvjeet Vishwakarma",
+    "Abhishek Das",
+    "Varun Kumar Dhiman",
+    "Bhuvnesh Sharma",
+    "Abhishek Ranjan",
+    "Radhey Mohan Bajpai",
+    "Venkatesh N",
+    "Varun Kumar",
+    "Satish Kumar",
+    "Aarti .",
+    "Deepak Kumar",
+    "Anjani Srivastava",
+    "Sandeep Kumar",
+    "Harsh Anand",
+    "Kuldeep Sharma",
+    "Deepak Kumar",
+    "Shyam Sundar Nai",
+    "Naveen Chopra",
+    "Subha Rajbanshi",
+    "Ashwin Mishra",
+    "Sandeep Kumar",
+    "Vimal Kumar Mishra",
+    "Sudhir Shivajirao Bhosle",
+    "Rishabh Gupta",
+    "Naeem .",
+    "Dhiraj Chunnalal Bhaoniya",
+    "Seeta Krishna Kadam",
+    "Kartiki . Tiwari",
+    "Bhavya Singh",
+    "Jasodha Rawat",
+    "Yogesh .",
+    "Kumar Vitthal Sandbhor",
+    "Pramod Jaiwant Surve",
+    "Abhay Kumar Singh",
+    "Anush Gupta",
+    "Nikhil Ranjan",
+    "AKSHAY VERMA",
+    "Shrawan Kumar Varun",
+    "Chandra Prakash",
+    "MD Afsar",
+    "Ashish Sasi",
+    "#N/A"
+  ],
+  "toAdd": [
+    {
+      "name": "Geeta Joshi",
+      "email": "geeta@pw.live",
+      "managerEmail": "abhishek.kansal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Himanshu .",
+      "email": "himanshu.nogiya@pw.live",
+      "managerEmail": "arun.solanki@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Shrishti Singh",
+      "email": "shrishti.singh@pw.live",
+      "managerEmail": "santanu.samal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Mehak Puri",
+      "email": "mehak.puri@pw.live",
+      "managerEmail": "vipul.gupta@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Kajal Prajapati",
+      "email": "kajal@pw.live",
+      "managerEmail": "arun.solanki@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Anshu Kumar",
+      "email": "anshu@pw.live",
+      "managerEmail": "sanjay.singh1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Arun Kumar Singh",
+      "email": "arun.singh@pw.live",
+      "managerEmail": "rahul.kumar47@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ajay Prakash",
+      "email": "ajay.prakash@pw.live",
+      "managerEmail": "apar.roy@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Shivang Sharma",
+      "email": "shivang.1@pw.live",
+      "managerEmail": "arun.solanki@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Azhar Ahmad",
+      "email": "azhar.ahmad@pw.live",
+      "managerEmail": "narayan.tiwari1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Brajesh Kumar",
+      "email": "brajesh.kumar@pw.live",
+      "managerEmail": "anand.maurya@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Pankaj Kumar",
+      "email": "pankaj.kumar4@pw.live",
+      "managerEmail": "indrajeet.singh@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Neeraj Kumar",
+      "email": "neeraj.kumar4@pw.live",
+      "managerEmail": "vinod.pal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Sanjay Singh",
+      "email": "sanjay.singh1@pw.live",
+      "managerEmail": "apar.roy@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Roshan Kumar",
+      "email": "roshan.kumar@pw.live",
+      "managerEmail": "ajay.kumar12@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Sunil Gupta",
+      "email": "sunil.gupta1@pw.live",
+      "managerEmail": "indrajeet.singh@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Kavita Fulara",
+      "email": "kavita.sharma@pw.live",
+      "managerEmail": "santanu.samal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Mrityunjay Tiwari",
+      "email": "mrityunjay.tiwari@pw.live",
+      "managerEmail": "rajan.agarwal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Arun Solanki",
+      "email": "arun.solanki@pw.live",
+      "managerEmail": "abhishek.pengoria@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Iqra Khalil",
+      "email": "iqra.khalil@pw.live",
+      "managerEmail": "kavita.sharma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Saba Perween",
+      "email": "saba.perween@pw.live",
+      "managerEmail": "narayan.tiwari1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ravi Kant Bhardwaj",
+      "email": "ravi.bhardwaj@pw.live",
+      "managerEmail": "rajan.agarwal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Anand Maurya",
+      "email": "anand.maurya@pw.live",
+      "managerEmail": "shakeb.tawheed@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ajay Kumar",
+      "email": "ajay.kumar12@pw.live",
+      "managerEmail": "anand.maurya@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Jitendra Kumar Yadav",
+      "email": "jitendra.yadav@pw.live",
+      "managerEmail": "anand.maurya@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Sayed Shakeb Tawheed",
+      "email": "shakeb.tawheed@pw.live",
+      "managerEmail": "nikhil.ranjan3@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Shivani .",
+      "email": "shivani.2@pw.live",
+      "managerEmail": "vipul.gupta@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ayush Kumar",
+      "email": "ayush.kumar3@pw.live",
+      "managerEmail": "kajal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "PREM PRATAP YADAV",
+      "email": "prem.yadav@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Abhishek Singh",
+      "email": "abhishek.singh32@pw.live",
+      "managerEmail": "abhay.singh4@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Rishabh Ranjan",
+      "email": "rishabh.ranjan@pw.live",
+      "managerEmail": "anand.maurya@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Harender Kumar",
+      "email": "harender.kumar@pw.live",
+      "managerEmail": "mrityunjay.tiwari@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Amar Nath Prasad",
+      "email": "amar.prasad@pw.live",
+      "managerEmail": "anand.maurya@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Hiteshwar Kumar",
+      "email": "hiteshwar.kumar@pw.live",
+      "managerEmail": "rishabh.ranjan@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Bhola Upadhyay",
+      "email": "bhola.upadhyay@pw.live",
+      "managerEmail": "amar.prasad@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Sharvan Kumar",
+      "email": "sharvan.kumar@pw.live",
+      "managerEmail": "rahul.kumar47@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Pappu Kumar Tiwari",
+      "email": "pappu.tiwari3@pw.live",
+      "managerEmail": "jitendra.yadav@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Gajender Singh Lingwal",
+      "email": "gajender.lingwal@pw.live",
+      "managerEmail": "rajan.agarwal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ankit Kumar",
+      "email": "ankit.kumar6@pw.live",
+      "managerEmail": "arun.solanki@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ranjeet Das",
+      "email": "ranjeet.das@pw.live",
+      "managerEmail": "indrajeet.singh@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Marshal Ahlawat",
+      "email": "marshal.ahlawat@pw.live",
+      "managerEmail": "rajan.agarwal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Abhay Pratap Singh",
+      "email": "abhay.singh4@pw.live",
+      "managerEmail": "apar.roy@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email (disambiguated by Employee ID: PW17940)"
+    },
+    {
+      "name": "Abhay Pratap Singh",
+      "email": "abhay.singh5@pw.live",
+      "managerEmail": "kajal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email (disambiguated by Employee ID: PW20551)"
+    },
+    {
+      "name": "Nishant Goel",
+      "email": "nishant.goel@pw.live",
+      "managerEmail": "varun.dhiman@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Rakesh Pandey",
+      "email": "rakesh.pandey@pw.live",
+      "managerEmail": "nishant.goel@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Anubhav Jaiswal",
+      "email": "anubhav.jaiswal@pw.live",
+      "managerEmail": "nishant.goel@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "SAURABH MODI",
+      "email": "saurabh.modi@pw.live",
+      "managerEmail": "narayan.tiwari1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Satender Singh",
+      "email": "satender.singh@pw.live",
+      "managerEmail": "nishant.goel@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Amit Kumar Jain",
+      "email": "amit.jain4@pw.live",
+      "managerEmail": "rahul.kumar47@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Rahul Kumar",
+      "email": "rahul.kumar47@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Indrajeet Singh",
+      "email": "indrajeet.singh@pw.live",
+      "managerEmail": "shakeb.tawheed@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Sagar .",
+      "email": "sagar.yadav@pw.live",
+      "managerEmail": "ajay.prakash@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Danish Ajmeri",
+      "email": "danish.ajmeri@pw.live",
+      "managerEmail": "shrishti.singh@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Goutam Malasiya",
+      "email": "goutam.malasiya@pw.live",
+      "managerEmail": "shrishti.singh@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Abhishek Pengoria",
+      "email": "abhishek.pengoria@pw.live",
+      "managerEmail": "rajeev.1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Shruti Verma",
+      "email": "shruti.verma@pw.live",
+      "managerEmail": "shrishti.singh@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ankita Maity",
+      "email": "ankita.maity@pw.live",
+      "managerEmail": "kavita.sharma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Pradeep Tiwari",
+      "email": "pradeep.tiwari@pw.live",
+      "managerEmail": "santanu.samal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Santanu Kumar Samal",
+      "email": "santanu.samal@pw.live",
+      "managerEmail": "kajal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Vipul Gupta",
+      "email": "vipul.gupta@pw.live",
+      "managerEmail": "abhishek.pengoria@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Bharat Chaujar",
+      "email": "bharat.chaujar@pw.live",
+      "managerEmail": "rajeev.1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Narayan Dutt Tiwari",
+      "email": "narayan.tiwari1@pw.live",
+      "managerEmail": "abhishek.pengoria@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Gourav Raghav",
+      "email": "gourav.raghav@pw.live",
+      "managerEmail": "rahul.kumar47@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Vinay Tiwari",
+      "email": "vinay.tiwari@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Mohd Naseem Khan",
+      "email": "mohd.khan4@pw.live",
+      "managerEmail": "bharat.chaujar@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Rahul Mishra",
+      "email": "rahul.mishra3@pw.live",
+      "managerEmail": "mrityunjay.tiwari@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ketan Agrawal",
+      "email": "ketan.agrawal@pw.live",
+      "managerEmail": "vipul.gupta@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Priyanshu Mangal",
+      "email": "priyanshu.mangal@pw.live",
+      "managerEmail": "bharat.chaujar@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Dipendra Kumar Yadav",
+      "email": "dipendra.yadav@pw.live",
+      "managerEmail": "jitendra.yadav@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Niraj Kumar",
+      "email": "niraj.kumar11@pw.live",
+      "managerEmail": "narayan.tiwari1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Akshat Singh",
+      "email": "akshat.singh1@pw.live",
+      "managerEmail": "vipul.gupta@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Priya Gupta",
+      "email": "priya.gupta3@pw.live",
+      "managerEmail": "narayan.tiwari1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Vibhore Johari",
+      "email": "vibhore.johari@pw.live",
+      "managerEmail": "bharat.chaujar@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Zaid Mallick",
+      "email": "zaid.mallick@pw.live",
+      "managerEmail": "bharat.chaujar@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Saswat Verma",
+      "email": "saswat.verma@pw.live",
+      "managerEmail": "shakeb.tawheed@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Apar Roy",
+      "email": "apar.roy@pw.live",
+      "managerEmail": "shakeb.tawheed@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Mukesh Kumar",
+      "email": "mukesh.kumar25@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Rajan Agarwal",
+      "email": "rajan.agarwal@pw.live",
+      "managerEmail": "abhishek.pengoria@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Bhushan Pandey",
+      "email": "bhushan.pandey@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ayushi Pandey",
+      "email": "ayushi.pandey1@pw.live",
+      "managerEmail": "kavita.sharma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Abhishek Tiwari",
+      "email": "abhishek.tiwari10@pw.live",
+      "managerEmail": "apar.roy@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Reetesh Yadav",
+      "email": "reetesh.yadav@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Himanshu Verma",
+      "email": "himanshu.verma5@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Divyanshu Jha",
+      "email": "divyanshu.jha@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Satyam Kumar",
+      "email": "satyam.kumar16@pw.live",
+      "managerEmail": "nishant.goel@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Harshit Sharma",
+      "email": "harshit.sharma5@pw.live",
+      "managerEmail": "ketan.agrawal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Saurabh Bhati",
+      "email": "saurabh.4@pw.live",
+      "managerEmail": "vibhore.johari@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Rashmi Chauhan",
+      "email": "rashmi.chauhan@pw.live",
+      "managerEmail": "anushka.singh@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ashutosh Chaturvedi",
+      "email": "ashutosh.chaturvedi@pw.live",
+      "managerEmail": "anushka.singh@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Vinod Kumar Pal",
+      "email": "vinod.pal@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Sher Singh",
+      "email": "sher.singh@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Robin S Lal",
+      "email": "robin.lal@pw.live",
+      "managerEmail": "mrityunjay.tiwari@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Rohit Kushwaha",
+      "email": "rohit.kushwaha@pw.live",
+      "managerEmail": "anand.maurya@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Anushka Singh",
+      "email": "anushka.singh@pw.live",
+      "managerEmail": "santanu.samal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Gunjan Yadav",
+      "email": "gunjan.yadav@pw.live",
+      "managerEmail": "narayan.tiwari1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    }
+  ],
+  "allResults": [
+    {
+      "name": "Geeta Joshi",
+      "email": "geeta@pw.live",
+      "managerEmail": "abhishek.kansal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Himanshu .",
+      "email": "himanshu.nogiya@pw.live",
+      "managerEmail": "arun.solanki@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Shrishti Singh",
+      "email": "shrishti.singh@pw.live",
+      "managerEmail": "santanu.samal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Mehak Puri",
+      "email": "mehak.puri@pw.live",
+      "managerEmail": "vipul.gupta@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Kajal Prajapati",
+      "email": "kajal@pw.live",
+      "managerEmail": "arun.solanki@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Anshu Kumar",
+      "email": "anshu@pw.live",
+      "managerEmail": "sanjay.singh1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Arun Kumar Singh",
+      "email": "arun.singh@pw.live",
+      "managerEmail": "rahul.kumar47@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ajay Prakash",
+      "email": "ajay.prakash@pw.live",
+      "managerEmail": "apar.roy@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Shivang Sharma",
+      "email": "shivang.1@pw.live",
+      "managerEmail": "arun.solanki@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Azhar Ahmad",
+      "email": "azhar.ahmad@pw.live",
+      "managerEmail": "narayan.tiwari1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Brajesh Kumar",
+      "email": "brajesh.kumar@pw.live",
+      "managerEmail": "anand.maurya@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Pankaj Kumar",
+      "email": "pankaj.kumar4@pw.live",
+      "managerEmail": "indrajeet.singh@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Neeraj Kumar",
+      "email": "neeraj.kumar4@pw.live",
+      "managerEmail": "vinod.pal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Sanjay Singh",
+      "email": "sanjay.singh1@pw.live",
+      "managerEmail": "apar.roy@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Roshan Kumar",
+      "email": "roshan.kumar@pw.live",
+      "managerEmail": "ajay.kumar12@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Sunil Gupta",
+      "email": "sunil.gupta1@pw.live",
+      "managerEmail": "indrajeet.singh@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Kavita Fulara",
+      "email": "kavita.sharma@pw.live",
+      "managerEmail": "santanu.samal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Mrityunjay Tiwari",
+      "email": "mrityunjay.tiwari@pw.live",
+      "managerEmail": "rajan.agarwal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Arun Solanki",
+      "email": "arun.solanki@pw.live",
+      "managerEmail": "abhishek.pengoria@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Iqra Khalil",
+      "email": "iqra.khalil@pw.live",
+      "managerEmail": "kavita.sharma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Saba Perween",
+      "email": "saba.perween@pw.live",
+      "managerEmail": "narayan.tiwari1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ravi Kant Bhardwaj",
+      "email": "ravi.bhardwaj@pw.live",
+      "managerEmail": "rajan.agarwal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Anand Maurya",
+      "email": "anand.maurya@pw.live",
+      "managerEmail": "shakeb.tawheed@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ajay Kumar",
+      "email": "ajay.kumar12@pw.live",
+      "managerEmail": "anand.maurya@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Jitendra Kumar Yadav",
+      "email": "jitendra.yadav@pw.live",
+      "managerEmail": "anand.maurya@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Sayed Shakeb Tawheed",
+      "email": "shakeb.tawheed@pw.live",
+      "managerEmail": "nikhil.ranjan3@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Shivani .",
+      "email": "shivani.2@pw.live",
+      "managerEmail": "vipul.gupta@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ayush Kumar",
+      "email": "ayush.kumar3@pw.live",
+      "managerEmail": "kajal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "PREM PRATAP YADAV",
+      "email": "prem.yadav@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Abhishek Singh",
+      "email": "abhishek.singh32@pw.live",
+      "managerEmail": "abhay.singh4@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Rishabh Ranjan",
+      "email": "rishabh.ranjan@pw.live",
+      "managerEmail": "anand.maurya@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Harender Kumar",
+      "email": "harender.kumar@pw.live",
+      "managerEmail": "mrityunjay.tiwari@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Amar Nath Prasad",
+      "email": "amar.prasad@pw.live",
+      "managerEmail": "anand.maurya@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Hiteshwar Kumar",
+      "email": "hiteshwar.kumar@pw.live",
+      "managerEmail": "rishabh.ranjan@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Bhola Upadhyay",
+      "email": "bhola.upadhyay@pw.live",
+      "managerEmail": "amar.prasad@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Sharvan Kumar",
+      "email": "sharvan.kumar@pw.live",
+      "managerEmail": "rahul.kumar47@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Pappu Kumar Tiwari",
+      "email": "pappu.tiwari3@pw.live",
+      "managerEmail": "jitendra.yadav@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Gajender Singh Lingwal",
+      "email": "gajender.lingwal@pw.live",
+      "managerEmail": "rajan.agarwal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ankit Kumar",
+      "email": "ankit.kumar6@pw.live",
+      "managerEmail": "arun.solanki@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ranjeet Das",
+      "email": "ranjeet.das@pw.live",
+      "managerEmail": "indrajeet.singh@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Marshal Ahlawat",
+      "email": "marshal.ahlawat@pw.live",
+      "managerEmail": "rajan.agarwal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Abhay Pratap Singh",
+      "email": "abhay.singh4@pw.live",
+      "managerEmail": "apar.roy@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email (disambiguated by Employee ID: PW17940)"
+    },
+    {
+      "name": "Abhay Pratap Singh",
+      "email": "abhay.singh5@pw.live",
+      "managerEmail": "kajal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email (disambiguated by Employee ID: PW20551)"
+    },
+    {
+      "name": "Nishant Goel",
+      "email": "nishant.goel@pw.live",
+      "managerEmail": "varun.dhiman@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Rakesh Pandey",
+      "email": "rakesh.pandey@pw.live",
+      "managerEmail": "nishant.goel@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Anubhav Jaiswal",
+      "email": "anubhav.jaiswal@pw.live",
+      "managerEmail": "nishant.goel@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "SAURABH MODI",
+      "email": "saurabh.modi@pw.live",
+      "managerEmail": "narayan.tiwari1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Satender Singh",
+      "email": "satender.singh@pw.live",
+      "managerEmail": "nishant.goel@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Amit Kumar Jain",
+      "email": "amit.jain4@pw.live",
+      "managerEmail": "rahul.kumar47@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Rahul Kumar",
+      "email": "rahul.kumar47@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Indrajeet Singh",
+      "email": "indrajeet.singh@pw.live",
+      "managerEmail": "shakeb.tawheed@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Sagar .",
+      "email": "sagar.yadav@pw.live",
+      "managerEmail": "ajay.prakash@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Danish Ajmeri",
+      "email": "danish.ajmeri@pw.live",
+      "managerEmail": "shrishti.singh@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Goutam Malasiya",
+      "email": "goutam.malasiya@pw.live",
+      "managerEmail": "shrishti.singh@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Abhishek Pengoria",
+      "email": "abhishek.pengoria@pw.live",
+      "managerEmail": "rajeev.1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Shruti Verma",
+      "email": "shruti.verma@pw.live",
+      "managerEmail": "shrishti.singh@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ankita Maity",
+      "email": "ankita.maity@pw.live",
+      "managerEmail": "kavita.sharma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Pradeep Tiwari",
+      "email": "pradeep.tiwari@pw.live",
+      "managerEmail": "santanu.samal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Santanu Kumar Samal",
+      "email": "santanu.samal@pw.live",
+      "managerEmail": "kajal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Vipul Gupta",
+      "email": "vipul.gupta@pw.live",
+      "managerEmail": "abhishek.pengoria@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Bharat Chaujar",
+      "email": "bharat.chaujar@pw.live",
+      "managerEmail": "rajeev.1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Narayan Dutt Tiwari",
+      "email": "narayan.tiwari1@pw.live",
+      "managerEmail": "abhishek.pengoria@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Gourav Raghav",
+      "email": "gourav.raghav@pw.live",
+      "managerEmail": "rahul.kumar47@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Vinay Tiwari",
+      "email": "vinay.tiwari@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Mohd Naseem Khan",
+      "email": "mohd.khan4@pw.live",
+      "managerEmail": "bharat.chaujar@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Rahul Mishra",
+      "email": "rahul.mishra3@pw.live",
+      "managerEmail": "mrityunjay.tiwari@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ketan Agrawal",
+      "email": "ketan.agrawal@pw.live",
+      "managerEmail": "vipul.gupta@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Priyanshu Mangal",
+      "email": "priyanshu.mangal@pw.live",
+      "managerEmail": "bharat.chaujar@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Dipendra Kumar Yadav",
+      "email": "dipendra.yadav@pw.live",
+      "managerEmail": "jitendra.yadav@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Niraj Kumar",
+      "email": "niraj.kumar11@pw.live",
+      "managerEmail": "narayan.tiwari1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Akshat Singh",
+      "email": "akshat.singh1@pw.live",
+      "managerEmail": "vipul.gupta@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Priya Gupta",
+      "email": "priya.gupta3@pw.live",
+      "managerEmail": "narayan.tiwari1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Vibhore Johari",
+      "email": "vibhore.johari@pw.live",
+      "managerEmail": "bharat.chaujar@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Zaid Mallick",
+      "email": "zaid.mallick@pw.live",
+      "managerEmail": "bharat.chaujar@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Saswat Verma",
+      "email": "saswat.verma@pw.live",
+      "managerEmail": "shakeb.tawheed@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Apar Roy",
+      "email": "apar.roy@pw.live",
+      "managerEmail": "shakeb.tawheed@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Mukesh Kumar",
+      "email": "mukesh.kumar25@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Rajan Agarwal",
+      "email": "rajan.agarwal@pw.live",
+      "managerEmail": "abhishek.pengoria@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Bhushan Pandey",
+      "email": "bhushan.pandey@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ayushi Pandey",
+      "email": "ayushi.pandey1@pw.live",
+      "managerEmail": "kavita.sharma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Abhishek Tiwari",
+      "email": "abhishek.tiwari10@pw.live",
+      "managerEmail": "apar.roy@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Reetesh Yadav",
+      "email": "reetesh.yadav@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Himanshu Verma",
+      "email": "himanshu.verma5@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Divyanshu Jha",
+      "email": "divyanshu.jha@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Satyam Kumar",
+      "email": "satyam.kumar16@pw.live",
+      "managerEmail": "nishant.goel@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Harshit Sharma",
+      "email": "harshit.sharma5@pw.live",
+      "managerEmail": "ketan.agrawal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Saurabh Bhati",
+      "email": "saurabh.4@pw.live",
+      "managerEmail": "vibhore.johari@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Rashmi Chauhan",
+      "email": "rashmi.chauhan@pw.live",
+      "managerEmail": "anushka.singh@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Ashutosh Chaturvedi",
+      "email": "ashutosh.chaturvedi@pw.live",
+      "managerEmail": "anushka.singh@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Vinod Kumar Pal",
+      "email": "vinod.pal@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Sher Singh",
+      "email": "sher.singh@pw.live",
+      "managerEmail": "saswat.verma@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Robin S Lal",
+      "email": "robin.lal@pw.live",
+      "managerEmail": "mrityunjay.tiwari@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Rohit Kushwaha",
+      "email": "rohit.kushwaha@pw.live",
+      "managerEmail": "anand.maurya@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Anushka Singh",
+      "email": "anushka.singh@pw.live",
+      "managerEmail": "santanu.samal@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    },
+    {
+      "name": "Gunjan Yadav",
+      "email": "gunjan.yadav@pw.live",
+      "managerEmail": "narayan.tiwari1@pw.live",
+      "status": "added",
+      "reason": "Will be added to E-Com team with manager email"
+    }
+  ]
+}
