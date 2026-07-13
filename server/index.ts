@@ -53,8 +53,12 @@ async function startServer() {
   // Start recurring task generation scheduler
   startRecurringTaskScheduler();
 
-  // Start server-side Sheets sync controller
-  startSheetsSyncInterval();
+  // Start server-side Sheets sync controller (skip during build to avoid sync errors)
+  if (process.env.SKIP_SHEETS_SYNC !== 'true') {
+    startSheetsSyncInterval();
+  } else {
+    logger.info('Skipping Sheets sync interval (SKIP_SHEETS_SYNC=true)');
+  }
   const app = express();
 
   app.set('trust proxy', 1);

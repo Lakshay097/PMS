@@ -1,6 +1,6 @@
 steps:
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/pms-repo/pms-taskflow:latest', '--cache-from', 'us-central1-docker.pkg.dev/$PROJECT_ID/pms-repo/pms-taskflow:latest', '--build-arg', 'VITE_FIREBASE_API_KEY=AIzaSyA8WTF6H0jyVtJFumtBdH_pOKfF6f8ocsE', '--build-arg', 'VITE_FIREBASE_AUTH_DOMAIN=pms-taskflow-aa254.firebaseapp.com', '--build-arg', 'VITE_FIREBASE_PROJECT_ID=pms-taskflow-aa254', '--build-arg', 'VITE_FIREBASE_APP_ID=1:1086239964586:web:239a15d2885b99d8c87fd3', '--build-arg', 'VITE_API_BASE_URL=/api', '.']
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/pms-repo/pms-taskflow:latest', '--cache-from', 'us-central1-docker.pkg.dev/$PROJECT_ID/pms-repo/pms-taskflow:latest', '--build-arg', 'VITE_FIREBASE_API_KEY=AIzaSyA8WTF6H0jyVtJFumtBdH_pOKfF6f8ocsE', '--build-arg', 'VITE_FIREBASE_AUTH_DOMAIN=pms-taskflow-aa254.firebaseapp.com', '--build-arg', 'VITE_FIREBASE_PROJECT_ID=pms-taskflow-aa254', '--build-arg', 'VITE_FIREBASE_APP_ID=1:1086239964586:web:239a15d2885b99d8c87fd3', '--build-arg', 'VITE_API_BASE_URL=/api', '--build-arg', 'SKIP_SHEETS_SYNC=true', '.']
 
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/pms-repo/pms-taskflow:latest']
