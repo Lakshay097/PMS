@@ -90,12 +90,60 @@ function getCurrentDayOfWeek(): DayOfWeek {
 }
 
 /**
+ * Get current time info in the configured timezone
+ */
+function getCurrentTimeInfo(): { hour: number; minute: number } {
+  const tz = process.env.TZ || 'Asia/Kolkata';
+  const now = new Date();
+  const options: Intl.DateTimeFormatOptions = {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  };
+  const formatter = new Intl.DateTimeFormat('en-US', options);
+  const parts = formatter.formatToParts(now);
+  const result: Record<string, string> = {};
+  parts.forEach(p => { result[p.type] = p.value });
+  
+  return {
+    hour: parseInt(result.hour || '0'),
+    minute: parseInt(result.minute || '0')
+  };
+}
+
+/**
  * Helper to query settings from Google Sheets
  */
 function getSettingValue(rows: any[][] | null, key: string, defaultValue: string): string {
   if (!rows) return defaultValue;
   const row = rows.find(r => r[0] === key);
   return row && row[1] !== undefined && row[1] !== null ? String(row[1]) : defaultValue;
+}
+
+async function saveSettingValue(
+  accessToken: string,
+  spreadsheetId: string,
+  rows: any[][],
+  key: string,
+  value: string
+): Promise<boolean> {
+  const { updateSheetValues, appendSheetValues } = await import('./googleSheetsService');
+  const index = rows.findIndex(r => r[0] === key);
+  let success = false;
+  if (index >= 0) {
+    const range = `settings!B${index + 1}`;
+    success = await updateSheetValues(accessToken, spreadsheetId, range, [[value]]);
+    if (success) {
+      rows[index][1] = value;
+    }
+  } else {
+    success = await appendSheetValues(accessToken, spreadsheetId, 'settings', [[key, value]]);
+    if (success) {
+      rows.push([key, value]);
+    }
+  }
+  return success;
 }
 
 /**
@@ -274,7 +322,16 @@ async function sendReportReminder(
 export async function checkAndSendReportReminders(): Promise<void> {
   try {
     const currentDay = getCurrentDayOfWeek();
+    const timeInfo = getCurrentTimeInfo();
     const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    
+    // Only send emails at 9:30 AM IST
+    if (timeInfo.hour !== 9 || timeInfo.minute !== 30) {
+      logger.info(`[SCHEDULER] Skipping report reminders - current time is ${timeInfo.hour}:${timeInfo.minute.toString().padStart(2, '0')} (scheduled for 9:30)`);
+      return;
+    }
+    
     logger.info(`[SCHEDULER] Checking report reminders for ${currentDay} at ${now.toISOString()}`);
 
     // Fetch settings from Google Sheets
@@ -292,6 +349,19 @@ export async function checkAndSendReportReminders(): Promise<void> {
       logger.error('[SCHEDULER] Failed to fetch settings sheet');
       return;
     }
+
+    // Check if already sent today
+    const lastReportReminderDate = getSettingValue(settingsRows, 'last_report_reminder_date', '');
+    const lastReportReminderStatus = getSettingValue(settingsRows, 'last_report_reminder_status', '');
+    
+    if (lastReportReminderDate === todayStr && lastReportReminderStatus === 'success') {
+      logger.info('[SCHEDULER] Report reminders already sent successfully today, skipping');
+      return;
+    }
+
+    // Update status to running
+    await saveSettingValue(accessToken, spreadsheetId, settingsRows, 'last_report_reminder_date', todayStr);
+    await saveSettingValue(accessToken, spreadsheetId, settingsRows, 'last_report_reminder_status', 'running');
 
     // Get all team report configurations
     const configs = await getTeamReportConfigs();
@@ -401,8 +471,24 @@ export async function checkAndSendReportReminders(): Promise<void> {
 
     logger.info(`[SCHEDULER] Report reminder check complete: ${successCount} sent, ${failureCount} failed`);
 
+    // Update final status
+    const finalStatus = failureCount === 0 ? 'success' : 'partial_success';
+    await saveSettingValue(accessToken, spreadsheetId, settingsRows, 'last_report_reminder_status', finalStatus);
+
   } catch (error) {
     logger.error('Error in checkAndSendReportReminders:', error);
+    // Update status to failed on error
+    try {
+      const tokenData = await generateGoogleSheetsToken();
+      if (tokenData && tokenData.spreadsheetId) {
+        const settingsRows = await fetchSheetValues(tokenData.accessToken, tokenData.spreadsheetId, 'settings!A:B');
+        if (settingsRows) {
+          await saveSettingValue(tokenData.accessToken, tokenData.spreadsheetId, settingsRows, 'last_report_reminder_status', 'failed');
+        }
+      }
+    } catch (saveError) {
+      logger.error('Failed to update error status:', saveError);
+    }
   }
 }
 
