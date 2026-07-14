@@ -274,6 +274,13 @@ async function manualSend() {
     console.log(`Last reminder date: ${lastReportReminderDate}`);
     console.log(`Last reminder status: ${lastReportReminderStatus}\n`);
 
+    // Check if already sent today successfully (duplicate protection)
+    if (lastReportReminderDate === todayStr && lastReportReminderStatus === 'success') {
+      console.log('⚠️  Report reminders already sent successfully today. Skipping to avoid duplicates.');
+      console.log('To force resend, reset the last_report_reminder_status in settings.');
+      process.exit(0);
+    }
+
     const configs = await getTeamReportConfigs();
     console.log(`Found ${configs.length} team report configurations\n`);
 
