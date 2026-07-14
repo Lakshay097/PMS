@@ -18,7 +18,7 @@ router.use('/', uploadRoutes);
 router.use('/', tokenRoutes);
 router.use('/sheets', sheetsRoutes);
 router.use('/auth', gmailAuthRoutes);
-router.use('/', emailTriggerRoutes);
+router.use('/email/trigger', emailTriggerRoutes);
 router.use('/', emailTemplateRoutes);
 router.use('/', teamsRoutes);
 router.use('/', teamReminderRoutes);

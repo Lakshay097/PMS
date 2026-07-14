@@ -18,6 +18,7 @@ import { startReminderScheduler } from './services/reminderScheduler';
 import { startRecurringTaskScheduler } from './services/recurringTaskScheduler';
 import { startSheetsSyncInterval } from './services/sheetsSyncController';
 import { checkAndSendReportReminders } from './services/reportReminderScheduler';
+import { startTaskDueDateScheduler } from './services/taskDueDateScheduler';
 import { isGmailConnected } from './services/gmailTokenStorage';
 
 validateEnv();
@@ -52,6 +53,9 @@ async function startServer() {
 
   // Start recurring task generation scheduler
   startRecurringTaskScheduler();
+
+  // Start task due date reminder scheduler
+  startTaskDueDateScheduler();
 
   // Start server-side Sheets sync controller (skip during build to avoid sync errors)
   if (process.env.SKIP_SHEETS_SYNC !== 'true') {

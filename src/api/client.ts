@@ -38,7 +38,7 @@ interface RequestOptions {
  * Get auth token from localStorage
  */
 function getAuthToken(): string | null {
-  return localStorage.getItem('auth_token');
+  return localStorage.getItem('PMS_auth_token') || localStorage.getItem('auth_token');
 }
 
 /**
@@ -57,6 +57,7 @@ export async function apiRequest<T = any>(
   } = options;
 
   const url = `${API_BASE_URL}${endpoint}`;
+  console.log(`[API CLIENT DEBUG] Request URL: ${url}, Method: ${method}`);
 
   // Prepare headers
   const requestHeaders: Record<string, string> = {

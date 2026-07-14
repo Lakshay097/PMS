@@ -83,6 +83,7 @@ export async function triggerTaskAssignmentEmail(
   task: any
 ): Promise<void> {
   try {
+    logger.info(`[TRIGGER DEBUG] triggerTaskAssignmentEmail called: assigner=${assignerEmail}, assignedTo=${assignedToEmail}, task=${task.TaskID}`);
     const recipients = assignedToEmail.split(',').map((e: string) => e.trim()).filter(Boolean);
     const threadTaskId = task.ParentTaskID || task.TaskID;
     const rootTitle = task.Title.replace(/^Follow-up #\d+:\s*/i, '');
@@ -95,8 +96,9 @@ export async function triggerTaskAssignmentEmail(
     logger.info(`Assignment email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
 
     for (const recipient of recipients) {
+      logger.info(`[TRIGGER DEBUG] Sending to recipient: ${recipient}`);
       const assignedToName = usersMap.get(recipient.trim().toLowerCase()) || recipient;
-      await sendEmailAsUser(
+      const result = await sendEmailAsUser(
         assignerEmail,
         recipient,
         emailSubject,
@@ -120,9 +122,10 @@ export async function triggerTaskAssignmentEmail(
         threadInfo?.messageId,
         threadTaskId,
       );
+      logger.info(`[TRIGGER DEBUG] Email send result for ${recipient}: success=${result.success}, usedFallback=${result.usedFallback}`);
     }
   } catch (err) {
-    logger.error('Error triggering task assignment email:', err);
+    logger.error('[TRIGGER ERROR] Error triggering task assignment email:', err);
   }
 }
 

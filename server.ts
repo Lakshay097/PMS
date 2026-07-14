@@ -509,13 +509,7 @@ async function startServer() {
   app.get("/api/auth/gmail/status", authenticateToken, getGmailStatusHandler);
   app.post("/api/auth/gmail/disconnect", authenticateToken, disconnectGmailHandler);
 
-  app.post("/api/email/trigger/task-assignment", authenticateToken, triggerTaskAssignmentHandler);
-  app.post("/api/email/trigger/task-due-soon", authenticateToken, triggerTaskDueSoonHandler);
-  app.post("/api/email/trigger/task-overdue", authenticateToken, triggerTaskOverdueHandler);
-  app.post("/api/email/trigger/report-submission", authenticateToken, triggerReportSubmissionHandler);
-  app.post("/api/email/trigger/task-closed", authenticateToken, triggerTaskClosureHandler);
-
-  // Email template routes
+  // Email template routes (not in router system yet)
   app.get("/api/email/templates", authenticateToken, getEmailTemplatesHandler);
   app.post("/api/email/templates", authenticateToken, saveEmailTemplateHandler);
   app.post("/api/auth/email/templates/update", authenticateToken, updateEmailTemplateHandler);

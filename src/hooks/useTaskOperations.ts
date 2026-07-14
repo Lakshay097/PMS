@@ -130,7 +130,8 @@ export function useTaskOperations({
         
         // Trigger email notification
         try {
-          await triggerTaskAssignmentEmail({
+          console.log('[FRONTEND EMAIL DEBUG] Attempting to trigger task assignment email');
+          console.log('[FRONTEND EMAIL DEBUG] Payload:', {
             assignerEmail: currentUser.Email,
             assignedToEmail: newTask.AssignedToEmail,
             task: {
@@ -139,10 +140,24 @@ export function useTaskOperations({
               Description: newTask.Description,
               DueDate: newTask.DueDate,
               Priority: newTask.Priority,
+              AttachmentLink: newTask.AttachmentLink,
             },
           });
+          const result = await triggerTaskAssignmentEmail({
+            assignerEmail: currentUser.Email,
+            assignedToEmail: newTask.AssignedToEmail,
+            task: {
+              TaskID: newTask.TaskID,
+              Title: newTask.Title,
+              Description: newTask.Description,
+              DueDate: newTask.DueDate,
+              Priority: newTask.Priority,
+              AttachmentLink: newTask.AttachmentLink,
+            },
+          });
+          console.log('[FRONTEND EMAIL DEBUG] Email trigger result:', result);
         } catch (emailError) {
-          console.error('Failed to trigger task assignment email:', emailError);
+          console.error('[FRONTEND EMAIL ERROR] Failed to trigger task assignment email:', emailError);
         }
         
         const alertMsg = formatEmailTemplate('template_assigned_email', newTask);

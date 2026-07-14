@@ -97,6 +97,7 @@ export async function exchangeCodeForTokens(code: string): Promise<GoogleOAuthTo
  */
 export async function refreshAccessToken(refreshToken: string): Promise<GoogleOAuthTokenResponse | null> {
   try {
+    logger.info(`[TOKEN REFRESH] Attempting to refresh access token. Refresh token length: ${refreshToken?.length}`);
     const response = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: {
@@ -110,17 +111,20 @@ export async function refreshAccessToken(refreshToken: string): Promise<GoogleOA
       }),
     });
 
+    logger.info(`[TOKEN REFRESH] Response status: ${response.status}, ok: ${response.ok}`);
+
     if (!response.ok) {
       const errorText = await response.text();
       const errorData = await response.json().catch(() => ({}));
-      logger.error('Failed to refresh access token:', { status: response.status, errorText, errorData });
+      logger.error('[TOKEN REFRESH ERROR] Failed to refresh access token:', { status: response.status, errorText, errorData });
       return null;
     }
 
     const data = await response.json();
+    logger.info(`[TOKEN REFRESH SUCCESS] New access token received, expires_in: ${data.expires_in}s`);
     return data;
   } catch (err) {
-    logger.error('Error refreshing access token:', err);
+    logger.error('[TOKEN REFRESH ERROR] Error refreshing access token:', err);
     return null;
   }
 }

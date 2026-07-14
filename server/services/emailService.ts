@@ -110,6 +110,7 @@ async function sendEmailViaGmail(
   email: EmailOptions
 ): Promise<{ success: boolean; gmailThreadId?: string; gmailMessageId?: string; storedMessageId?: string }> {
   try {
+    logger.info(`[GMAIL API DEBUG] Preparing to send email to ${email.to}`);
     const { raw, messageId: outboundMessageId } = encodeEmail(email);
 
     // FIX: Pass threadId to Gmail API when available (same approach as task emails)
@@ -119,7 +120,7 @@ async function sendEmailViaGmail(
       body.threadId = email.gmailThreadId;
     }
 
-    logger.info(`Gmail API request body: ${JSON.stringify(body)}`);
+    logger.info(`[GMAIL API DEBUG] Request body: ${JSON.stringify(body).substring(0, 200)}...`);
 
     const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
       method: 'POST',
@@ -130,14 +131,16 @@ async function sendEmailViaGmail(
       body: JSON.stringify(body),
     });
 
+    logger.info(`[GMAIL API DEBUG] Response status: ${response.status}, ok: ${response.ok}`);
+
     if (!response.ok) {
       const errorText = await response.text();
-      logger.error('Gmail API error:', errorText);
+      logger.error(`[GMAIL API ERROR] Status: ${response.status}, Error: ${errorText}`);
       return { success: false };
     }
 
     const data = await response.json();
-    logger.info(`Gmail send OK: threadId=${data.threadId}, apiMessageId=${data.id}, rfcMessageId=${outboundMessageId}`);
+    logger.info(`[GMAIL API SUCCESS] threadId=${data.threadId}, apiMessageId=${data.id}, rfcMessageId=${outboundMessageId}`);
 
     // FIX: Fetch the actual Message-ID that Gmail stored
     const storedMessageId = await getGmailStoredMessageId(accessToken, data.id);
@@ -188,10 +191,11 @@ export async function sendEmailAsUser(
   ccEmails?: string[]
 ): Promise<{ success: boolean; usedFallback: boolean; gmailThreadId?: string; gmailMessageId?: string; storedMessageId?: string }> {
   try {
+    logger.info(`[EMAIL DEBUG] Attempting to send email from ${senderEmail} to ${toEmail}`);
     const token = await getGmailToken(senderEmail);
 
     if (!token || !token.refreshToken) {
-      logger.warn(`No Gmail token for ${senderEmail}, using fallback`);
+      logger.warn(`[EMAIL DEBUG] No Gmail token for ${senderEmail}, using fallback. Token found: ${!!token}, hasRefreshToken: ${!!token?.refreshToken}`);
       const fallbackResult = await sendFallbackEmail(senderEmail, toEmail, subject, body, teamId, subTeamId, emailType, weekOf);
       return { success: fallbackResult, usedFallback: true };
     }
@@ -199,11 +203,14 @@ export async function sendEmailAsUser(
     // Refresh token if expired
     const now = new Date();
     let accessToken = token.accessToken;
-    if (now >= new Date(token.tokenExpiry)) {
-      logger.info(`Token expired for ${senderEmail}, refreshing...`);
+    const expiryDate = new Date(token.tokenExpiry);
+    logger.info(`[TOKEN DEBUG] Token expiry check for ${senderEmail}: now=${now.toISOString()}, expiry=${expiryDate.toISOString()}, isExpired=${now >= expiryDate}`);
+    
+    if (now >= expiryDate) {
+      logger.info(`[TOKEN DEBUG] Token expired for ${senderEmail}, refreshing...`);
       const refreshed = await refreshAccessToken(token.refreshToken);
       if (!refreshed) {
-        logger.error(`Token refresh failed for ${senderEmail}, disconnecting`);
+        logger.error(`[TOKEN ERROR] Token refresh failed for ${senderEmail}, disconnecting`);
         await deleteGmailToken(senderEmail);
         await logEmailFailure(senderEmail, toEmail, subject, 'Token refresh failed');
         const fallbackResult = await sendFallbackEmail(senderEmail, toEmail, subject, body, teamId, subTeamId, emailType, weekOf);
@@ -212,6 +219,9 @@ export async function sendEmailAsUser(
       accessToken = refreshed.access_token;
       await updateGmailAccessToken(senderEmail, accessToken, refreshed.expires_in);
       await logEmailRetry(senderEmail, toEmail, subject);
+      logger.info(`[TOKEN DEBUG] Token refreshed successfully for ${senderEmail}`);
+    } else {
+      logger.info(`[TOKEN DEBUG] Token is still valid for ${senderEmail}`);
     }
 
     // Resolve template body
@@ -229,11 +239,16 @@ export async function sendEmailAsUser(
         
         logger.info(`Template body after replacement: ${emailBody}`);
         
-        emailBody = emailBody
-          .split('\n')
-          .map(line => line.trim())
-          .filter(line => line !== '')
-          .join('<br>');
+        // Only convert newlines to <br> if the template doesn't already contain HTML tags
+        // If template has HTML (like <p>, <ul>, etc.), use it as-is
+        const hasHtmlTags = /<[a-z][\s\S]*>/i.test(emailBody);
+        if (!hasHtmlTags) {
+          emailBody = emailBody
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line !== '')
+            .join('<br>');
+        }
 
         // Always replace subject variables when using a template
         const originalSubject = subject;

@@ -11,26 +11,34 @@ export async function triggerTaskAssignmentHandler(req: AuthRequest, res: Respon
   try {
     const { assignerEmail, assignedToEmail, task } = req.body;
 
-    logger.info(`Task assignment email trigger request: assigner=${assignerEmail}, assignedTo=${assignedToEmail}, task=${task?.TaskID}`);
+    logger.info(`[CONTROLLER DEBUG] Task assignment email trigger request: assigner=${assignerEmail}, assignedTo=${assignedToEmail}, task=${task?.TaskID}`);
+    logger.info(`[CONTROLLER DEBUG] Request body: ${JSON.stringify(req.body)}`);
 
     if (!assignerEmail || !assignedToEmail || !task) {
-      logger.warn('Missing required fields in task assignment email trigger');
+      logger.warn('[CONTROLLER ERROR] Missing required fields in task assignment email trigger');
       res.status(400).json({ error: 'Missing required fields' });
       return;
     }
 
-    // Fire and forget - don't wait for email to send
-    triggerTaskAssignmentEmail(assignerEmail, assignedToEmail, task).catch(err => {
-      logger.error('Error in fire-and-forget email trigger:', err);
-    });
-
+    // Send response immediately, then trigger email in background
     res.json({
       success: true,
       message: 'Task assignment email triggered',
     });
+
+    logger.info('[CONTROLLER DEBUG] Response sent, now triggering email in background');
+
+    // Fire and forget - don't wait for email to send
+    triggerTaskAssignmentEmail(assignerEmail, assignedToEmail, task).catch(err => {
+      logger.error('[CONTROLLER ERROR] Error in fire-and-forget email trigger:', err);
+    });
+
+    logger.info('[CONTROLLER DEBUG] Email trigger function called');
   } catch (err) {
-    logger.error('Error in task assignment email trigger:', err);
-    res.status(500).json({ error: 'Failed to trigger email' });
+    logger.error('[CONTROLLER ERROR] Error in task assignment email trigger:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to trigger email' });
+    }
   }
 }
 

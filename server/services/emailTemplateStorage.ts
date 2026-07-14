@@ -12,61 +12,351 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
   {
     templateName: 'template_assigned_email',
     subject: 'New task assigned: {Title}',
-    body: 'Hi {AssignedToName},\n\nYou have been assigned a new task:\n\nTask: {Title}\nTask ID: {TaskID}\nDue Date: {DueDate}\nPriority: {Priority}\nAssigned by: {AssignedByEmail}\n\nDescription: {Description}\n\nPlease review and start working on this task.\n\nBest regards,\n{AssignedByName}',
+    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
+  <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <h2 style="color: #333; margin-top: 0;">New Task Assignment</h2>
+    <p style="color: #666; line-height: 1.6;">Hello {AssignedToName},</p>
+    <p style="color: #666; line-height: 1.6;">You have been assigned a new task. Please review the details below:</p>
+    
+    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+      <tr>
+        <td style="padding: 12px; background-color: #f9f9f9; font-weight: bold; color: #333; border-bottom: 2px solid #ddd;">Task ID</td>
+        <td style="padding: 12px; background-color: #f9f9f9; color: #666; border-bottom: 2px solid #ddd;">{TaskID}</td>
+      </tr>
+      <tr>
+        <td style="padding: 12px; font-weight: bold; color: #333; border-bottom: 1px solid #eee;">Title</td>
+        <td style="padding: 12px; color: #666; border-bottom: 1px solid #eee;">{Title}</td>
+      </tr>
+      <tr>
+        <td style="padding: 12px; font-weight: bold; color: #333; border-bottom: 1px solid #eee;">Priority</td>
+        <td style="padding: 12px; color: #666; border-bottom: 1px solid #eee;">{Priority}</td>
+      </tr>
+      <tr>
+        <td style="padding: 12px; font-weight: bold; color: #333; border-bottom: 1px solid #eee;">Due Date</td>
+        <td style="padding: 12px; color: #666; border-bottom: 1px solid #eee;">{DueDate}</td>
+      </tr>
+      <tr>
+        <td style="padding: 12px; font-weight: bold; color: #333; border-bottom: 1px solid #eee;">Assigned By</td>
+        <td style="padding: 12px; color: #666; border-bottom: 1px solid #eee;">{AssignedByEmail}</td>
+      </tr>
+      <tr>
+        <td style="padding: 12px; font-weight: bold; color: #333; border-bottom: 1px solid #eee;">Description</td>
+        <td style="padding: 12px; color: #666; border-bottom: 1px solid #eee;">{Description}</td>
+      </tr>
+      <tr>
+        <td style="padding: 12px; font-weight: bold; color: #333;">Attachment</td>
+        <td style="padding: 12px; color: #666;">{AttachmentLink}</td>
+      </tr>
+    </table>
+    
+    <p style="color: #666; line-height: 1.6;">Please review the task and begin working on it at your earliest convenience.</p>
+    
+    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
+      <p style="margin: 0;">This is an automated email from the PMS Task Management System.</p>
+      <p style="margin: 5px 0 0 0;">Best regards,<br>{AssignedByName}</p>
+    </div>
+  </div>
+</div>`,
     updatedAt: new Date().toISOString(),
   },
   {
     templateName: 'template_delayed_email',
     subject: 'Task due in 24 hours: {Title}',
-    body: 'Hi {AssignedToName},\n\nThe following task is due within 24 hours:\n\nTask: {Title}\nTask ID: {TaskID}\nDue Date: {DueDate}\nPriority: {Priority}\n\nPlease ensure you complete this task on time.\n\nBest regards,\n{AssignedByName}',
+    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff3cd;">
+  <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid #ffc107;">
+    <h2 style="color: #856404; margin-top: 0;">⚠️ Task Due Soon</h2>
+    <p style="color: #666; line-height: 1.6;">Hello {AssignedToName},</p>
+    <p style="color: #666; line-height: 1.6;">The following task is due within 24 hours:</p>
+    
+    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+      <tr>
+        <td style="padding: 12px; background-color: #fff9e6; font-weight: bold; color: #333; border-bottom: 2px solid #ffc107;">Task ID</td>
+        <td style="padding: 12px; background-color: #fff9e6; color: #666; border-bottom: 2px solid #ffc107;">{TaskID}</td>
+      </tr>
+      <tr>
+        <td style="padding: 12px; font-weight: bold; color: #333; border-bottom: 1px solid #eee;">Title</td>
+        <td style="padding: 12px; color: #666; border-bottom: 1px solid #eee;">{Title}</td>
+      </tr>
+      <tr>
+        <td style="padding: 12px; font-weight: bold; color: #333; border-bottom: 1px solid #eee;">Priority</td>
+        <td style="padding: 12px; color: #666; border-bottom: 1px solid #eee;">{Priority}</td>
+      </tr>
+      <tr>
+        <td style="padding: 12px; font-weight: bold; color: #333;">Due Date</td>
+        <td style="padding: 12px; color: #666;">{DueDate}</td>
+      </tr>
+    </table>
+    
+    <p style="color: #666; line-height: 1.6;">Please ensure you complete this task on time.</p>
+    
+    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
+      <p style="margin: 0;">This is an automated reminder from the PMS Task Management System.</p>
+      <p style="margin: 5px 0 0 0;">Best regards,<br>{AssignedByName}</p>
+    </div>
+  </div>
+</div>`,
     updatedAt: new Date().toISOString(),
   },
   {
     templateName: 'report_submitted',
     subject: 'Progress Report: {task_name} [{task_id}]',
-    body: 'Hi {AllocatorName},\n\nA progress report has been submitted for the following task:\n\nTask: {task_name}\nTask ID: {task_id}\nSubmitted By: {SubmittedByName}\n\nReport Content:\n{report_content}\n\nBest regards,\n{SubmittedByName}',
+    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #e3f2fd;">
+  <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid #2196f3;">
+    <h2 style="color: #0d47a1; margin-top: 0;">📊 Progress Report Submitted</h2>
+    <p style="color: #666; line-height: 1.6;">Hello {AllocatorName},</p>
+    <p style="color: #666; line-height: 1.6;">A progress report has been submitted for the following task:</p>
+    
+    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+      <tr>
+        <td style="padding: 12px; background-color: #e3f2fd; font-weight: bold; color: #333; border-bottom: 2px solid #2196f3;">Task</td>
+        <td style="padding: 12px; background-color: #e3f2fd; color: #666; border-bottom: 2px solid #2196f3;">{task_name}</td>
+      </tr>
+      <tr>
+        <td style="padding: 12px; font-weight: bold; color: #333; border-bottom: 1px solid #eee;">Task ID</td>
+        <td style="padding: 12px; color: #666; border-bottom: 1px solid #eee;">{task_id}</td>
+      </tr>
+      <tr>
+        <td style="padding: 12px; font-weight: bold; color: #333; border-bottom: 1px solid #eee;">Submitted By</td>
+        <td style="padding: 12px; color: #666; border-bottom: 1px solid #eee;">{SubmittedByName}</td>
+      </tr>
+    </table>
+    
+    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 4px; margin: 20px 0;">
+      <p style="margin: 0; font-weight: bold; color: #333;">Report Content:</p>
+      <p style="margin: 10px 0 0 0; color: #666; line-height: 1.6;">{report_content}</p>
+    </div>
+    
+    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
+      <p style="margin: 0;">This is an automated notification from the PMS Task Management System.</p>
+      <p style="margin: 5px 0 0 0;">Best regards,<br>{SubmittedByName}</p>
+    </div>
+  </div>
+</div>`,
     updatedAt: new Date().toISOString(),
   },
   {
     templateName: 'task_closed',
     subject: 'Task Closed: {task_name} [{task_id}]',
-    body: 'Hi {AssignedToName},\n\nThe following task has been marked as closed:\n\nTask: {task_name}\nTask ID: {task_id}\nClosed By: {ClosedByName}\nCompletion Date: {completion_date}\n\nClose Remarks:\n{close_remark}\n\nBest regards,\n{ClosedByName}',
+    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #d4edda;">
+  <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid #28a745;">
+    <h2 style="color: #155724; margin-top: 0;">✅ Task Closed</h2>
+    <p style="color: #666; line-height: 1.6;">Hello {AssignedToName},</p>
+    <p style="color: #666; line-height: 1.6;">The following task has been marked as closed:</p>
+    
+    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+      <tr>
+        <td style="padding: 12px; background-color: #d4edda; font-weight: bold; color: #333; border-bottom: 2px solid #28a745;">Task</td>
+        <td style="padding: 12px; background-color: #d4edda; color: #666; border-bottom: 2px solid #28a745;">{task_name}</td>
+      </tr>
+      <tr>
+        <td style="padding: 12px; font-weight: bold; color: #333; border-bottom: 1px solid #eee;">Task ID</td>
+        <td style="padding: 12px; color: #666; border-bottom: 1px solid #eee;">{task_id}</td>
+      </tr>
+      <tr>
+        <td style="padding: 12px; font-weight: bold; color: #333; border-bottom: 1px solid #eee;">Closed By</td>
+        <td style="padding: 12px; color: #666; border-bottom: 1px solid #eee;">{ClosedByName}</td>
+      </tr>
+      <tr>
+        <td style="padding: 12px; font-weight: bold; color: #333;">Completion Date</td>
+        <td style="padding: 12px; color: #666;">{completion_date}</td>
+      </tr>
+    </table>
+    
+    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 4px; margin: 20px 0;">
+      <p style="margin: 0; font-weight: bold; color: #333;">Close Remarks:</p>
+      <p style="margin: 10px 0 0 0; color: #666; line-height: 1.6;">{close_remark}</p>
+    </div>
+    
+    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
+      <p style="margin: 0;">This is an automated notification from the PMS Task Management System.</p>
+      <p style="margin: 5px 0 0 0;">Best regards,<br>{ClosedByName}</p>
+    </div>
+  </div>
+</div>`,
     updatedAt: new Date().toISOString(),
   },
   {
     templateName: 'template_scheduled_reminder',
     subject: 'Weekly Report Reminder: Submit PPT by Friday for {TeamName}',
-    body: 'Hello,\n\nThis is a reminder for team leaders of team "{TeamName}" to submit the weekly PPT report by Friday.\n\nPlease log in and upload your PPT:\n\nApp URL: <a href="{AppURL}" style="color: #3b82f6; text-decoration: underline;">{AppURL}</a>\n\nBest regards,\nPMS Team',
+    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff3cd;">
+  <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid #ffc107;">
+    <h2 style="color: #856404; margin-top: 0;">📅 Weekly Report Reminder</h2>
+    <p style="color: #666; line-height: 1.6;">Hello,</p>
+    <p style="color: #666; line-height: 1.6;">This is a reminder for team leaders of team <strong>{TeamName}</strong> to submit the weekly PPT report by Friday.</p>
+    
+    <div style="background-color: #fff9e6; padding: 20px; border-radius: 4px; margin: 20px 0; text-align: center;">
+      <p style="margin: 0; color: #333; font-weight: bold;">Please log in and upload your PPT:</p>
+      <a href="{AppURL}" style="display: inline-block; margin-top: 10px; padding: 12px 24px; background-color: #ffc107; color: #333; text-decoration: none; border-radius: 4px; font-weight: bold;">Open PMS Portal</a>
+    </div>
+    
+    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
+      <p style="margin: 0;">This is an automated reminder from the PMS Task Management System.</p>
+      <p style="margin: 5px 0 0 0;">Best regards,<br>PMS Team</p>
+    </div>
+  </div>
+</div>`,
     updatedAt: new Date().toISOString(),
   },
   {
     templateName: 'template_proof_email',
     subject: 'Weekly Report Proof: {DisplayName}',
-    body: 'Weekly report proof of submission for {DisplayName}\n\nSubmitted by: {SubmittedBy}\nSubmitted at: {SubmittedAt}\n\n{NoteSection}{AttachmentsSection}',
+    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #e3f2fd;">
+  <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid #2196f3;">
+    <h2 style="color: #0d47a1; margin-top: 0;">📋 Weekly Report Proof of Submission</h2>
+    <p style="color: #666; line-height: 1.6;">Weekly report proof of submission for <strong>{DisplayName}</strong></p>
+    
+    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+      <tr>
+        <td style="padding: 12px; background-color: #e3f2fd; font-weight: bold; color: #333; border-bottom: 2px solid #2196f3;">Submitted By</td>
+        <td style="padding: 12px; background-color: #e3f2fd; color: #666; border-bottom: 2px solid #2196f3;">{SubmittedBy}</td>
+      </tr>
+      <tr>
+        <td style="padding: 12px; font-weight: bold; color: #333;">Submitted At</td>
+        <td style="padding: 12px; color: #666;">{SubmittedAt}</td>
+      </tr>
+    </table>
+    
+    {NoteSection}
+    {AttachmentsSection}
+    
+    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
+      <p style="margin: 0;">This is an automated notification from the PMS Task Management System.</p>
+    </div>
+  </div>
+</div>`,
     updatedAt: new Date().toISOString(),
   },
   {
     templateName: 'template_report_onboarding',
     subject: 'Welcome to Weekly Reports - {TeamName}',
-    body: 'Hello,\n\nWelcome to the weekly reporting process for team "{TeamName}".\n\nYour meeting is scheduled for {day}.\n\nPlease submit your report by the deadline.\n\nLogin credentials:\nEmail: {OfficialWorkMail}\nPassword: {TemporaryPassword}\n\nApp URL: <a href="{AppURL}" style="color: #3b82f6; text-decoration: underline;">{AppURL}</a>\n\nBest regards,\nPMS Team',
+    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #e8f5e9;">
+  <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid #4caf50;">
+    <h2 style="color: #2e7d32; margin-top: 0;">🎉 Welcome to Weekly Reports</h2>
+    <p style="color: #666; line-height: 1.6;">Hello,</p>
+    <p style="color: #666; line-height: 1.6;">Welcome to the weekly reporting process for team <strong>{TeamName}</strong>.</p>
+    
+    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+      <tr>
+        <td style="padding: 12px; background-color: #e8f5e9; font-weight: bold; color: #333; border-bottom: 2px solid #4caf50;">Meeting Day</td>
+        <td style="padding: 12px; background-color: #e8f5e9; color: #666; border-bottom: 2px solid #4caf50;">{day}</td>
+      </tr>
+    </table>
+    
+    <div style="background-color: #f9f9f9; padding: 20px; border-radius: 4px; margin: 20px 0;">
+      <p style="margin: 0; font-weight: bold; color: #333; margin-bottom: 10px;">Login Credentials:</p>
+      <p style="margin: 5px 0; color: #666;"><strong>Email:</strong> {OfficialWorkMail}</p>
+      <p style="margin: 5px 0; color: #666;"><strong>Password:</strong> {TemporaryPassword}</p>
+    </div>
+    
+    <div style="background-color: #e8f5e9; padding: 20px; border-radius: 4px; margin: 20px 0; text-align: center;">
+      <a href="{AppURL}" style="display: inline-block; padding: 12px 24px; background-color: #4caf50; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">Access PMS Portal</a>
+    </div>
+    
+    <p style="color: #666; line-height: 1.6; margin: 20px 0;">Please submit your report by the deadline.</p>
+    
+    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
+      <p style="margin: 0;">This is an automated notification from the PMS Task Management System.</p>
+      <p style="margin: 5px 0 0 0;">Best regards,<br>PMS Team</p>
+    </div>
+  </div>
+</div>`,
     updatedAt: new Date().toISOString(),
   },
   {
     templateName: 'template_report_reminder',
     subject: 'Weekly Report Reminder - {TeamName}',
-    body: 'Hello,\n\nThis is a reminder for team "{TeamName}" to submit your weekly report.\n\nYour meeting is scheduled for {day}.\n\nPlease log in and submit your report:\n\nApp URL: <a href="{AppURL}" style="color: #3b82f6; text-decoration: underline;">{AppURL}</a>\n\nBest regards,\nPMS Team',
+    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff3cd;">
+  <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid #ffc107;">
+    <h2 style="color: #856404; margin-top: 0;">📅 Weekly Report Reminder</h2>
+    <p style="color: #666; line-height: 1.6;">Hello,</p>
+    <p style="color: #666; line-height: 1.6;">This is a reminder for team <strong>{TeamName}</strong> to submit your weekly report.</p>
+    
+    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+      <tr>
+        <td style="padding: 12px; background-color: #fff9e6; font-weight: bold; color: #333; border-bottom: 2px solid #ffc107;">Meeting Day</td>
+        <td style="padding: 12px; background-color: #fff9e6; color: #666; border-bottom: 2px solid #ffc107;">{day}</td>
+      </tr>
+    </table>
+    
+    <div style="background-color: #fff9e6; padding: 20px; border-radius: 4px; margin: 20px 0; text-align: center;">
+      <p style="margin: 0; color: #333; font-weight: bold;">Please log in and submit your report:</p>
+      <a href="{AppURL}" style="display: inline-block; margin-top: 10px; padding: 12px 24px; background-color: #ffc107; color: #333; text-decoration: none; border-radius: 4px; font-weight: bold;">Open PMS Portal</a>
+    </div>
+    
+    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
+      <p style="margin: 0;">This is an automated reminder from the PMS Task Management System.</p>
+      <p style="margin: 5px 0 0 0;">Best regards,<br>PMS Team</p>
+    </div>
+  </div>
+</div>`,
     updatedAt: new Date().toISOString(),
   },
   {
     templateName: 'template_scheduled_report_first',
     subject: 'Scheduled Report Submission - {TeamName}',
-    body: 'Hello,\n\nTo ensure timely preparation for scheduled review meetings, please submit your review document through the portal at least one day before the scheduled meeting that is on {day} (PPT preferred).\n\nPlease use the following credentials to access the application for first time users:\n\nEmail: {OfficialWorkMail}\nTemporary Password: {TemporaryPassword}\n\nFor security reasons, please change your password after your first login.\n\nApplication URL: <a href="{AppURL}" style="color: #3b82f6; text-decoration: underline;">{AppURL}</a>\n\n<strong>Important:</strong> Please coordinate to select the time of the meeting.\n\nThank you for your cooperation.\n\nBest regards',
+    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #e3f2fd;">
+  <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid #2196f3;">
+    <h2 style="color: #0d47a1; margin-top: 0;">📝 Scheduled Report Submission</h2>
+    <p style="color: #666; line-height: 1.6;">Hello,</p>
+    <p style="color: #666; line-height: 1.6;">To ensure timely preparation for scheduled review meetings, please submit your review document through the portal at least one day before the scheduled meeting that is on <strong>{day}</strong> (PPT preferred).</p>
+    
+    <div style="background-color: #f9f9f9; padding: 20px; border-radius: 4px; margin: 20px 0;">
+      <p style="margin: 0; font-weight: bold; color: #333; margin-bottom: 10px;">Login Credentials (for first-time users):</p>
+      <p style="margin: 5px 0; color: #666;"><strong>Email:</strong> {OfficialWorkMail}</p>
+      <p style="margin: 5px 0; color: #666;"><strong>Temporary Password:</strong> {TemporaryPassword}</p>
+      <p style="margin: 15px 0 5px 0; color: #666; font-style: italic;">For security reasons, please change your password after your first login.</p>
+    </div>
+    
+    <div style="background-color: #e3f2fd; padding: 20px; border-radius: 4px; margin: 20px 0; text-align: center;">
+      <a href="{AppURL}" style="display: inline-block; padding: 12px 24px; background-color: #2196f3; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">Access PMS Portal</a>
+    </div>
+    
+    <div style="background-color: #fff3cd; padding: 15px; border-radius: 4px; margin: 20px 0; border-left: 4px solid #ffc107;">
+      <p style="margin: 0; color: #856404; font-weight: bold;">⚠️ Important:</p>
+      <p style="margin: 10px 0 0 0; color: #666; line-height: 1.6;">Please coordinate to select the time of the meeting.</p>
+    </div>
+    
+    <p style="color: #666; line-height: 1.6; margin: 20px 0;">Thank you for your cooperation.</p>
+    
+    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
+      <p style="margin: 0;">This is an automated notification from the PMS Task Management System.</p>
+      <p style="margin: 5px 0 0 0;">Best regards</p>
+    </div>
+  </div>
+</div>`,
     updatedAt: new Date().toISOString(),
   },
   {
     templateName: 'template_scheduled_report_reminder',
     subject: 'Scheduled Report Submission - {TeamName}',
-    body: 'Hello,\n\nThis is a reminder to submit the scheduled report for {TeamName} at least one day before the scheduled review meeting (PPT preferred).\n\nMeeting is on {day}\n\nPlease log in and upload the report using the link below:\n\nApp URL: <a href="{AppURL}" style="color: #3b82f6; text-decoration: underline;">{AppURL}</a>\n\nTimely submission will help ensure the process runs smoothly.\n\nThank you for your cooperation.\n\nBest regards',
+    body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff3cd;">
+  <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid #ffc107;">
+    <h2 style="color: #856404; margin-top: 0;">📅 Scheduled Report Reminder</h2>
+    <p style="color: #666; line-height: 1.6;">Hello,</p>
+    <p style="color: #666; line-height: 1.6;">This is a reminder to submit the scheduled report for <strong>{TeamName}</strong> at least one day before the scheduled review meeting (PPT preferred).</p>
+    
+    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+      <tr>
+        <td style="padding: 12px; background-color: #fff9e6; font-weight: bold; color: #333; border-bottom: 2px solid #ffc107;">Meeting Day</td>
+        <td style="padding: 12px; background-color: #fff9e6; color: #666; border-bottom: 2px solid #ffc107;">{day}</td>
+      </tr>
+    </table>
+    
+    <div style="background-color: #fff9e6; padding: 20px; border-radius: 4px; margin: 20px 0; text-align: center;">
+      <p style="margin: 0; color: #333; font-weight: bold;">Please log in and upload the report:</p>
+      <a href="{AppURL}" style="display: inline-block; margin-top: 10px; padding: 12px 24px; background-color: #ffc107; color: #333; text-decoration: none; border-radius: 4px; font-weight: bold;">Open PMS Portal</a>
+    </div>
+    
+    <p style="color: #666; line-height: 1.6; margin: 20px 0;">Timely submission will help ensure the process runs smoothly.</p>
+    
+    <p style="color: #666; line-height: 1.6; margin: 20px 0;">Thank you for your cooperation.</p>
+    
+    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
+      <p style="margin: 0;">This is an automated reminder from the PMS Task Management System.</p>
+      <p style="margin: 5px 0 0 0;">Best regards</p>
+    </div>
+  </div>
+</div>`,
     updatedAt: new Date().toISOString(),
   },
 ];

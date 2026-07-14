@@ -780,6 +780,37 @@ export default function Dashboard({
     document.title = titles[activeView] || 'PMS TaskFlow';
   }, [activeView]);
 
+  // Helper function to extract filename from URL
+  const getFileNameFromUrl = (url: string): string => {
+    try {
+      // For Google Drive URLs, try to extract filename from URL parameters
+      if (url.includes('drive.google.com')) {
+        const urlObj = new URL(url);
+        // Check for filename in URL parameters
+        const filename = urlObj.searchParams.get('filename') || urlObj.searchParams.get('name');
+        if (filename) return filename;
+      }
+      
+      // Extract from path
+      const pathname = new URL(url).pathname;
+      const parts = pathname.split('/');
+      const lastPart = parts[parts.length - 1];
+      
+      // Remove query parameters and decode
+      if (lastPart) {
+        const cleanName = lastPart.split('?')[0];
+        const decoded = decodeURIComponent(cleanName);
+        // Remove file extension if needed
+        return decoded;
+      }
+      
+      // Fallback: generate a name from the URL
+      return 'Attachment';
+    } catch (error) {
+      return 'Attachment';
+    }
+  };
+
   // Get team members based on user role with hierarchical visibility
   const getTeamMembers = () => {
     if (isAdminLevel(currentUser.Role)) {
@@ -2013,7 +2044,7 @@ export default function Dashboard({
                         <div className={`text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
                           <a href={report.AttachmentLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:underline">
                             <Link size={14} />
-                            <span>View Attachment</span>
+                            <span>{getFileNameFromUrl(report.AttachmentLink)}</span>
                           </a>
                         </div>
                       )}
@@ -2126,7 +2157,7 @@ export default function Dashboard({
                                 <div className={`text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
                                   <a href={report.AttachmentLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:underline">
                                     <Link size={14} />
-                                    <span>View Attachment</span>
+                                    <span>{getFileNameFromUrl(report.AttachmentLink)}</span>
                                   </a>
                                 </div>
                               )}
@@ -2370,7 +2401,7 @@ export default function Dashboard({
                                         className={`inline-link-pill text-[10px] sm:text-xs px-2 py-0.5 sm:py-1 rounded border flex items-center gap-1 ${isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'}`}
                                       >
                                         <Link size={10} className="shrink-0" />
-                                        <span>Attachment {idx + 1}</span>
+                                        <span>{getFileNameFromUrl(link.trim())}</span>
                                       </a>
                                     ))}
                                   </div>
