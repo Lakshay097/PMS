@@ -120,7 +120,7 @@ export async function triggerTaskAssignmentEmail(
           AssignedByName: assignedByName,
           // FIX: attachment/URL was never passed to the template, so it could
           // never appear in the assignment email regardless of what the task had.
-          AttachmentLink: task.AttachmentLink || '',
+          AttachmentLink: task.AttachmentLink || 'No attachment',
         },
         threadInfo?.threadId,
         threadInfo?.messageId,
@@ -298,7 +298,7 @@ export async function triggerReportSubmissionEmail(
         SubmittedByName: submittedByName,
         AllocatorName: allocatorName,  // Renamed from AssignedByName for clarity in this template
         report_content: reportContent,
-        AttachmentLink: task.AttachmentLink || '',
+        AttachmentLink: task.AttachmentLink || 'No attachment',
         app_url: appUrl,
       },
       threadInfo?.threadId,
