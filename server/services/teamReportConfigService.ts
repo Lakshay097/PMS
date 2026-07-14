@@ -54,8 +54,8 @@ export async function getTeamReportConfigs(): Promise<TeamReportConfig[]> {
         configs.push({
           teamId: data.teamId,
           teamName: data.teamName || '',
-          reminderDay: data.reminderDay || 'Thursday',
-          meetingDay: data.meetingDay || 'Friday',
+          reminderDay: data.reminderDay,
+          meetingDay: data.meetingDay,
           active: data.active !== false,
           updatedAt: data.updatedAt || new Date().toISOString(),
           entityType: data.entityType || 'team',

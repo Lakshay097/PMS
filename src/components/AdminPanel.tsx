@@ -2282,9 +2282,9 @@ export default function AdminPanel({
                               <button
                                 onClick={() => {
                                   setEditingReportConfigTeamId(configKey);
-                                  const config = teamReportConfigs[configKey] || { reminderDay: 'Thursday', meetingDay: 'Friday' };
-                                  setEditingReminderDay(config.reminderDay);
-                                  setEditingMeetingDay(config.meetingDay);
+                                  const config = teamReportConfigs[configKey];
+                                  setEditingReminderDay(config?.reminderDay || 'Thursday');
+                                  setEditingMeetingDay(config?.meetingDay || 'Friday');
                                 }}
                                 className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
                               >
@@ -2360,9 +2360,9 @@ export default function AdminPanel({
                           <button
                             onClick={() => {
                               setEditingReportConfigTeamId(team.TeamID);
-                              const config = teamReportConfigs[team.TeamID] || { reminderDay: 'Thursday', meetingDay: 'Friday' };
-                              setEditingReminderDay(config.reminderDay);
-                              setEditingMeetingDay(config.meetingDay);
+                              const config = teamReportConfigs[team.TeamID];
+                              setEditingReminderDay(config?.reminderDay || 'Thursday');
+                              setEditingMeetingDay(config?.meetingDay || 'Friday');
                             }}
                             className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
                           >

@@ -21,10 +21,32 @@ export function useTeamOperations({
     const targetTeam = teams.find(t => t.TeamID === teamId);
     if (!targetTeam) return;
 
-    // 1. Delete from teams collection
+    // 1. Get all sub-teams that belong to this team
+    const subTeams = await dbService.getSubTeams();
+    const teamSubTeams = subTeams.filter(st => st.TeamID === teamId);
+
+    // 2. Delete all sub-teams and remove sub-team references from users
+    for (const subTeam of teamSubTeams) {
+      await dbService.deleteSubTeam(subTeam.SubTeamID);
+      
+      // Remove sub-team references from users who belonged to it
+      const usersInSubTeam = users.filter(u => u.SubTeamIDs?.includes(subTeam.SubTeamID));
+      for (const u of usersInSubTeam) {
+        const updatedSubTeamIDs = (u.SubTeamIDs || []).filter(id => id !== subTeam.SubTeamID);
+        const updatedSubTeamNames = (u.SubTeamNames || []).filter(name => name !== subTeam.SubTeamName);
+        await dbService.saveUser({
+          ...u,
+          SubTeamIDs: updatedSubTeamIDs,
+          SubTeamNames: updatedSubTeamNames,
+          UpdatedAt: new Date().toISOString()
+        });
+      }
+    }
+
+    // 3. Delete from teams collection
     await dbService.deleteTeam(teamId);
 
-    // 2. Remove team reference from all users who belonged to it
+    // 4. Remove team reference from all users who belonged to it
     const usersToUpdate = users.filter(u => u.TeamIDs.includes(teamId));
     for (const u of usersToUpdate) {
       const updatedTeamIDs = u.TeamIDs.filter(id => id !== teamId);
@@ -37,7 +59,7 @@ export function useTeamOperations({
       });
     }
 
-    await logAudit('Team', teamId, `Deleted Team: ${targetTeam.TeamName}`, JSON.stringify(targetTeam), '');
+    await logAudit('Team', teamId, `Deleted Team: ${targetTeam.TeamName} (with ${teamSubTeams.length} sub-teams)`, JSON.stringify(targetTeam), '');
     // Optimistic update handles UI refresh automatically
   }, [teams, users, logAudit]);
 
