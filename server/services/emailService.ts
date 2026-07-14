@@ -250,10 +250,14 @@ export async function sendEmailAsUser(
             .join('<br>');
         }
 
-        // Always replace subject variables when using a template
-        const originalSubject = subject;
-        subject = replaceTemplateVariables(template.subject, templateVars);
-        logger.info(`Subject before: ${originalSubject}, after: ${subject}`);
+        // Only use template subject if no custom subject was provided
+        // Custom subjects (like [TaskID] Title) are used for Gmail threading
+        if (!subject || subject.trim() === '') {
+          subject = replaceTemplateVariables(template.subject, templateVars);
+          logger.info(`Using template subject: ${subject}`);
+        } else {
+          logger.info(`Using custom subject for threading: ${subject}`);
+        }
 
         // Warn if any placeholders remain unreplaced
         const unreplaced = [...emailBody.matchAll(/\{[^}]+\}/g)].map(m => m[0]);
