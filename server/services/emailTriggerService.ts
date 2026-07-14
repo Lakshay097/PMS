@@ -280,8 +280,9 @@ export async function triggerReportSubmissionEmail(
     logger.info(`Report email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
 
     // Get all thread participants for CC to keep emails in same thread
+    // Include submitter so they can see their own report in the thread
     const allParticipants = threadInfo?.participants?.split(',').map((p: string) => p.trim()).filter(Boolean) || [];
-    const ccRecipients = allParticipants.filter((p: string) => p !== submitterEmail && p !== allocatorEmail);
+    const ccRecipients = allParticipants.filter((p: string) => p !== allocatorEmail);
 
     await sendEmailAsUser(
       submitterEmail,
