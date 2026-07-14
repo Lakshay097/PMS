@@ -326,9 +326,9 @@ export async function checkAndSendReportReminders(): Promise<void> {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
     
-    // Only send emails at 9:30 AM IST
-    if (timeInfo.hour !== 9 || timeInfo.minute !== 30) {
-      logger.info(`[SCHEDULER] Skipping report reminders - current time is ${timeInfo.hour}:${timeInfo.minute.toString().padStart(2, '0')} (scheduled for 9:30)`);
+    // Only send emails after 9:30 AM IST (more robust than exact time check)
+    if (timeInfo.hour < 9 || (timeInfo.hour === 9 && timeInfo.minute < 30)) {
+      logger.info(`[SCHEDULER] Skipping report reminders - current time is ${timeInfo.hour}:${timeInfo.minute.toString().padStart(2, '0')} (scheduled for after 9:30)`);
       return;
     }
     
