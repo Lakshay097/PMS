@@ -95,8 +95,12 @@ export async function triggerTaskAssignmentEmail(
 
     logger.info(`Assignment email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
 
+    // Get all thread participants for CC to keep emails in same thread
+    const allParticipants = threadInfo?.participants?.split(',').map((p: string) => p.trim()).filter(Boolean) || [];
+    const ccRecipients = allParticipants.filter((p: string) => p !== assignerEmail && !recipients.includes(p));
+
     for (const recipient of recipients) {
-      logger.info(`[TRIGGER DEBUG] Sending to recipient: ${recipient}`);
+      logger.info(`[TRIGGER DEBUG] Sending to recipient: ${recipient}, CC: ${ccRecipients.join(', ') || 'none'}`);
       const assignedToName = usersMap.get(recipient.trim().toLowerCase()) || recipient;
       const result = await sendEmailAsUser(
         assignerEmail,
@@ -121,6 +125,11 @@ export async function triggerTaskAssignmentEmail(
         threadInfo?.threadId,
         threadInfo?.messageId,
         threadTaskId,
+        undefined, // teamId
+        undefined, // subTeamId
+        undefined, // weekOf
+        undefined, // emailType
+        ccRecipients, // ccEmails
       );
       logger.info(`[TRIGGER DEBUG] Email send result for ${recipient}: success=${result.success}, usedFallback=${result.usedFallback}`);
     }
@@ -146,6 +155,10 @@ export async function triggerTaskDueSoonEmail(
     const assignedByName = usersMap.get(creatorEmail.trim().toLowerCase()) || creatorEmail;
 
     logger.info(`Due-soon email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
+
+    // Get all thread participants for CC to keep emails in same thread
+    const allParticipants = threadInfo?.participants?.split(',').map((p: string) => p.trim()).filter(Boolean) || [];
+    const ccRecipients = allParticipants.filter((p: string) => p !== creatorEmail && !recipients.includes(p));
 
     for (const recipient of recipients) {
       const assignedToName = usersMap.get(recipient.trim().toLowerCase()) || recipient;
@@ -174,6 +187,11 @@ export async function triggerTaskDueSoonEmail(
         threadInfo?.threadId,
         threadInfo?.messageId,
         threadTaskId,
+        undefined, // teamId
+        undefined, // subTeamId
+        undefined, // weekOf
+        undefined, // emailType
+        ccRecipients, // ccEmails
       );
     }
   } catch (err) {
@@ -198,6 +216,10 @@ export async function triggerTaskOverdueEmail(
     const assignedByName = usersMap.get(creatorEmail.trim().toLowerCase()) || creatorEmail;
 
     logger.info(`Overdue email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
+
+    // Get all thread participants for CC to keep emails in same thread
+    const allParticipants = threadInfo?.participants?.split(',').map((p: string) => p.trim()).filter(Boolean) || [];
+    const ccRecipients = allParticipants.filter((p: string) => p !== creatorEmail && !recipients.includes(p));
 
     for (const recipient of recipients) {
       const assignedToName = usersMap.get(recipient.trim().toLowerCase()) || recipient;
@@ -226,6 +248,11 @@ export async function triggerTaskOverdueEmail(
         threadInfo?.threadId,
         threadInfo?.messageId,
         threadTaskId,
+        undefined, // teamId
+        undefined, // subTeamId
+        undefined, // weekOf
+        undefined, // emailType
+        ccRecipients, // ccEmails
       );
     }
   } catch (err) {
@@ -252,6 +279,10 @@ export async function triggerReportSubmissionEmail(
 
     logger.info(`Report email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
 
+    // Get all thread participants for CC to keep emails in same thread
+    const allParticipants = threadInfo?.participants?.split(',').map((p: string) => p.trim()).filter(Boolean) || [];
+    const ccRecipients = allParticipants.filter((p: string) => p !== submitterEmail && p !== allocatorEmail);
+
     await sendEmailAsUser(
       submitterEmail,
       allocatorEmail,
@@ -267,11 +298,17 @@ export async function triggerReportSubmissionEmail(
         SubmittedByName: submittedByName,
         AllocatorName: allocatorName,  // Renamed from AssignedByName for clarity in this template
         report_content: reportContent,
+        AttachmentLink: task.AttachmentLink || '',
         app_url: appUrl,
       },
       threadInfo?.threadId,
       threadInfo?.messageId,
       threadTaskId,
+      undefined, // teamId
+      undefined, // subTeamId
+      undefined, // weekOf
+      undefined, // emailType
+      ccRecipients, // ccEmails
     );
   } catch (err) {
     logger.error('Error triggering report submission email:', err);
@@ -311,6 +348,10 @@ export async function triggerTaskClosureEmail(
 
     logger.info(`Closure email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
 
+    // Get all thread participants for CC to keep emails in same thread
+    const allParticipants = threadInfo?.participants?.split(',').map((p: string) => p.trim()).filter(Boolean) || [];
+    const ccRecipients = allParticipants.filter((p: string) => p !== closedByEmail && !recipients.includes(p));
+
     for (const recipient of recipients) {
       const assignedToName = usersMap.get(recipient.trim().toLowerCase()) || recipient;
       await sendEmailAsUser(
@@ -333,6 +374,11 @@ export async function triggerTaskClosureEmail(
         threadInfo?.threadId,
         threadInfo?.messageId,
         threadTaskId,
+        undefined, // teamId
+        undefined, // subTeamId
+        undefined, // weekOf
+        undefined, // emailType
+        ccRecipients, // ccEmails
       );
     }
   } catch (err) {

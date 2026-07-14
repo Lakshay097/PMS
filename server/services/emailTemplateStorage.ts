@@ -119,6 +119,10 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
         <td style="padding: 12px; font-weight: bold; color: #333; border-bottom: 1px solid #eee;">Submitted By</td>
         <td style="padding: 12px; color: #666; border-bottom: 1px solid #eee;">{SubmittedByName}</td>
       </tr>
+      <tr>
+        <td style="padding: 12px; font-weight: bold; color: #333;">Attachment</td>
+        <td style="padding: 12px; color: #666;">{AttachmentLink}</td>
+      </tr>
     </table>
     
     <div style="background-color: #f9f9f9; padding: 15px; border-radius: 4px; margin: 20px 0;">
