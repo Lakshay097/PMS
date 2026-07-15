@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import {
+  triggerTaskCreationHandler,
   triggerTaskAssignmentHandler,
   triggerTaskDueSoonHandler,
   triggerTaskOverdueHandler,
@@ -11,6 +12,7 @@ import {
 
 const router = Router();
 
+router.post('/task-creation', authenticateToken, triggerTaskCreationHandler);
 router.post('/task-assignment', (req, res, next) => {
   logger.info('[ROUTER DEBUG] Email trigger route hit BEFORE auth: /task-assignment');
   next();

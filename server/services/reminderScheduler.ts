@@ -3,6 +3,7 @@ import { sendEmailAsUser } from './emailService';
 import { logger } from '../utils/logger';
 import { config } from '../config';
 import { firestoreAdmin } from './firebaseAdmin';
+import { getOrCreateTeamEmailThread, updateTeamEmailThreadId } from './emailLogService';
 
 // Intra-process lock to prevent overlapping runs within the same process
 let isRunning = false;
@@ -282,7 +283,17 @@ async function checkThursdayReminders(): Promise<void> {
     );
 
     // Restrict sender to system email from config
-    const senderEmail = config.SYSTEM_SENDER_EMAIL;
+    const senderEmail = config.DEFAULT_FALLBACK_EMAIL || config.SYSTEM_SENDER_EMAIL;
+    logger.info(`ReminderScheduler: Using sender email: ${senderEmail}`);
+
+    // Check email_enabled_scheduled_tasks flag — respect Admin Panel on/off toggle
+    const scheduledTasksEnabledSetting = getSettingValue(settingsRows, 'email_enabled_scheduled_tasks', 'true');
+    if (scheduledTasksEnabledSetting === 'false') {
+      logger.info('ReminderScheduler: Skipping — email_enabled_scheduled_tasks is disabled');
+      await saveSettingValue(accessToken, spreadsheetId, settingsRows, 'last_weekly_reminder_status', 'success');
+      isRunning = false;
+      return;
+    }
 
     let hasOverallTransients = false;
     let emailsSentCount = 0;
@@ -343,6 +354,11 @@ async function checkThursdayReminders(): Promise<void> {
             logger.info(`ReminderScheduler: Sending weekly report reminder to ${leaderEmail} for team "${teamName}"`);
             const appUrl = config.APP_URL || 'http://localhost:3000';
             const weekOf = getWeekOfDate(new Date());
+            const meetingDay = dueDaySetting || 'Friday';
+            
+            // Get or create team email thread from Google Sheets
+            const threadInfo = await getOrCreateTeamEmailThread(teamId, leaderEmail);
+            
             const result = await sendEmailAsUser(
               senderEmail,
               leaderEmail,
@@ -351,10 +367,11 @@ async function checkThursdayReminders(): Promise<void> {
               'template_scheduled_reminder',
               {
                 TeamName: teamName,
-                AppURL: appUrl
+                AppURL: appUrl,
+                day: meetingDay
               },
-              undefined, // threadId
-              undefined, // messageId
+              threadInfo?.threadId, // threadId from Google Sheets
+              threadInfo?.messageId, // messageId from Google Sheets
               undefined, // taskId
               teamId,
               null, // subTeamId
@@ -364,24 +381,15 @@ async function checkThursdayReminders(): Promise<void> {
 
             if (result.success) {
               emailsSentCount++;
+              logger.info(`ReminderScheduler: Email sent successfully to ${leaderEmail} for team "${teamName}"`);
 
-              // Store threadId/messageId in Firebase for proof email threading
+              // Update threadId/messageId in Google Sheets team_email_threads
               if (result.gmailThreadId && result.gmailMessageId && !result.usedFallback) {
-                const docId = `${teamId}_${weekOf}`;
                 try {
-                  await firestoreAdmin.collection('teamReminderThreads').doc(docId).set({
-                    teamId,
-                    weekOf,
-                    gmailThreadId: result.gmailThreadId,
-                    gmailMessageId: result.gmailMessageId,
-                    sentAt: new Date().toISOString(),
-                    sentTo: leaderEmail,
-                    teamName,
-                    subTeamId: null
-                  }, { merge: true });
-                  logger.info(`ReminderScheduler: Stored threadId for team "${teamName}" (${docId})`);
-                } catch (firebaseErr) {
-                  logger.error(`ReminderScheduler: Failed to store threadId in Firebase for team "${teamName}"`, firebaseErr);
+                  await updateTeamEmailThreadId(teamId, result.gmailThreadId, result.gmailMessageId);
+                  logger.info(`ReminderScheduler: Stored threadId for team "${teamName}"`);
+                } catch (sheetsErr) {
+                  logger.error(`ReminderScheduler: Failed to store threadId in Google Sheets for team "${teamName}"`, sheetsErr);
                 }
               } else if (result.usedFallback) {
                 logger.warn(`ReminderScheduler: Reminder email for team "${teamName}" used fallback (not actually sent)`);
@@ -389,6 +397,7 @@ async function checkThursdayReminders(): Promise<void> {
             } else {
               teamSendSuccess = false;
               hasOverallTransients = true;
+              logger.error(`ReminderScheduler: Failed to send email to ${leaderEmail} for team "${teamName}". Error: ${result.error || 'Unknown error'}`);
             }
           } catch (err) {
             logger.error(`ReminderScheduler: Failed to send reminder email to ${leaderEmail} for team "${teamName}"`, err);
@@ -447,6 +456,11 @@ async function checkThursdayReminders(): Promise<void> {
               logger.info(`ReminderScheduler: Sending weekly report reminder to ${leaderEmail} for sub-team "${subTeam.subTeamName}" of team "${teamName}"`);
               const appUrl = config.APP_URL || 'http://localhost:3000';
               const weekOf = getWeekOfDate(new Date());
+              const meetingDay = dueDaySetting || 'Friday';
+              
+              // Get or create team email thread from Google Sheets (use teamId for sub-teams too)
+              const threadInfo = await getOrCreateTeamEmailThread(teamId, leaderEmail);
+              
               const result = await sendEmailAsUser(
                 senderEmail,
                 leaderEmail,
@@ -456,10 +470,11 @@ async function checkThursdayReminders(): Promise<void> {
                 {
                   TeamName: teamName,
                   SubTeamName: subTeam.subTeamName,
-                  AppURL: appUrl
+                  AppURL: appUrl,
+                  day: meetingDay
                 },
-                undefined, // threadId
-                undefined, // messageId
+                threadInfo?.threadId, // threadId from Google Sheets
+                threadInfo?.messageId, // messageId from Google Sheets
                 undefined, // taskId
                 teamId,
                 subTeam.subTeamId,
@@ -469,25 +484,15 @@ async function checkThursdayReminders(): Promise<void> {
 
               if (result.success) {
                 emailsSentCount++;
+                logger.info(`ReminderScheduler: Email sent successfully to ${leaderEmail} for sub-team "${subTeam.subTeamName}"`);
 
-                // Store threadId/messageId in Firebase for proof email threading
+                // Update threadId/messageId in Google Sheets team_email_threads
                 if (result.gmailThreadId && result.gmailMessageId && !result.usedFallback) {
-                  const docId = `${subTeam.subTeamId}_${weekOf}`;
                   try {
-                    await firestoreAdmin.collection('teamReminderThreads').doc(docId).set({
-                      teamId,
-                      weekOf,
-                      gmailThreadId: result.gmailThreadId,
-                      gmailMessageId: result.gmailMessageId,
-                      sentAt: new Date().toISOString(),
-                      sentTo: leaderEmail,
-                      teamName,
-                      subTeamId: subTeam.subTeamId,
-                      subTeamName: subTeam.subTeamName
-                    }, { merge: true });
-                    logger.info(`ReminderScheduler: Stored threadId for sub-team "${subTeam.subTeamName}" (${docId})`);
-                  } catch (firebaseErr) {
-                    logger.error(`ReminderScheduler: Failed to store threadId in Firebase for sub-team "${subTeam.subTeamName}"`, firebaseErr);
+                    await updateTeamEmailThreadId(teamId, result.gmailThreadId, result.gmailMessageId);
+                    logger.info(`ReminderScheduler: Stored threadId for sub-team "${subTeam.subTeamName}"`);
+                  } catch (sheetsErr) {
+                    logger.error(`ReminderScheduler: Failed to store threadId in Google Sheets for sub-team "${subTeam.subTeamName}"`, sheetsErr);
                   }
                 } else if (result.usedFallback) {
                   logger.warn(`ReminderScheduler: Reminder email for sub-team "${subTeam.subTeamName}" used fallback (not actually sent)`);
@@ -495,6 +500,7 @@ async function checkThursdayReminders(): Promise<void> {
               } else {
                 subTeamSendSuccess = false;
                 hasOverallTransients = true;
+                logger.error(`ReminderScheduler: Failed to send email to ${leaderEmail} for sub-team "${subTeam.subTeamName}". Error: ${result.error || 'Unknown error'}`);
               }
             } catch (err) {
               logger.error(`ReminderScheduler: Failed to send reminder email to ${leaderEmail} for sub-team "${subTeam.subTeamName}"`, err);

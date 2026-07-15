@@ -27,6 +27,8 @@ import { checkAndGenerateRecurringTasks, evaluateOverdueTasks } from './lib/task
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { useAuth } from './contexts/AuthContext';
 import { changePassword } from './api/auth';
+import { triggerReportSubmissionEmail, triggerTaskClosureEmail } from './api/emailTrigger';
+import { useGmailStatus } from './hooks/useGmailStatus';
 import { getVisibleSubTeamIds } from './utils/subTeamUtils';
 import InstallBanner from './components/InstallBanner';
 import OfflineBanner from './components/OfflineBanner';
@@ -142,6 +144,10 @@ export default function App() {
     return localStorage.getItem('PMS_active_user_email') || '';
   });
   const [activeUser, setActiveUser] = useState<User | null>(null);
+
+  // Check whether the active user has a connected Gmail account.
+  // Used to gate email sends and show a connect-prompt before any send is attempted.
+  const { isConnected: gmailConnected, connectGmail } = useGmailStatus(activeUser?.Email);
 
   // Active Route/View
   const [activeView, setActiveView] = useState<ActiveView>('dashboard');
@@ -623,6 +629,8 @@ export default function App() {
     setSimulationMessage,
     setSubtasks,
     subtasks,
+    gmailConnected,
+    connectGmail,
   });
 
   // User operations hook
@@ -741,38 +749,38 @@ export default function App() {
       );
 
       try {
-        const token = localStorage.getItem('PMS_auth_token');
-        await fetch('/api/email/trigger/report-submission', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
+        if (!gmailConnected) {
+          // Sender's Gmail not connected — show prompt instead of a silent send failure
+          setSimulationMessage({
+            type: 'error',
+            text: `Gmail not connected for ${activeUser.Email}. Connect your Gmail account in Settings → Gmail to send report and closure emails.`,
+          });
+          connectGmail().catch(() => {});
+        } else {
+          // Use typed API wrappers — fire-and-forget
+          triggerReportSubmissionEmail({
             submitterEmail: activeUser.Email,
             allocatorEmail: targetTask.AssignedByEmail,
-            task: targetTask,
-            reportContent: data.WorkSummary,
-          }),
-        });
-
-        if (data.StatusUpdate === 'Closed') {
-          await fetch('/api/email/trigger/task-closed', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+            task: {
+              TaskID: targetTask.TaskID,
+              Title: targetTask.Title,
+              Description: targetTask.Description,
             },
-            body: JSON.stringify({
+            reportContent: data.WorkSummary,
+          }).catch(err => logger.error('Failed to trigger report email:', err));
+
+          if (data.StatusUpdate === 'Closed') {
+            triggerTaskClosureEmail({
               closedByEmail: activeUser.Email,
               assignedToEmail: targetTask.AssignedToEmail,
+              allocatorEmail: targetTask.AssignedByEmail,
               task: updatedTask,
               closeRemark: data.WorkSummary,
-            }),
-          });
+            }).catch(err => logger.error('Failed to trigger closure email:', err));
+          }
         }
       } catch (err) {
-        console.error('Email trigger FAILED:', err); 
+        console.error('Email trigger FAILED:', err);
         logger.error('Failed to trigger report email:', err);
       }
 

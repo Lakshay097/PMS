@@ -235,3 +235,174 @@ export async function updateTaskEmailThreadId(
     logger.error('Error updating Gmail threadId:', err);
   }
 }
+
+/**
+ * Team email thread interface (for scheduled reports)
+ */
+export interface TeamEmailThread {
+  teamId: string;
+  messageId: string;
+  threadId: string;
+  participants: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function initializeTeamEmailThreadsSheet(): Promise<boolean> {
+  try {
+    const tokenData = await generateGoogleSheetsToken();
+    if (!tokenData || !tokenData.spreadsheetId) return false;
+
+    const spreadsheetId = tokenData.spreadsheetId;
+    const existingValues = await fetchSheetValues(tokenData.accessToken, spreadsheetId, 'team_email_threads!A1:F1');
+    if (existingValues && existingValues.length > 0) return true;
+
+    await createSheet(tokenData.accessToken, spreadsheetId, 'team_email_threads');
+    const headers = [['team_id', 'message_id', 'thread_id', 'participants', 'created_at', 'updated_at']];
+    const success = await appendSheetValues(tokenData.accessToken, spreadsheetId, 'team_email_threads', headers);
+    if (success) logger.info('Initialized team_email_threads sheet');
+    return success;
+  } catch (err) {
+    logger.error('Error initializing team_email_threads sheet:', err);
+    return false;
+  }
+}
+
+/**
+ * Gets or creates a team email thread for scheduled reports.
+ * Mirrors getOrCreateTaskEmailThread but uses teamId as the key.
+ */
+export async function getOrCreateTeamEmailThread(
+  teamId: string,
+  initialRecipient: string
+): Promise<TeamEmailThread | null> {
+  try {
+    const tokenData = await generateGoogleSheetsToken();
+    if (!tokenData || !tokenData.spreadsheetId) {
+      logger.error('Failed to get Google Sheets token');
+      return null;
+    }
+
+    const spreadsheetId = tokenData.spreadsheetId;
+
+    // Fetch all rows so we have the sheet row index alongside the data
+    const allValues = await fetchSheetValues(tokenData.accessToken, spreadsheetId, 'team_email_threads!A:F');
+
+    if (allValues && allValues.length > 1) {
+      for (let i = 1; i < allValues.length; i++) {
+        const row = allValues[i];
+        if (row[0] === teamId) {
+          // Found existing thread — i is 0-based array index, sheet row is i+1
+          const sheetRowNumber = i + 1;
+
+          const participants = row[3] || '';
+          const participantList = participants.split(',').map((p: string) => p.trim()).filter(Boolean);
+
+          if (!participantList.includes(initialRecipient)) {
+            participantList.push(initialRecipient);
+            const updatedParticipants = participantList.join(', ');
+            const now = new Date().toISOString();
+
+            await updateSheetValues(
+              tokenData.accessToken,
+              spreadsheetId,
+              `team_email_threads!D${sheetRowNumber}:F${sheetRowNumber}`,
+              [[updatedParticipants, row[4], now]]
+            );
+
+            logger.info(`Thread found for team ${teamId}: threadId=${row[2]}, sheetRow=${sheetRowNumber}`);
+            return {
+              teamId: row[0],
+              messageId: row[1],
+              threadId: row[2],
+              participants: updatedParticipants,
+              createdAt: row[4],
+              updatedAt: now,
+            };
+          }
+
+          logger.info(`Thread found for team ${teamId}: threadId=${row[2]}, sheetRow=${sheetRowNumber}`);
+          return {
+            teamId: row[0],
+            messageId: row[1],
+            threadId: row[2],
+            participants: row[3],
+            createdAt: row[4],
+            updatedAt: row[5],
+          };
+        }
+      }
+    }
+
+    // No existing thread — create one
+    const now = new Date().toISOString();
+    const placeholderMessageId = `<${teamId}-${Date.now()}@pms.taskflow>`;
+
+    const newRow = [teamId, placeholderMessageId, '', initialRecipient, now, now];
+    const success = await appendSheetValues(tokenData.accessToken, spreadsheetId, 'team_email_threads', [newRow]);
+
+    if (success) {
+      logger.info(`Created new email thread record for team ${teamId}`);
+      return {
+        teamId,
+        messageId: placeholderMessageId,
+        threadId: '',
+        participants: initialRecipient,
+        createdAt: now,
+        updatedAt: now,
+      };
+    }
+
+    return null;
+  } catch (err) {
+    logger.error('Error getting or creating team email thread:', err);
+    return null;
+  }
+}
+
+/**
+ * Updates the team email thread info after successful send.
+ * Called after every successful send so thread info stays current for reply chaining.
+ */
+export async function updateTeamEmailThreadId(
+  teamId: string,
+  gmailThreadId: string,
+  gmailMessageId: string
+): Promise<void> {
+  try {
+    const tokenData = await generateGoogleSheetsToken();
+    if (!tokenData || !tokenData.spreadsheetId) return;
+
+    const values = await fetchSheetValues(
+      tokenData.accessToken,
+      tokenData.spreadsheetId,
+      'team_email_threads!A:F'
+    );
+    if (!values || values.length < 2) return;
+
+    for (let i = 1; i < values.length; i++) {
+      if (values[i][0] === teamId) {
+        const sheetRowNumber = i + 1;
+        const now = new Date().toISOString();
+        // Update message_id (B), thread_id (C), updated_at (F)
+        await updateSheetValues(
+          tokenData.accessToken,
+          tokenData.spreadsheetId,
+          `team_email_threads!B${sheetRowNumber}:C${sheetRowNumber}`,
+          [[gmailMessageId, gmailThreadId]]
+        );
+        await updateSheetValues(
+          tokenData.accessToken,
+          tokenData.spreadsheetId,
+          `team_email_threads!F${sheetRowNumber}`,
+          [[now]]
+        );
+        logger.info(`Updated Gmail thread for team ${teamId}: threadId=${gmailThreadId}, messageId=${gmailMessageId}`);
+        return;
+      }
+    }
+    logger.warn(`updateTeamEmailThreadId: no row found for teamId=${teamId}`);
+  } catch (err) {
+    logger.error('Error updating team Gmail threadId:', err);
+  }
+}

@@ -143,6 +143,7 @@ export async function saveGmailToken(
  */
 export async function getGmailToken(userEmail: string): Promise<GmailToken | null> {
   try {
+    logger.info(`[TOKEN STORAGE DEBUG] getGmailToken called with userEmail: "${userEmail}"`);
     const tokenData = await generateGoogleSheetsToken();
     if (!tokenData || !tokenData.spreadsheetId) {
       logger.error('Failed to get Google Sheets token');
@@ -153,14 +154,18 @@ export async function getGmailToken(userEmail: string): Promise<GmailToken | nul
     const values = await fetchSheetValues(tokenData.accessToken, spreadsheetId, 'user_tokens!A:E');
 
     if (!values || values.length < 2) {
+      logger.warn(`[TOKEN STORAGE DEBUG] No values found in user_tokens sheet or only header row`);
       return null;
     }
 
     const normalizedEmail = userEmail.toLowerCase();
+    logger.info(`[TOKEN STORAGE DEBUG] Normalized email: "${normalizedEmail}", searching through ${values.length - 1} rows`);
 
     for (let i = 1; i < values.length; i++) {
       const row = values[i];
+      logger.info(`[TOKEN STORAGE DEBUG] Row ${i}: row[0]="${row[0]}", comparing to "${normalizedEmail}", match: ${row[0] === normalizedEmail}`);
       if (row[0] === normalizedEmail) {
+        logger.info(`[TOKEN STORAGE DEBUG] FOUND token for ${userEmail} at row ${i}`);
         return {
           userEmail: row[0],
           refreshToken: row[1],
@@ -171,6 +176,7 @@ export async function getGmailToken(userEmail: string): Promise<GmailToken | nul
       }
     }
 
+    logger.warn(`[TOKEN STORAGE DEBUG] No token found for ${userEmail} (normalized: ${normalizedEmail})`);
     return null;
   } catch (err) {
     logger.error('Error getting Gmail token:', err);

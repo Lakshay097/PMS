@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+﻿import { useCallback } from 'react';
 import { Task, User, TaskTemplate, Subtask, Comment, FollowUp, TaskStatus, SubTeam } from '../types';
 import { dbService } from '../lib/dbService';
 import { checkAndGenerateRecurringTasks } from '../lib/taskEngine';
@@ -22,6 +22,10 @@ interface UseTaskOperationsProps {
   setSimulationMessage: (message: { type: "error" | "success" | "info"; text: string } | null) => void;
   setSubtasks: (subtasks: Subtask[]) => void;
   subtasks: Subtask[];
+  /** Whether the current user has a connected Gmail account */
+  gmailConnected: boolean;
+  /** Opens the Gmail OAuth consent page to connect an account */
+  connectGmail: () => Promise<void>;
 }
 
 export function useTaskOperations({
@@ -40,9 +44,20 @@ export function useTaskOperations({
   setSimulationMessage,
   setSubtasks,
   subtasks,
+  gmailConnected,
+  connectGmail,
 }: UseTaskOperationsProps) {
   const handleCreateTaskOrTemplate = useCallback(async (data: any) => {
     if (!currentUser) return;
+
+    if (!gmailConnected) {
+      setSimulationMessage({
+        type: 'error',
+        text: `Gmail not connected for ${currentUser.Email}. Connect your Gmail account in Settings -> Gmail before assigning tasks.`,
+      });
+      connectGmail().catch(() => { });
+      return;
+    }
 
     const isTemplate = data.TaskType === 'Recurring';
     const nowStr = new Date().toISOString();
@@ -88,12 +103,12 @@ export function useTaskOperations({
         const newId = `TSK-${Math.floor(1000 + Math.random() * 8999)}`;
         const firstEmail = data.AssignedToEmail.split(',')[0]?.trim() || '';
         const recipient = users.find(u => u.Email === firstEmail);
-        
+
         // Use provided team IDs or fallback to recipient's team IDs
-        const assignedTeamIDs = data.AssignedToTeamIDs && data.AssignedToTeamIDs.length > 0 
-          ? data.AssignedToTeamIDs 
+        const assignedTeamIDs = data.AssignedToTeamIDs && data.AssignedToTeamIDs.length > 0
+          ? data.AssignedToTeamIDs
           : (recipient ? recipient.TeamIDs : currentUser.TeamIDs);
-        
+
         const newTask: Task = {
           TaskID: newId,
           TemplateID: null,
@@ -121,28 +136,17 @@ export function useTaskOperations({
           AttachmentLink: data.AttachmentLink || '',
           CreatedAt: nowStr,
           UpdatedAt: nowStr,
+          CreatedByEmail: currentUser.Email,
           Active: true,
           DeletedAt: null
         };
 
         await dbService.saveTask(newTask);
         await logAudit('Task', newId, 'Created One-time Task Allocation', '', JSON.stringify(data));
-        
+
         // Trigger email notification
         try {
           console.log('[FRONTEND EMAIL DEBUG] Attempting to trigger task assignment email');
-          console.log('[FRONTEND EMAIL DEBUG] Payload:', {
-            assignerEmail: currentUser.Email,
-            assignedToEmail: newTask.AssignedToEmail,
-            task: {
-              TaskID: newTask.TaskID,
-              Title: newTask.Title,
-              Description: newTask.Description,
-              DueDate: newTask.DueDate,
-              Priority: newTask.Priority,
-              AttachmentLink: newTask.AttachmentLink,
-            },
-          });
           const result = await triggerTaskAssignmentEmail({
             assignerEmail: currentUser.Email,
             assignedToEmail: newTask.AssignedToEmail,
@@ -156,10 +160,21 @@ export function useTaskOperations({
             },
           });
           console.log('[FRONTEND EMAIL DEBUG] Email trigger result:', result);
+
+          if (!result.success) {
+            const errorMessage = result.error || result.message || 'Failed to send assignment email';
+            const userFriendlyMessage = errorMessage.includes('Gmail')
+              ? `${errorMessage} Please connect your Gmail account in Settings to send emails.`
+              : errorMessage;
+            triggerNotification('error', userFriendlyMessage, newTask.AssignedToEmail);
+          }
+          // NOTE: triggerTaskCreationEmail removed - assignment email is the single
+          // notification on task creation. Firing both sent two emails with different
+          // templates to the same recipient on the same action.
         } catch (emailError) {
           console.error('[FRONTEND EMAIL ERROR] Failed to trigger task assignment email:', emailError);
         }
-        
+
         const alertMsg = formatEmailTemplate('template_assigned_email', newTask);
         triggerNotification(
           'Task Assignment',
@@ -171,12 +186,21 @@ export function useTaskOperations({
     } catch (error) {
       throw error;
     }
-  }, [currentUser, users, subTeams, triggerNotification, formatEmailTemplate, logAudit]);
+  }, [currentUser, users, subTeams, triggerNotification, formatEmailTemplate, logAudit, gmailConnected, connectGmail, setSimulationMessage]);
 
   const handleCloseTask = useCallback(async (taskId: string, remark: string, attachmentLink?: string) => {
+    if (!currentUser) return;
+    if (!gmailConnected) {
+      setSimulationMessage({
+        type: 'error',
+        text: `Gmail not connected for ${currentUser.Email}. Connect your Gmail account in Settings -> Gmail before closing/reporting tasks.`,
+      });
+      connectGmail().catch(() => { });
+      return;
+    }
+
     const nowStr = new Date().toISOString();
     const targetTask = tasks.find(t => t.TaskID === taskId);
-
     if (targetTask) {
       let finalAttachment = targetTask.AttachmentLink;
       if (attachmentLink) {
@@ -193,9 +217,9 @@ export function useTaskOperations({
 
       const closedInSubTeamIDs = assigneeEmails.length > 0
         ? assigneeEmails.flatMap(email => {
-            const assignee = users.find(u => u.Email.toLowerCase() === email.toLowerCase());
-            return assignee?.SubTeamIDs || [];
-          })
+          const assignee = users.find(u => u.Email.toLowerCase() === email.toLowerCase());
+          return assignee?.SubTeamIDs || [];
+        })
         : null;
 
       const updatedTask: Task = {
@@ -218,6 +242,7 @@ export function useTaskOperations({
         await triggerTaskClosureEmail({
           closedByEmail: currentUser.Email,
           assignedToEmail: targetTask.AssignedToEmail,
+          allocatorEmail: targetTask.AssignedByEmail,
           task: updatedTask,
           closeRemark: remark,
         });
@@ -228,7 +253,7 @@ export function useTaskOperations({
 
     await logAudit('Task', taskId, 'Task Cleared & Closed', '', JSON.stringify({ Remark: remark }));
     // Optimistic update handles UI refresh automatically
-  }, [tasks, selectedTask, setSelectedTask, logAudit, currentUser, users]);
+  }, [tasks, selectedTask, setSelectedTask, logAudit, currentUser, users, gmailConnected, connectGmail, setSimulationMessage]);
 
   const handleUpdateTask = useCallback(async (taskId: string, fields: Partial<Task>) => {
     if (!currentUser) return;
@@ -291,7 +316,7 @@ export function useTaskOperations({
       if (selectedTask && selectedTask.TaskID === taskId) {
         setSelectedTask(updatedTask);
       }
-      
+
       await logAudit('Task', taskId, 'Updated Task Properties', '', JSON.stringify(fields));
       // Optimistic update handles UI refresh automatically
     }
@@ -306,12 +331,12 @@ export function useTaskOperations({
 
     const nextFCount = parent.FollowUpCount + 1;
 
-    // Calculate new due date — 7 days from today
+    // Calculate new due date - 7 days from today
     const newDue = new Date();
     newDue.setDate(newDue.getDate() + 7);
     const newDueStr = `${newDue.getFullYear()}-${String(newDue.getMonth() + 1).padStart(2, '0')}-${String(newDue.getDate()).padStart(2, '0')}`;
 
-    // Update the original task in place — reopen it
+    // Update the original task in place - reopen it
     const updatedTask: Task = {
       ...parent,
       Status: 'Reopened',
@@ -335,7 +360,7 @@ export function useTaskOperations({
     const newFollowUpRecord: FollowUp = {
       FollowUpID: followId,
       ParentTaskID: parentTaskId,
-      NewTaskID: parentTaskId,          // same task — no new task created
+      NewTaskID: parentTaskId,          // same task - no new task created
       FollowUpNumber: nextFCount,
       Reason: reason,
       CreatedAt: nowStr,
@@ -359,7 +384,7 @@ export function useTaskOperations({
 
   const handleAddSubtask = useCallback(async (taskId: string, data: { title: string; assignedTo?: string; dueDate?: string }) => {
     if (!currentUser) return;
-    
+
     const newSubtask: Subtask = {
       SubtaskID: `SUB-${Math.floor(1000 + Math.random() * 8999)}`,
       TaskID: taskId,
@@ -391,7 +416,7 @@ export function useTaskOperations({
 
   const handleAddComment = useCallback(async (taskId: string, comment: string) => {
     if (!currentUser) return;
-    
+
     const newComment: Comment = {
       CommentID: `CMT-${Math.floor(1000 + Math.random() * 8999)}`,
       TaskID: taskId,
@@ -405,12 +430,12 @@ export function useTaskOperations({
 
   const handleDeleteTask = useCallback(async (taskId: string) => {
     if (!currentUser) return;
-    
+
     try {
       await dbService.deleteTask(taskId);
       await logAudit('Task', taskId, 'Deleted Task', '', '');
       // Optimistic update handles UI refresh automatically
-      
+
       // Clear selected task if it's the deleted one
       if (selectedTask && selectedTask.TaskID === taskId) {
         setSelectedTask(null);
@@ -467,3 +492,6 @@ export function useTaskOperations({
     runSimulatedRecurrenceEngine,
   };
 }
+
+
+

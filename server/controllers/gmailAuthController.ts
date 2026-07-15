@@ -3,8 +3,8 @@ import { AuthRequest } from '../middleware/auth';
 import { getGmailAuthUrl, exchangeCodeForTokens, getUserEmail } from '../services/gmailOAuthService';
 import { saveGmailToken, deleteGmailToken, isGmailConnected } from '../services/gmailTokenStorage';
 import { initializeUserTokensSheet } from '../services/gmailTokenStorage';
-import { initializeEmailTemplatesSheet } from '../services/emailTemplateStorage';
-import { initializeEmailLogsSheet, initializeTaskEmailThreadsSheet } from '../services/emailLogService';
+import { initializeEmailTemplatesSheet, migrateEmailTemplates } from '../services/emailTemplateStorage';
+import { initializeEmailLogsSheet, initializeTaskEmailThreadsSheet, initializeTeamEmailThreadsSheet } from '../services/emailLogService';
 import { logger } from '../utils/logger';
 
 /**
@@ -17,7 +17,10 @@ export async function initializeEmailSheets(): Promise<void> {
       initializeEmailTemplatesSheet(),
       initializeEmailLogsSheet(),
       initializeTaskEmailThreadsSheet(),
+      initializeTeamEmailThreadsSheet(),
     ]);
+    // Overwrite any templates whose defaults changed in code (safe upsert)
+    await migrateEmailTemplates();
     logger.info('Email sheets initialized successfully');
   } catch (err) {
     logger.error('Error initializing email sheets:', err);

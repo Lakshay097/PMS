@@ -114,6 +114,7 @@ export interface Task {
   AttachmentLink: string;
   CreatedAt: string;
   UpdatedAt: string;
+  CreatedByEmail?: string;
   Active: boolean;
   OriginalDueDate?: string;
   EtaRequestCount?: number;

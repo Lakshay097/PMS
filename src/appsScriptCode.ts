@@ -313,6 +313,7 @@ function createTask_(user, taskData) {
       case 'AttachmentLink': return taskData.AttachmentLink || '';
       case 'CreatedAt': return nowStr;
       case 'UpdatedAt': return nowStr;
+      case 'CreatedByEmail': return user.Email;
       case 'Active': return true;
       default: return '';
     }

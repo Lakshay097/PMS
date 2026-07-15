@@ -4,25 +4,24 @@ import { sendEmailAsUser } from './emailService';
 import { getEmailTemplate } from './emailTemplateStorage';
 import { getTeamReportConfigs } from './teamReportConfigService';
 import { hasReceivedFirstReportEmail, markFirstReportEmailSent } from './userOnboardingService';
+import { getOrCreateTeamEmailThread, updateTeamEmailThreadId } from './emailLogService';
 
 /**
  * Gets or creates a report reminder email thread.
- * Similar to getOrCreateTaskEmailThread but uses Firestore instead of Google Sheets.
+ * Uses Google Sheets team_email_threads to match the task email threading pattern.
  */
 async function getOrCreateReportReminderThread(
   teamId: string,
   recipientEmail: string
 ): Promise<{ threadId?: string; messageId?: string } | null> {
   try {
-    const threadDocId = `${teamId}_${recipientEmail}`;
-    const threadDoc = await firestoreAdmin.collection('report_reminder_threads').doc(threadDocId).get();
-
-    if (threadDoc.exists) {
-      const data = threadDoc.data();
-      logger.info(`Found existing report reminder thread for team ${teamId}: threadId=${data?.gmailThreadId}`);
+    const threadInfo = await getOrCreateTeamEmailThread(teamId, recipientEmail);
+    
+    if (threadInfo) {
+      logger.info(`Found existing report reminder thread for team ${teamId}: threadId=${threadInfo.threadId}`);
       return {
-        threadId: data?.gmailThreadId,
-        messageId: data?.gmailMessageId,
+        threadId: threadInfo.threadId || undefined,
+        messageId: threadInfo.messageId || undefined,
       };
     }
 
@@ -37,7 +36,7 @@ async function getOrCreateReportReminderThread(
 
 /**
  * Updates the report reminder thread info after successful send.
- * Called after every successful send so thread info stays current for reply chaining.
+ * Uses Google Sheets team_email_threads to match the task email threading pattern.
  */
 export async function updateReportReminderThreadId(
   teamId: string,
@@ -46,17 +45,7 @@ export async function updateReportReminderThreadId(
   gmailMessageId: string
 ): Promise<void> {
   try {
-    const threadDocId = `${teamId}_${recipientEmail}`;
-    const now = new Date().toISOString();
-
-    await firestoreAdmin.collection('report_reminder_threads').doc(threadDocId).set({
-      teamId,
-      recipientEmail: recipientEmail.toLowerCase(),
-      gmailThreadId,
-      gmailMessageId,
-      lastSentAt: now,
-    }, { merge: true });
-
+    await updateTeamEmailThreadId(teamId, gmailThreadId, gmailMessageId);
     logger.info(`Updated report reminder thread for team ${teamId}: threadId=${gmailThreadId}, messageId=${gmailMessageId}`);
   } catch (err) {
     logger.error('Error updating report reminder threadId:', err);
@@ -280,7 +269,7 @@ async function sendReportReminder(
     }
 
     const result = await sendEmailAsUser(
-      'rajeev.1@pw.live', // Fixed sender for scheduled reports
+      'rajeev.1@pw.live', // Fixed sender for scheduled report emails (confirmed requirement)
       recipientEmail,
       template.subject,
       template.body,
@@ -324,7 +313,6 @@ export async function checkAndSendReportReminders(): Promise<void> {
     const currentDay = getCurrentDayOfWeek();
     const timeInfo = getCurrentTimeInfo();
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
     
     // Only send emails after 9:30 AM IST (more robust than exact time check)
     if (timeInfo.hour < 9 || (timeInfo.hour === 9 && timeInfo.minute < 30)) {
@@ -350,18 +338,64 @@ export async function checkAndSendReportReminders(): Promise<void> {
       return;
     }
 
-    // Check if already sent today
-    const lastReportReminderDate = getSettingValue(settingsRows, 'last_report_reminder_date', '');
-    const lastReportReminderStatus = getSettingValue(settingsRows, 'last_report_reminder_status', '');
-    
-    if (lastReportReminderDate === todayStr && lastReportReminderStatus === 'success') {
-      logger.info('[SCHEDULER] Report reminders already sent successfully today, skipping');
-      return;
+    // Check if already sent today using Firestore for better reliability during deployments
+    const todayStr = new Date().toISOString().split('T')[0];
+    const schedulerLockDoc = await firestoreAdmin.collection('scheduler_locks').doc('report_reminder').get();
+    const lockData = schedulerLockDoc.exists ? schedulerLockDoc.data() : null;
+
+    if (lockData) {
+      const lastRunDate = lockData.lastRunDate || '';
+      const lastRunStatus = lockData.lastRunStatus || '';
+      const lastRunTimestamp = lockData.lastRunTimestamp || '';
+
+      // Check if status is running but stale (older than 5 minutes) - indicates crashed run
+      let isStaleRunning = false;
+      if (lastRunStatus === 'running' && lastRunTimestamp) {
+        try {
+          const startTime = new Date(lastRunTimestamp).getTime();
+          const elapsedMs = Date.now() - startTime;
+          if (elapsedMs > 5 * 60 * 1000) { // 5 minutes (reduced from 30 for faster recovery)
+            isStaleRunning = true;
+            logger.warn('[SCHEDULER] Previous run stale (running > 5 min), will retry');
+          }
+        } catch (e) {
+          logger.error('[SCHEDULER] Error parsing timestamp', e);
+        }
+      }
+
+      const alreadySentSuccessfully = lastRunDate === todayStr && lastRunStatus === 'success';
+      const isRunningRecently = lastRunDate === todayStr && lastRunStatus === 'running' && !isStaleRunning;
+
+      if (alreadySentSuccessfully) {
+        logger.info('[SCHEDULER] Report reminders already sent successfully today, skipping');
+        return;
+      }
+
+      if (isRunningRecently) {
+        logger.info('[SCHEDULER] Report reminders already running today, skipping to prevent duplicates');
+        return;
+      }
     }
 
-    // Update status to running
-    await saveSettingValue(accessToken, spreadsheetId, settingsRows, 'last_report_reminder_date', todayStr);
-    await saveSettingValue(accessToken, spreadsheetId, settingsRows, 'last_report_reminder_status', 'running');
+    // Set lock to running with timestamp (Firestore transaction for atomicity)
+    await firestoreAdmin.collection('scheduler_locks').doc('report_reminder').set({
+      lastRunDate: todayStr,
+      lastRunStatus: 'running',
+      lastRunTimestamp: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+
+    // Check email_enabled_scheduled_reports flag — respect Admin Panel on/off toggle
+    const scheduledReportsEnabled = getSettingValue(settingsRows, 'email_enabled_scheduled_reports', 'true');
+    if (scheduledReportsEnabled === 'false') {
+      logger.info('[SCHEDULER] Skipping — email_enabled_scheduled_reports is disabled');
+      // Reset lock since we're not actually running
+      await firestoreAdmin.collection('scheduler_locks').doc('report_reminder').update({
+        lastRunStatus: 'skipped',
+        updatedAt: new Date().toISOString()
+      });
+      return;
+    }
 
     // Get all team report configurations
     const configs = await getTeamReportConfigs();
@@ -471,21 +505,26 @@ export async function checkAndSendReportReminders(): Promise<void> {
 
     logger.info(`[SCHEDULER] Report reminder check complete: ${successCount} sent, ${failureCount} failed`);
 
-    // Update final status
+    // Update final status in Firestore (more reliable than Google Sheets)
     const finalStatus = failureCount === 0 ? 'success' : 'partial_success';
-    await saveSettingValue(accessToken, spreadsheetId, settingsRows, 'last_report_reminder_status', finalStatus);
+    await firestoreAdmin.collection('scheduler_locks').doc('report_reminder').update({
+      lastRunStatus: finalStatus,
+      lastRunTimestamp: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      successCount,
+      failureCount
+    });
 
   } catch (error) {
     logger.error('Error in checkAndSendReportReminders:', error);
-    // Update status to failed on error
+    // Update status to failed on error (use Firestore for reliability)
     try {
-      const tokenData = await generateGoogleSheetsToken();
-      if (tokenData && tokenData.spreadsheetId) {
-        const settingsRows = await fetchSheetValues(tokenData.accessToken, tokenData.spreadsheetId, 'settings!A:B');
-        if (settingsRows) {
-          await saveSettingValue(tokenData.accessToken, tokenData.spreadsheetId, settingsRows, 'last_report_reminder_status', 'failed');
-        }
-      }
+      await firestoreAdmin.collection('scheduler_locks').doc('report_reminder').update({
+        lastRunStatus: 'failed',
+        lastRunTimestamp: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        error: String(error)
+      });
     } catch (saveError) {
       logger.error('Failed to update error status:', saveError);
     }

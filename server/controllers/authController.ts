@@ -373,6 +373,20 @@ export async function changePasswordHandler(req: AuthRequest, res: Response): Pr
   userRow[12] = hashedPassword; // Password (M)
   userRow[11] = now; // UpdatedAt (L)
 
+  // CRITICAL: Update Firestore FIRST, then Sheets
+  // The background Firestore→Sheets sync runs every 5 minutes and will overwrite
+  // Sheets with Firestore data. If we don't update Firestore first, the new password
+  // in Sheets will be immediately overwritten by the old/empty value from Firestore.
+  try {
+    await firestoreAdmin.collection('users').doc(normalizedEmail).set({
+      Password: hashedPassword,
+      UpdatedAt: now,
+    }, { merge: true });
+  } catch (firestoreErr) {
+    console.error("Failed to update password in Firestore:", firestoreErr);
+    throw new InternalServerError("Failed to update password in Firestore");
+  }
+
   // Update the user row in Google Sheets
   const success = await updateSheetValues(
     tokenData.accessToken,
@@ -382,19 +396,7 @@ export async function changePasswordHandler(req: AuthRequest, res: Response): Pr
   );
 
   if (!success) {
-    throw new InternalServerError("Failed to update password");
-  }
-
-  // Keep Firestore in sync so the background Firestore→Sheets sync doesn't
-  // overwrite column M with the old hash on the next 5-minute flush.
-  try {
-    await firestoreAdmin.collection('users').doc(normalizedEmail).set({
-      Password: hashedPassword,
-      UpdatedAt: now,
-    }, { merge: true });
-  } catch (firestoreErr) {
-    console.error("Failed to mirror password change into Firestore:", firestoreErr);
-    // Non-fatal: Sheets is already updated, Firestore will be corrected on next full sync
+    throw new InternalServerError("Failed to update password in Sheets");
   }
 
   res.json({

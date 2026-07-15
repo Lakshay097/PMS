@@ -148,6 +148,8 @@ describe('handleUpdateTask assignment validation', () => {
     setSimulationMessage: vi.fn(),
     setSubtasks: vi.fn(),
     subtasks: [],
+    gmailConnected: true,
+    connectGmail: vi.fn(() => Promise.resolve()),
   };
 
   beforeEach(() => {
@@ -403,6 +405,8 @@ describe('handleCloseTask approval-with-Team logic', () => {
     setSimulationMessage: vi.fn(),
     setSubtasks: vi.fn(),
     subtasks: [],
+    gmailConnected: true,
+    connectGmail: vi.fn(() => Promise.resolve()),
   };
 
   beforeEach(() => {

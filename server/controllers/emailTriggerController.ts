@@ -1,7 +1,37 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { triggerTaskAssignmentEmail, triggerTaskDueSoonEmail, triggerTaskOverdueEmail, triggerReportSubmissionEmail, triggerTaskClosureEmail } from '../services/emailTriggerService';
+import { triggerTaskCreationEmail, triggerTaskAssignmentEmail, triggerTaskDueSoonEmail, triggerTaskOverdueEmail, triggerReportSubmissionEmail, triggerTaskClosureEmail } from '../services/emailTriggerService';
 import { logger } from '../utils/logger';
+
+/**
+ * POST /api/email/trigger/task-creation
+ * Triggers task creation email (notifies assignees a new task was created for them)
+ */
+export async function triggerTaskCreationHandler(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { creatorEmail, assignedToEmail, task } = req.body;
+
+    logger.info(`[CONTROLLER DEBUG] Task creation email trigger request: creator=${creatorEmail}, assignedTo=${assignedToEmail}, task=${task?.TaskID}`);
+
+    if (!creatorEmail || !assignedToEmail || !task) {
+      logger.warn('[CONTROLLER ERROR] Missing required fields in task creation email trigger');
+      res.status(400).json({ success: false, error: 'Missing required fields' });
+      return;
+    }
+
+    // Fire and forget
+    res.json({ success: true, message: 'Task creation email triggered' });
+
+    triggerTaskCreationEmail(creatorEmail, assignedToEmail, task).catch(err => {
+      logger.error('[CONTROLLER ERROR] Error in fire-and-forget task creation email trigger:', err);
+    });
+  } catch (err) {
+    logger.error('[CONTROLLER ERROR] Error in task creation email trigger:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: 'Failed to trigger email' });
+    }
+  }
+}
 
 /**
  * POST /api/email/trigger/task-assignment
@@ -16,7 +46,7 @@ export async function triggerTaskAssignmentHandler(req: AuthRequest, res: Respon
 
     if (!assignerEmail || !assignedToEmail || !task) {
       logger.warn('[CONTROLLER ERROR] Missing required fields in task assignment email trigger');
-      res.status(400).json({ error: 'Missing required fields' });
+      res.status(400).json({ success: false, error: 'Missing required fields' });
       return;
     }
 
@@ -37,7 +67,7 @@ export async function triggerTaskAssignmentHandler(req: AuthRequest, res: Respon
   } catch (err) {
     logger.error('[CONTROLLER ERROR] Error in task assignment email trigger:', err);
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to trigger email' });
+      res.status(500).json({ success: false, error: 'Failed to trigger email' });
     }
   }
 }
@@ -123,12 +153,12 @@ export async function triggerReportSubmissionHandler(req: AuthRequest, res: Resp
  */
 export async function triggerTaskClosureHandler(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { closedByEmail, assignedToEmail, task, closeRemark } = req.body;
+    const { closedByEmail, assignedToEmail, allocatorEmail, task, closeRemark } = req.body;
     if (!closedByEmail || !assignedToEmail || !task || !closeRemark) {
       res.status(400).json({ error: 'Missing required fields' });
       return;
     }
-    triggerTaskClosureEmail(closedByEmail, assignedToEmail, task, closeRemark).catch(err => {
+    triggerTaskClosureEmail(closedByEmail, assignedToEmail, task, closeRemark, allocatorEmail).catch(err => {
       logger.error('Error in fire-and-forget closure email trigger:', err);
     });
     res.json({ success: true, message: 'Task closure email triggered' });

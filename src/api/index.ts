@@ -5,3 +5,4 @@ export * from './token';
 export * from './templates';
 export * from './emailTrigger';
 export * from './teamReminder';
+export * from './gmail';

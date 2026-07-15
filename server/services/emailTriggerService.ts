@@ -115,15 +115,22 @@ export async function triggerTaskCreationEmail(
     const usersMap = await loadUsersNameMap();
     const createdByName = usersMap.get(creatorEmail.trim().toLowerCase()) || creatorEmail;
 
+    // FIX: Use task.CreatedByEmail if creatorEmail not provided
+    const actualCreatorEmail = creatorEmail || task.CreatedByEmail || task.CreatedBy || task.creatorEmail;
+    if (!actualCreatorEmail) {
+      logger.error(`[TRIGGER ERROR] No creator email found for task ${task.TaskID}`);
+      return;
+    }
+
     logger.info(`Creation email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
 
     const allParticipants = threadInfo?.participants?.split(',').map((p: string) => p.trim()).filter(Boolean) || [];
-    const toRecipients = allParticipants.filter((p: string) => p !== creatorEmail && !recipients.includes(p));
+    const toRecipients = allParticipants.filter((p: string) => p !== actualCreatorEmail && !recipients.includes(p));
 
     for (const recipient of recipients) {
       const assignedToName = usersMap.get(recipient.trim().toLowerCase()) || recipient;
       const result = await sendEmailAsUser(
-        creatorEmail,
+        actualCreatorEmail,
         recipient,
         emailSubject,
         '',
@@ -177,7 +184,13 @@ export async function triggerTaskAssignmentEmail(
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
 
     const usersMap = await loadUsersNameMap();
-    const assignedByName = usersMap.get(assignerEmail.trim().toLowerCase()) || assignerEmail;
+    // FIX: Use task.CreatedByEmail/AssignedByEmail if assignerEmail not provided
+    const actualAssignerEmail = assignerEmail || task.CreatedByEmail || task.AssignedByEmail || task.CreatedBy || task.creatorEmail;
+    if (!actualAssignerEmail) {
+      logger.error(`[TRIGGER ERROR] No assigner email found for task ${task.TaskID}`);
+      return;
+    }
+    const assignedByName = usersMap.get(actualAssignerEmail.trim().toLowerCase()) || actualAssignerEmail;
 
     logger.info(`Assignment email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
 
@@ -185,7 +198,7 @@ export async function triggerTaskAssignmentEmail(
     // Every email CCs everyone except the current sender and primary To,
     // so the full thread is visible to all parties regardless of who sends next.
     const allKnown = [
-      assignerEmail,
+      actualAssignerEmail,
       ...recipients,
       ...(threadInfo?.participants?.split(',').map((p: string) => p.trim()).filter(Boolean) || []),
     ];
@@ -195,15 +208,15 @@ export async function triggerTaskAssignmentEmail(
       logger.info(`[TRIGGER DEBUG] Sending to recipient: ${recipient}`);
       const assignedToName = usersMap.get(recipient.trim().toLowerCase()) || recipient;
 
-      // TO = everyone except sender (assignerEmail) - first recipient is primary TO, others are additional TO
+      // TO = everyone except sender (actualAssignerEmail) - first recipient is primary TO, others are additional TO
       const toRecipients = uniqueKnown
-        .filter(e => e !== assignerEmail.toLowerCase())
+        .filter(e => e !== actualAssignerEmail.toLowerCase())
         .map(e => allKnown.find(a => a.toLowerCase() === e) || e);
 
       logger.info(`[TRIGGER DEBUG] TO recipients: ${toRecipients.join(', ') || 'none'}`);
 
       const result = await sendEmailAsUser(
-        assignerEmail,
+        actualAssignerEmail,
         recipient,
         emailSubject,
         '',

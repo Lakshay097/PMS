@@ -11,15 +11,14 @@ import { generateGoogleSheetsToken, fetchSheetValues } from './services/googleSh
 
 async function checkTodaysEmails() {
   try {
-    console.log('=== Checking who will get email today (July 14, 2026) ===\n');
-
-    // Determine what day July 14, 2026 is
-    const targetDate = new Date('2026-07-14');
+    // Use today's actual date
+    const targetDate = new Date();
     const tz = process.env.TZ || 'Asia/Kolkata';
-    const options: Intl.DateTimeFormatOptions = { timeZone: tz, weekday: 'long' };
-    const dayName = new Intl.DateTimeFormat('en-US', options).format(targetDate);
+    const options: Intl.DateTimeFormatOptions = { timeZone: tz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    const dayName = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'long' }).format(targetDate);
+    const formattedDate = new Intl.DateTimeFormat('en-US', options).format(targetDate);
     
-    console.log(`Target date: July 14, 2026`);
+    console.log(`=== Checking who will get email today (${formattedDate}) ===\n`);
     console.log(`Day of week: ${dayName}\n`);
 
     // Fetch team report configurations from Firestore
