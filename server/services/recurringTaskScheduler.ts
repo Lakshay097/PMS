@@ -313,7 +313,18 @@ export async function checkAndGenerateRecurringTaskInstances(): Promise<void> {
                   AssignedToName: recipient, // Could be enhanced with name lookup
                   AssignedByEmail: template.AssignedByEmail,
                   AssignedByName: template.AssignedByEmail, // Could be enhanced with name lookup
-                }
+                },
+                undefined, // threadId
+                undefined, // messageId
+                undefined, // taskId
+                undefined, // teamId
+                undefined, // subTeamId
+                undefined, // weekOf
+                undefined, // emailType
+                undefined, // ccEmails
+                undefined, // toRecipients
+                'recurring_task_assignment', // eventType
+                true // forceSystemSender - system-generated email
               );
               
               if (emailSuccess) {

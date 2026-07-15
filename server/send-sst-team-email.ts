@@ -119,7 +119,11 @@ async function sendSSTTeamEmail() {
       sstMember.teamId,
       undefined,
       weekOf,
-      'report_reminder'
+      'report_reminder',
+      undefined, // ccEmails
+      undefined, // toRecipients
+      'sst_team', // eventType
+      true // forceSystemSender - manual script
     );
 
     console.log(`\nResult: success=${result.success}`);

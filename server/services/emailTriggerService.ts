@@ -157,6 +157,8 @@ export async function triggerTaskCreationEmail(
         undefined,
         undefined,
         toRecipients,
+        'task_creation',
+        false
       );
       logger.info(`[TRIGGER DEBUG] Creation email to ${recipient}: success=${result.success}, error=${result.error || 'none'}`);
     }
@@ -243,6 +245,8 @@ export async function triggerTaskAssignmentEmail(
         undefined,
         undefined,
         toRecipients,
+        'task_assignment',
+        false
       );
       logger.info(`[TRIGGER DEBUG] Email send result for ${recipient}: success=${result.success}, usedFallback=${result.usedFallback}, error=${result.error || 'none'}`);
       if (!result.success && result.error) {
@@ -320,6 +324,8 @@ export async function triggerTaskDueSoonEmail(
         undefined,
         undefined,
         toRecipients,
+        'task_due_soon',
+        false
       );
     }
   } catch (err) {
@@ -393,6 +399,8 @@ export async function triggerTaskOverdueEmail(
         undefined,
         undefined,
         toRecipients,
+        'task_overdue',
+        false
       );
     }
   } catch (err) {
@@ -471,6 +479,8 @@ export async function triggerReportSubmissionEmail(
       undefined, // emailType
       undefined,
       toRecipients,
+      'report_submission',
+      false
     );
   } catch (err) {
     logger.error('Error triggering report submission email:', err);
@@ -559,6 +569,8 @@ export async function triggerTaskClosureEmail(
       undefined, // emailType
       undefined,
       toRecipients,
+      'task_closure',
+      false
     );
   } catch (err) {
     console.error('Task closure email FAILED:', err);

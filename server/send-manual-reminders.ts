@@ -222,7 +222,11 @@ async function sendReportReminder(
       team.teamId,
       undefined,
       weekOf,
-      'report_reminder'
+      'report_reminder',
+      undefined, // ccEmails
+      undefined, // toRecipients
+      'manual_report_reminder', // eventType
+      true // forceSystemSender - manual script
     );
 
     if (result.success && result.gmailThreadId && result.gmailMessageId) {

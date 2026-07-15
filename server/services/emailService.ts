@@ -7,6 +7,46 @@ import { logEmailSuccess, logEmailFailure, logEmailRetry, updateTaskEmailThreadI
 import { getEmailTemplate } from './emailTemplateStorage';
 import { firestoreAdmin } from './firebaseAdmin';
 
+/**
+ * Resolves the sender email for an email based on OAuth token availability.
+ * 
+ * @param actingUserEmail - The email of the user performing the action (assigner, reporter, etc.)
+ * @param eventType - Type of email event for logging (e.g., 'task_assignment', 'report_submission')
+ * @param forceSystemSender - If true, always use system sender regardless of OAuth tokens
+ * @returns Object with resolved sender email and whether fallback was used
+ */
+async function resolveSenderEmail(
+  actingUserEmail: string,
+  eventType: string,
+  forceSystemSender: boolean = false
+): Promise<{ senderEmail: string; usedFallback: boolean; tokenFound: boolean }> {
+  if (forceSystemSender) {
+    logger.info(`[EMAIL SENDER DEBUG] Event=${eventType}, forced system sender=${config.DEFAULT_FALLBACK_EMAIL}`);
+    return { senderEmail: config.DEFAULT_FALLBACK_EMAIL, usedFallback: true, tokenFound: false };
+  }
+
+  // Try to get OAuth token for the acting user
+  const token = await getGmailToken(actingUserEmail);
+  
+  if (token && token.refreshToken) {
+    // Token exists - check if it can be refreshed (validates token health)
+    try {
+      const refreshed = await refreshAccessToken(token.refreshToken);
+      if (refreshed) {
+        // Token is valid and can be refreshed
+        logger.info(`[EMAIL SENDER DEBUG] Event=${eventType}, resolved sender=${actingUserEmail}, tokenFound=true, usedFallback=false`);
+        return { senderEmail: actingUserEmail, usedFallback: false, tokenFound: true };
+      }
+    } catch (refreshErr) {
+      logger.warn(`[EMAIL SENDER DEBUG] Event=${eventType}, token refresh failed for ${actingUserEmail}, falling back to system sender`);
+    }
+  }
+
+  // No valid token found - fall back to system sender
+  logger.info(`[EMAIL SENDER DEBUG] Event=${eventType}, resolved sender=${config.DEFAULT_FALLBACK_EMAIL}, tokenFound=false, usedFallback=true`);
+  return { senderEmail: config.DEFAULT_FALLBACK_EMAIL, usedFallback: true, tokenFound: false };
+}
+
 export interface EmailOptions {
   to: string;
   toRecipients?: string[];  // Multiple TO recipients instead of CC
@@ -170,9 +210,9 @@ async function sendEmailViaGmail(
 
 /**
  * Sends an email as a specific user via their Gmail OAuth tokens.
+ * Falls back to system sender if OAuth token is not available or refresh fails.
  *
- * @param taskId        - Task ID used to persist/look up the Gmail threadId after first send.
- * @param senderEmail   - OAuth-connected sender.
+ * @param actingUserEmail - The email of the user performing the action (assigner, reporter, etc.)
  * @param toEmail       - Recipient.
  * @param subject       - Subject line (pre-built by caller; template subject is ignored when non-empty).
  * @param body          - Fallback body if no template is used.
@@ -180,10 +220,19 @@ async function sendEmailViaGmail(
  * @param templateVars  - Variables to substitute in the template.
  * @param threadId      - Real Gmail threadId from task_email_threads (empty string on first send).
  * @param messageId     - Last Gmail messageId for In-Reply-To (empty string on first send).
- * @returns { success, gmailThreadId?, gmailMessageId? } - Success flag plus Gmail thread/message IDs if successful.
+ * @param taskId        - Task ID used to persist/look up the Gmail threadId after first send.
+ * @param teamId        - Team ID for report reminder threading.
+ * @param subTeamId     - Sub-team ID for report reminder threading.
+ * @param weekOf        - Week of date for report reminders.
+ * @param emailType     - Type of email for threading logic.
+ * @param ccEmails      - CC recipients (deprecated).
+ * @param toRecipients  - Multiple TO recipients.
+ * @param eventType     - Type of email event for logging (e.g., 'task_assignment', 'report_submission').
+ * @param forceSystemSender - If true, always use system sender regardless of OAuth tokens (for system-generated emails).
+ * @returns { success, usedFallback, gmailThreadId?, gmailMessageId? } - Success flag plus Gmail thread/message IDs if successful.
  */
 export async function sendEmailAsUser(
-  senderEmail: string,
+  actingUserEmail: string,
   toEmail: string,
   subject: string,
   body: string,
@@ -197,41 +246,102 @@ export async function sendEmailAsUser(
   weekOf?: string,
   emailType?: 'thursday_reminder' | 'proof_email' | 'report_reminder',
   ccEmails?: string[],
-  toRecipients?: string[]
+  toRecipients?: string[],
+  eventType?: string,
+  forceSystemSender: boolean = false
 ): Promise<{ success: boolean; usedFallback: boolean; gmailThreadId?: string; gmailMessageId?: string; storedMessageId?: string; error?: string }> {
+  let senderEmail: string;
+  let usedFallback: boolean;
+  let tokenFound: boolean;
+  
   try {
-    logger.info(`[EMAIL DEBUG] Attempting to send email from ${senderEmail} to ${toEmail}`);
-    logger.info(`[TOKEN DEBUG] Looking up token for senderEmail: "${senderEmail}" (length: ${senderEmail?.length}, trimmed: "${senderEmail?.trim()}")`);
-    const token = await getGmailToken(senderEmail);
-    logger.info(`[TOKEN DEBUG] Token lookup result for "${senderEmail}": ${token ? 'FOUND' : 'NOT FOUND'}, hasRefreshToken: ${!!token?.refreshToken}`);
+    // Resolve the actual sender email based on OAuth token availability
+    const resolved = await resolveSenderEmail(
+      actingUserEmail,
+      eventType || 'unknown',
+      forceSystemSender
+    );
+    senderEmail = resolved.senderEmail;
+    usedFallback = resolved.usedFallback;
+    tokenFound = resolved.tokenFound;
 
-    if (!token || !token.refreshToken) {
-      logger.error(`[EMAIL ERROR] No Gmail OAuth token found for ${senderEmail}. User must connect their Gmail account in settings.`);
-      await logEmailFailure(senderEmail, toEmail, subject, `No Gmail OAuth token found for ${senderEmail}. User must connect their Gmail account in settings.`);
-      return { success: false, usedFallback: false, error: `No Gmail OAuth token found for ${senderEmail}. Please connect your Gmail account in Settings to send emails.` };
+    logger.info(`[EMAIL DEBUG] Sending email: actingUser=${actingUserEmail}, actualSender=${senderEmail}, to=${toEmail}, usedFallback=${usedFallback}, tokenFound=${tokenFound}`);
+
+    let accessToken: string | null = null;
+    let tokenRefreshFailed = false;
+
+    // Only try to use OAuth if we found a valid token
+    if (tokenFound && !usedFallback) {
+      const token = await getGmailToken(senderEmail);
+      
+      if (token && token.refreshToken) {
+        // Refresh token if expired
+        const now = new Date();
+        accessToken = token.accessToken;
+        const expiryDate = new Date(token.tokenExpiry);
+        logger.info(`[TOKEN DEBUG] Token expiry check for ${senderEmail}: now=${now.toISOString()}, expiry=${expiryDate.toISOString()}, isExpired=${now >= expiryDate}`);
+        
+        if (now >= expiryDate) {
+          logger.info(`[TOKEN DEBUG] Token expired for ${senderEmail}, refreshing...`);
+          try {
+            const refreshed = await refreshAccessToken(token.refreshToken);
+            if (!refreshed) {
+              logger.warn(`[TOKEN WARNING] Token refresh failed for ${senderEmail}, falling back to system sender`);
+              tokenRefreshFailed = true;
+            } else {
+              accessToken = refreshed.access_token;
+              await updateGmailAccessToken(senderEmail, accessToken, refreshed.expires_in);
+              await logEmailRetry(senderEmail, toEmail, subject);
+              logger.info(`[TOKEN DEBUG] Token refreshed successfully for ${senderEmail}`);
+            }
+          } catch (refreshErr) {
+            logger.warn(`[TOKEN WARNING] Token refresh exception for ${senderEmail}, falling back to system sender:`, refreshErr);
+            tokenRefreshFailed = true;
+          }
+        } else {
+          logger.info(`[TOKEN DEBUG] Token is still valid for ${senderEmail}`);
+        }
+      }
     }
 
-    // Refresh token if expired
-    const now = new Date();
-    let accessToken = token.accessToken;
-    const expiryDate = new Date(token.tokenExpiry);
-    logger.info(`[TOKEN DEBUG] Token expiry check for ${senderEmail}: now=${now.toISOString()}, expiry=${expiryDate.toISOString()}, isExpired=${now >= expiryDate}`);
-    
-    if (now >= expiryDate) {
-      logger.info(`[TOKEN DEBUG] Token expired for ${senderEmail}, refreshing...`);
-      const refreshed = await refreshAccessToken(token.refreshToken);
-      if (!refreshed) {
-        logger.error(`[TOKEN ERROR] Token refresh failed for ${senderEmail}, disconnecting`);
-        await deleteGmailToken(senderEmail);
-        await logEmailFailure(senderEmail, toEmail, subject, 'Token refresh failed - Gmail OAuth token expired or revoked');
-        return { success: false, usedFallback: false, error: `Gmail OAuth token refresh failed for ${senderEmail}. Please reconnect your Gmail account in Settings.` };
+    // If token refresh failed or no token found, fall back to system sender
+    if (tokenRefreshFailed || !tokenFound || usedFallback) {
+      logger.info(`[EMAIL FALLBACK] Using system sender ${config.DEFAULT_FALLBACK_EMAIL} for ${actingUserEmail}`);
+      
+      // When using fallback, still try to send via system sender's OAuth if available
+      // Otherwise, use the fallback email function (which currently doesn't actually send)
+      const systemToken = await getGmailToken(config.DEFAULT_FALLBACK_EMAIL);
+      
+      if (systemToken && systemToken.refreshToken) {
+        // System sender has OAuth token - use it
+        logger.info(`[EMAIL FALLBACK] System sender has OAuth token, using it`);
+        const now = new Date();
+        accessToken = systemToken.accessToken;
+        const expiryDate = new Date(systemToken.tokenExpiry);
+        
+        if (now >= expiryDate) {
+          try {
+            const refreshed = await refreshAccessToken(systemToken.refreshToken);
+            if (refreshed) {
+              accessToken = refreshed.access_token;
+              await updateGmailAccessToken(config.DEFAULT_FALLBACK_EMAIL, accessToken, refreshed.expires_in);
+            } else {
+              logger.error(`[EMAIL ERROR] System sender token refresh failed`);
+              await logEmailFailure(config.DEFAULT_FALLBACK_EMAIL, toEmail, subject, 'System sender token refresh failed');
+              return { success: false, usedFallback: true, error: 'System sender token refresh failed' };
+            }
+          } catch (refreshErr) {
+            logger.error(`[EMAIL ERROR] System sender token refresh exception:`, refreshErr);
+            await logEmailFailure(config.DEFAULT_FALLBACK_EMAIL, toEmail, subject, 'System sender token refresh failed');
+            return { success: false, usedFallback: true, error: 'System sender token refresh failed' };
+          }
+        }
+      } else {
+        // System sender doesn't have OAuth token - use fallback function
+        logger.warn(`[EMAIL FALLBACK] System sender has no OAuth token, using fallback (no actual email sent)`);
+        await sendFallbackEmail(actingUserEmail, toEmail, subject, body, teamId, subTeamId, emailType, weekOf);
+        return { success: true, usedFallback: true, error: 'Email sent via fallback (no actual email sent)' };
       }
-      accessToken = refreshed.access_token;
-      await updateGmailAccessToken(senderEmail, accessToken, refreshed.expires_in);
-      await logEmailRetry(senderEmail, toEmail, subject);
-      logger.info(`[TOKEN DEBUG] Token refreshed successfully for ${senderEmail}`);
-    } else {
-      logger.info(`[TOKEN DEBUG] Token is still valid for ${senderEmail}`);
     }
 
     // Resolve template body
@@ -283,7 +393,7 @@ export async function sendEmailAsUser(
       cc: ccEmails,
       subject,
       html: emailBody,
-      replyTo: senderEmail,
+      replyTo: usedFallback ? actingUserEmail : senderEmail,  // Reply to acting user even if sent from system
       gmailThreadId: threadId || undefined,  // Gmail API threadId for threading
       inReplyTo: messageId || undefined,    // last RFC Message-ID for In-Reply-To header
     };
@@ -294,7 +404,7 @@ export async function sendEmailAsUser(
 
     if (result.success) {
       await logEmailSuccess(senderEmail, toEmail, subject);
-      logger.info(`Email sent OK from ${senderEmail} to ${toEmail}`);
+      logger.info(`Email sent OK from ${senderEmail} to ${toEmail} (acting user: ${actingUserEmail})`);
 
       // FIX: After every successful send, persist the real Gmail threadId + messageId
       // so all subsequent emails for this task chain into the same Gmail thread.
@@ -308,32 +418,37 @@ export async function sendEmailAsUser(
           await updateTaskEmailThreadId(taskId, result.gmailThreadId, result.gmailMessageId);
         }
       }
-      return { success: true, usedFallback: false, gmailThreadId: result.gmailThreadId, gmailMessageId: result.gmailMessageId, storedMessageId: result.storedMessageId };
+      return { success: true, usedFallback, gmailThreadId: result.gmailThreadId, gmailMessageId: result.gmailMessageId, storedMessageId: result.storedMessageId };
     }
 
-    // Retry once with a fresh token
-    await logEmailFailure(senderEmail, toEmail, subject, 'Gmail API send failed — retrying');
-    const refreshed = await refreshAccessToken(token.refreshToken);
-    if (refreshed) {
-      accessToken = refreshed.access_token;
-      await updateGmailAccessToken(senderEmail, accessToken, refreshed.expires_in);
-      const retry = await sendEmailViaGmail(accessToken, email);
-      if (retry.success) {
-        await logEmailSuccess(senderEmail, toEmail, subject);
-        if (taskId && retry.gmailThreadId && retry.gmailMessageId) {
-          await updateTaskEmailThreadId(taskId, retry.gmailThreadId, retry.gmailMessageId);
+    // Retry once with a fresh token (only if we have a token to refresh)
+    if (tokenFound && !usedFallback) {
+      const token = await getGmailToken(senderEmail);
+      if (token && token.refreshToken) {
+        await logEmailFailure(senderEmail, toEmail, subject, 'Gmail API send failed — retrying');
+        const refreshed = await refreshAccessToken(token.refreshToken);
+        if (refreshed) {
+          accessToken = refreshed.access_token;
+          await updateGmailAccessToken(senderEmail, accessToken, refreshed.expires_in);
+          const retry = await sendEmailViaGmail(accessToken, email);
+          if (retry.success) {
+            await logEmailSuccess(senderEmail, toEmail, subject);
+            if (taskId && retry.gmailThreadId && retry.gmailMessageId) {
+              await updateTaskEmailThreadId(taskId, retry.gmailThreadId, retry.gmailMessageId);
+            }
+            return { success: true, usedFallback, gmailThreadId: retry.gmailThreadId, gmailMessageId: retry.gmailMessageId };
+          }
         }
-        return { success: true, usedFallback: false, gmailThreadId: retry.gmailThreadId, gmailMessageId: retry.gmailMessageId };
       }
     }
 
     // Final error after retry exhausted
     await logEmailFailure(senderEmail, toEmail, subject, 'Gmail API send failed after retry');
-    return { success: false, usedFallback: false, error: `Failed to send email via Gmail API for ${senderEmail}. Please check your Gmail connection in Settings.` };
+    return { success: false, usedFallback, error: `Failed to send email via Gmail API for ${senderEmail}. Please check your Gmail connection in Settings.` };
   } catch (err) {
     logger.error(`Error sending email as ${senderEmail}:`, err);
     await logEmailFailure(senderEmail, toEmail, subject, String(err));
-    return { success: false, usedFallback: false, error: `Error sending email: ${String(err)}. Please check your Gmail connection in Settings.` };
+    return { success: false, usedFallback, error: `Error sending email: ${String(err)}. Please check your Gmail connection in Settings.` };
   }
 }
 

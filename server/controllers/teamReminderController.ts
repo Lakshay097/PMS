@@ -158,7 +158,10 @@ export async function sendProofEmail(req: AuthRequest, res: Response): Promise<v
         subTeamId,
         weekOf,
         'proof_email',
-        ccLeaderEmails
+        ccLeaderEmails,
+        undefined, // toRecipients
+        'proof_email', // eventType
+        false // forceSystemSender - user-triggered, try user's OAuth
       );
 
       if (result.success) {

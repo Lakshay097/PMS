@@ -376,7 +376,11 @@ async function checkThursdayReminders(): Promise<void> {
               teamId,
               null, // subTeamId
               weekOf,
-              'thursday_reminder'
+              'thursday_reminder',
+              undefined, // ccEmails
+              undefined, // toRecipients
+              'weekly_report_reminder', // eventType
+              true // forceSystemSender - system-generated email
             );
 
             if (result.success) {
@@ -479,7 +483,11 @@ async function checkThursdayReminders(): Promise<void> {
                 teamId,
                 subTeam.subTeamId,
                 weekOf,
-                'thursday_reminder'
+                'thursday_reminder',
+                undefined, // ccEmails
+                undefined, // toRecipients
+                'weekly_report_reminder', // eventType
+                true // forceSystemSender - system-generated email
               );
 
               if (result.success) {

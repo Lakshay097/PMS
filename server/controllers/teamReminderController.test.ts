@@ -154,7 +154,10 @@ describe('teamReminderController', () => {
         'team1',
         undefined,
         'proof_email',
-        expect.any(String)
+        expect.any(String),
+        undefined,
+        'proof_email',
+        false
       );
 
       expect(mockRes.json).toHaveBeenCalledWith({
@@ -296,7 +299,10 @@ describe('teamReminderController', () => {
         'team1',
         'sub1',
         'proof_email',
-        expect.any(String)
+        expect.any(String),
+        undefined,
+        'proof_email',
+        false
       );
     });
 

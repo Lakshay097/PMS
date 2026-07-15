@@ -105,7 +105,11 @@ async function sendPlanningTeamEmail() {
       'TEST-PLANNING', // teamId for testing - DIFFERENT from planning team
       undefined, // subTeamId
       weekOf,
-      'report_reminder'
+      'report_reminder',
+      undefined, // ccEmails
+      undefined, // toRecipients
+      'planning_team_test', // eventType
+      true // forceSystemSender - manual script
     );
 
     console.log(`Test email result: success=${testResult.success}`);
@@ -159,7 +163,11 @@ async function sendPlanningTeamEmail() {
         leader.teamId,
         undefined,
         weekOf,
-        'report_reminder'
+        'report_reminder',
+        undefined, // ccEmails
+        undefined, // toRecipients
+        'planning_team', // eventType
+        true // forceSystemSender - manual script
       );
 
       console.log(`  Result: success=${result.success}`);
