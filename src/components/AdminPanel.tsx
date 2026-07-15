@@ -410,25 +410,33 @@ export default function AdminPanel({
   // Default template content for each type
   const getDefaultTemplateContent = (key: string): { subject: string; body: string } => {
     const defaults: Record<string, { subject: string; body: string }> = {
+      'template_task_creation': {
+        subject: 'New task created for you: {Title}',
+        body: 'Hello {AssignedToName},\n\nA new task has been created and assigned to you:\n\nTask ID: {TaskID}\nTitle: {Title}\nDescription: {Description}\nPriority: {Priority}\nDue Date: {DueDate}\nCreated By: {AssignedByName}\n\nPlease log in and start working on this task.\n\nBest regards,\n{AssignedByName}'
+      },
       'template_assigned_email': {
-        subject: 'New task assigned: {Title}',
-        body: 'Hello {AssignedToEmail},\n\nYou have been assigned a new task:\n\nTask ID: {TaskID}\nTitle: {Title}\nDescription: {Description}\nPriority: {Priority}\nDue Date: {DueDate}\n\nPlease review and start working on this task.\n\nBest regards,\nPMS Team'
+        subject: '{Title}',
+        body: 'Hello {AssignedToName},\n\nYou have been assigned a new task:\n\nTask ID: {TaskID}\nTitle: {Title}\nDescription: {Description}\nPriority: {Priority}\nDue Date: {DueDate}\nAssigned By: {AssignedByName}\n\nPlease review and start working on this task.\n\nBest regards,\n{AssignedByName}'
       },
       'template_delayed_email': {
         subject: 'Task overdue: {Title}',
-        body: 'URGENT: Task Overdue Alert\n\nHello {AssignedToEmail},\n\nThe following task is now overdue:\n\nTask ID: {TaskID}\nTitle: {Title}\nDue Date: {DueDate}\nPriority: {Priority}\n\nPlease address this immediately.\n\nBest regards,\nPMS Team'
+        body: 'URGENT: Task Overdue Alert\n\nHello {AssignedToName},\n\nThe following task is now overdue:\n\nTask ID: {TaskID}\nTitle: {Title}\nDue Date: {DueDate}\nPriority: {Priority}\n\nPlease address this immediately.\n\nBest regards,\nPMS Team'
       },
       'template_scheduled_reminder': {
-        subject: 'Scheduled Document Reminder: Weekly Report for {TeamName}',
-        body: 'Hello,\n\nThis is a reminder for team leaders of team "{TeamName}" to submit the weekly report (scheduled document) due tomorrow.\n\nPlease log in and submit the document:\n\nApp URL: <a href="{AppURL}" style="color: #3b82f6; text-decoration: underline;">{AppURL}</a>\n\nBest regards,\nPMS Team'
+        subject: 'Weekly Report Reminder: Submit PPT by {day} for {TeamName}',
+        body: 'Hello,\n\nThis is a reminder for team leaders of team "{TeamName}" to submit the weekly report by {day}.\n\nPlease log in and submit:\n{AppURL}\n\nBest regards,\nPMS Team'
+      },
+      'template_scheduled_report_reminder': {
+        subject: 'Scheduled Report Submission - {TeamName}',
+        body: 'Hello,\n\nThis is a reminder to submit the scheduled report for {TeamName} at least one day before the scheduled review meeting.\n\nMeeting Day: {day}\n\nPlease log in and upload the report:\n{AppURL}\n\nBest regards,\nPMS Team'
       },
       'report_submitted': {
         subject: 'Progress Report: {Title} [{TaskID}]',
-        body: 'Hello,\n\nA progress report has been submitted for the following task:\n\nTask: {Title}\nTask ID: {TaskID}\nReported By: {assigned_by}\nReported By Email: {assigned_by}\n\nReport Content:\n{report_content}\n\nBest regards,\nPMS Team'
+        body: 'Hello {AllocatorName},\n\nA progress report has been submitted:\n\nTask: {Title}\nTask ID: {TaskID}\nSubmitted By: {SubmittedByName}\n\nReport Content:\n{report_content}\n\nBest regards,\n{SubmittedByName}'
       },
       'task_closed': {
-        subject: 'Task Closed: {Title} [{TaskID}]',
-        body: 'Hello,\n\nThe following task has been marked as closed:\n\nTask: {Title}\nTask ID: {TaskID}\nClosed By: {AssignedByEmail}\nCompletion Date: {DueDate}\n\nClose Remarks:\n{ReportContent}\n\nBest regards,\nPMS Team'
+        subject: 'Task Closed: {task_name} [{task_id}]',
+        body: 'Hello {AssignedToName},\n\nThe following task has been marked as closed:\n\nTask: {task_name}\nTask ID: {task_id}\nClosed By: {ClosedByName}\n\nClose Remarks:\n{close_remark}\n\nBest regards,\n{ClosedByName}'
       }
     };
     return defaults[key] || { subject: '', body: '' };
@@ -860,6 +868,9 @@ export default function AdminPanel({
         ...baseTokens,
         { token: "{assigned_by}", desc: "Reporter Email" },
         { token: "{report_content}", desc: "Progress Report Content" },
+        { token: "{SubmittedByName}", desc: "Submitter Name" },
+        { token: "{AllocatorName}", desc: "Allocator Name" },
+        { token: "{AttachmentLink}", desc: "Attachment Link" },
       ];
     }
     
@@ -867,15 +878,29 @@ export default function AdminPanel({
       return [
         ...baseTokens,
         { token: "{closed_by}", desc: "Closed By User Email" },
+        { token: "{ClosedByName}", desc: "Closed By Name" },
+        { token: "{AssignedToName}", desc: "Assignee Name" },
         { token: "{close_remark}", desc: "Closure Remarks" },
         { token: "{completion_date}", desc: "Date Task Was Closed" },
       ];
     }
     
-    if (selectedEmailTemplateKey === 'template_scheduled_reminder') {
+    if (selectedEmailTemplateKey === 'template_scheduled_reminder' || selectedEmailTemplateKey === 'template_scheduled_report_reminder') {
       return [
         { token: "{TeamName}", desc: "Team Name" },
         { token: "{AppURL}", desc: "Application URL" },
+        { token: "{day}", desc: "Meeting Day" },
+      ];
+    }
+
+    if (selectedEmailTemplateKey === 'template_task_creation') {
+      return [
+        ...baseTokens,
+        { token: "{AssignedToEmail}", desc: "Receiver Mail" },
+        { token: "{AssignedByEmail}", desc: "Creator Mail" },
+        { token: "{AssignedToName}", desc: "Receiver Name" },
+        { token: "{AssignedByName}", desc: "Creator Name" },
+        { token: "{AttachmentLink}", desc: "Attachment Link" },
       ];
     }
     
@@ -884,7 +909,8 @@ export default function AdminPanel({
       { token: "{AssignedToEmail}", desc: "Receiver Mail" },
       { token: "{AssignedByEmail}", desc: "Sender Mail" },
       { token: "{AssignedToName}", desc: "Receiver Name" },
-      { token: "{AssignedByName}", desc: "Sender Name" }
+      { token: "{AssignedByName}", desc: "Sender Name" },
+      { token: "{AttachmentLink}", desc: "Attachment Link" },
     ];
   };
 
@@ -2664,11 +2690,13 @@ export default function AdminPanel({
                   onChange={(e) => setSelectedEmailTemplateKey(e.target.value as any)}
                   className={`bg-transparent border-none font-extrabold text-xs focus:ring-0 outline-none cursor-pointer ${isDarkMode ? 'text-emerald-400' : 'text-emerald-800'}`}
                 >
+                  <option value="template_task_creation">Task Creation</option>
                   <option value="template_assigned_email">Task Assignment</option>
-                  <option value="template_delayed_email">Overdue Alert</option>
-                  <option value="template_scheduled_reminder">Scheduled Report Reminder</option>
-                  <option value="report_submitted">Report Submitted</option>
-                  <option value="task_closed">Task Closed</option>
+                  <option value="template_delayed_email">Task Delay (Due Soon / Overdue)</option>
+                  <option value="task_closed">Task Completion (Closure)</option>
+                  <option value="report_submitted">Task Reporting (Report Submitted)</option>
+                  <option value="template_scheduled_reminder">Scheduled Tasks (Weekly Reminder)</option>
+                  <option value="template_scheduled_report_reminder">Scheduled Reports (Report Reminder)</option>
                 </select>
               </div>
             </div>
@@ -2796,6 +2824,49 @@ export default function AdminPanel({
                     <span>Apply email layout</span>
                   </button>
                 </div>
+
+                {/* Per-type enable/disable toggle — backed by settings key email_enabled_{type} */}
+                {(() => {
+                  const typeKeyMap: Record<string, string> = {
+                    'template_task_creation':          'email_enabled_task_creation',
+                    'template_assigned_email':         'email_enabled_task_assignment',
+                    'template_delayed_email':          'email_enabled_task_delay',
+                    'task_closed':                     'email_enabled_task_completion',
+                    'report_submitted':                'email_enabled_task_reporting',
+                    'template_scheduled_reminder':     'email_enabled_scheduled_tasks',
+                    'template_scheduled_report_reminder': 'email_enabled_scheduled_reports',
+                  };
+                  const settingKey = typeKeyMap[selectedEmailTemplateKey];
+                  if (!settingKey) return null;
+                  const currentValue = settings.find(s => s.Key === settingKey)?.Value ?? 'true';
+                  const isEnabled = currentValue !== 'false';
+                  return (
+                    <div className={`flex items-center justify-between p-3 rounded-xl border mt-2 ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
+                      <div>
+                        <span className={`text-xs font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                          Email type enabled
+                        </span>
+                        <p className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                          Setting: <span className="font-mono">{settingKey}</span>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const newValue = isEnabled ? 'false' : 'true';
+                          await onUpdateSetting(settingKey, newValue);
+                        }}
+                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${isEnabled ? 'bg-emerald-500' : isDarkMode ? 'bg-slate-600' : 'bg-slate-300'}`}
+                        role="switch"
+                        aria-checked={isEnabled}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isEnabled ? 'translate-x-5' : 'translate-x-0'}`}
+                        />
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Right Side: Live HTML / Text simulated email client card preview */}
