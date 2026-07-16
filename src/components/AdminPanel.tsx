@@ -367,8 +367,8 @@ export default function AdminPanel({
   // Report configuration state
   const [teamReportConfigs, setTeamReportConfigs] = useState<Record<string, { reminderDay: string; meetingDay: string }>>({});
   const [editingReportConfigTeamId, setEditingReportConfigTeamId] = useState<string | null>(null);
-  const [editingReminderDay, setEditingReminderDay] = useState('Thursday');
-  const [editingMeetingDay, setEditingMeetingDay] = useState('Friday');
+  const [editingReminderDay, setEditingReminderDay] = useState('');
+  const [editingMeetingDay, setEditingMeetingDay] = useState('');
 
   // Calculate teams that need attention (no leaders or stakeholders)
   const teamsNeedingAttention = teams.filter(team => {
@@ -2309,8 +2309,8 @@ export default function AdminPanel({
                                 onClick={() => {
                                   setEditingReportConfigTeamId(configKey);
                                   const config = teamReportConfigs[configKey];
-                                  setEditingReminderDay(config?.reminderDay || 'Thursday');
-                                  setEditingMeetingDay(config?.meetingDay || 'Friday');
+                                  setEditingReminderDay(config?.reminderDay || '');
+                                  setEditingMeetingDay(config?.meetingDay || '');
                                 }}
                                 className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
                               >
@@ -2328,6 +2328,7 @@ export default function AdminPanel({
                                   onChange={(e) => setEditingReminderDay(e.target.value)}
                                   className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                                 >
+                                  <option value="">Not configured</option>
                                   {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
                                     <option key={day} value={day}>{day}</option>
                                   ))}
@@ -2340,6 +2341,7 @@ export default function AdminPanel({
                                   onChange={(e) => setEditingMeetingDay(e.target.value)}
                                   className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                                 >
+                                  <option value="">Not configured</option>
                                   {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
                                     <option key={day} value={day}>{day}</option>
                                   ))}
@@ -2351,13 +2353,13 @@ export default function AdminPanel({
                               <div>
                                 <span className={`text-xs font-bold block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Reminder Day</span>
                                 <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                                  {teamReportConfigs[configKey]?.reminderDay || 'Thursday'}
+                                  {teamReportConfigs[configKey]?.reminderDay || <span className="text-slate-400 italic">Not configured</span>}
                                 </span>
                               </div>
                               <div>
                                 <span className={`text-xs font-bold block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Meeting Day</span>
                                 <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                                  {teamReportConfigs[configKey]?.meetingDay || 'Friday'}
+                                  {teamReportConfigs[configKey]?.meetingDay || <span className="text-slate-400 italic">Not configured</span>}
                                 </span>
                               </div>
                             </div>
@@ -2387,8 +2389,8 @@ export default function AdminPanel({
                             onClick={() => {
                               setEditingReportConfigTeamId(team.TeamID);
                               const config = teamReportConfigs[team.TeamID];
-                              setEditingReminderDay(config?.reminderDay || 'Thursday');
-                              setEditingMeetingDay(config?.meetingDay || 'Friday');
+                              setEditingReminderDay(config?.reminderDay || '');
+                              setEditingMeetingDay(config?.meetingDay || '');
                             }}
                             className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
                           >
@@ -2406,6 +2408,7 @@ export default function AdminPanel({
                               onChange={(e) => setEditingReminderDay(e.target.value)}
                               className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                             >
+                              <option value="">Not configured</option>
                               {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
                                 <option key={day} value={day}>{day}</option>
                               ))}
@@ -2418,6 +2421,7 @@ export default function AdminPanel({
                               onChange={(e) => setEditingMeetingDay(e.target.value)}
                               className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
                             >
+                              <option value="">Not configured</option>
                               {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
                                 <option key={day} value={day}>{day}</option>
                               ))}
@@ -2429,13 +2433,13 @@ export default function AdminPanel({
                           <div>
                             <span className={`text-xs font-bold block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Reminder Day</span>
                             <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                              {teamReportConfigs[team.TeamID]?.reminderDay || 'Thursday'}
+                              {teamReportConfigs[team.TeamID]?.reminderDay || <span className="text-slate-400 italic">Not configured</span>}
                             </span>
                           </div>
                           <div>
                             <span className={`text-xs font-bold block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Meeting Day</span>
                             <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                              {teamReportConfigs[team.TeamID]?.meetingDay || 'Friday'}
+                              {teamReportConfigs[team.TeamID]?.meetingDay || <span className="text-slate-400 italic">Not configured</span>}
                             </span>
                           </div>
                         </div>
