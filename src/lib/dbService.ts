@@ -1347,7 +1347,10 @@ export const dbService = {
 
     try {
       const snapshot = await getDocs(collection(db, 'sub_teams'));
-      const subTeams = snapshot.docs.map(doc => doc.data() as SubTeam);
+      const subTeams = snapshot.docs.map(doc => ({
+        ...doc.data() as SubTeam,
+        id: doc.id // Include Firestore document ID
+      }));
 
       // Attach sub-team leader emails from settings (same pattern as TeamLeaderEmails)
       const settingsSnapshot = await getDocs(collection(db, 'settings'));

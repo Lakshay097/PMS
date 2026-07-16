@@ -33,6 +33,7 @@ export interface User {
  * settings collection as the single source of truth for all leader assignments.
  */
 export interface SubTeam {
+  id: string;          // Firestore document ID
   SubTeamID: string;   // e.g. "ST-001"
   TeamID: string;      // Parent team
   SubTeamName: string;

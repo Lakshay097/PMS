@@ -2165,8 +2165,10 @@ export default function AdminPanel({
                                         return;
                                       }
                                       const now = new Date().toISOString();
+                                      const subTeamId = `ST-${team.TeamID}-${Date.now()}`;
                                       await onSaveSubTeam?.({
-                                        SubTeamID: `ST-${team.TeamID}-${Date.now()}`,
+                                        id: subTeamId, // Firestore document ID
+                                        SubTeamID: subTeamId,
                                         TeamID: team.TeamID,
                                         SubTeamName: name,
                                         Description: newSubTeamDesc.trim() || undefined,
@@ -2286,7 +2288,8 @@ export default function AdminPanel({
                       const subTeam = subTeams.find(st => st.SubTeamID === subTeamId && st.Active);
                       if (!subTeam) return null;
                       
-                      const configKey = `${team.TeamID}_${subTeam.SubTeamID}`;
+                      // Use sub-team document ID as config key (matches Firestore)
+                      const configKey = subTeam.id;
                       
                       return (
                         <div key={configKey} className={`border rounded-lg p-4 ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
