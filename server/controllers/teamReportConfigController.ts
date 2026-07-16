@@ -33,26 +33,60 @@ export const updateTeamReportConfig = asyncWrapper(async (req, res) => {
     const { teamId } = req.params;
     const { reminderDay, meetingDay } = req.body;
 
-    if (!reminderDay || !meetingDay) {
+    // Allow empty strings to clear configuration, but require both to be set or both empty
+    if ((reminderDay && !meetingDay) || (!reminderDay && meetingDay)) {
       return res.status(400).json({ 
         success: false, 
-        message: 'reminderDay and meetingDay are required' 
+        message: 'Both reminderDay and meetingDay must be set together, or both left empty to clear configuration' 
       });
     }
 
-    // Get the team name from the config or teams collection
+    // If both are empty, delete the configuration
+    if (!reminderDay && !meetingDay) {
+      const { deleteTeamReportConfig } = await import('../services/teamReportConfigService');
+      const success = await deleteTeamReportConfig(teamId);
+      
+      if (success) {
+        res.json({ 
+          success: true, 
+          message: 'Team report configuration cleared successfully' 
+        });
+      } else {
+        res.status(500).json({ 
+          success: false, 
+          message: 'Failed to clear team report configuration' 
+        });
+      }
+      return;
+    }
+
+    // Get the team name from teams or sub_teams collection
     const { firestoreAdmin } = await import('../services/firebaseAdmin');
-    const teamDoc = await firestoreAdmin.collection('teams').doc(teamId).get();
     
-    if (!teamDoc.exists) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Team not found' 
-      });
-    }
+    // Try teams collection first
+    let teamDoc = await firestoreAdmin.collection('teams').doc(teamId).get();
+    let teamName = 'Unknown';
+    let entityType: 'team' | 'subteam' = 'team';
+    let parentTeamId: string | undefined = undefined;
 
-    const teamData = teamDoc.data();
-    const teamName = teamData?.TeamName || 'Unknown';
+    if (teamDoc.exists) {
+      const teamData = teamDoc.data();
+      teamName = teamData?.TeamName || 'Unknown';
+    } else {
+      // Try sub_teams collection
+      const subTeamDoc = await firestoreAdmin.collection('sub_teams').doc(teamId).get();
+      if (subTeamDoc.exists) {
+        const subTeamData = subTeamDoc.data();
+        teamName = subTeamData?.SubTeamName || 'Unknown';
+        entityType = 'subteam';
+        parentTeamId = subTeamData?.TeamID;
+      } else {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Team or sub-team not found' 
+        });
+      }
+    }
 
     const success = await saveTeamReportConfig({
       teamId,
@@ -61,6 +95,8 @@ export const updateTeamReportConfig = asyncWrapper(async (req, res) => {
       meetingDay,
       active: true,
       updatedAt: new Date().toISOString(),
+      entityType,
+      parentTeamId,
     });
 
     if (success) {
