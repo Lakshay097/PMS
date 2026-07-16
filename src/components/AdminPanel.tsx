@@ -2281,11 +2281,19 @@ export default function AdminPanel({
                 {teams.map(team => {
                   const teamReq = reportRequirements[team.TeamID];
                   const isSubteamReporting = teamReq?.level === 'subteam';
+                  const teamSubTeams = subTeams.filter(st => st.TeamID === team.TeamID && st.Active);
                   
-                  if (isSubteamReporting && teamReq?.subTeamIds && teamReq.subTeamIds.length > 0) {
+                  // Show sub-teams if configured for sub-team reporting OR if they have existing configs
+                  const subTeamsWithConfigs = teamSubTeams.filter(st => teamReportConfigs[st.id]);
+                  const shouldShowSubTeams = (isSubteamReporting && teamReq?.subTeamIds && teamReq.subTeamIds.length > 0) || subTeamsWithConfigs.length > 0;
+                  
+                  if (shouldShowSubTeams) {
                     // Show individual sub-teams instead of parent team
-                    return teamReq.subTeamIds.map(subTeamId => {
-                      const subTeam = subTeams.find(st => st.SubTeamID === subTeamId && st.Active);
+                    const subTeamsToShow = isSubteamReporting && teamReq?.subTeamIds 
+                      ? teamReq.subTeamIds.map(subTeamId => subTeams.find(st => st.SubTeamID === subTeamId && st.Active)).filter(Boolean)
+                      : subTeamsWithConfigs;
+                    
+                    return subTeamsToShow.map(subTeam => {
                       if (!subTeam) return null;
                       
                       // Use sub-team document ID as config key (matches Firestore)
