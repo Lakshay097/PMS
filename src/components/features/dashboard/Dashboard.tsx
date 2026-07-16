@@ -945,6 +945,15 @@ export default function Dashboard({
         // Normalize both dates to YYYY-MM-DD format
         const normalizedDateToCheck = dateToCheck.includes('T') ? dateToCheck.split('T')[0] : dateToCheck;
         const normalizedFilterDate = filterDateFrom.includes('T') ? filterDateFrom.split('T')[0] : filterDateFrom;
+        
+        // Special handling for overdue tasks with date filter
+        // When filtering by date for overdue tasks, check if DueDate falls within the range
+        const isOverdue = t.Status !== 'Closed' && t.Status !== 'Reviewed' && t.DueDate < new Date().toISOString().split('T')[0];
+        if (isOverdue && filterStatus === 'Overdue') {
+          const normalizedDueDate = t.DueDate.includes('T') ? t.DueDate.split('T')[0] : t.DueDate;
+          return normalizedDueDate >= normalizedFilterDate;
+        }
+        
         return normalizedDateToCheck >= normalizedFilterDate;
       });
     }
@@ -956,6 +965,15 @@ export default function Dashboard({
         // Normalize both dates to YYYY-MM-DD format
         const normalizedDateToCheck = dateToCheck.includes('T') ? dateToCheck.split('T')[0] : dateToCheck;
         const normalizedFilterDate = filterDateTo.includes('T') ? filterDateTo.split('T')[0] : filterDateTo;
+        
+        // Special handling for overdue tasks with date filter
+        // When filtering by date for overdue tasks, check if DueDate falls within the range
+        const isOverdue = t.Status !== 'Closed' && t.Status !== 'Reviewed' && t.DueDate < new Date().toISOString().split('T')[0];
+        if (isOverdue && filterStatus === 'Overdue') {
+          const normalizedDueDate = t.DueDate.includes('T') ? t.DueDate.split('T')[0] : t.DueDate;
+          return normalizedDueDate <= normalizedFilterDate;
+        }
+        
         return normalizedDateToCheck <= normalizedFilterDate;
       });
     }
