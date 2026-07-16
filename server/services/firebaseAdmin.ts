@@ -9,12 +9,12 @@ function getFirestoreAdmin(): Firestore {
     return _firestoreAdmin;
   }
 
-  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
+  const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
   const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY;
 
   const missing: string[] = [];
-  if (!projectId) missing.push('FIREBASE_ADMIN_PROJECT_ID or FIREBASE_PROJECT_ID');
+  if (!projectId) missing.push('FIREBASE_PROJECT_ID');
   if (!clientEmail) missing.push('FIREBASE_ADMIN_CLIENT_EMAIL');
   if (!privateKey) missing.push('FIREBASE_ADMIN_PRIVATE_KEY');
 
