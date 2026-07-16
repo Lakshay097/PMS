@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import TimelineItem from '../shared/TimelineItem';
 import FilterChip from '../shared/FilterChip';
-import { Calendar, Filter as FilterIcon, ChevronDown, CheckSquare, Clock, AlertTriangle, FileText, Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar, Filter as FilterIcon, ChevronDown, CheckSquare, Clock, AlertTriangle, FileText, Calendar as CalendarIcon, Paperclip } from 'lucide-react';
 import { AuditLog } from '../../types';
 
 interface ReportsPageProps {
@@ -73,6 +73,42 @@ export default function ReportsPage({ auditLogs }: ReportsPageProps) {
     if (action.includes('update') || action.includes('edit')) return 'warning';
     if (action.includes('create') || action.includes('complete')) return 'success';
     return 'default';
+  };
+
+  // Extract attachment links from NewValueJSON
+  const getAttachmentsFromLog = (log: AuditLog) => {
+    if (!log.NewValueJSON) return [];
+    try {
+      const newValue = JSON.parse(log.NewValueJSON);
+      // Check for AttachmentLink in various possible locations
+      if (newValue.AttachmentLink) {
+        return newValue.AttachmentLink.split(',').map((link: string) => link.trim()).filter(Boolean);
+      }
+      if (newValue.AttachmentLinks) {
+        return newValue.AttachmentLinks.split(',').map((link: string) => link.trim()).filter(Boolean);
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  };
+
+  // Helper function to extract filename from URL
+  const getFileNameFromUrl = (url: string): string => {
+    try {
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname;
+      const fileName = pathname.split('/').pop();
+      if (!fileName || fileName === '/') {
+        return url;
+      }
+      if (!fileName.includes('.')) {
+        return url;
+      }
+      return fileName;
+    } catch {
+      return url;
+    }
   };
 
   return (
@@ -185,6 +221,7 @@ export default function ReportsPage({ auditLogs }: ReportsPageProps) {
                               actor={log.ActionByEmail}
                               icon={getEntityIcon(log.EntityType)}
                               status={getEventStatus(log.Action) as any}
+                              attachments={getAttachmentsFromLog(log)}
                             />
                           </div>
                         ))}

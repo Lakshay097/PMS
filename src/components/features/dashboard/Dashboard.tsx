@@ -924,9 +924,20 @@ export default function Dashboard({
         // For completed tasks, use CompletionDate; otherwise use DueDate
         const dateToCheck = (t.Status === 'Closed' || t.Status === 'Reviewed') ? t.CompletionDate : t.DueDate;
         if (!dateToCheck) return false;
-        // Ensure both dates are in YYYY-MM-DD format for comparison
-        const normalizedDateToCheck = dateToCheck.split('T')[0];
-        const normalizedFilterDate = filterDateFrom.split('T')[0];
+        // Normalize both dates to YYYY-MM-DD format
+        const normalizedDateToCheck = dateToCheck.includes('T') ? dateToCheck.split('T')[0] : dateToCheck;
+        const normalizedFilterDate = filterDateFrom.includes('T') ? filterDateFrom.split('T')[0] : filterDateFrom;
+        
+        // Debug logging
+        console.log('Date filter from:', {
+          taskId: t.TaskID,
+          dateToCheck,
+          normalizedDateToCheck,
+          filterDateFrom,
+          normalizedFilterDate,
+          result: normalizedDateToCheck >= normalizedFilterDate
+        });
+        
         return normalizedDateToCheck >= normalizedFilterDate;
       });
     }
@@ -935,9 +946,20 @@ export default function Dashboard({
         // For completed tasks, use CompletionDate; otherwise use DueDate
         const dateToCheck = (t.Status === 'Closed' || t.Status === 'Reviewed') ? t.CompletionDate : t.DueDate;
         if (!dateToCheck) return false;
-        // Ensure both dates are in YYYY-MM-DD format for comparison
-        const normalizedDateToCheck = dateToCheck.split('T')[0];
-        const normalizedFilterDate = filterDateTo.split('T')[0];
+        // Normalize both dates to YYYY-MM-DD format
+        const normalizedDateToCheck = dateToCheck.includes('T') ? dateToCheck.split('T')[0] : dateToCheck;
+        const normalizedFilterDate = filterDateTo.includes('T') ? filterDateTo.split('T')[0] : filterDateTo;
+        
+        // Debug logging
+        console.log('Date filter to:', {
+          taskId: t.TaskID,
+          dateToCheck,
+          normalizedDateToCheck,
+          filterDateTo,
+          normalizedFilterDate,
+          result: normalizedDateToCheck <= normalizedFilterDate
+        });
+        
         return normalizedDateToCheck <= normalizedFilterDate;
       });
     }
