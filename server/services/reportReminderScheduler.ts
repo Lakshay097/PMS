@@ -480,11 +480,20 @@ export async function checkAndSendReportReminders(): Promise<void> {
     let successCount = 0;
     let failureCount = 0;
 
+    // Track sent recipients in this run to prevent duplicates
+    const sentRecipients = new Set<string>();
+
     for (const entity of entitiesToRemind) {
       const recipients = getTeamRecipients(entity);
       logger.info(`[SCHEDULER] Processing ${entity.teamName} (ID: ${entity.teamId}) with ${recipients.length} recipients: ${recipients.join(', ')}`);
 
       for (const recipient of recipients) {
+        // Skip if already sent to this recipient in this run
+        if (sentRecipients.has(recipient.toLowerCase())) {
+          logger.info(`[SCHEDULER] Skipping ${recipient} - already sent in this run`);
+          continue;
+        }
+
         const isFirstTime = !(await hasReceivedFirstReportEmail(recipient));
         logger.info(`[SCHEDULER] Sending to ${recipient} - First time: ${isFirstTime}`);
 
@@ -492,6 +501,7 @@ export async function checkAndSendReportReminders(): Promise<void> {
 
         if (result.success) {
           successCount++;
+          sentRecipients.add(recipient.toLowerCase());
           logger.info(`[SCHEDULER] ✓ Report reminder sent to ${recipient} for ${entity.teamName}`);
         } else {
           failureCount++;

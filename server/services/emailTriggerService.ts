@@ -206,7 +206,16 @@ export async function triggerTaskAssignmentEmail(
     ];
     const uniqueKnown = [...new Set(allKnown.map(e => e.toLowerCase()))];
 
+    // Track sent recipients in this batch to prevent duplicates
+    const sentRecipients = new Set<string>();
+
     for (const recipient of recipients) {
+      // Skip if already sent to this recipient in this batch
+      if (sentRecipients.has(recipient.toLowerCase())) {
+        logger.info(`[TRIGGER DEBUG] Skipping ${recipient} - already sent in this batch`);
+        continue;
+      }
+
       logger.info(`[TRIGGER DEBUG] Sending to recipient: ${recipient}`);
       const assignedToName = usersMap.get(recipient.trim().toLowerCase()) || recipient;
 
@@ -251,6 +260,8 @@ export async function triggerTaskAssignmentEmail(
       logger.info(`[TRIGGER DEBUG] Email send result for ${recipient}: success=${result.success}, usedFallback=${result.usedFallback}, error=${result.error || 'none'}`);
       if (!result.success && result.error) {
         logger.error(`[TRIGGER ERROR] Failed to send email to ${recipient}: ${result.error}`);
+      } else if (result.success) {
+        sentRecipients.add(recipient.toLowerCase());
       }
     }
   } catch (err) {

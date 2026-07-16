@@ -341,7 +341,13 @@ export async function sendEmailAsUser(
         // Custom subjects (like [TaskID] Title) are used for Gmail threading
         if (!subject || subject.trim() === '') {
           subject = replaceTemplateVariables(template.subject, templateVars);
-          logger.info(`Using template subject: ${subject}`);
+          // Fallback if template subject is still empty after replacement
+          if (!subject || subject.trim() === '') {
+            subject = 'PMS Notification';
+            logger.warn(`Template subject is empty for ${templateName}, using fallback: ${subject}`);
+          } else {
+            logger.info(`Using template subject: ${subject}`);
+          }
         } else {
           logger.info(`Using custom subject for threading: ${subject}`);
         }
@@ -399,10 +405,17 @@ export async function sendEmailAsUser(
         const retry = await sendEmailViaGmail(accessToken, email);
         if (retry.success) {
           await logEmailSuccess(senderEmail, toEmail, subject);
-          if (taskId && retry.gmailThreadId && retry.gmailMessageId) {
-            await updateTaskEmailThreadId(taskId, retry.gmailThreadId, retry.gmailMessageId);
+          // Use the Gmail-stored Message-ID if available for proper threading
+          const finalMessageId = retry.storedMessageId || retry.gmailMessageId;
+          if (taskId && retry.gmailThreadId && finalMessageId) {
+            if (emailType === 'report_reminder') {
+              const { updateReportReminderThreadId } = await import('./reportReminderScheduler');
+              await updateReportReminderThreadId(taskId, toEmail, retry.gmailThreadId, finalMessageId);
+            } else {
+              await updateTaskEmailThreadId(taskId, retry.gmailThreadId, finalMessageId);
+            }
           }
-          return { success: true, usedFallback: false, gmailThreadId: retry.gmailThreadId, gmailMessageId: retry.gmailMessageId };
+          return { success: true, usedFallback: false, gmailThreadId: retry.gmailThreadId, gmailMessageId: finalMessageId, storedMessageId: retry.storedMessageId };
         }
       }
     }
