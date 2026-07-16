@@ -27,6 +27,7 @@ steps:
       - '--set-secrets=GOOGLE_PRIVATE_KEY=GOOGLE_PRIVATE_KEY:latest'
       - '--set-secrets=FIREBASE_ADMIN_CLIENT_EMAIL=FIREBASE_ADMIN_CLIENT_EMAIL:latest'
       - '--set-secrets=FIREBASE_ADMIN_PRIVATE_KEY=FIREBASE_ADMIN_PRIVATE_KEY:latest'
+      - '--set-secrets=FIREBASE_ADMIN_PROJECT_ID=FIREBASE_ADMIN_PROJECT_ID:latest'
       - '--set-env-vars=FIREBASE_PROJECT_ID=pms-taskflow-aa254'
       - '--set-env-vars=GOOGLE_SPREADSHEET_ID=1zwbskE3dTGVNn8EGG6Dx45TorL08zCB9ovLvnGeoEWQ'
       - '--set-secrets=JWT_SECRET=JWT_SECRET:latest'
