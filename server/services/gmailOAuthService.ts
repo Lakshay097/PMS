@@ -31,7 +31,7 @@ export interface GoogleOAuthTokenResponse {
 export function getGmailAuthUrl(state: string): string {
   const scopes = [
     'https://www.googleapis.com/auth/gmail.send',
-    'https://www.googleapis.com/auth/gmail.metadata', // Minimal scope for fetching message headers (Message-ID, etc.)
+    'https://www.googleapis.com/auth/gmail.readonly', // Required for fetching message metadata (Message-ID, etc.)
     'https://www.googleapis.com/auth/userinfo.email'
   ].join(' ');
 
