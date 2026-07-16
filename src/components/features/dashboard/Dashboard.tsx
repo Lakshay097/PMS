@@ -922,19 +922,23 @@ export default function Dashboard({
     if (filterDateFrom) {
       filtered = filtered.filter(t => {
         // For completed tasks, use CompletionDate; otherwise use DueDate
-        if (t.Status === 'Closed' || t.Status === 'Reviewed') {
-          return t.CompletionDate && t.CompletionDate >= filterDateFrom;
-        }
-        return t.DueDate >= filterDateFrom;
+        const dateToCheck = (t.Status === 'Closed' || t.Status === 'Reviewed') ? t.CompletionDate : t.DueDate;
+        if (!dateToCheck) return false;
+        // Ensure both dates are in YYYY-MM-DD format for comparison
+        const normalizedDateToCheck = dateToCheck.split('T')[0];
+        const normalizedFilterDate = filterDateFrom.split('T')[0];
+        return normalizedDateToCheck >= normalizedFilterDate;
       });
     }
     if (filterDateTo) {
       filtered = filtered.filter(t => {
         // For completed tasks, use CompletionDate; otherwise use DueDate
-        if (t.Status === 'Closed' || t.Status === 'Reviewed') {
-          return t.CompletionDate && t.CompletionDate <= filterDateTo;
-        }
-        return t.DueDate <= filterDateTo;
+        const dateToCheck = (t.Status === 'Closed' || t.Status === 'Reviewed') ? t.CompletionDate : t.DueDate;
+        if (!dateToCheck) return false;
+        // Ensure both dates are in YYYY-MM-DD format for comparison
+        const normalizedDateToCheck = dateToCheck.split('T')[0];
+        const normalizedFilterDate = filterDateTo.split('T')[0];
+        return normalizedDateToCheck <= normalizedFilterDate;
       });
     }
     if (searchQuery) {

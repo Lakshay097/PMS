@@ -321,16 +321,23 @@ export default function TaskDetailDrawer({
         {activeTab === 'files' && (
           <div className="p-6">
             {task.AttachmentLink ? (
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <a
-                  href={task.AttachmentLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-[var(--color-accent)] hover:underline"
-                >
-                  <Paperclip size={16} />
-                  <span>{task.AttachmentLink}</span>
-                </a>
+              <div className="space-y-2">
+                {task.AttachmentLink.split(',').map((link, idx) => {
+                  const fileName = getFileNameFromUrl(link.trim());
+                  return (
+                    <div key={idx} className="p-4 bg-gray-50 rounded-lg">
+                      <a
+                        href={link.trim()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-sm text-[var(--color-accent)] hover:underline"
+                      >
+                        <Paperclip size={16} />
+                        <span className="truncate">{fileName}</span>
+                      </a>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <p className="text-sm text-muted text-center py-8">No files attached</p>
