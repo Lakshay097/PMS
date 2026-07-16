@@ -1206,7 +1206,7 @@ export default function Dashboard({
             {recentActivity.map((activity, index) => (
               <div
                 key={index}
-                onClick={() => activity.type === 'report' ? handleViewChange('tasks', 'Submitted') : handleViewChange('tasks', 'In progress')}
+                onClick={() => activity.type === 'report' ? handleViewChange('tasks', 'Submitted', 'status') : handleViewChange('tasks', 'In progress', 'status')}
                 className="flex items-start space-x-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-[#1E293B]/30 rounded-lg p-2 -mx-2 transition-colors"
               >
                 <div className="w-8 h-8 bg-blue-500/10 rounded-full flex items-center justify-center flex-shrink-0">
