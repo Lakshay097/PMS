@@ -931,6 +931,7 @@ export default function Dashboard({
         // Debug logging
         console.log('Date filter from:', {
           taskId: t.TaskID,
+          status: t.Status,
           dateToCheck,
           normalizedDateToCheck,
           filterDateFrom,
@@ -953,6 +954,7 @@ export default function Dashboard({
         // Debug logging
         console.log('Date filter to:', {
           taskId: t.TaskID,
+          status: t.Status,
           dateToCheck,
           normalizedDateToCheck,
           filterDateTo,
