@@ -9,10 +9,16 @@ import { firestoreAdmin } from './firebaseAdmin';
  * Returns true (enabled) if the key is absent or set to anything other than 'false'.
  */
 async function isEmailTypeEnabled(type: string): Promise<boolean> {
-  // Temporarily return true to bypass Firebase authentication issues
-  // TODO: Re-enable Firestore check once Firebase authentication is fixed
-  logger.info(`isEmailTypeEnabled(${type}): bypassing Firestore check, enabled by default`);
-  return true;
+  try {
+    const key = `email_enabled_${type}`;
+    const doc = await firestoreAdmin.collection('settings').doc(key).get();
+    if (!doc.exists) return true; // default: enabled
+    const value = doc.data()?.Value;
+    return value !== 'false';
+  } catch (err) {
+    logger.warn(`isEmailTypeEnabled(${type}): error reading setting, defaulting to enabled`, err);
+    return true;
+  }
 }
 
 /**
