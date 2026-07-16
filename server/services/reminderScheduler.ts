@@ -282,8 +282,10 @@ async function checkThursdayReminders(): Promise<void> {
       lastDate === todayStr ? sentTeamsStr.split(',').map(id => id.trim()).filter(Boolean) : []
     );
 
-    // Restrict sender to system email from config
-    const senderEmail = config.DEFAULT_FALLBACK_EMAIL || config.SYSTEM_SENDER_EMAIL;
+    // Note: Scheduled reminders require a configured sender. 
+    // This should be set via environment variable or admin panel.
+    // If not configured, reminders will fail with clear error.
+    const senderEmail = process.env.REMINDER_SENDER_EMAIL || config.DEFAULT_FALLBACK_EMAIL;
     logger.info(`ReminderScheduler: Using sender email: ${senderEmail}`);
 
     // Check email_enabled_scheduled_tasks flag — respect Admin Panel on/off toggle
@@ -380,7 +382,7 @@ async function checkThursdayReminders(): Promise<void> {
               undefined, // ccEmails
               undefined, // toRecipients
               'weekly_report_reminder', // eventType
-              true // forceSystemSender - system-generated email
+              false // forceSystemSender - use configured sender's OAuth token
             );
 
             if (result.success) {
@@ -487,7 +489,7 @@ async function checkThursdayReminders(): Promise<void> {
                 undefined, // ccEmails
                 undefined, // toRecipients
                 'weekly_report_reminder', // eventType
-                true // forceSystemSender - system-generated email
+                false // forceSystemSender - use configured sender's OAuth token
               );
 
               if (result.success) {

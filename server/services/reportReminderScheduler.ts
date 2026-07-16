@@ -268,8 +268,11 @@ async function sendReportReminder(
       }
     }
 
+    // Use configured reminder sender for scheduled report emails
+    const senderEmail = process.env.REMINDER_SENDER_EMAIL || config.DEFAULT_FALLBACK_EMAIL;
+    
     const result = await sendEmailAsUser(
-      'rajeev.1@pw.live', // Fixed sender for scheduled report emails (confirmed requirement)
+      senderEmail,
       recipientEmail,
       template.subject,
       template.body,
@@ -285,7 +288,7 @@ async function sendReportReminder(
       undefined, // ccEmails
       undefined, // toRecipients
       'report_reminder', // eventType
-      true // forceSystemSender - always use system sender for scheduled reports
+      false // forceSystemSender - use configured sender's OAuth token
     );
 
     if (result.success && result.gmailThreadId && result.gmailMessageId) {

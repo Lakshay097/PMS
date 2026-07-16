@@ -119,12 +119,10 @@ export async function sendProofEmail(req: AuthRequest, res: Response): Promise<v
       AttachmentsSection: attachmentsSection
     }) : `Weekly report proof of submission for ${displayName}\n\nSubmitted by: ${submittedBy}\nSubmitted at: ${new Date().toLocaleString()}\n\n${noteSection}${attachmentsSection}`;
 
-    // Fixed CC recipients per spec (sender is rajeev.1@pw.live, so don't CC yourself)
-    const ccRecipients = ['utsav@pw.live'];
-    const senderEmail = config.SYSTEM_SENDER_EMAIL;
+    // Use the submitter's email as sender for user-triggered emails
+    const senderEmail = submittedBy;
 
-    // FIX: Send ONE email to all leaders in a single thread instead of looping
-    // First leader is the primary recipient, rest are CC'd to create a shared thread
+    // Send to all stakeholders in 'to' field (no CC)
     if (leaderEmails.length === 0) {
       logger.warn('No leader emails provided for proof email');
       res.json({
@@ -138,15 +136,12 @@ export async function sendProofEmail(req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    const primaryRecipient = leaderEmails[0];
-    const ccLeaderEmails = leaderEmails.slice(1);
-
-    logger.info(`Sending single proof email to ${primaryRecipient} with CC: ${ccLeaderEmails.join(', ')}`);
+    logger.info(`Sending proof email to all stakeholders: ${leaderEmails.join(', ')}`);
 
     try {
       const result = await sendEmailAsUser(
         senderEmail,
-        primaryRecipient,
+        leaderEmails[0], // primary recipient (first in list)
         emailSubject,
         emailBody,
         undefined, // no template (we already replaced variables)
@@ -158,8 +153,8 @@ export async function sendProofEmail(req: AuthRequest, res: Response): Promise<v
         subTeamId,
         weekOf,
         'proof_email',
-        ccLeaderEmails,
-        undefined, // toRecipients
+        undefined, // ccEmails - no CC
+        leaderEmails, // toRecipients - all stakeholders in 'to'
         'proof_email', // eventType
         false // forceSystemSender - user-triggered, try user's OAuth
       );

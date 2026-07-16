@@ -222,10 +222,13 @@ Fallback: SSEService.startAuditLoop() polls auditlogs every 60 s
 ## Email System
 
 1. Emails are sent via the connected user's Gmail OAuth tokens (per-user sending)
-2. Fallback: system account (`DEFAULT_FALLBACK_EMAIL`) if user has no Gmail token
+2. No fallback: if user has no Gmail token, returns error with message to connect Gmail account in Settings
 3. Email thread continuity: `task_email_threads` Sheets tab stores Gmail `threadId` + `messageId` so replies chain into the same Gmail thread
-4. Templates are stored in `email_templates` Firestore collection and `email_templates` Sheets tab
+4. Templates are stored in `email_templates` Sheets tab only
 5. Weekly scheduled-task reminders are sent on a configurable day (default: day before report due day) by `reminderScheduler.ts`
+6. Scheduled reminder emails include the meeting day in the template (from `weekly_report_due_day` setting)
+7. Debug logging is enabled for token lookup and email send operations to troubleshoot email issues
+8. Frontend handles email send errors and displays user-friendly messages to connect Gmail account
 
 ---
 
