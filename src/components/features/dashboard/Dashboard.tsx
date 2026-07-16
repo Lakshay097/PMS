@@ -904,7 +904,25 @@ export default function Dashboard({
     if (filterStatus !== 'All') {
       // Handle comma-separated status values
       const statusValues = filterStatus.split(',').map(s => s.trim());
-      filtered = filtered.filter(t => statusValues.includes(t.Status));
+      
+      // Special handling for "Overdue" status (computed status, not stored in database)
+      if (statusValues.includes('Overdue')) {
+        const today = new Date().toISOString().split('T')[0];
+        filtered = filtered.filter(t => {
+          return t.Status !== 'Closed' && t.Status !== 'Reviewed' && t.DueDate < today;
+        });
+        // If only "Overdue" is selected, we're done
+        if (statusValues.length === 1 && statusValues[0] === 'Overdue') {
+          // Continue with other filters
+        } else {
+          // If "Overdue" is combined with other statuses, filter out the non-overdue ones
+          const otherStatuses = statusValues.filter(s => s !== 'Overdue');
+          filtered = filtered.filter(t => otherStatuses.includes(t.Status));
+        }
+      } else {
+        // Normal status filtering
+        filtered = filtered.filter(t => statusValues.includes(t.Status));
+      }
     }
     if (filterPriority !== 'All') {
       filtered = filtered.filter(t => t.Priority === filterPriority);
@@ -927,18 +945,6 @@ export default function Dashboard({
         // Normalize both dates to YYYY-MM-DD format
         const normalizedDateToCheck = dateToCheck.includes('T') ? dateToCheck.split('T')[0] : dateToCheck;
         const normalizedFilterDate = filterDateFrom.includes('T') ? filterDateFrom.split('T')[0] : filterDateFrom;
-        
-        // Debug logging
-        console.log('Date filter from:', {
-          taskId: t.TaskID,
-          status: t.Status,
-          dateToCheck,
-          normalizedDateToCheck,
-          filterDateFrom,
-          normalizedFilterDate,
-          result: normalizedDateToCheck >= normalizedFilterDate
-        });
-        
         return normalizedDateToCheck >= normalizedFilterDate;
       });
     }
@@ -950,18 +956,6 @@ export default function Dashboard({
         // Normalize both dates to YYYY-MM-DD format
         const normalizedDateToCheck = dateToCheck.includes('T') ? dateToCheck.split('T')[0] : dateToCheck;
         const normalizedFilterDate = filterDateTo.includes('T') ? filterDateTo.split('T')[0] : filterDateTo;
-        
-        // Debug logging
-        console.log('Date filter to:', {
-          taskId: t.TaskID,
-          status: t.Status,
-          dateToCheck,
-          normalizedDateToCheck,
-          filterDateTo,
-          normalizedFilterDate,
-          result: normalizedDateToCheck <= normalizedFilterDate
-        });
-        
         return normalizedDateToCheck <= normalizedFilterDate;
       });
     }
@@ -2069,11 +2063,18 @@ export default function Dashboard({
                         </div>
                       )}
                       {report.AttachmentLink && (
-                        <div className={`text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-                          <a href={report.AttachmentLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:underline">
-                            <Link size={14} />
-                            <span>{getFileNameFromUrl(report.AttachmentLink)}</span>
-                          </a>
+                        <div className="space-y-1">
+                          {report.AttachmentLink.split(',').map((url, idx) => {
+                            const trimmedUrl = url.trim();
+                            return (
+                              <div key={idx} className={`text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                                <a href={trimmedUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:underline">
+                                  <Link size={14} />
+                                  <span>{getFileNameFromUrl(trimmedUrl)}</span>
+                                </a>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                         </div>
@@ -2182,11 +2183,18 @@ export default function Dashboard({
                                 </div>
                               )}
                               {report.AttachmentLink && (
-                                <div className={`text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-                                  <a href={report.AttachmentLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:underline">
-                                    <Link size={14} />
-                                    <span>{getFileNameFromUrl(report.AttachmentLink)}</span>
-                                  </a>
+                                <div className="space-y-1">
+                                  {report.AttachmentLink.split(',').map((url, idx) => {
+                                    const trimmedUrl = url.trim();
+                                    return (
+                                      <div key={idx} className={`text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                                        <a href={trimmedUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:underline">
+                                          <Link size={14} />
+                                          <span>{getFileNameFromUrl(trimmedUrl)}</span>
+                                        </a>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </div>
