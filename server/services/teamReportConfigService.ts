@@ -1,4 +1,3 @@
-import { generateGoogleSheetsToken, fetchSheetValues, appendSheetValues, updateSheetValues, createSheet } from './googleSheetsService';
 import { logger } from '../utils/logger';
 
 export interface TeamReportConfig {
@@ -10,31 +9,6 @@ export interface TeamReportConfig {
   updatedAt: string;
   entityType?: 'team' | 'subteam';
   parentTeamId?: string;
-}
-
-/**
- * Initialize the team_report_config sheet with headers
- */
-export async function initializeTeamReportConfigSheet(): Promise<boolean> {
-  try {
-    const tokenData = await generateGoogleSheetsToken();
-    if (!tokenData || !tokenData.spreadsheetId) return false;
-
-    const spreadsheetId = tokenData.spreadsheetId;
-    const existingValues = await fetchSheetValues(tokenData.accessToken, spreadsheetId, 'team_report_config!A1:E1');
-    if (existingValues && existingValues.length > 0) return true;
-
-    await createSheet(tokenData.accessToken, spreadsheetId, 'team_report_config');
-    await appendSheetValues(tokenData.accessToken, spreadsheetId, 'team_report_config', [
-      ['team_id', 'team_name', 'reminder_day', 'meeting_day', 'active', 'updated_at', 'entity_type', 'parent_team_id']
-    ]);
-
-    logger.info('Initialized team_report_config sheet');
-    return true;
-  } catch (err) {
-    logger.error('Error initializing team_report_config sheet:', err);
-    return false;
-  }
 }
 
 /**
@@ -80,79 +54,44 @@ export async function getTeamReportConfig(teamId: string): Promise<TeamReportCon
 }
 
 /**
- * Save or update a team report configuration
+ * Save or update a team report configuration to Firestore
  */
 export async function saveTeamReportConfig(config: TeamReportConfig): Promise<boolean> {
   try {
-    const tokenData = await generateGoogleSheetsToken();
-    if (!tokenData || !tokenData.spreadsheetId) return false;
-
-    const spreadsheetId = tokenData.spreadsheetId;
-    const values = await fetchSheetValues(tokenData.accessToken, spreadsheetId, 'team_report_config!A:H');
-    if (!values) return false;
-
+    const { firestoreAdmin } = await import('./firebaseAdmin');
     const now = new Date().toISOString();
-    let rowIndex = -1;
-    for (let i = 1; i < values.length; i++) {
-      if (values[i][0] === config.teamId) {
-        rowIndex = i;
-        break;
-      }
-    }
 
-    const row = [
-      config.teamId,
-      config.teamName,
-      config.reminderDay,
-      config.meetingDay,
-      config.active ? 'true' : 'false',
-      now,
-      config.entityType || 'team',
-      config.parentTeamId || '',
-    ];
+    await firestoreAdmin.collection('team_report_config').doc(config.teamId).set({
+      teamId: config.teamId,
+      teamName: config.teamName,
+      reminderDay: config.reminderDay,
+      meetingDay: config.meetingDay,
+      active: config.active,
+      updatedAt: now,
+      entityType: config.entityType || 'team',
+      parentTeamId: config.parentTeamId || null,
+    }, { merge: true });
 
-    if (rowIndex > 0) {
-      return updateSheetValues(
-        tokenData.accessToken,
-        spreadsheetId,
-        `team_report_config!A${rowIndex + 1}:H${rowIndex + 1}`,
-        [row]
-      );
-    }
-    return appendSheetValues(tokenData.accessToken, spreadsheetId, 'team_report_config', [row]);
+    logger.info(`Saved team report config for ${config.teamName} (${config.teamId}) to Firestore`);
+    return true;
   } catch (err) {
-    logger.error('Error saving team report config:', err);
+    logger.error('Error saving team report config to Firestore:', err);
     return false;
   }
 }
 
 /**
- * Delete a team report configuration
+ * Delete a team report configuration from Firestore
  */
 export async function deleteTeamReportConfig(teamId: string): Promise<boolean> {
   try {
-    const tokenData = await generateGoogleSheetsToken();
-    if (!tokenData || !tokenData.spreadsheetId) return false;
+    const { firestoreAdmin } = await import('./firebaseAdmin');
 
-    const spreadsheetId = tokenData.spreadsheetId;
-    const values = await fetchSheetValues(tokenData.accessToken, spreadsheetId, 'team_report_config!A:F');
-    if (!values) return false;
-
-    for (let i = 1; i < values.length; i++) {
-      if (values[i][0] === teamId) {
-        // Mark as inactive instead of deleting
-        return updateSheetValues(
-          tokenData.accessToken,
-          spreadsheetId,
-          `team_report_config!E${i + 1}`,
-          [['false']]
-        );
-      }
-    }
-
-    return false;
+    await firestoreAdmin.collection('team_report_config').doc(teamId).delete();
+    logger.info(`Deleted team report config for team ID: ${teamId} from Firestore`);
+    return true;
   } catch (err) {
-    logger.error('Error deleting team report config:', err);
+    logger.error('Error deleting team report config from Firestore:', err);
     return false;
   }
 }
