@@ -2297,7 +2297,8 @@ export default function AdminPanel({
                       if (!subTeam) return null;
                       
                       // Use sub-team document ID as config key (matches Firestore)
-                      const configKey = subTeam.id;
+                      // Fallback to SubTeamID if id is missing (for cached data)
+                      const configKey = subTeam.id || subTeam.SubTeamID;
                       
                       return (
                         <div key={configKey} className={`border rounded-lg p-4 ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
