@@ -142,8 +142,9 @@ async function startServer() {
   app.use(notFoundHandler);
   app.use(errorHandler);
 
-  app.listen(config.PORT, "0.0.0.0", () => {
-    logger.info(`Server successfully started on http://0.0.0.0:${config.PORT}`);
+  const port = Number(process.env.PORT) || config.PORT;
+  app.listen(port, "0.0.0.0", () => {
+    logger.info(`Server successfully started on http://0.0.0.0:${port}`);
   });
 }
 

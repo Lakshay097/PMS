@@ -45,11 +45,12 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/firebase-blueprint.json ./
 
-# Expose port
-EXPOSE 3000
+# Expose port (Cloud Run expects 8080)
+EXPOSE 8080
 
 # Set environment to production
 ENV NODE_ENV=production
+ENV PORT=8080
 
 # Start the application
 CMD ["node", "dist/server.mjs"]
