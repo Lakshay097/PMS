@@ -168,7 +168,7 @@ export default function Dashboard({
 }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeView, setActiveView] = useState<'overview' | 'tasks' | 'team' | 'reports' | 'admin' | 'settings' | 'scheduled-tasks'>('overview');
-  const [filterStatus, setFilterStatus] = useState('All');
+  const [filterStatus, setFilterStatus] = useState<string[]>(['All']);
   const [filterPriority, setFilterPriority] = useState('All');
   const [filterAssignee, setFilterAssignee] = useState<string[]>([]);
   const [filterTeamIDs, setFilterTeamIDs] = useState<string[]>([]);
@@ -468,7 +468,7 @@ export default function Dashboard({
     const dateFromParam = params.get('dateFrom');
     const dateToParam = params.get('dateTo');
 
-    if (statusParam) setFilterStatus(statusParam);
+    if (statusParam) setFilterStatus(statusParam.split(','));
     if (priorityParam) setFilterPriority(priorityParam);
     if (assigneesParam) setFilterAssignee(assigneesParam.split(','));
     if (teamsParam) setFilterTeamIDs(teamsParam.split(','));
@@ -479,7 +479,7 @@ export default function Dashboard({
   // Update URL when filters change
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (filterStatus !== 'All') params.set('status', filterStatus);
+    if (filterStatus.length > 0 && !filterStatus.includes('All')) params.set('status', filterStatus.join(','));
     else params.delete('status');
     if (filterPriority !== 'All') params.set('priority', filterPriority);
     else params.delete('priority');
@@ -632,6 +632,7 @@ export default function Dashboard({
   }, [onSyncDatabase, isSyncing, lastActionTime]);
 
   // Calculate metrics
+  const allTasks = tasks.length;
   const activeTasks = tasks.filter(t => t.Status !== 'Closed' && t.Status !== 'Reviewed').length;
   const overdueTasks = tasks.filter(t => {
     if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
@@ -705,7 +706,7 @@ export default function Dashboard({
 
   const handleViewChange = (
     view: 'overview' | 'tasks' | 'team' | 'reports' | 'admin' | 'settings' | 'scheduled-tasks',
-    filterStatus?: string,
+    filterStatusParam?: string,
     filterType?: 'status' | 'dueDate' | 'completedThisWeek'
   ) => {
     if (activeView !== view) {
@@ -716,24 +717,30 @@ export default function Dashboard({
     setIsSidebarVisible(false);
     
     // Reset filters first
-    setFilterStatus('All');
+    setFilterStatus(['All']);
     setFilterPriority('All');
     setFilterAssignee([]);
     setFilterTeamIDs([]);
     setFilterDateFrom('');
     setFilterDateTo('');
     
-    if (filterStatus && filterType === 'status') {
-      setFilterStatus(filterStatus);
-    } else if (filterStatus && filterType === 'dueDate') {
+    if (filterStatusParam && filterType === 'status') {
+      // Set single status value to match dropdown options
+      // For Active Tasks card, select all statuses except Closed and Reviewed
+      if (filterStatusParam === 'In Progress,Submitted') {
+        setFilterStatus(['In Progress', 'Submitted', 'Not Started', 'On Hold', 'Dropped']);
+      } else {
+        setFilterStatus([filterStatusParam]);
+      }
+    } else if (filterStatusParam && filterType === 'dueDate') {
       const today = new Date().toISOString().split('T')[0];
-      if (filterStatus === 'today') {
+      if (filterStatusParam === 'today') {
         setFilterDateFrom(today);
         setFilterDateTo(today);
       }
-    } else if (filterStatus && filterType === 'completedThisWeek') {
+    } else if (filterStatusParam && filterType === 'completedThisWeek') {
       // Set status to Closed and date range to last 7 days
-      setFilterStatus('Closed');
+      setFilterStatus(['Closed']);
       const oneWeekAgo = new Date();
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
       const today = new Date().toISOString().split('T')[0];
@@ -901,27 +908,24 @@ export default function Dashboard({
 
     let filtered = roleFiltered;
 
-    if (filterStatus !== 'All') {
-      // Handle comma-separated status values
-      const statusValues = filterStatus.split(',').map(s => s.trim());
-      
+    if (filterStatus.length > 0 && !filterStatus.includes('All')) {
       // Special handling for "Overdue" status (computed status, not stored in database)
-      if (statusValues.includes('Overdue')) {
+      if (filterStatus.includes('Overdue')) {
         const today = new Date().toISOString().split('T')[0];
         filtered = filtered.filter(t => {
           return t.Status !== 'Closed' && t.Status !== 'Reviewed' && t.DueDate < today;
         });
         // If only "Overdue" is selected, we're done
-        if (statusValues.length === 1 && statusValues[0] === 'Overdue') {
+        if (filterStatus.length === 1 && filterStatus[0] === 'Overdue') {
           // Continue with other filters
         } else {
           // If "Overdue" is combined with other statuses, filter out the non-overdue ones
-          const otherStatuses = statusValues.filter(s => s !== 'Overdue');
+          const otherStatuses = filterStatus.filter(s => s !== 'Overdue');
           filtered = filtered.filter(t => otherStatuses.includes(t.Status));
         }
       } else {
         // Normal status filtering
-        filtered = filtered.filter(t => statusValues.includes(t.Status));
+        filtered = filtered.filter(t => filterStatus.includes(t.Status));
       }
     }
     if (filterPriority !== 'All') {
@@ -949,7 +953,7 @@ export default function Dashboard({
         // Special handling for overdue tasks with date filter
         // When filtering by date for overdue tasks, check if DueDate falls within the range
         const isOverdue = t.Status !== 'Closed' && t.Status !== 'Reviewed' && t.DueDate < new Date().toISOString().split('T')[0];
-        if (isOverdue && filterStatus === 'Overdue') {
+        if (isOverdue && filterStatus.includes('Overdue')) {
           const normalizedDueDate = t.DueDate.includes('T') ? t.DueDate.split('T')[0] : t.DueDate;
           return normalizedDueDate >= normalizedFilterDate;
         }
@@ -969,7 +973,7 @@ export default function Dashboard({
         // Special handling for overdue tasks with date filter
         // When filtering by date for overdue tasks, check if DueDate falls within the range
         const isOverdue = t.Status !== 'Closed' && t.Status !== 'Reviewed' && t.DueDate < new Date().toISOString().split('T')[0];
-        if (isOverdue && filterStatus === 'Overdue') {
+        if (isOverdue && filterStatus.includes('Overdue')) {
           const normalizedDueDate = t.DueDate.includes('T') ? t.DueDate.split('T')[0] : t.DueDate;
           return normalizedDueDate <= normalizedFilterDate;
         }
@@ -1002,7 +1006,24 @@ export default function Dashboard({
   const renderOverview = () => (
     <div className="space-y-6 sm:space-y-8">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          onClick={() => handleViewChange('tasks')}
+          className={`border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B] hover:border-purple-500/50' : 'bg-white border-[#E5E7EB]'}`}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-purple-500/10 rounded-lg flex items-center justify-center">
+              <Activity className="text-purple-400" size={16} />
+            </div>
+            <span className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>All statuses</span>
+          </div>
+          <p className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{allTasks}</p>
+          <p className={`text-[10px] sm:text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>All Tasks</p>
+        </motion.div>
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

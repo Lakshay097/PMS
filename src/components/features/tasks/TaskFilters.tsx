@@ -5,7 +5,7 @@ import { ROLE, isAdminLevel } from '../../../constants/status';
 import { getAllSubordinates } from '../../../utils/userUtils';
 
 interface TaskFiltersProps {
-  filterStatus: string;
+  filterStatus: string[];
   filterPriority: string;
   filterAssigneeNames: string[];
   filterTeamIDs: string[];
@@ -16,7 +16,7 @@ interface TaskFiltersProps {
   users: UserType[];
   teams: Team[];
   isDarkMode: boolean;
-  onFilterStatusChange: (value: string) => void;
+  onFilterStatusChange: (value: string[]) => void;
   onFilterPriorityChange: (value: string) => void;
   onFilterAssigneeNamesChange: (value: string[]) => void;
   onFilterTeamIDsChange: (value: string[]) => void;
@@ -47,9 +47,11 @@ export default function TaskFilters({
 }: TaskFiltersProps) {
   const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
   const [isTeamDropdownOpen, setIsTeamDropdownOpen] = useState(false);
+  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [assigneeSearchQuery, setAssigneeSearchQuery] = useState('');
   const assigneeDropdownRef = useRef<HTMLDivElement>(null);
   const teamDropdownRef = useRef<HTMLDivElement>(null);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
 
   // Close assignee dropdown when clicking outside
   useEffect(() => {
@@ -67,6 +69,17 @@ export default function TaskFilters({
     function handleClickOutside(event: MouseEvent) {
       if (teamDropdownRef.current && !teamDropdownRef.current.contains(event.target as Node)) {
         setIsTeamDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Close status dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+        setIsStatusDropdownOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -112,6 +125,7 @@ export default function TaskFilters({
   };
 
   const clearAll = () => {
+    onFilterStatusChange(['All']);
     onFilterAssigneeNamesChange([]);
     onFilterTeamIDsChange([]);
     onFilterDateFromChange('');
@@ -124,6 +138,24 @@ export default function TaskFilters({
       onFilterTeamIDsChange(filterTeamIDs.filter(id => id !== teamId));
     } else {
       onFilterTeamIDsChange([...filterTeamIDs, teamId]);
+    }
+  };
+
+  const toggleStatus = (status: string) => {
+    if (status === 'All') {
+      onFilterStatusChange(['All']);
+    } else {
+      if (filterStatus.includes('All')) {
+        onFilterStatusChange([status]);
+      } else if (filterStatus.includes(status)) {
+        if (filterStatus.length === 1) {
+          onFilterStatusChange(['All']);
+        } else {
+          onFilterStatusChange(filterStatus.filter(s => s !== status));
+        }
+      } else {
+        onFilterStatusChange([...filterStatus, status]);
+      }
     }
   };
   return (
@@ -148,23 +180,68 @@ export default function TaskFilters({
           }`}
         />
       </div>
-      <select
-        value={filterStatus}
-        onChange={(e) => onFilterStatusChange(e.target.value)}
-        className={`border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-          isDarkMode 
-            ? 'bg-[#1E293B] border-[#334155] text-white' 
-            : 'bg-slate-50 border-slate-200 text-slate-900'
-        }`}
-      >
-        <option value="All">All status</option>
-        <option value="In Progress">In Progress</option>
-        <option value="Submitted">Submitted</option>
-        <option value="Closed">Closed</option>
-        <option value="Overdue">Overdue</option>
-        <option value="On Hold">On Hold</option>
-        <option value="Dropped">Dropped</option>
-      </select>
+      <div className="relative" ref={statusDropdownRef}>
+        <button
+          onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+          className={`flex items-center gap-1.5 sm:gap-2 border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+            isDarkMode 
+              ? 'bg-[#1E293B] border-[#334155] text-white' 
+              : 'bg-slate-50 border-slate-200 text-slate-900'
+          }`}
+        >
+          <Filter size={14} className="sm:size-4" />
+          <span className="hidden sm:inline">Status</span>
+          {filterStatus.length > 0 && !filterStatus.includes('All') && (
+            <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${
+              isDarkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700'
+            }`}>
+              {filterStatus.length}
+            </span>
+          )}
+          <ChevronDown size={12} className={`transition-transform sm:size-3.5 ${isStatusDropdownOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {isStatusDropdownOpen && (
+          <div className={`absolute top-full left-0 mt-2 w-48 sm:w-56 rounded-lg shadow-lg z-50 ${
+            isDarkMode ? 'bg-[#1E293B] border border-[#334155]' : 'bg-white border border-[#E5E7EB]'
+          }`}>
+            <div className="max-h-60 overflow-y-auto p-2">
+              {['All', 'In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'].map(status => (
+                <label
+                  key={status}
+                  className={`flex items-center gap-2 sm:gap-3 p-2 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-[#334155]/50 transition-colors ${
+                    isDarkMode ? 'text-white' : 'text-slate-900'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={filterStatus.includes(status)}
+                    onChange={() => toggleStatus(status)}
+                    className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
+                  />
+                  <span className="flex-1 text-xs sm:text-sm">{status}</span>
+                </label>
+              ))}
+            </div>
+
+            {filterStatus.length > 0 && !filterStatus.includes('All') && (
+              <div className="p-2 border-t border-[#E5E7EB] dark:border-[#334155]">
+                <button
+                  onClick={() => onFilterStatusChange(['All'])}
+                  className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-md transition-colors ${
+                    isDarkMode 
+                      ? 'text-slate-400 hover:text-white hover:bg-[#334155]/50' 
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <X size={12} className="sm:size-3.5" />
+                  Clear status
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
       <select
         value={filterPriority}
         onChange={(e) => onFilterPriorityChange(e.target.value)}
