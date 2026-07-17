@@ -16,7 +16,6 @@ import * as gmailAuthController from './controllers/gmailAuthController';
 import { initializeTeamSubmissionsSheet } from './services/googleSheetsService';
 import { startRecurringTaskScheduler } from './services/recurringTaskScheduler';
 import { startSheetsSyncInterval } from './services/sheetsSyncController';
-import { checkAndSendReportReminders } from './services/reportReminderScheduler';
 import { startTaskDueDateScheduler } from './services/taskDueDateScheduler';
 
 validateEnv();
@@ -29,15 +28,9 @@ async function startServer() {
   // Note: Email sending is now dynamic based on acting user's OAuth token
   // No system sender check needed - users must connect their own Gmail accounts
 
-  // Start report reminder scheduler (runs every hour)
-  logger.info('Starting report reminder scheduler (hourly check)');
-  setInterval(async () => {
-    try {
-      await checkAndSendReportReminders();
-    } catch (error) {
-      logger.error('Error in scheduled report reminder check:', error);
-    }
-  }, 60 * 60 * 1000); // Run every hour
+  // Note: Report reminder scheduler is now triggered by Cloud Scheduler via OIDC-authenticated endpoint
+  // POST /api/internal/run-weekly-reminders (see server/routes/internal.ts)
+  // No in-process interval needed - eliminates multi-instance race condition
 
   // Start recurring task generation scheduler
   startRecurringTaskScheduler();

@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { triggerReportReminders, initializeReportReminders } from '../controllers/reportReminderController';
 import { getTeamReportConfigs, updateTeamReportConfig } from '../controllers/teamReportConfigController';
 
 const router = Router();
@@ -15,17 +14,5 @@ router.get('/config', getTeamReportConfigs);
  * Update a team's report configuration
  */
 router.put('/config/:teamId', updateTeamReportConfig);
-
-/**
- * POST /api/report-reminders/trigger
- * Manually trigger report reminder check
- */
-router.post('/trigger', triggerReportReminders);
-
-/**
- * POST /api/report-reminders/initialize
- * Initialize the report reminder scheduler
- */
-router.post('/initialize', initializeReportReminders);
 
 export default router;

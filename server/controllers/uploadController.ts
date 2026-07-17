@@ -188,6 +188,7 @@ export async function uploadFileHandler(req: AuthRequest, res: Response): Promis
     if (error?.code) logger.error(`Cloudinary Code: ${error.code}`);
     logger.error(`Cloudinary config: cloud_name=${config.CLOUDINARY_CLOUD_NAME}, api_key=${config.CLOUDINARY_API_KEY}, api_secret=${config.CLOUDINARY_API_SECRET ? 'SET' : 'NOT_SET'}`);
     logger.error(`Upload details: folder=${folder}, fileName=${fileName}, fileSize=${buffer.length}, mimeType=${mimeType}`);
+    logger.error(`Full error object: ${JSON.stringify(error)}`);
 
     // Manual signature recomputation for debugging
     if (error?.message?.includes('Invalid Signature') && error?.message?.includes('String to sign')) {

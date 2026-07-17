@@ -164,7 +164,7 @@ async function sendReportReminder(
   try {
     const templateName = isFirstTime ? 'template_scheduled_report_first' : 'template_scheduled_report_reminder';
     const template = await getEmailTemplate(templateName);
-    
+
     if (!template) {
       logger.error(`Template not found: ${templateName}`);
       return { success: false };
@@ -172,7 +172,7 @@ async function sendReportReminder(
 
     let officialWorkMail = recipientEmail;
     let temporaryPassword = '';
-    
+
     if (isFirstTime) {
       temporaryPassword = '123456';
     }
@@ -245,6 +245,11 @@ async function sendReportReminder(
   }
 }
 
+// helper to parse --force from process.argv
+function isForceEnabled(): boolean {
+  return process.argv.includes('--force') || process.argv.includes('-f');
+}
+
 async function manualSend() {
   try {
     console.log('=== Manually sending report reminder emails for today ===\n');
@@ -253,9 +258,31 @@ async function manualSend() {
     const currentDay = getCurrentDayOfWeek();
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
-    
+
     console.log(`Current day: ${currentDay}`);
     console.log(`Date: ${todayStr}\n`);
+
+    const force = isForceEnabled();
+    if (force) {
+      console.log('⚠️  Force mode enabled: will send even if lock says already sent today.\n');
+    }
+
+    // Read shared Firestore scheduler lock instead of Sheets status
+    const lockRef = firestoreAdmin.collection('scheduler_locks').doc('report_reminder');
+    const lockSnap = await lockRef.get();
+    const lockData = lockSnap.exists ? lockSnap.data() as any : null;
+
+    const alreadySentToday =
+      lockData?.lastRunDate === todayStr &&
+      lockData?.lastRunStatus === 'success';
+
+    console.log('Current lock state:', lockData);
+
+    if (alreadySentToday && !force) {
+      console.log('⚠️  Report reminders already sent successfully today according to Firestore lock.');
+      console.log('    Use `npm run send-manual-reminders -- --force` (or equivalent) to force a resend.');
+      process.exit(0);
+    }
 
     const tokenData = await generateGoogleSheetsToken();
     if (!tokenData) {
@@ -266,24 +293,14 @@ async function manualSend() {
     const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
     const accessToken = tokenData.accessToken;
     const settingsRows = await fetchSheetValues(accessToken, spreadsheetId, 'settings!A:B');
-    
+
     if (!settingsRows) {
       logger.error('Failed to fetch settings sheet');
       return;
     }
 
-    const lastReportReminderDate = getSettingValue(settingsRows, 'last_report_reminder_date', '');
-    const lastReportReminderStatus = getSettingValue(settingsRows, 'last_report_reminder_status', '');
-    
-    console.log(`Last reminder date: ${lastReportReminderDate}`);
-    console.log(`Last reminder status: ${lastReportReminderStatus}\n`);
-
-    // Check if already sent today successfully (duplicate protection)
-    if (lastReportReminderDate === todayStr && lastReportReminderStatus === 'success') {
-      console.log('⚠️  Report reminders already sent successfully today. Skipping to avoid duplicates.');
-      console.log('To force resend, reset the last_report_reminder_status in settings.');
-      process.exit(0);
-    }
+    // NOTE: still fetch settings for leaders/stakeholders, but we no longer use
+    // last_report_reminder_date / last_report_reminder_status for locking.
 
     const configs = await getTeamReportConfigs();
     console.log(`Found ${configs.length} team report configurations\n`);
@@ -329,7 +346,7 @@ async function manualSend() {
         leaderEmails = getTeamLeaderEmails(settingsRows, config.teamId);
       }
 
-      const stakeholderEmails = config.entityType === 'team' 
+      const stakeholderEmails = config.entityType === 'team'
         ? getTeamStakeholderEmails(settingsRows, config.teamId)
         : [];
 
@@ -352,7 +369,7 @@ async function manualSend() {
 
     const weekOf = getWeekOfDate(new Date());
     console.log(`Week of: ${weekOf}\n`);
-    
+
     let successCount = 0;
     let failureCount = 0;
 
@@ -388,6 +405,18 @@ async function manualSend() {
     console.log(`\n=== Manual send complete: ${successCount} sent, ${failureCount} failed ===`);
 
     const finalStatus = failureCount === 0 ? 'success' : 'partial_success';
+
+    // Update shared Firestore lock so scheduler sees this run
+    await lockRef.set({
+      lastRunDate: todayStr,
+      lastRunStatus: finalStatus,
+      lastRunTimestamp: new Date().toISOString(),
+      source: 'manual',
+      successCount,
+      failureCount,
+    }, { merge: true });
+
+    // Optional: keep Sheets keys for display only, but they are no longer used for locking.
     await saveSettingValue(accessToken, spreadsheetId, settingsRows, 'last_report_reminder_date', todayStr);
     await saveSettingValue(accessToken, spreadsheetId, settingsRows, 'last_report_reminder_status', finalStatus);
 

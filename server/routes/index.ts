@@ -9,6 +9,7 @@ import emailTemplateRoutes from './emailTemplate';
 import teamsRoutes from './teams';
 import teamReminderRoutes from './teamReminder';
 import reportReminderRoutes from './reportReminder';
+import internalRoutes from './internal';
 
 const router = Router();
 
@@ -23,5 +24,6 @@ router.use('/', emailTemplateRoutes);
 router.use('/', teamsRoutes);
 router.use('/', teamReminderRoutes);
 router.use('/report-reminders', reportReminderRoutes);
+router.use('/internal', internalRoutes);
 
 export default router;
