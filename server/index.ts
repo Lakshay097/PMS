@@ -14,7 +14,6 @@ import { authenticateToken, AuthRequest } from './middleware/auth';
 import { oauthRateLimiter, loginRateLimiter } from './middleware/rateLimiters';
 import * as gmailAuthController from './controllers/gmailAuthController';
 import { initializeTeamSubmissionsSheet } from './services/googleSheetsService';
-import { startReminderScheduler } from './services/reminderScheduler';
 import { startRecurringTaskScheduler } from './services/recurringTaskScheduler';
 import { startSheetsSyncInterval } from './services/sheetsSyncController';
 import { checkAndSendReportReminders } from './services/reportReminderScheduler';
@@ -29,9 +28,6 @@ async function startServer() {
 
   // Note: Email sending is now dynamic based on acting user's OAuth token
   // No system sender check needed - users must connect their own Gmail accounts
-
-  // Start automated email reminders scheduler
-  startReminderScheduler();
 
   // Start report reminder scheduler (runs every hour)
   logger.info('Starting report reminder scheduler (hourly check)');
