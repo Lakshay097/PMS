@@ -1,0 +1,18 @@
+[
+  {
+    "timestamp": "2026-07-15T06:50:57.093Z",
+    "sender": "lakshay.kumar@pw.live",
+    "recipient": "utsav@pw.live",
+    "subject": "[TSK-1441] [Medium] Last Testing - Jul 22",
+    "errorMessage": "Gmail API send failed — retrying",
+    "status": "failed"
+  },
+  {
+    "timestamp": "2026-07-15T06:50:59.294Z",
+    "sender": "lakshay.kumar@pw.live",
+    "recipient": "utsav@pw.live",
+    "subject": "[TSK-1441] [Medium] Last Testing - Jul 22",
+    "errorMessage": "Gmail API send failed after retry",
+    "status": "failed"
+  }
+]

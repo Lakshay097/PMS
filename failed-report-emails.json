@@ -1,0 +1,93 @@
+{
+  "failed": [],
+  "retried": [
+    {
+      "timestamp": "2026-07-12T09:07:55.588Z",
+      "sender": "rajeev.1@pw.live",
+      "recipient": "lakshay.kumar@pw.live",
+      "subject": "Welcome to Weekly Reports - Test Report Team for Threading Verification",
+      "errorMessage": "",
+      "status": "retrying"
+    },
+    {
+      "timestamp": "2026-07-12T11:32:55.047Z",
+      "sender": "lakshay.kumar@pw.live",
+      "recipient": "lakshay.kumar@pw.live",
+      "subject": "Weekly Report Reminder - {TeamName}",
+      "errorMessage": "",
+      "status": "retrying"
+    },
+    {
+      "timestamp": "2026-07-12T11:39:25.922Z",
+      "sender": "rajeev.1@pw.live",
+      "recipient": "lakshay.kumar@pw.live",
+      "subject": "Scheduled Report Submission - {TeamName}",
+      "errorMessage": "",
+      "status": "retrying"
+    },
+    {
+      "timestamp": "2026-07-12T14:37:02.442Z",
+      "sender": "rajeev.1@pw.live",
+      "recipient": "lakshay.kumar@pw.live",
+      "subject": "Scheduled Report Submission - {TeamName}",
+      "errorMessage": "",
+      "status": "retrying"
+    },
+    {
+      "timestamp": "2026-07-13T05:23:55.604Z",
+      "sender": "lakshay.kumar@pw.live",
+      "recipient": "lakshay.kumar@pw.live",
+      "subject": "Scheduled Report Submission - {TeamName}",
+      "errorMessage": "",
+      "status": "retrying"
+    },
+    {
+      "timestamp": "2026-07-13T06:08:55.220Z",
+      "sender": "rajeev.1@pw.live",
+      "recipient": "lakshay.kumar@pw.live",
+      "subject": "Scheduled Report Submission - {TeamName}",
+      "errorMessage": "",
+      "status": "retrying"
+    },
+    {
+      "timestamp": "2026-07-14T05:58:34.395Z",
+      "sender": "rajeev.1@pw.live",
+      "recipient": "aman@pw.live",
+      "subject": "Scheduled Report Submission - {TeamName}",
+      "errorMessage": "",
+      "status": "retrying"
+    },
+    {
+      "timestamp": "2026-07-14T09:26:02.952Z",
+      "sender": "rajeev.1@pw.live",
+      "recipient": "nishant.goel@pw.live",
+      "subject": "Scheduled Report Submission - {TeamName}",
+      "errorMessage": "",
+      "status": "retrying"
+    },
+    {
+      "timestamp": "2026-07-14T11:00:37.827Z",
+      "sender": "rajeev.1@pw.live",
+      "recipient": "aman@pw.live",
+      "subject": "Scheduled Report Submission - {TeamName}",
+      "errorMessage": "",
+      "status": "retrying"
+    },
+    {
+      "timestamp": "2026-07-14T12:00:40.899Z",
+      "sender": "rajeev.1@pw.live",
+      "recipient": "aman@pw.live",
+      "subject": "Scheduled Report Submission - {TeamName}",
+      "errorMessage": "",
+      "status": "retrying"
+    },
+    {
+      "timestamp": "2026-07-15T05:42:49.731Z",
+      "sender": "rajeev.1@pw.live",
+      "recipient": "arun.solanki@pw.live",
+      "subject": "Scheduled Report Submission - Ecom - KAM",
+      "errorMessage": "",
+      "status": "retrying"
+    }
+  ]
+}

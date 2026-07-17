@@ -4,7 +4,7 @@ import { logger } from '../utils/logger';
 import { config } from '../config';
 import { firestoreAdmin } from './firebaseAdmin';
 import { getOrCreateTeamEmailThread, updateTeamEmailThreadId } from './emailLogService';
-
+import { getTeamReportConfigs } from './teamReportConfigService';
 // Intra-process lock to prevent overlapping runs within the same process
 let isRunning = false;
 
@@ -143,13 +143,6 @@ async function checkThursdayReminders(): Promise<void> {
     const overrideDay = process.env.REMINDER_DAY_OVERRIDE || getSettingValue(settingsRows, 'weekly_report_reminder_day_override', '');
     const isOverrideActive = overrideDay && (overrideDay.toLowerCase() === 'today' || overrideDay.toLowerCase() === currentWeekday.toLowerCase());
 
-    const isReminderDay = currentWeekday.toLowerCase() === targetReminderWeekday.toLowerCase();
-    
-    // Only execute on reminder day (Thursdays by default) after 9:00 AM local time, or if override matches today
-    if (!isReminderDay && !isOverrideActive) {
-      isRunning = false;
-      return;
-    }
     if (!isOverrideActive && timeInfo.hour < 9) {
       isRunning = false;
       return; // Do not send before 9 AM
@@ -204,26 +197,40 @@ async function checkThursdayReminders(): Promise<void> {
     }
 
     // Fetch sub-teams
-    const subTeamsRows = await fetchSheetValues(accessToken, spreadsheetId, 'sub_teams!A:G');
-    const subTeamsMap = new Map<string, Array<{ subTeamId: string; subTeamName: string; leaderEmails: string[] }>>();
-    if (subTeamsRows && subTeamsRows.length > 1) {
-      for (let i = 1; i < subTeamsRows.length; i++) {
-        const row = subTeamsRows[i];
-        const teamId = row[1];
-        const subTeamId = row[0];
-        const subTeamName = row[2];
-        const active = row[6];
-        if (teamId && subTeamId && active === 'true') {
-          if (!subTeamsMap.has(teamId)) {
-            subTeamsMap.set(teamId, []);
-          }
-          subTeamsMap.get(teamId)!.push({
-            subTeamId,
-            subTeamName,
-            leaderEmails: row[5] ? row[5].split(',').map((e: string) => e.trim()).filter(Boolean) : []
-          });
+    // Fetch per-team reminder day overrides from Firestore; teams without an entry fall back to the global day
+    const teamReminderDayMap = new Map<string, string>();
+    try {
+      const teamConfigs = await getTeamReportConfigs();
+      for (const tc of teamConfigs) {
+        if (tc.reminderDay) {
+          teamReminderDayMap.set(tc.teamId, tc.reminderDay);
         }
       }
+    } catch (e) {
+      logger.error('ReminderScheduler: Failed to fetch per-team reminder days, all teams will use the global day', e);
+    }
+
+    // Fetch sub-teams
+    // Fetch sub-teams from Firestore (migrated off Google Sheets; no leader-emails field here,
+    // so leaderEmails is always empty and falls back to team_${teamId}_leaders from Sheets settings)
+    const subTeamsMap = new Map<string, Array<{ subTeamId: string; subTeamName: string; leaderEmails: string[] }>>();
+    try {
+      const subTeamsSnapshot = await firestoreAdmin.collection('sub_teams').get();
+      subTeamsSnapshot.forEach(doc => {
+        const subTeam = doc.data();
+        if (subTeam.TeamID && subTeam.Active !== false) {
+          if (!subTeamsMap.has(subTeam.TeamID)) {
+            subTeamsMap.set(subTeam.TeamID, []);
+          }
+          subTeamsMap.get(subTeam.TeamID)!.push({
+            subTeamId: doc.id,
+            subTeamName: subTeam.SubTeamName || '',
+            leaderEmails: []
+          });
+        }
+      });
+    } catch (e) {
+      logger.error('ReminderScheduler: Failed to fetch sub-teams from Firestore', e);
     }
 
     // Fetch weekly report requirements configuration
@@ -306,8 +313,14 @@ async function checkThursdayReminders(): Promise<void> {
       const teamName = row[1];
       const activeVal = row[3];
 
-      const isActive = activeVal === 'true' || activeVal === true;
-      if (!isActive || !teamId) continue;
+      const isActive = String(activeVal).toLowerCase() === 'true';
+        if (!isActive || !teamId) continue;
+
+      // Skip teams whose configured reminder day isn't today (unless a test override is active)
+      const teamReminderDay = teamReminderDayMap.get(teamId) || targetReminderWeekday;
+      if (!isOverrideActive && teamReminderDay.toLowerCase() !== currentWeekday.toLowerCase()) {
+        continue;
+      }
 
       const teamConfig = requirements[teamId];
 
@@ -640,7 +653,7 @@ async function checkSaturdayUnsubmittedReports(): Promise<void> {
       const teamName = row[1];
       const activeVal = row[3];
 
-      const isActive = activeVal === 'true' || activeVal === true;
+      const isActive = String(activeVal).toLowerCase() === 'true';
       if (!isActive || !teamId) continue;
 
       if (!submittedTeamIds.has(teamId)) {

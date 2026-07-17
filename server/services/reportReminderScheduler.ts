@@ -370,7 +370,7 @@ export async function checkAndSendReportReminders(): Promise<void> {
         }
       }
 
-      const alreadySentSuccessfully = lastRunDate === todayStr && lastRunStatus === 'success';
+      const alreadySentSuccessfully = lastRunDate === todayStr && (lastRunStatus === 'success' || lastRunStatus === 'partial_success');
       const isRunningRecently = lastRunDate === todayStr && lastRunStatus === 'running' && !isStaleRunning;
 
       if (alreadySentSuccessfully) {

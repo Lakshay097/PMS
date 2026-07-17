@@ -1,0 +1,212 @@
+[
+  {
+    "timestamp": "2026-06-27T06:45:28.580Z",
+    "sender": "lakshay.kumar@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "[TSK-4889] [Medium] Test - Jul 4",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-01T05:42:11.849Z",
+    "sender": "lakshay.kumar@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "[TSK-8257] [High] TestDrive - Jul 1",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-06T12:31:21.578Z",
+    "sender": "lakshay.kumar@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "[TSK-8807] [Medium] A new test - Jul 13",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-09T06:28:52.024Z",
+    "sender": "rajeev.1@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-11T09:22:41.320Z",
+    "sender": "rajeev.1@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-12T09:07:55.588Z",
+    "sender": "rajeev.1@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "Welcome to Weekly Reports - Test Report Team for Threading Verification",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-12T11:32:55.047Z",
+    "sender": "lakshay.kumar@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "Weekly Report Reminder - {TeamName}",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-12T11:39:25.922Z",
+    "sender": "rajeev.1@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "Scheduled Report Submission - {TeamName}",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-12T14:37:02.442Z",
+    "sender": "rajeev.1@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "Scheduled Report Submission - {TeamName}",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-13T05:23:55.604Z",
+    "sender": "lakshay.kumar@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "Scheduled Report Submission - {TeamName}",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-13T06:08:55.220Z",
+    "sender": "rajeev.1@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "Scheduled Report Submission - {TeamName}",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-14T05:58:34.395Z",
+    "sender": "rajeev.1@pw.live",
+    "recipient": "aman@pw.live",
+    "subject": "Scheduled Report Submission - {TeamName}",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-14T09:26:02.952Z",
+    "sender": "rajeev.1@pw.live",
+    "recipient": "nishant.goel@pw.live",
+    "subject": "Scheduled Report Submission - {TeamName}",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-14T09:39:02.413Z",
+    "sender": "lakshay.kumar@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "[TSK-9473] [Medium] tasks - Jul 21",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-14T11:00:37.827Z",
+    "sender": "rajeev.1@pw.live",
+    "recipient": "aman@pw.live",
+    "subject": "Scheduled Report Submission - {TeamName}",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-14T11:15:57.684Z",
+    "sender": "lakshay.kumar@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "[TSK-2222] [Medium] Testing for Attachment and mail - Jul 21",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-14T11:23:14.416Z",
+    "sender": "utsav@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "[TSK-8964] [Medium] testing for email - Jul 21",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-14T12:00:40.899Z",
+    "sender": "rajeev.1@pw.live",
+    "recipient": "aman@pw.live",
+    "subject": "Scheduled Report Submission - {TeamName}",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-14T12:23:47.571Z",
+    "sender": "utsav@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "[TEST-001] Test Task for Email Debug",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-15T05:42:49.731Z",
+    "sender": "rajeev.1@pw.live",
+    "recipient": "arun.solanki@pw.live",
+    "subject": "Scheduled Report Submission - Ecom - KAM",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-15T06:35:50.508Z",
+    "sender": "utsav@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "[TSK-5359] [Medium] Testing for mail - Jul 22",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-15T06:35:50.702Z",
+    "sender": "utsav@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "[TSK-5359] [Medium] Testing for mail - Jul 22",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-15T06:50:55.265Z",
+    "sender": "lakshay.kumar@pw.live",
+    "recipient": "utsav@pw.live",
+    "subject": "[TSK-1441] [Medium] Last Testing - Jul 22",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-15T06:50:57.093Z",
+    "sender": "lakshay.kumar@pw.live",
+    "recipient": "utsav@pw.live",
+    "subject": "[TSK-1441] [Medium] Last Testing - Jul 22",
+    "errorMessage": "Gmail API send failed — retrying"
+  },
+  {
+    "timestamp": "2026-07-15T06:50:59.294Z",
+    "sender": "lakshay.kumar@pw.live",
+    "recipient": "utsav@pw.live",
+    "subject": "[TSK-1441] [Medium] Last Testing - Jul 22",
+    "errorMessage": "Gmail API send failed after retry"
+  },
+  {
+    "timestamp": "2026-07-15T08:03:05.394Z",
+    "sender": "lakshay.kumar@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "[TSK-9997] [Medium] test - Jul 22",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-15T08:06:11.808Z",
+    "sender": "rajeev.1@pw.live",
+    "recipient": "sourabh@pw.live",
+    "subject": "New task created for you: [Medium] Opportunity to Optimize Transportation Costs - Jul 21",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-15T08:06:20.707Z",
+    "sender": "utsav@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "New task created for you: [Medium] Last Testing - Jul 22",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-15T10:33:38.656Z",
+    "sender": "utsav@pw.live",
+    "recipient": "rajeev.1@pw.live",
+    "subject": "New task created for you: [Medium] Kalyan school Loi For review - Jul 16",
+    "errorMessage": ""
+  },
+  {
+    "timestamp": "2026-07-16T06:49:32.623Z",
+    "sender": "lakshay.kumar@pw.live",
+    "recipient": "lakshay.kumar@pw.live",
+    "subject": "[TSK-7382] [Medium] lakshay - Jul 23",
+    "errorMessage": ""
+  }
+]

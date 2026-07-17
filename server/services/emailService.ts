@@ -15,6 +15,21 @@ import { firestoreAdmin } from './firebaseAdmin';
  * @param forceSystemSender - If true, always use system sender regardless of OAuth tokens
  * @returns Object with resolved sender email and whether token was found
  */
+// Short-lived cache to avoid repeated Sheets API reads for the same sender
+// when sending many emails back-to-back (e.g. scheduled report reminders).
+const TOKEN_CACHE_TTL_MS = 60 * 1000;
+const tokenCache = new Map<string, { token: Awaited<ReturnType<typeof getGmailToken>>; expiresAt: number }>();
+
+async function getGmailTokenCached(email: string): ReturnType<typeof getGmailToken> {
+  const cached = tokenCache.get(email);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.token;
+  }
+  const token = await getGmailToken(email);
+  tokenCache.set(email, { token, expiresAt: Date.now() + TOKEN_CACHE_TTL_MS });
+  return token;
+}
+
 async function resolveSenderEmail(
   actingUserEmail: string,
   eventType: string,
@@ -26,7 +41,7 @@ async function resolveSenderEmail(
   }
 
   // Try to get OAuth token for the acting user
-  const token = await getGmailToken(actingUserEmail);
+  const token = await getGmailTokenCached(actingUserEmail);
   
   if (token && token.refreshToken) {
     // Token exists - check if it can be refreshed (validates token health)
@@ -275,7 +290,7 @@ export async function sendEmailAsUser(
     }
 
     // Get the token for the sender
-    const senderToken = await getGmailToken(senderEmail);
+    const senderToken = await getGmailTokenCached(senderEmail);
     
     if (!senderToken || !senderToken.refreshToken) {
       logger.error(`[EMAIL ERROR] No Gmail OAuth token found for ${senderEmail}`);
@@ -395,6 +410,7 @@ export async function sendEmailAsUser(
     }
 
     // Retry once with a fresh token
+    tokenCache.delete(senderEmail); // force a fresh read on retry
     const retryToken = await getGmailToken(senderEmail);
     if (retryToken && retryToken.refreshToken) {
       await logEmailFailure(senderEmail, toEmail, subject, 'Gmail API send failed — retrying');

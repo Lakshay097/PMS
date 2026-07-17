@@ -6,8 +6,29 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
-import { firestoreAdmin } from './services/firebaseAdmin';
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from './utils/logger';
+
+// Initialize Firebase Admin with explicit credentials for local execution
+const projectId = process.env.FIREBASE_PROJECT_ID;
+const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
+const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, '\n');
+
+if (!projectId || !clientEmail || !privateKey) {
+  console.error('Missing Firebase Admin credentials in .env file');
+  process.exit(1);
+}
+
+const app = initializeApp({
+  credential: cert({
+    projectId,
+    clientEmail,
+    privateKey,
+  }),
+});
+
+const firestoreAdmin = getFirestore(app);
 
 interface TeamConfig {
   teamId: string;
@@ -126,13 +147,33 @@ async function seedTeamReportConfig() {
       if (entity.parentTeamId) {
         console.log(`   Parent Team ID: ${entity.parentTeamId}`);
       }
-      console.log(`   Reminder Day: ${entity.reminderDay}`);
+      console.log(` reminder Day: ${entity.reminderDay}`);
       console.log(`   Meeting Day: ${entity.meetingDay}`);
       console.log('');
     });
 
-    // Step 4: Save configurations to Firestore
-    console.log('Step 4: Saving configurations to Firestore...');
+    // Step 4: Clear configs for teams NOT in schedule map (leave blank for later admin config)
+    console.log('Step 4: Clearing configs for teams not in schedule map...');
+    const allConfigsSnapshot = await firestoreAdmin.collection('team_report_config').get();
+    const configuredTeamIds = new Set(entities.map(e => e.teamId));
+    let clearedCount = 0;
+
+    for (const doc of allConfigsSnapshot.docs) {
+      const teamId = doc.id;
+      if (!configuredTeamIds.has(teamId)) {
+        try {
+          await firestoreAdmin.collection('team_report_config').doc(teamId).delete();
+          clearedCount++;
+          console.log(`🗑️  Cleared config for team ID: ${teamId}`);
+        } catch (error) {
+          console.error(`❌ Error clearing config for ${teamId}:`, error);
+        }
+      }
+    }
+    console.log(`✅ Cleared ${clearedCount} team configs not in schedule map\n`);
+
+    // Step 5: Save configurations to Firestore
+    console.log('Step 5: Saving configurations to Firestore...');
     let successCount = 0;
     let failureCount = 0;
 
@@ -162,9 +203,11 @@ async function seedTeamReportConfig() {
     }
 
     console.log('\n=== Seeding Complete ===');
-    console.log(`Success: ${successCount}`);
+    console.log(`Configs Cleared: ${clearedCount}`);
+    console.log(`Configs Saved: ${successCount}`);
     console.log(`Failures: ${failureCount}`);
     console.log('\nConfigurations saved to Firestore team_report_config collection.');
+    console.log('Teams not in schedule map have been cleared and can be configured via Admin Panel.');
 
   } catch (error) {
     console.error('Error in seedTeamReportConfig:', error);
