@@ -2547,11 +2547,32 @@ export default function Dashboard({
                                               <p className={`text-[10px] sm:text-xs font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                                                 {submitter?.FullName || submission.SubmittedBy}
                                               </p>
-                                              <p className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                             <p className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
                                                 {new Date(submission.SubmittedAt).toLocaleDateString()}
                                               </p>
                                             </div>
                                           </div>
+                                          {submission.Note && (
+                                            <p className={`text-[10px] sm:text-xs mt-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                                              {submission.Note}
+                                            </p>
+                                          )}
+                                          {submission.AttachmentLinks && (
+                                            <div className="flex flex-wrap gap-1 mt-1.5">
+                                              {submission.AttachmentLinks.split(',').map((link, idx) => (
+                                                <a
+                                                  key={idx}
+                                                  href={link.trim()}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className={`inline-link-pill text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1 ${isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'}`}
+                                                >
+                                                  <Link size={9} className="shrink-0" />
+                                                  <span>{getFileNameFromUrl(link.trim())}</span>
+                                                </a>
+                                              ))}
+                                            </div>
+                                          )}
                                         </div>
                                       );
                                     })}
