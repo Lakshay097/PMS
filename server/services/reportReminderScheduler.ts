@@ -200,10 +200,10 @@ function getTeamRecipients(team: TeamWithConfig): string[] {
 }
 
 /**
- * Send report reminder email to a recipient
+ * Send report reminder email to a team (all recipients in TO field)
  */
 async function sendReportReminder(
-  recipientEmail: string,
+  recipientEmails: string[],
   team: TeamWithConfig,
   isFirstTime: boolean,
   weekOf: string
@@ -217,8 +217,9 @@ async function sendReportReminder(
       return { success: false };
     }
 
-    // Get user record for credentials if first time
-    let officialWorkMail = recipientEmail;
+    // Use first recipient for template variables (for credentials)
+    const primaryRecipient = recipientEmails[0];
+    let officialWorkMail = primaryRecipient;
     let temporaryPassword = '';
     
     if (isFirstTime) {
@@ -244,12 +245,12 @@ async function sendReportReminder(
 
     if (isFirstTime) {
       // Onboarding email: always start fresh thread, never reply to existing thread
-      logger.info(`First-time onboarding email for ${recipientEmail} - starting fresh thread`);
+      logger.info(`First-time onboarding email for ${team.teamName} - starting fresh thread`);
       threadId = undefined;
       messageId = undefined;
     } else {
       // Reminder email: must reply to existing thread
-      const threadInfo = await getOrCreateReportReminderThread(team.teamId, recipientEmail);
+      const threadInfo = await getOrCreateReportReminderThread(team.teamId, primaryRecipient);
       if (!threadInfo) {
         logger.error(`Failed to get or create thread for team ${team.teamId}`);
         return { success: false };
@@ -258,7 +259,7 @@ async function sendReportReminder(
       if (!threadInfo.threadId) {
         // BUG: Reminder email sent without existing thread - this shouldn't happen
         // if onboarding status tracking is working correctly
-        logger.error(`Reminder email for ${recipientEmail} but no existing thread found - onboarding may not have been sent`);
+        logger.error(`Reminder email for ${team.teamName} but no existing thread found - onboarding may not have been sent`);
         // For now, we'll allow it to start a new thread, but this should be investigated
         threadId = undefined;
         messageId = undefined;
@@ -273,7 +274,7 @@ async function sendReportReminder(
     
     const result = await sendEmailAsUser(
       senderEmail,
-      recipientEmail,
+      primaryRecipient, // Primary TO recipient
       template.subject,
       template.body,
       templateName,
@@ -286,7 +287,7 @@ async function sendReportReminder(
       weekOf,
       'report_reminder',
       undefined, // ccEmails
-      undefined, // toRecipients
+      recipientEmails, // toRecipients - all leaders in TO field
       'report_reminder', // eventType
       false // forceSystemSender - use configured sender's OAuth token
     );
@@ -296,17 +297,19 @@ async function sendReportReminder(
       // Use the Gmail-stored Message-ID if available for proper threading
       const finalMessageId = result.storedMessageId || result.gmailMessageId;
       
-      await updateReportReminderThreadId(team.teamId, recipientEmail, result.gmailThreadId, finalMessageId);
+      await updateReportReminderThreadId(team.teamId, primaryRecipient, result.gmailThreadId, finalMessageId);
 
-      // Mark as first email sent if applicable
+      // Mark as first email sent for all recipients if applicable
       if (isFirstTime) {
-        await markFirstReportEmailSent(recipientEmail);
+        for (const recipient of recipientEmails) {
+          await markFirstReportEmailSent(recipient);
+        }
       }
     }
 
     return result;
   } catch (error) {
-    logger.error(`Error sending report reminder to ${recipientEmail}:`, error);
+    logger.error(`Error sending report reminder to ${team.teamName}:`, error);
     return { success: false };
   }
 }
@@ -487,36 +490,41 @@ export async function checkAndSendReportReminders(): Promise<void> {
       const recipients = getTeamRecipients(entity);
       logger.info(`[SCHEDULER] Processing ${entity.teamName} (ID: ${entity.teamId}) with ${recipients.length} recipients: ${recipients.join(', ')}`);
 
+      // Skip if already sent to this team in this run
+      if (sentRecipients.has(entity.teamId)) {
+        logger.info(`[SCHEDULER] Skipping ${entity.teamName} - already sent in this run`);
+        continue;
+      }
+
+      // Check if any recipient is first-time (if any is first-time, treat as first-time for the team)
+      let isFirstTimeForTeam = false;
       for (const recipient of recipients) {
-        // Skip if already sent to this recipient in this run
-        if (sentRecipients.has(recipient.toLowerCase())) {
-          logger.info(`[SCHEDULER] Skipping ${recipient} - already sent in this run`);
-          continue;
+        if (!(await hasReceivedFirstReportEmail(recipient))) {
+          isFirstTimeForTeam = true;
+          break;
         }
+      }
+      logger.info(`[SCHEDULER] Sending to ${entity.teamName} - First time for team: ${isFirstTimeForTeam}`);
 
-        const isFirstTime = !(await hasReceivedFirstReportEmail(recipient));
-        logger.info(`[SCHEDULER] Sending to ${recipient} - First time: ${isFirstTime}`);
+      const result = await sendReportReminder(recipients, entity, isFirstTimeForTeam, weekOf);
 
-        const result = await sendReportReminder(recipient, entity, isFirstTime, weekOf);
+      if (result.success) {
+        successCount++;
+        sentRecipients.add(entity.teamId);
+        logger.info(`[SCHEDULER] ✓ Report reminder sent to ${entity.teamName} for ${recipients.length} recipients`);
+      } else {
+        failureCount++;
+        logger.error(`[SCHEDULER] ✗ Failed to send report reminder to ${entity.teamName}`);
 
-        if (result.success) {
-          successCount++;
-          sentRecipients.add(recipient.toLowerCase());
-          logger.info(`[SCHEDULER] ✓ Report reminder sent to ${recipient} for ${entity.teamName}`);
-        } else {
-          failureCount++;
-          logger.error(`[SCHEDULER] ✗ Failed to send report reminder to ${recipient} for ${entity.teamName}`);
-
-          // Log failure for admin visibility
-          await firestoreAdmin.collection('report_reminder_failures').add({
-            teamId: entity.teamId,
-            teamName: entity.teamName,
-            recipientEmail: recipient,
-            weekOf,
-            reason: 'Email send failed',
-            timestamp: new Date().toISOString(),
-          });
-        }
+        // Log failure for admin visibility
+        await firestoreAdmin.collection('report_reminder_failures').add({
+          teamId: entity.teamId,
+          teamName: entity.teamName,
+          recipientEmails: recipients.join(', '),
+          weekOf,
+          reason: 'Email send failed',
+          timestamp: new Date().toISOString(),
+        });
       }
     }
 
@@ -559,4 +567,29 @@ export async function initializeReportReminderScheduler(): Promise<void> {
   } catch (error) {
     logger.error('Error initializing report reminder scheduler:', error);
   }
+}
+
+let reportReminderIntervalId: NodeJS.Timeout | null = null;
+
+/**
+ * Starts the hourly checks for report reminders
+ */
+export function startReportReminderScheduler(): void {
+  if (reportReminderIntervalId) {
+    return;
+  }
+
+  logger.info('ReportReminderScheduler: Initializing hourly report reminder check...');
+
+  // Execute once immediately on startup (will run if needed)
+  checkAndSendReportReminders().catch(err => {
+    logger.error('ReportReminderScheduler: Startup check failed', err);
+  });
+
+  // Check every hour
+  reportReminderIntervalId = setInterval(() => {
+    checkAndSendReportReminders().catch(err => {
+      logger.error('ReportReminderScheduler: Interval execution failed', err);
+    });
+  }, 60 * 60 * 1000);
 }
