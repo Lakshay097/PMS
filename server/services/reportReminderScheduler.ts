@@ -395,10 +395,14 @@ export async function checkAndSendReportReminders(): Promise<void> {
       updatedAt: new Date().toISOString()
     }, { merge: true });
 
-    // Check email_enabled_scheduled_reports flag — respect Admin Panel on/off toggle
-    const scheduledReportsEnabled = getSettingValue(settingsRows, 'email_enabled_scheduled_reports', 'true');
-    if (scheduledReportsEnabled === 'false') {
-      logger.info('[SCHEDULER] Skipping — email_enabled_scheduled_reports is disabled');
+    // Check email_enabled_scheduled_reports flag from Firestore (authoritative source)
+    const scheduledReportsDoc = await firestoreAdmin.collection('settings').doc('email_enabled_scheduled_reports').get();
+    const scheduledReportsEnabled = scheduledReportsDoc.exists 
+      ? scheduledReportsDoc.data()?.Value === 'true'
+      : true; // Default to enabled if setting doesn't exist
+
+    if (!scheduledReportsEnabled) {
+      logger.info('[SCHEDULER] Skipping — email_enabled_scheduled_reports is disabled in Firestore');
       // Reset lock since we're not actually running
       await firestoreAdmin.collection('scheduler_locks').doc('report_reminder').update({
         lastRunStatus: 'skipped',
