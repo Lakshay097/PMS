@@ -35,27 +35,27 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<'Low' | 'Medium' | 'High' | 'Critical'>('Medium');
   const [recurrenceType, setRecurrenceType] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Half-yearly'>('Weekly');
-  
+
   // Track whether user has manually selected a day (for Weekly recurrence)
   const [userSelectedDay, setUserSelectedDay] = useState(false);
   const [manualWeeklyDay, setManualWeeklyDay] = useState<string>('');
-  
+
   // Schedule dates (defaulting to today + offset)
   const todayStr = new Date().toISOString().split('T')[0];
   const nextWeekStr = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
-  
+
   const [startDate, setStartDate] = useState(todayStr);
   const [dueDate, setDueDate] = useState(nextWeekStr);
-  
+
   // Compute the weekday name for Weekly recurrence based on start date
   const getWeekdayName = (dateStr: string): string => {
     const date = new Date(dateStr);
     const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     return weekdays[date.getDay()];
   };
-  
+
   const weeklyDayName = userSelectedDay && manualWeeklyDay ? manualWeeklyDay : getWeekdayName(startDate);
-  
+
   // Set initial assignedToEmail based on preSelectedAssignee
   const [assignedToEmail, setAssignedToEmail] = useState(preSelectedAssignee || '');
 
@@ -64,7 +64,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
     if (isOpen && preSelectedAssignee) {
       setAssignedToEmail(preSelectedAssignee);
       // Parse comma-separated emails into selectedEmails array
-      const emails = typeof preSelectedAssignee === 'string' 
+      const emails = typeof preSelectedAssignee === 'string'
         ? preSelectedAssignee.split(',').map(e => e.trim()).filter(e => e)
         : [String(preSelectedAssignee)];
       setSelectedEmails(emails);
@@ -79,21 +79,21 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
     // Reset user selection flag when modal opens
     setUserSelectedDay(false);
   }, [isOpen, preSelectedAssignee, preSelectedTeamIDs]);
-  
+
   // Filter eligible assignees based on role and parent team
   // Rule: Admin can assign to anyone. Other roles can only assign within their parent teams
   const filteredAssignees = usersList.filter(user => {
     if (!user.Active) return false;
-    
+
     // Admins can assign to anyone
     if (isAdminLevel(currentUser.Role)) return true;
-    
+
     // For non-admin users, restrict to users in the same parent team
     const currentUserTeams = new Set(currentUser.TeamIDs || []);
     const userInSameTeam = (user.TeamIDs || []).some(tid => currentUserTeams.has(tid));
-    
+
     if (!userInSameTeam) return false;
-    
+
     if (currentUser.Role === ROLE.STAKEHOLDER) {
       return isAdminLevel(user.Role) || user.Role === ROLE.STAKEHOLDER || user.Email.toLowerCase() === currentUser.Email.toLowerCase();
     }
@@ -136,11 +136,11 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
       // Extract first few words from description (up to 5 words)
       const words = description.trim().split(/\s+/).slice(0, 5);
       const descriptionSnippet = words.join(' ');
-      
+
       // Format date for title
       const dateObj = new Date(dueDate);
       const formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      
+
       // Generate title with priority
       const generatedTitle = `[${priority}] ${descriptionSnippet} - ${formattedDate}`;
       setTitle(generatedTitle);
@@ -381,7 +381,9 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                 <UserPlus size={12} />
                 <span>Assigned recipients {selectedTeamIDs.length > 0 ? '(Auto-filled from team)' : '(Multiple allowed)'}</span>
               </label>
-              <div className="relative search-dropdown-container">
+              {/* Raise this wrapper's stacking context while the results are open so the
+                  dropdown paints above the Priority select and date fields below it. */}
+              <div className={`relative search-dropdown-container ${showDropdown ? 'z-30' : ''}`}>
                 <input
                   type="text"
                   value={searchQuery}
@@ -394,7 +396,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                   className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                 />
                 {showDropdown && searchQuery && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-[#E2E8F0] rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  <div className="absolute z-30 w-full mt-1 bg-white border border-[#E2E8F0] rounded-lg shadow-lg max-h-48 overflow-y-auto">
                     {filteredStakeholders.length === 0 ? (
                       <div className="p-3 text-slate-400 text-xs italic">No stakeholders found.</div>
                     ) : (
@@ -455,7 +457,8 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                   <Users size={12} />
                   <span>Assign to teams (optional, multiple allowed)</span>
                 </label>
-                <div className="relative search-dropdown-container">
+                {/* Same fix for the team results dropdown. */}
+                <div className={`relative search-dropdown-container ${showTeamDropdown ? 'z-30' : ''}`}>
                   <input
                     type="text"
                     value={teamSearchQuery}
@@ -468,7 +471,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                     className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                   />
                   {showTeamDropdown && teamSearchQuery && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-[#E2E8F0] rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    <div className="absolute z-30 w-full mt-1 bg-white border border-[#E2E8F0] rounded-lg shadow-lg max-h-48 overflow-y-auto">
                       {visibleTeams.filter(t => t.TeamName.toLowerCase().includes(teamSearchQuery.toLowerCase())).length === 0 ? (
                         <div className="p-3 text-slate-400 text-xs italic">No teams found.</div>
                       ) : (
@@ -698,44 +701,31 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                       <button
                         type="button"
                         onClick={() => removeUploadedFile(index)}
-                        className="text-[#EF4444] hover:text-[#DC2626] transition-colors"
+                        className="text-red-500 hover:text-red-700 transition-colors"
                       >
-                        <XIcon size={14} />
+                        <X size={14} />
                       </button>
                     </div>
                   ))}
                 </div>
               )}
-
-              {/* URL Input */}
-              <div className="flex items-center gap-2">
-                <div className="flex-1">
-                  <input
-                    type="url"
-                    value={attachmentLink}
-                    onChange={(e) => setAttachmentLink(e.target.value)}
-                    placeholder="Or paste a URL"
-                    className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
-                  />
-                </div>
-              </div>
             </div>
           </div>
 
-          <div className="pt-3 sm:pt-4 border-t border-[#E5E7EB] flex items-center justify-end space-x-2 sm:space-x-3 sticky bottom-0 bg-white pb-0">
+          <div className="pt-3 sm:pt-4 border-t border-[#E5E7EB] flex items-center justify-end space-x-2 sm:space-x-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-[#E5E7EB] text-slate-700 hover:bg-slate-50 transition-all rounded-lg text-[10px] sm:text-xs font-bold cursor-pointer"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-[#E5E7EB] text-slate-700 hover:bg-slate-50 transition-all rounded-lg text-[10px] sm:text-xs font-bold tracking-wider cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={selectedEmails.length === 0 && selectedTeamIDs.length === 0}
-              className="px-4 sm:px-5 py-1.5 sm:py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-[10px] sm:text-xs font-bold transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              disabled={isUploading}
+              className="px-4 sm:px-5 py-1.5 sm:py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-[10px] sm:text-xs font-bold tracking-wider transition-all shadow-sm flex items-center space-x-1.5 sm:space-x-2 cursor-pointer border-none disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Allocate task
+              {isUploading ? 'Uploading...' : 'Create Task'}
             </button>
           </div>
         </form>

@@ -1,6 +1,7 @@
 import { Task, TaskReport, FollowUp } from '../types';
 import { ROLE, isAdminLevel } from '../constants/status';
 import { getAllSubordinates } from './userUtils';
+import { normalizeStatus } from './taskStatus';
 
 export function parseSafely(value: string): any {
   try {
@@ -11,13 +12,11 @@ export function parseSafely(value: string): any {
 }
 
 export function getStatusBadgeStyle(status: string) {
-  switch (status) {
-    case 'Not Started': return 'bg-[#F1F5F9] text-[#475569] border-[#E2E8F0]';
+  switch (normalizeStatus(status)) {
     case 'In Progress': return 'bg-[#DBEAFE] text-[#1E40AF] border-[#BFDBFE]';
-    case 'Submitted': return 'bg-[#F3E8FF] text-[#6B21A7] border-[#E9D5FF]';
-    case 'Closed': return 'bg-[#F1F5F9] text-[#475569] border-[#E2E8F0]';
-    case 'Overdue': return 'bg-[#FEF2F2] border-[#FCA5A5] text-[#B91C1C] animate-pulse font-bold';
-    default: return 'bg-[#F1F5F9] text-[#475569] border-[#E2E8F0]';
+    case 'On Hold':     return 'bg-[#FEF3C7] text-[#92400E] border-[#FDE68A]';
+    case 'Dropped':     return 'bg-[#F1F5F9] text-[#475569] border-[#E2E8F0]';
+    case 'Closed':      return 'bg-[#DCFCE7] text-[#166534] border-[#BBF7D0]'; // Completed — green
   }
 }
 

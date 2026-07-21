@@ -1,4 +1,4 @@
-                                                                          import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAllSubordinates } from '../../../utils/userUtils';
 import { getVisibleSubTeamIds, isSubTeamLeader, isTeamLeader } from '../../../utils/subTeamUtils';
@@ -48,6 +48,8 @@ import BulkActionBar from '../../shared/BulkActionBar';
 import { useRowSelection } from '../../../hooks/useRowSelection';
 import { uploadFile } from '../../../api/upload';
 import { sendProofEmail } from '../../../api/teamReminder';
+import ReportExportModal from '../../ReportExportModal';
+import { getVisibleReports } from '../../../utils/taskUtils';
 
 interface DashboardProps {
   tasks: Task[];
@@ -162,8 +164,8 @@ export default function Dashboard({
   reports = [],
   syncStatus = 'synced',
   teamSubmissions = [],
-  onAddTeamSubmission = () => {},
-  triggerNotification = () => {},
+  onAddTeamSubmission = () => { },
+  triggerNotification = () => { },
   onRefreshUsers,
 }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -178,6 +180,7 @@ export default function Dashboard({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     return localStorage.getItem('sidebarCollapsed') === 'true';
   });
+  const [showExportModal, setShowExportModal] = useState(false);
   const [taskSubView, setTaskSubView] = useState<'my-tasks' | 'team-tasks' | 'assigned-by-me'>('my-tasks');
   const [taskContentType, setTaskContentType] = useState<'tasks' | 'schedules'>('tasks');
   const [lastActionTime, setLastActionTime] = useState(Date.now());
@@ -219,23 +222,23 @@ export default function Dashboard({
     // Apply team filter to reports
     const teamFilteredReports = filterTeamIDs.length > 0
       ? taskReports.filter(r => {
-          const task = tasks?.find(t => t.TaskID === r.TaskID);
-          return task && filterTeamIDs.some(teamId =>
-            task.AssignedToTeamIDs?.includes(teamId) || task.TeamID === teamId
-          );
-        })
+        const task = tasks?.find(t => t.TaskID === r.TaskID);
+        return task && filterTeamIDs.some(teamId =>
+          task.AssignedToTeamIDs?.includes(teamId) || task.TeamID === teamId
+        );
+      })
       : taskReports;
 
     // Apply stakeholder/assignee filter to reports
     const assigneeFilteredReports = filterAssignee.length > 0
       ? teamFilteredReports.filter(r => {
-          const task = tasks?.find(t => t.TaskID === r.TaskID);
-          return task && filterAssignee.some(email =>
-            task.AssignedToEmail?.toLowerCase().includes(email.toLowerCase()) ||
-            task.AssignedByEmail?.toLowerCase() === email.toLowerCase() ||
-            r.SubmittedByEmail?.toLowerCase() === email.toLowerCase()
-          );
-        })
+        const task = tasks?.find(t => t.TaskID === r.TaskID);
+        return task && filterAssignee.some(email =>
+          task.AssignedToEmail?.toLowerCase().includes(email.toLowerCase()) ||
+          task.AssignedByEmail?.toLowerCase() === email.toLowerCase() ||
+          r.SubmittedByEmail?.toLowerCase() === email.toLowerCase()
+        );
+      })
       : teamFilteredReports;
 
     // Apply date range filter to reports
@@ -384,7 +387,7 @@ export default function Dashboard({
       try {
         const team = teams.find(t => t.TeamID === submissionTeamId);
         const teamName = team?.TeamName || 'Unknown Team';
-        
+
         // Get leader emails
         let leaderEmails: string[] = [];
         if (submissionSubTeamId) {
@@ -398,8 +401,8 @@ export default function Dashboard({
         }
 
         if (leaderEmails.length > 0) {
-          const subTeamName = submissionSubTeamId 
-            ? subTeams?.find(st => st.SubTeamID === submissionSubTeamId)?.SubTeamName 
+          const subTeamName = submissionSubTeamId
+            ? subTeams?.find(st => st.SubTeamID === submissionSubTeamId)?.SubTeamName
             : undefined;
 
           await sendProofEmail({
@@ -438,7 +441,7 @@ export default function Dashboard({
   };
 
   // Check if any modal is open
-  const isAnyModalOpen = isDrawerOpen || isTaskModalOpen || isReportModalOpen || 
+  const isAnyModalOpen = isDrawerOpen || isTaskModalOpen || isReportModalOpen ||
     isFollowUpModalOpen || isEditProfileModalOpen || isChangePasswordModalOpen ||
     isConfigureNotificationsModalOpen || isAddUserModalOpen || isAddTeamModalOpen;
 
@@ -447,7 +450,7 @@ export default function Dashboard({
     if (isAdminLevel(currentUser.Role)) return true;
     const isTeamLeader = teams.some(team => team.TeamLeaderEmails?.includes(currentUser.Email));
     // Also check if user is a sub-team leader for any sub-team
-    const isSubTeamLeader = subTeams?.some(st => 
+    const isSubTeamLeader = subTeams?.some(st =>
       st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase())
     );
     return isTeamLeader || isSubTeamLeader;
@@ -499,12 +502,12 @@ export default function Dashboard({
   // Check Gmail connection status on mount
   useEffect(() => {
     checkGmailStatus();
-    
+
     // Check for OAuth callback in URL
     const urlParams = new URLSearchParams(window.location.search);
     const emailSuccess = urlParams.get('email_success');
     const emailError = urlParams.get('email_error');
-    
+
     if (emailSuccess === 'true') {
       setConnectionMessage({ type: 'success', text: 'Gmail connected successfully!' });
       checkGmailStatus();
@@ -518,9 +521,9 @@ export default function Dashboard({
         'save_failed': 'Failed to save connection',
         'unknown_error': 'An unknown error occurred',
       };
-      setConnectionMessage({ 
-        type: 'error', 
-        text: errorMessages[emailError] || 'Connection failed' 
+      setConnectionMessage({
+        type: 'error',
+        text: errorMessages[emailError] || 'Connection failed'
       });
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -631,30 +634,78 @@ export default function Dashboard({
     return () => clearInterval(syncInterval);
   }, [onSyncDatabase, isSyncing, lastActionTime]);
 
-  // Calculate metrics
-  const allTasks = tasks.length;
-  const activeTasks = tasks.filter(t => t.Status !== 'Closed' && t.Status !== 'Reviewed').length;
-  const overdueTasks = tasks.filter(t => {
+  const visibleTasksForOverview = useMemo(() => {
+    const subStakeholderEmails = currentUser.Role === ROLE.STAKEHOLDER
+      ? getAllSubordinates(currentUser.Email, users || [])
+      : [];
+
+    const myTeamMembers = currentUser.TeamIDs && currentUser.TeamIDs.length > 0
+      ? (users || []).filter(u => u.TeamIDs.some(teamId => currentUser.TeamIDs.includes(teamId)))
+      : [];
+    const teamMemberEmails = myTeamMembers.map(u => u.Email.toLowerCase());
+
+    const visibleSubTeamIds = getVisibleSubTeamIds(currentUser, subTeams || []);
+
+    return (tasks || []).filter(task => {
+      if (isAdminLevel(currentUser.Role)) {
+        return true;
+      }
+
+      if (currentUser.Role === ROLE.STAKEHOLDER) {
+        const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
+        const assignedByMe = task.AssignedByEmail?.toLowerCase() === currentUser.Email.toLowerCase();
+        const assignedToSubStakeholder = task.AssignedToEmail?.toLowerCase().split(',').some(email =>
+          subStakeholderEmails.includes(email.trim().toLowerCase())
+        );
+        const assignedToTeamMember = task.AssignedToEmail?.toLowerCase().split(',').some(email =>
+          teamMemberEmails.includes(email.trim().toLowerCase())
+        );
+        return assignedToMe || assignedByMe || assignedToSubStakeholder || assignedToTeamMember;
+      }
+
+      if (currentUser.Role === ROLE.SUB_STAKEHOLDER) {
+        const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
+
+        if (visibleSubTeamIds.length > 0) {
+          const assignees = (task.AssignedToEmail || '').split(',').map(e => e.trim().toLowerCase());
+          const assigneeUser = users?.find(u => assignees.includes(u.Email?.toLowerCase() || ''));
+          if (assigneeUser && assigneeUser.SubTeamIDs) {
+            const hasVisibleSubTeam = assigneeUser.SubTeamIDs.some(stId => visibleSubTeamIds.includes(stId));
+            if (hasVisibleSubTeam) return true;
+          }
+        }
+
+        return assignedToMe;
+      }
+
+      return false;
+    });
+  }, [tasks, currentUser, users, subTeams]);
+
+  // Calculate metrics — scoped to what this user can see
+  const allTasks = visibleTasksForOverview.length;
+  const activeTasks = visibleTasksForOverview.filter(t => t.Status !== 'Closed' && t.Status !== 'Reviewed').length;
+  const overdueTasks = visibleTasksForOverview.filter(t => {
     if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
     const today = new Date().toISOString().split('T')[0];
     return t.DueDate < today;
   }).length;
   const today = new Date().toISOString().split('T')[0];
-  const dueToday = tasks.filter(t => {
+  const dueToday = visibleTasksForOverview.filter(t => {
     if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
     return t.DueDate === today;
   }).length;
   const oneWeekAgo = new Date();
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-  const completedThisWeek = tasks.filter(t => {
+  const completedThisWeek = visibleTasksForOverview.filter(t => {
     if (t.Status !== 'Closed' && t.Status !== 'Reviewed') return false;
     if (!t.CompletionDate) return false;
     const completionDate = new Date(t.CompletionDate);
     return completionDate >= oneWeekAgo;
   }).length;
 
-  // Get tasks needing attention (overdue or high priority)
-  const needsAttention = tasks
+  // Get tasks needing attention (overdue or high priority), scoped to this user
+  const needsAttention = visibleTasksForOverview
     .filter(t => {
       if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
       const isOverdue = t.DueDate < today;
@@ -663,11 +714,8 @@ export default function Dashboard({
     })
     .slice(0, 3);
 
-  // Get recent activity (from audit logs or task updates)
-  const recentActivity: { date: string; action: string; type: string }[] = [];
-
-  // Get alerts based on actual task data
-  const alerts = tasks
+  // Get alerts based on this user's visible task data
+  const alerts = visibleTasksForOverview
     .filter(t => {
       if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
       const isOverdue = t.DueDate < today;
@@ -715,7 +763,7 @@ export default function Dashboard({
     }
     setActiveView(view);
     setIsSidebarVisible(false);
-    
+
     // Reset filters first
     setFilterStatus(['All']);
     setFilterPriority('All');
@@ -723,7 +771,7 @@ export default function Dashboard({
     setFilterTeamIDs([]);
     setFilterDateFrom('');
     setFilterDateTo('');
-    
+
     if (filterStatusParam && filterType === 'status') {
       // Set single status value to match dropdown options
       // For Active Tasks card, select all statuses except Closed and Reviewed
@@ -747,7 +795,7 @@ export default function Dashboard({
       setFilterDateFrom(oneWeekAgo.toISOString().split('T')[0]);
       setFilterDateTo(today);
     }
-    
+
     if (onViewChange) {
       onViewChange(view);
     }
@@ -797,12 +845,12 @@ export default function Dashboard({
         const filename = urlObj.searchParams.get('filename') || urlObj.searchParams.get('name');
         if (filename) return filename;
       }
-      
+
       // Extract from path
       const pathname = new URL(url).pathname;
       const parts = pathname.split('/');
       const lastPart = parts[parts.length - 1];
-      
+
       // Remove query parameters and decode
       if (lastPart) {
         const cleanName = lastPart.split('?')[0];
@@ -810,7 +858,7 @@ export default function Dashboard({
         // Remove file extension if needed
         return decoded;
       }
-      
+
       // Fallback: generate a name from the URL
       return 'Attachment';
     } catch (error) {
@@ -838,22 +886,22 @@ export default function Dashboard({
   const filteredTasks = useMemo(() => {
     // First apply role-based filtering using taskSubView
     const subView = currentUser.Role === ROLE.SUB_STAKEHOLDER ? 'my-tasks' : taskSubView;
-    
+
     // Get hierarchical subordinates for the current user (if they are a stakeholder)
-    const subStakeholderEmails = currentUser.Role === ROLE.STAKEHOLDER 
+    const subStakeholderEmails = currentUser.Role === ROLE.STAKEHOLDER
       ? getAllSubordinates(currentUser.Email, users || [])
       : [];
-    
+
     // Get team members for the current user
     const myTeamMembers = currentUser.TeamIDs && currentUser.TeamIDs.length > 0
       ? (users || []).filter(u => u.TeamIDs.some(teamId => currentUser.TeamIDs.includes(teamId)))
       : [];
-    
+
     const teamMemberEmails = myTeamMembers.map(u => u.Email.toLowerCase());
-    
+
     // Get visible sub-team IDs for Sub-Team Leader visibility
     const visibleSubTeamIds = getVisibleSubTeamIds(currentUser, subTeams || []);
-    
+
     const roleFiltered = (tasks || []).filter(task => {
       // Admin: My Tasks = assigned to me, Team Tasks = all tasks, Assigned by Me = tasks I assigned
       if (isAdminLevel(currentUser.Role)) {
@@ -866,30 +914,30 @@ export default function Dashboard({
         // team-tasks - show all tasks
         return true;
       }
-      
+
       // Stakeholder: My Tasks = assigned to me, Team Tasks = hierarchical sub-stakeholder tasks
       if (currentUser.Role === ROLE.STAKEHOLDER) {
         const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
         const assignedByMe = task.AssignedByEmail?.toLowerCase() === currentUser.Email.toLowerCase();
-        const assignedToSubStakeholder = task.AssignedToEmail?.toLowerCase().split(',').some(email => 
+        const assignedToSubStakeholder = task.AssignedToEmail?.toLowerCase().split(',').some(email =>
           subStakeholderEmails.includes(email.trim().toLowerCase())
         );
-        const assignedToTeamMember = task.AssignedToEmail?.toLowerCase().split(',').some(email => 
+        const assignedToTeamMember = task.AssignedToEmail?.toLowerCase().split(',').some(email =>
           teamMemberEmails.includes(email.trim().toLowerCase())
         );
-        
+
         if (subView === 'my-tasks') {
           return assignedToMe;
         }
         // team-tasks / assigned-by-me - show hierarchical sub-stakeholder tasks
         return assignedToSubStakeholder || assignedToTeamMember;
       }
-      
+
       // Sub-stakeholder: My Tasks = assigned to me only
       // Additionally, if they are a Sub-Team Leader, they see tasks for their sub-team members
       if (currentUser.Role === ROLE.SUB_STAKEHOLDER) {
         const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
-        
+
         // Check if task assignee is in any of the visible sub-teams
         if (visibleSubTeamIds.length > 0) {
           const assignees = (task.AssignedToEmail || '').split(',').map(e => e.trim().toLowerCase());
@@ -899,10 +947,10 @@ export default function Dashboard({
             if (hasVisibleSubTeam) return true;
           }
         }
-        
+
         return assignedToMe;
       }
-      
+
       return false;
     });
 
@@ -949,7 +997,7 @@ export default function Dashboard({
         // Normalize both dates to YYYY-MM-DD format
         const normalizedDateToCheck = dateToCheck.includes('T') ? dateToCheck.split('T')[0] : dateToCheck;
         const normalizedFilterDate = filterDateFrom.includes('T') ? filterDateFrom.split('T')[0] : filterDateFrom;
-        
+
         // Special handling for overdue tasks with date filter
         // When filtering by date for overdue tasks, check if DueDate falls within the range
         const isOverdue = t.Status !== 'Closed' && t.Status !== 'Reviewed' && t.DueDate < new Date().toISOString().split('T')[0];
@@ -957,7 +1005,7 @@ export default function Dashboard({
           const normalizedDueDate = t.DueDate.includes('T') ? t.DueDate.split('T')[0] : t.DueDate;
           return normalizedDueDate >= normalizedFilterDate;
         }
-        
+
         return normalizedDateToCheck >= normalizedFilterDate;
       });
     }
@@ -969,7 +1017,7 @@ export default function Dashboard({
         // Normalize both dates to YYYY-MM-DD format
         const normalizedDateToCheck = dateToCheck.includes('T') ? dateToCheck.split('T')[0] : dateToCheck;
         const normalizedFilterDate = filterDateTo.includes('T') ? filterDateTo.split('T')[0] : filterDateTo;
-        
+
         // Special handling for overdue tasks with date filter
         // When filtering by date for overdue tasks, check if DueDate falls within the range
         const isOverdue = t.Status !== 'Closed' && t.Status !== 'Reviewed' && t.DueDate < new Date().toISOString().split('T')[0];
@@ -977,7 +1025,7 @@ export default function Dashboard({
           const normalizedDueDate = t.DueDate.includes('T') ? t.DueDate.split('T')[0] : t.DueDate;
           return normalizedDueDate <= normalizedFilterDate;
         }
-        
+
         return normalizedDateToCheck <= normalizedFilterDate;
       });
     }
@@ -1002,6 +1050,44 @@ export default function Dashboard({
 
     return sorted;
   }, [tasks, currentUser, users, subTeams, taskSubView, filterStatus, filterPriority, filterAssignee, filterTeamIDs, filterDateFrom, filterDateTo, searchQuery]);
+
+  // Broadest set of tasks the current user is allowed to see, independent of
+  // the Tasks-page tab (taskSubView). Used for Overview summary cards, alerts,
+  // and Needs Attention — these should reflect the user's own scope, not the
+  // whole org, unless they're an admin.
+
+
+  // Recent Activity, derived from audit logs (AuditLog: LogID, EntityType,
+  // EntityID, Action, OldValueJSON, NewValueJSON, ActionByEmail, ActionDateTime).
+  // Known EntityType values: 'Task', 'User', 'Team', 'Template', 'Report',
+  // 'Settings', 'FollowUp'. For 'Task' entries, EntityID === TaskID, so we
+  // can scope those to tasks the user can see. Everything else is scoped to
+  // activity the user personally performed.
+  const recentActivity = useMemo(() => {
+    return (audits || [])
+      .filter(a => {
+        if (isAdminLevel(currentUser.Role)) return true;
+
+        const performedByMe = a.ActionByEmail?.toLowerCase() === currentUser.Email.toLowerCase();
+        if (performedByMe) return true;
+
+        if (a.EntityType === 'Task' && a.EntityID) {
+          const visibleTaskIds = new Set(visibleTasksForOverview.map(t => t.TaskID));
+          return visibleTaskIds.has(a.EntityID);
+        }
+
+        return false;
+      })
+      .sort((a, b) => new Date(b.ActionDateTime).getTime() - new Date(a.ActionDateTime).getTime())
+      .slice(0, 5)
+      .map(a => ({
+        date: a.ActionDateTime,
+        action: a.Action,
+        type: a.EntityType?.toLowerCase() || 'general',
+        entityId: a.EntityID,
+      }));
+  }, [audits, currentUser, visibleTasksForOverview]);
+  console.log('DEBUG: recentActivity =', recentActivity.length, recentActivity);
 
   const renderOverview = () => (
     <div className="space-y-6 sm:space-y-8">
@@ -1227,7 +1313,31 @@ export default function Dashboard({
             {recentActivity.map((activity, index) => (
               <div
                 key={index}
-                onClick={() => activity.type === 'report' ? handleViewChange('tasks', 'Submitted', 'status') : handleViewChange('tasks', 'In progress', 'status')}
+                onClick={() => {
+                  if (activity.type === 'task' && activity.entityId) {
+                    const task = tasks?.find(t => t.TaskID === activity.entityId);
+                    if (task) {
+                      onTaskClick(task);
+                      return;
+                    }
+                  }
+                  switch (activity.type) {
+                    case 'report':
+                      handleViewChange('tasks', 'Submitted', 'status');
+                      break;
+                    case 'team':
+                      handleViewChange('team');
+                      break;
+                    case 'settings':
+                      handleViewChange('settings');
+                      break;
+                    case 'user':
+                      handleViewChange('admin');
+                      break;
+                    default:
+                      handleViewChange('tasks');
+                  }
+                }}
                 className="flex items-start space-x-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-[#1E293B]/30 rounded-lg p-2 -mx-2 transition-colors"
               >
                 <div className="w-8 h-8 bg-blue-500/10 rounded-full flex items-center justify-center flex-shrink-0">
@@ -1252,7 +1362,7 @@ export default function Dashboard({
         <div>
           <h2 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Tasks & Schedules</h2>
           <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-            {taskContentType === 'tasks' 
+            {taskContentType === 'tasks'
               ? (isAdminLevel(currentUser.Role) ? 'Manage all tasks' : 'Manage your assigned tasks')
               : 'Manage recurring task schedules'
             }
@@ -1263,25 +1373,23 @@ export default function Dashboard({
           <div className={`flex rounded-lg p-1 ${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-100'}`}>
             <button
               onClick={() => setTaskContentType('tasks')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                taskContentType === 'tasks'
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${taskContentType === 'tasks'
                   ? 'bg-blue-500 text-white'
                   : isDarkMode
-                  ? 'text-slate-400 hover:text-white'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
+                    ? 'text-slate-400 hover:text-white'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
             >
               Tasks
             </button>
             <button
               onClick={() => setTaskContentType('schedules')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                taskContentType === 'schedules'
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${taskContentType === 'schedules'
                   ? 'bg-blue-500 text-white'
                   : isDarkMode
-                  ? 'text-slate-400 hover:text-white'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
+                    ? 'text-slate-400 hover:text-white'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
             >
               Schedules
             </button>
@@ -1302,25 +1410,23 @@ export default function Dashboard({
           <div className="flex items-center space-x-4">
             <button
               onClick={() => setTaskSubView('my-tasks')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                taskSubView === 'my-tasks'
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${taskSubView === 'my-tasks'
                   ? 'bg-blue-500 text-white'
                   : isDarkMode
-                  ? 'bg-[#1E293B] text-slate-400 hover:text-white'
-                  : 'bg-slate-100 text-slate-600 hover:text-slate-900'
-              }`}
+                    ? 'bg-[#1E293B] text-slate-400 hover:text-white'
+                    : 'bg-slate-100 text-slate-600 hover:text-slate-900'
+                }`}
             >
               My Tasks
             </button>
             <button
               onClick={() => setTaskSubView('team-tasks')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                taskSubView === 'team-tasks'
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${taskSubView === 'team-tasks'
                   ? 'bg-blue-500 text-white'
                   : isDarkMode
-                  ? 'bg-[#1E293B] text-slate-400 hover:text-white'
-                  : 'bg-slate-100 text-slate-600 hover:text-slate-900'
-              }`}
+                    ? 'bg-[#1E293B] text-slate-400 hover:text-white'
+                    : 'bg-slate-100 text-slate-600 hover:text-slate-900'
+                }`}
             >
               {isAdminLevel(currentUser.Role) ? 'Team Tasks' : 'Assigned by Me'}
             </button>
@@ -1328,13 +1434,12 @@ export default function Dashboard({
             {isAdminLevel(currentUser.Role) && (
               <button
                 onClick={() => setTaskSubView('assigned-by-me')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  taskSubView === 'assigned-by-me'
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${taskSubView === 'assigned-by-me'
                     ? 'bg-blue-500 text-white'
                     : isDarkMode
-                    ? 'bg-[#1E293B] text-slate-400 hover:text-white'
-                    : 'bg-slate-100 text-slate-600 hover:text-slate-900'
-                }`}
+                      ? 'bg-[#1E293B] text-slate-400 hover:text-white'
+                      : 'bg-slate-100 text-slate-600 hover:text-slate-900'
+                  }`}
               >
                 Assigned by Me
               </button>
@@ -1342,7 +1447,7 @@ export default function Dashboard({
           </div>
         </div>
       )}
-      
+
       {/* Show tasks content */}
       {taskContentType === 'tasks' && (
         <>
@@ -1402,11 +1507,10 @@ export default function Dashboard({
                     <div className="flex items-center space-x-2">
                       <button
                         onClick={() => onNewTask()}
-                        className={`px-3 py-1 text-xs font-bold tracking-wider rounded-lg transition-colors ${
-                          isDarkMode
+                        className={`px-3 py-1 text-xs font-bold tracking-wider rounded-lg transition-colors ${isDarkMode
                             ? 'text-slate-700 hover:text-slate-900 bg-slate-200 hover:bg-slate-300'
                             : 'text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200'
-                        }`}
+                          }`}
                       >
                         Edit
                       </button>
@@ -1478,9 +1582,9 @@ export default function Dashboard({
                 );
                 const filteredMembers = searchQuery
                   ? allTeamMembers.filter(u =>
-                      u.FullName.toLowerCase().includes(searchLower) ||
-                      u.Email.toLowerCase().includes(searchLower)
-                    )
+                    u.FullName.toLowerCase().includes(searchLower) ||
+                    u.Email.toLowerCase().includes(searchLower)
+                  )
                   : allTeamMembers;
 
                 // Sub-teams for this team
@@ -1575,13 +1679,12 @@ export default function Dashboard({
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
                                   Team Leader
                                 </span>
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded border ${
-                                  member.Role === ROLE.ADMIN
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded border ${member.Role === ROLE.ADMIN
                                     ? isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200'
                                     : member.Role === ROLE.STAKEHOLDER
-                                    ? isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-700 border-blue-200'
-                                    : isDarkMode ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-slate-50 text-slate-700 border-slate-200'
-                                }`}>
+                                      ? isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-700 border-blue-200'
+                                      : isDarkMode ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-slate-50 text-slate-700 border-slate-200'
+                                  }`}>
                                   {member.Role}
                                 </span>
                               </div>
@@ -1652,13 +1755,12 @@ export default function Dashboard({
                                           Sub-Team Leader
                                         </span>
                                       )}
-                                      <span className={`text-xs font-bold px-2 py-0.5 rounded border ${
-                                        member.Role === ROLE.ADMIN
+                                      <span className={`text-xs font-bold px-2 py-0.5 rounded border ${member.Role === ROLE.ADMIN
                                           ? isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200'
                                           : member.Role === ROLE.STAKEHOLDER
-                                          ? isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-700 border-blue-200'
-                                          : isDarkMode ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-slate-50 text-slate-700 border-slate-200'
-                                      }`}>
+                                            ? isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-700 border-blue-200'
+                                            : isDarkMode ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-slate-50 text-slate-700 border-slate-200'
+                                        }`}>
                                         {member.Role}
                                       </span>
                                       {isAdminLevel(currentUser.Role) && member.Role === ROLE.STAKEHOLDER && (
@@ -1705,7 +1807,7 @@ export default function Dashboard({
     try {
       const task = tasks?.find(t => t.TaskID === taskId);
       const taskReports = reports?.filter(r => r.TaskID === taskId);
-      
+
       if (!task || !taskReports || taskReports.length === 0) {
         console.error('Task or reports not found');
         setIsGeneratingPdf(false);
@@ -1719,7 +1821,7 @@ export default function Dashboard({
       reportContent += `Priority: ${task.Priority}\n`;
       reportContent += `Due Date: ${task.DueDate}\n`;
       reportContent += `Assigned To: ${task.AssignedToEmail}\n\n`;
-      
+
       taskReports.forEach((report, index) => {
         reportContent += `--- Report ${index + 1} ---\n`;
         reportContent += `Submitted By: ${report.SubmittedByEmail}\n`;
@@ -1844,29 +1946,32 @@ export default function Dashboard({
 
     const taskReports = reports.filter(r => {
       const task = tasks?.find(t => t.TaskID === r.TaskID);
-      return task && (task.Status === 'Submitted' || task.Status === 'In Progress');
+      // Keep reports for a task in any status — including Closed — so its
+      // history and closing remark stay visible instead of disappearing
+      // once the task is finished.
+      return !!task;
     });
 
     // Apply team filter to reports
     const teamFilteredReports = filterTeamIDs.length > 0
       ? taskReports.filter(r => {
-          const task = tasks?.find(t => t.TaskID === r.TaskID);
-          return task && filterTeamIDs.some(teamId => 
-            task.AssignedToTeamIDs?.includes(teamId) || task.TeamID === teamId
-          );
-        })
+        const task = tasks?.find(t => t.TaskID === r.TaskID);
+        return task && filterTeamIDs.some(teamId =>
+          task.AssignedToTeamIDs?.includes(teamId) || task.TeamID === teamId
+        );
+      })
       : taskReports;
 
     // Apply stakeholder/assignee filter to reports
     const assigneeFilteredReports = filterAssignee.length > 0
       ? teamFilteredReports.filter(r => {
-          const task = tasks?.find(t => t.TaskID === r.TaskID);
-          return task && filterAssignee.some(email => 
-            task.AssignedToEmail?.toLowerCase().includes(email.toLowerCase()) ||
-            task.AssignedByEmail?.toLowerCase() === email.toLowerCase() ||
-            r.SubmittedByEmail?.toLowerCase() === email.toLowerCase()
-          );
-        })
+        const task = tasks?.find(t => t.TaskID === r.TaskID);
+        return task && filterAssignee.some(email =>
+          task.AssignedToEmail?.toLowerCase().includes(email.toLowerCase()) ||
+          task.AssignedByEmail?.toLowerCase() === email.toLowerCase() ||
+          r.SubmittedByEmail?.toLowerCase() === email.toLowerCase()
+        );
+      })
       : teamFilteredReports;
 
     // Apply date range filter to reports
@@ -1885,7 +1990,7 @@ export default function Dashboard({
       }
       reportsByTask.get(report.TaskID)!.reports.push(report);
     });
-
+    
     // Filter by search query
     const filteredTasks = Array.from(reportsByTask.entries()).filter(([taskId, { task }]) => {
       if (!searchQuery) return true;
@@ -1897,21 +2002,39 @@ export default function Dashboard({
       );
     });
 
+    // Anchor each task's closing remark to its most recent report by ReportDate,
+    // computed once so the remainder doesn't jump between rows if the list is
+    // re-sorted or re-filtered — no dependency on iteration order.
+    const latestReportIdByTask = new Map<string, string>();
+    newDateFilteredReports.forEach(r => {
+      const currentId = latestReportIdByTask.get(r.TaskID);
+      const current = currentId ? newDateFilteredReports.find(x => x.ReportID === currentId) : null;
+      if (!current || r.ReportDate > current.ReportDate) {
+        latestReportIdByTask.set(r.TaskID, r.ReportID);
+      }
+    });
+
     return (
       <div className="space-y-6">
         <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
           <div className="flex items-center justify-between mb-6">
             <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Progress Reports</h3>
             <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2"
+                >
+                  <Download size={16} />
+                  Download Report
+                </button>
               <button
                 onClick={() => setShowFlatView(!showFlatView)}
-                className={`text-sm px-3 py-1.5 rounded-lg transition-colors ${
-                  !showFlatView
+                className={`text-sm px-3 py-1.5 rounded-lg transition-colors ${!showFlatView
                     ? 'bg-blue-500 text-white'
                     : isDarkMode
-                    ? 'text-slate-400 hover:text-white'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
+                      ? 'text-slate-400 hover:text-white'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
               >
                 {showFlatView ? 'Grouped View' : 'Flat View'}
               </button>
@@ -1924,11 +2047,10 @@ export default function Dashboard({
                   }
                 }}
                 disabled={isGeneratingPdf || newDateFilteredReports.length === 0}
-                className={`text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2 ${
-                  isDarkMode
+                className={`text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2 ${isDarkMode
                     ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20'
                     : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 {isGeneratingPdf ? (
                   <Loader2 size={14} className="animate-spin" />
@@ -1955,11 +2077,10 @@ export default function Dashboard({
                 placeholder="Search reports..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className={`pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  isDarkMode 
-                    ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' 
+                className={`pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode
+                    ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500'
                     : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
-                }`}
+                  }`}
               />
             </div>
 
@@ -2016,11 +2137,10 @@ export default function Dashboard({
                   setFilterDateFrom('');
                   setFilterDateTo('');
                 }}
-                className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
-                  isDarkMode 
-                    ? 'text-slate-400 hover:text-white hover:bg-[#334155]/50' 
+                className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${isDarkMode
+                    ? 'text-slate-400 hover:text-white hover:bg-[#334155]/50'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
+                  }`}
               >
                 Clear Filters
               </button>
@@ -2049,6 +2169,9 @@ export default function Dashboard({
                 newDateFilteredReports.map((report) => {
                   const task = tasks?.find(t => t.TaskID === report.TaskID);
                   if (!task) return null;
+
+                  const showCloseRemark = !!task.CloseRemark && latestReportIdByTask.get(task.TaskID) === report.ReportID;
+
                   return (
                     <div
                       key={report.ReportID}
@@ -2077,45 +2200,58 @@ export default function Dashboard({
                                 Date: {report.ReportDate || 'N/A'}
                               </div>
                             </div>
-                        <span className={`text-xs font-bold px-2 py-1 rounded border ${
-                          report.StatusUpdate === 'Submitted' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                          report.StatusUpdate === 'In Progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                          'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-                        }`}>
-                          {report.StatusUpdate || 'Unknown'}
-                        </span>
-                      </div>
-                      <div className={`mb-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                        <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Work summary</div>
-                        <p className="text-sm">{report.WorkSummary || 'No work summary provided'}</p>
-                      </div>
-                      {report.Blockers && (
-                        <div className={`mb-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                          <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Blockers</div>
-                          <p className="text-sm">{report.Blockers}</p>
-                        </div>
-                      )}
-                      {report.NextAction && (
-                        <div className={`mb-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                          <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Next action</div>
-                          <p className="text-sm">{report.NextAction}</p>
-                        </div>
-                      )}
-                      {report.AttachmentLink && (
-                        <div className="space-y-1">
-                          {report.AttachmentLink.split(',').map((url, idx) => {
-                            const trimmedUrl = url.trim();
-                            return (
-                              <div key={idx} className={`text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-                                <a href={trimmedUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:underline">
-                                  <Link size={14} />
-                                  <span>{getFileNameFromUrl(trimmedUrl)}</span>
-                                </a>
+                            <span className={`text-xs font-bold px-2 py-1 rounded border ${report.StatusUpdate === 'Submitted' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                                report.StatusUpdate === 'In Progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                  'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                              }`}>
+                              {report.StatusUpdate || 'Unknown'}
+                            </span>
+                          </div>
+                          <div className={`mb-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                            <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Work summary</div>
+                            <p className="text-sm">{report.WorkSummary || 'No work summary provided'}</p>
+                          </div>
+                          {report.Blockers && (
+                            <div className={`mb-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                              <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Blockers</div>
+                              <p className="text-sm">{report.Blockers}</p>
+                            </div>
+                          )}
+                          {report.NextAction && (
+                            <div className={`mb-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                              <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Next action</div>
+                              <p className="text-sm">{report.NextAction}</p>
+                            </div>
+                          )}
+                          {report.AttachmentLink && (
+                            <div className="space-y-1">
+                              {report.AttachmentLink.split(',').map((url, idx) => {
+                                const trimmedUrl = url.trim();
+                                return (
+                                  <div key={idx} className={`text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                                    <a href={trimmedUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:underline">
+                                      <Link size={14} />
+                                      <span>{getFileNameFromUrl(trimmedUrl)}</span>
+                                    </a>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {showCloseRemark && (
+                            <div className={`mt-3 rounded-lg border p-3 ${isDarkMode ? 'bg-emerald-900/20 border-emerald-800' : 'bg-emerald-50 border-emerald-200'}`}>
+                              <div className={`flex items-center gap-1.5 text-[11px] font-bold ${isDarkMode ? 'text-emerald-300' : 'text-emerald-800'}`}>
+                                <CheckCircle size={13} />
+                                <span>Closing remark — {task.Title}</span>
+                                {task.CompletionDate && (
+                                  <span className={`font-normal ${isDarkMode ? 'text-emerald-400/70' : 'text-emerald-600'}`}>· {task.CompletionDate}</span>
+                                )}
                               </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                              <p className={`mt-1 text-xs leading-relaxed whitespace-pre-wrap ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                                {task.CloseRemark}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2154,11 +2290,10 @@ export default function Dashboard({
                               handleDownloadReportWithAttachments(taskId);
                             }}
                             disabled={isGeneratingPdf}
-                            className={`p-2 rounded-lg transition-colors ${
-                              isDarkMode
+                            className={`p-2 rounded-lg transition-colors ${isDarkMode
                                 ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
                                 : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
                             title="Download with Attachments"
                           >
                             {isGeneratingPdf ? (
@@ -2167,16 +2302,31 @@ export default function Dashboard({
                               <Download size={14} />
                             )}
                           </button>
-                          <span className={`text-xs font-bold px-2 py-1 rounded border ${
-                            task.Status === 'Submitted' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                            'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-                          }`}>
+                          <span className={`text-xs font-bold px-2 py-1 rounded border ${task.Status === 'Submitted' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                              'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                            }`}>
                             {task.Status || 'Unknown'}
                           </span>
                           <ChevronDown size={16} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                         </div>
                       </button>
-                      
+
+                      {/* Closing remark */}
+                      {task?.CloseRemark && (
+                        <div className={`mt-3 rounded-lg border p-3 ${isDarkMode ? 'bg-emerald-900/20 border-emerald-800' : 'bg-emerald-50 border-emerald-200'}`}>
+                          <div className={`flex items-center gap-1.5 text-[11px] font-bold ${isDarkMode ? 'text-emerald-300' : 'text-emerald-800'}`}>
+                            <CheckCircle size={13} />
+                            <span>Closing remark</span>
+                            {task.CompletionDate && (
+                              <span className={`font-normal ${isDarkMode ? 'text-emerald-400/70' : 'text-emerald-600'}`}>· {task.CompletionDate}</span>
+                            )}
+                          </div>
+                          <p className={`mt-1 text-xs leading-relaxed whitespace-pre-wrap ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                            {task.CloseRemark}
+                          </p>
+                        </div>
+                      )}
+
                       {/* Reports - shown when expanded */}
                       {isExpanded && (
                         <div className="p-4 pt-0 space-y-3">
@@ -2197,11 +2347,10 @@ export default function Dashboard({
                                     Date: {report.ReportDate || 'N/A'}
                                   </div>
                                 </div>
-                                <span className={`text-xs font-bold px-2 py-1 rounded border ${
-                                  report.StatusUpdate === 'Submitted' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                                  report.StatusUpdate === 'In Progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                  'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-                                }`}>
+                                <span className={`text-xs font-bold px-2 py-1 rounded border ${report.StatusUpdate === 'Submitted' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                                    report.StatusUpdate === 'In Progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                      'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                                  }`}>
                                   {report.StatusUpdate || 'Unknown'}
                                 </span>
                               </div>
@@ -2263,6 +2412,14 @@ export default function Dashboard({
             onClear={clearReportSelection}
           />
         </div>
+        <ReportExportModal
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          tasks={tasks || []}
+          reports={getVisibleReports(reports || [], currentUser)}
+          users={users}
+          isDarkMode={isDarkMode}
+        />
       </div>
     );
   };
@@ -2276,18 +2433,18 @@ export default function Dashboard({
       teams={teams}
       subTeams={subTeams}
       currentUserEmail={currentUser.Email}
-      onAddUser={onAddUser || (() => {})}
-      onToggleUserStatus={onToggleUserStatus || (() => {})}
-      onAddTemplate={onAddTemplate || (() => {})}
-      onToggleTemplateStatus={onToggleTemplateStatus || (() => {})}
-      onUpdateSetting={onUpdateSetting || (() => {})}
-      onUpdateUserRole={onUpdateUserRole || (() => {})}
-      onApproveUser={onApproveUser || (() => {})}
-      onAddTeam={onAddTeam || (() => {})}
-      onToggleTeamStatus={onToggleTeamStatus || (() => {})}
-      onUpdateUserTeams={onUpdateUserTeams || (() => {})}
-      onDeleteTeam={onDeleteTeam || (() => {})}
-      onRenameTeam={onRenameTeam || (() => {})}
+      onAddUser={onAddUser || (() => { })}
+      onToggleUserStatus={onToggleUserStatus || (() => { })}
+      onAddTemplate={onAddTemplate || (() => { })}
+      onToggleTemplateStatus={onToggleTemplateStatus || (() => { })}
+      onUpdateSetting={onUpdateSetting || (() => { })}
+      onUpdateUserRole={onUpdateUserRole || (() => { })}
+      onApproveUser={onApproveUser || (() => { })}
+      onAddTeam={onAddTeam || (() => { })}
+      onToggleTeamStatus={onToggleTeamStatus || (() => { })}
+      onUpdateUserTeams={onUpdateUserTeams || (() => { })}
+      onDeleteTeam={onDeleteTeam || (() => { })}
+      onRenameTeam={onRenameTeam || (() => { })}
       onSaveSubTeam={onSaveSubTeam}
       onDeleteSubTeam={onDeleteSubTeam}
       onUpdateSubTeamLeaders={onUpdateSubTeamLeaders}
@@ -2309,24 +2466,24 @@ export default function Dashboard({
     const visibleTeams = isAdminLevel(currentUser.Role)
       ? teams.filter(t => t.Active)
       : teams.filter(t => {
-          if (!t.Active) return false;
-          const isTeamLeader = t.TeamLeaderEmails?.includes(currentUser.Email);
-          const isStakeholder = t.StakeholderEmails?.includes(currentUser.Email);
-          // Check if user is a sub-team leader for any sub-team within this team
-          const teamSubTeams = subTeams?.filter(st => st.TeamID === t.TeamID) || [];
-          const isSubTeamLeader = teamSubTeams.some(st => 
-            st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase())
-          );
-          return isTeamLeader || isStakeholder || isSubTeamLeader;
-        });
+        if (!t.Active) return false;
+        const isTeamLeader = t.TeamLeaderEmails?.includes(currentUser.Email);
+        const isStakeholder = t.StakeholderEmails?.includes(currentUser.Email);
+        // Check if user is a sub-team leader for any sub-team within this team
+        const teamSubTeams = subTeams?.filter(st => st.TeamID === t.TeamID) || [];
+        const isSubTeamLeader = teamSubTeams.some(st =>
+          st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase())
+        );
+        return isTeamLeader || isStakeholder || isSubTeamLeader;
+      });
 
     // Get unsubmitted teams from settings (for Admin dashboard visibility on Saturday)
     const unsubmittedTeamsSetting = settings.find(s => s.Key === 'unsubmitted_teams_this_week');
     const unsubmittedTeamIds = unsubmittedTeamsSetting?.Value ? unsubmittedTeamsSetting.Value.split(',').filter(Boolean) : [];
-    
+
     // Filter out teams that have submitted (even late) from the unsubmitted list
     const submittedTeamIds = new Set(teamSubmissions.map(s => s.TeamID));
-    const unsubmittedTeams = teams.filter(t => 
+    const unsubmittedTeams = teams.filter(t =>
       unsubmittedTeamIds.includes(t.TeamID) && !submittedTeamIds.has(t.TeamID)
     );
 
@@ -2382,7 +2539,7 @@ export default function Dashboard({
                 const isTeamLeader = team.TeamLeaderEmails?.includes(currentUser.Email);
                 // Check if user is a sub-team leader for any sub-team within this team
                 const teamSubTeams = subTeams?.filter(st => st.TeamID === team.TeamID && st.Active) || [];
-                const isSubTeamLeader = teamSubTeams.some(st => 
+                const isSubTeamLeader = teamSubTeams.some(st =>
                   st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase())
                 );
                 const canPost = isTeamLeader || isSubTeamLeader || isAdminLevel(currentUser.Role);
@@ -2547,7 +2704,7 @@ export default function Dashboard({
                                               <p className={`text-[10px] sm:text-xs font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                                                 {submitter?.FullName || submission.SubmittedBy}
                                               </p>
-                                             <p className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                              <p className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
                                                 {new Date(submission.SubmittedAt).toLocaleDateString()}
                                               </p>
                                             </div>
@@ -2640,10 +2797,10 @@ export default function Dashboard({
                   let requirements: Record<string, { level: 'team' | 'subteam'; subTeamIds: string[] }> = {};
                   try {
                     if (reportRequirement) requirements = JSON.parse(reportRequirement);
-                  } catch (e) {}
-                  
+                  } catch (e) { }
+
                   const teamConfig = requirements[submissionTeamId];
-                  
+
                   // Show sub-team selection if:
                   // 1. Team is configured for sub-team reports AND
                   // 2. User is a sub-team leader OR team leader OR admin
@@ -2651,7 +2808,7 @@ export default function Dashboard({
                     const userIsTeamLeader = isTeamLeader(currentUser.Email, team);
                     const userIsSubTeamLeader = teamSubTeams.some(st => isSubTeamLeader(currentUser.Email, st));
                     const userIsAdmin = isAdminLevel(currentUser.Role);
-                    
+
                     if (userIsTeamLeader || userIsSubTeamLeader || userIsAdmin) {
                       return (
                         <div>
@@ -2917,11 +3074,10 @@ export default function Dashboard({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   autoFocus
-                  className={`w-full border rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm ${
-                    isDarkMode
+                  className={`w-full border rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm ${isDarkMode
                       ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-400'
                       : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-500'
-                  }`}
+                    }`}
                 />
               </div>
               <button
@@ -2934,7 +3090,7 @@ export default function Dashboard({
           </div>
         </div>
       )}
-      
+
       {/* Modal Backdrop Overlay - Covers entire screen including sidebar */}
       {isAnyModalOpen && (
         <div className="fixed inset-0 z-40 bg-slate-900/50 pointer-events-none" />
@@ -2983,9 +3139,8 @@ export default function Dashboard({
               <li>
                 <button
                   onClick={() => handleViewChange('overview')}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${
-                    activeView === 'overview' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'overview' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
                   title={isSidebarCollapsed ? 'Overview' : ''}
                 >
                   <LayoutDashboard size={18} />
@@ -2995,9 +3150,8 @@ export default function Dashboard({
               <li>
                 <button
                   onClick={() => handleViewChange('tasks')}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg transition-colors ${
-                    activeView === 'tasks' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'tasks' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
                   title={isSidebarCollapsed ? 'Tasks' : ''}
                 >
                   <div className={`flex items-center ${isSidebarCollapsed ? '' : 'space-x-3'}`}>
@@ -3010,9 +3164,8 @@ export default function Dashboard({
               <li>
                 <button
                   onClick={() => handleViewChange('team')}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${
-                    activeView === 'team' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'team' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
                   title={isSidebarCollapsed ? 'Team' : ''}
                 >
                   <Users size={18} />
@@ -3022,9 +3175,8 @@ export default function Dashboard({
               <li>
                 <button
                   onClick={() => handleViewChange('reports')}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${
-                    activeView === 'reports' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'reports' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
                   title={isSidebarCollapsed ? 'Reports' : ''}
                 >
                   <FileText size={18} />
@@ -3035,9 +3187,8 @@ export default function Dashboard({
                 <li>
                   <button
                     onClick={() => handleViewChange('scheduled-tasks')}
-                    className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${
-                      activeView === 'scheduled-tasks' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                    }`}
+                    className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'scheduled-tasks' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
                     title={isSidebarCollapsed ? 'Scheduled Reports' : ''}
                   >
                     <Calendar size={18} />
@@ -3049,9 +3200,8 @@ export default function Dashboard({
                 <li>
                   <button
                     onClick={() => handleViewChange('admin')}
-                    className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${
-                      activeView === 'admin' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                    }`}
+                    className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'admin' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
                     title={isSidebarCollapsed ? 'Admin Panel' : ''}
                   >
                     <Shield size={18} />
@@ -3069,9 +3219,8 @@ export default function Dashboard({
               <li>
                 <button
                   onClick={() => handleViewChange('settings')}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${
-                    activeView === 'settings' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'settings' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
                   title={isSidebarCollapsed ? 'Settings' : ''}
                 >
                   <Settings size={18} />
@@ -3123,13 +3272,12 @@ export default function Dashboard({
               <button
                 onClick={onSyncDatabase}
                 disabled={isSyncing}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity disabled:cursor-not-allowed disabled:opacity-50 ${
-                  syncStatus === 'synced'
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity disabled:cursor-not-allowed disabled:opacity-50 ${syncStatus === 'synced'
                     ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                     : syncStatus === 'syncing'
-                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                    : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                }`}
+                      ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                      : 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                  }`}
                 title={`Sync status: ${syncStatus}`}
               >
                 {syncStatus === 'synced' && <CheckCircle2 size={14} />}

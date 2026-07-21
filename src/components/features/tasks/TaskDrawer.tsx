@@ -158,6 +158,8 @@ export default function TaskDrawer({
   // Filter reports specifically linked to this Task ID or its subtasks
   const taskSubtasks = subtasks.filter(s => s.TaskID === task.TaskID);
   const taskSubtaskIds = taskSubtasks.map(s => s.SubtaskID);
+  console.log('TaskDrawer: task.TaskID typeof/value:', typeof task.TaskID, JSON.stringify(task.TaskID));
+  console.log('TaskDrawer: report TaskIDs:', reports.map(r => ({ value: r.TaskID, type: typeof r.TaskID })));
   const taskReports = reports.filter(r => r.TaskID === task.TaskID || (r.SubtaskID && taskSubtaskIds.includes(r.SubtaskID)));
 
   console.log(`TaskDrawer: task.TaskID=${task.TaskID}, total reports=${reports.length}, filtered reports=${taskReports.length}`);
