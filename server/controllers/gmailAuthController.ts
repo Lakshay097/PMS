@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { getGmailAuthUrl, exchangeCodeForTokens, getUserEmail } from '../services/gmailOAuthService';
-import { saveGmailToken, deleteGmailToken, isGmailConnected } from '../services/gmailTokenStorage';
+import { saveGmailToken, deleteGmailToken, isGmailConnected, clearNeedsReauth } from '../services/gmailTokenStorage';
 import { initializeUserTokensSheet } from '../services/gmailTokenStorage';
 import { initializeEmailTemplatesSheet, migrateEmailTemplates } from '../services/emailTemplateStorage';
 import { initializeEmailLogsSheet, initializeTaskEmailThreadsSheet, initializeTeamEmailThreadsSheet } from '../services/emailLogService';
@@ -94,6 +94,9 @@ export async function gmailCallbackHandler(req: Request, res: Response): Promise
       logger.error('Failed to save Gmail token');
       return res.redirect(`${process.env.APP_URL || 'http://localhost:3000'}/settings?email_error=save_failed`);
     }
+
+    // Clear needs_reauth flag if it was set (user has successfully re-authenticated)
+    await clearNeedsReauth(userEmail);
 
     logger.info(`Gmail connected successfully for ${userEmail}`);
     res.redirect(`${process.env.APP_URL || 'http://localhost:3000'}/settings?email_success=true`);

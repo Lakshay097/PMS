@@ -48,6 +48,12 @@ async function startServer() {
 
   app.set('trust proxy', 1);
 
+  // Log all incoming requests at the very start
+  app.use((req, res, next) => {
+    logger.info('[express-start] request received:', req.method, req.path);
+    next();
+  });
+
   app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -61,6 +67,13 @@ async function startServer() {
   app.use('/api/', rateLimit({
     windowMs: config.RATE_LIMIT_WINDOW_MS,
     max: config.RATE_LIMIT_MAX_REQUESTS,
+    skip: () => {
+      const skip = process.env.RATE_LIMIT_ENABLED !== 'true';
+      if (skip) {
+        logger.info('[rateLimit] skipping rate limiter (RATE_LIMIT_ENABLED=false)');
+      }
+      return skip;
+    },
     message: { error: 'Too many requests from this IP, please try again later.' }
   }));
 
@@ -100,6 +113,7 @@ async function startServer() {
 
   if (config.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
+    app.use('/api', (_req, res) => res.status(404).json({ error: 'Not Found' }));
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
@@ -137,4 +151,20 @@ async function startServer() {
   });
 }
 
-startServer();
+// Global error handlers for crashes after startup
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
+startServer().catch(err => {
+  // Probe C: event loop heartbeat, anywhere in startServer
+  setInterval(() => logger.info('[heartbeat]'), 2000);
+  logger.error('Server failed to start:', err);
+  process.exit(1);
+});

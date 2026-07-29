@@ -6,7 +6,7 @@ import TaskFilters from '../components/features/tasks/TaskFilters';
 interface TasksPageProps {
   tasks: Task[];
   filters: {
-    status: string;
+    status: string[];
     priority: string;
     assignee: string;
     searchQuery: string;
@@ -14,7 +14,7 @@ interface TasksPageProps {
   currentUser: UserType;
   users: UserType[];
   isDarkMode: boolean;
-  onFilterChange: (filterType: 'status' | 'priority' | 'assignee' | 'searchQuery', value: string) => void;
+  onFilterChange: (filterType: 'status' | 'priority' | 'assignee' | 'searchQuery', value: string | string[]) => void;
   onTaskClick: (task: Task) => void;
   onNewTask: () => void;
   getPriorityColor: (priority: string) => string;

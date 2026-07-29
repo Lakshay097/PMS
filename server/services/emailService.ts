@@ -1,6 +1,6 @@
 import { logger } from '../utils/logger';
 import { config } from '../config/env';
-import { getGmailToken, updateGmailAccessToken, deleteGmailToken } from './gmailTokenStorage';
+import { getGmailToken, updateGmailAccessToken, deleteGmailToken, markNeedsReauth } from './gmailTokenStorage';
 import { refreshAccessToken } from './gmailOAuthService';
 import { replaceTemplateVariables } from './emailTemplateStorage';
 import { logEmailSuccess, logEmailFailure, logEmailRetry, updateTaskEmailThreadId } from './emailLogService';
@@ -73,6 +73,7 @@ export interface EmailOptions {
   gmailThreadId?: string;  // Gmail API threadId for threading
   references?: string;  // RFC Message-ID chain for References header
   inReplyTo?: string;   // Last messageId for In-Reply-To header
+  senderEmail?: string; // Sender email for Message-ID domain derivation
 }
 
 /**
@@ -80,7 +81,9 @@ export interface EmailOptions {
  * Returns both the encoded string and the generated Message-ID so callers can store it.
  */
 function encodeEmail(email: EmailOptions): { raw: string; messageId: string } {
-  const messageId = `<${Date.now()}-${Math.random().toString(36).substr(2, 9)}@pms.taskflow>`;
+  // Derive domain from sender email for proper Message-ID alignment
+  const senderDomain = email.senderEmail?.split('@')[1] || 'pw.live';
+  const messageId = `<${Date.now()}-${Math.random().toString(36).slice(2, 11)}@${senderDomain}>`;
   
   // RFC 2822 requires Date header
   const dateHeader = new Date().toUTCString();
@@ -125,41 +128,6 @@ function encodeEmail(email: EmailOptions): { raw: string; messageId: string } {
   return { raw, messageId };
 }
 
-/**
- * Fetches the actual Message-ID header from Gmail after sending.
- * Gmail may rewrite or reformat the Message-ID, so we need to retrieve what Gmail actually stored.
- */
-async function getGmailStoredMessageId(
-  accessToken: string,
-  gmailMessageId: string
-): Promise<string | null> {
-  try {
-    // Wait a moment for Gmail to index the message
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${gmailMessageId}?format=metadata&metadataHeaders=Message-ID`, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-      },
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error(`Failed to fetch Gmail message metadata: ${response.status} - ${errorText}`);
-      return null;
-    }
-
-    const data = await response.json();
-    const headers = data.payload?.headers || [];
-    const messageIdHeader = headers.find((h: any) => h.name === 'Message-ID');
-    
-    logger.info(`Gmail message metadata fetched, headers count: ${headers.length}`);
-    return messageIdHeader?.value || null;
-  } catch (err) {
-    logger.error('Error fetching Gmail stored Message-ID:', err);
-    return null;
-  }
-}
 
 /**
  * Sends via Gmail API using RFC 2822 threading headers only.
@@ -175,7 +143,7 @@ async function getGmailStoredMessageId(
 async function sendEmailViaGmail(
   accessToken: string,
   email: EmailOptions
-): Promise<{ success: boolean; gmailThreadId?: string; gmailMessageId?: string; storedMessageId?: string }> {
+): Promise<{ success: boolean; gmailThreadId?: string; gmailMessageId?: string }> {
   try {
     logger.info(`[GMAIL API DEBUG] Preparing to send email to ${email.to}`);
     const { raw, messageId: outboundMessageId } = encodeEmail(email);
@@ -205,18 +173,11 @@ async function sendEmailViaGmail(
     const data = await response.json();
     logger.info(`[GMAIL API SUCCESS] threadId=${data.threadId}, apiMessageId=${data.id}, rfcMessageId=${outboundMessageId}`);
 
-    // FIX: Fetch the actual Message-ID that Gmail stored
-    const storedMessageId = await getGmailStoredMessageId(accessToken, data.id);
-    if (storedMessageId) {
-      logger.info(`Gmail stored Message-ID: ${storedMessageId}`);
-    } else {
-      logger.warn(`Could not fetch Gmail stored Message-ID, using generated: ${outboundMessageId}`);
-    }
-
-    // Return the Gmail-stored Message-ID if available, otherwise use our generated one
-    const finalMessageId = storedMessageId || outboundMessageId;
-
-    return { success: true, gmailThreadId: data.threadId, gmailMessageId: finalMessageId, storedMessageId };
+    // Use the generated Message-ID - Gmail API doesn't require metadata fetch for threading
+    // RFC headers (In-Reply-To, References) handle threading across all accounts
+    // CRITICAL: encodeEmail() produces a properly-formatted RFC-822 Message-ID (with angle brackets
+    // and valid domain derived from sender email), which is the sole anchor for In-Reply-To/References threading.
+    return { success: true, gmailThreadId: data.threadId, gmailMessageId: outboundMessageId };
   } catch (err) {
     logger.error('Error sending email via Gmail:', err);
     return { success: false };
@@ -264,7 +225,7 @@ export async function sendEmailAsUser(
   toRecipients?: string[],
   eventType?: string,
   forceSystemSender: boolean = false
-): Promise<{ success: boolean; usedFallback: boolean; gmailThreadId?: string; gmailMessageId?: string; storedMessageId?: string; error?: string }> {
+): Promise<{ success: boolean; usedFallback: boolean; gmailThreadId?: string; gmailMessageId?: string; error?: string }> {
   let senderEmail: string;
   let tokenFound: boolean;
   
@@ -298,19 +259,34 @@ export async function sendEmailAsUser(
       return { success: false, usedFallback: false, error: `No Gmail OAuth token found for ${senderEmail}. Please connect your Gmail account in Settings.` };
     }
 
-    // Refresh token if expired
+    // Refresh token if expired or within 5 minutes of expiring
     const now = new Date();
+    const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
     accessToken = senderToken.accessToken;
     const expiryDate = new Date(senderToken.tokenExpiry);
-    logger.info(`[TOKEN DEBUG] Token expiry check for ${senderEmail}: now=${now.toISOString()}, expiry=${expiryDate.toISOString()}, isExpired=${now >= expiryDate}`);
+    logger.info(`[TOKEN DEBUG] Token expiry check for ${senderEmail}: now=${now.toISOString()}, expiry=${expiryDate.toISOString()}, isExpired=${now >= expiryDate}, needsRefresh=${fiveMinutesFromNow >= expiryDate}`);
     
-    if (now >= expiryDate) {
-      logger.info(`[TOKEN DEBUG] Token expired for ${senderEmail}, refreshing...`);
+    if (now >= expiryDate || fiveMinutesFromNow >= expiryDate) {
+      const reason = now >= expiryDate ? 'expired' : 'expiring soon';
+      logger.info(`[TOKEN DEBUG] Token ${reason} for ${senderEmail}, refreshing...`);
       try {
         const refreshed = await refreshAccessToken(senderToken.refreshToken);
         if (!refreshed) {
-          logger.error(`[TOKEN ERROR] Token refresh failed for ${senderEmail}`);
-          await logEmailFailure(senderEmail, toEmail, subject, 'Token refresh failed - Gmail OAuth token expired or revoked');
+          logger.error(`[TOKEN ERROR] Token refresh failed for ${senderEmail} - marking needs_reauth`);
+          await markNeedsReauth(senderEmail);
+          await logEmailFailure(senderEmail, toEmail, subject, 'Token refresh failed - Gmail OAuth token expired or revoked. Account marked for re-authentication.');
+          
+          // Log to Firestore for admin visibility
+          try {
+            await firestoreAdmin.collection('gmail_reauth_required').add({
+              userEmail: senderEmail,
+              reason: 'Token refresh failed',
+              timestamp: new Date().toISOString(),
+            });
+          } catch (firestoreErr) {
+            logger.error('Failed to log reauth requirement to Firestore:', firestoreErr);
+          }
+          
           return { success: false, usedFallback: false, error: `Gmail OAuth token refresh failed for ${senderEmail}. Please reconnect your Gmail account in Settings.` };
         }
         accessToken = refreshed.access_token;
@@ -319,7 +295,21 @@ export async function sendEmailAsUser(
         logger.info(`[TOKEN DEBUG] Token refreshed successfully for ${senderEmail}`);
       } catch (refreshErr) {
         logger.error(`[TOKEN ERROR] Token refresh exception for ${senderEmail}:`, refreshErr);
-        await logEmailFailure(senderEmail, toEmail, subject, 'Token refresh failed - Gmail OAuth token expired or revoked');
+        await markNeedsReauth(senderEmail);
+        await logEmailFailure(senderEmail, toEmail, subject, 'Token refresh failed - Gmail OAuth token expired or revoked. Account marked for re-authentication.');
+        
+        // Log to Firestore for admin visibility
+        try {
+          await firestoreAdmin.collection('gmail_reauth_required').add({
+            userEmail: senderEmail,
+            reason: 'Token refresh exception',
+            error: String(refreshErr),
+            timestamp: new Date().toISOString(),
+          });
+        } catch (firestoreErr) {
+          logger.error('Failed to log reauth requirement to Firestore:', firestoreErr);
+        }
+        
         return { success: false, usedFallback: false, error: `Gmail OAuth token refresh failed for ${senderEmail}. Please reconnect your Gmail account in Settings.` };
       }
     } else {
@@ -384,6 +374,7 @@ export async function sendEmailAsUser(
       replyTo: senderEmail,
       gmailThreadId: threadId || undefined,  // Gmail API threadId for threading
       inReplyTo: messageId || undefined,    // last RFC Message-ID for In-Reply-To header
+      senderEmail, // For Message-ID domain derivation
     };
 
     logger.info(`Sending email: taskId=${taskId}, threadId=${threadId || 'NEW'}, inReplyTo=${messageId || 'none'}`);
@@ -394,7 +385,7 @@ export async function sendEmailAsUser(
       await logEmailSuccess(senderEmail, toEmail, subject);
       logger.info(`Email sent OK from ${senderEmail} to ${toEmail} (acting user: ${actingUserEmail})`);
 
-      // FIX: After every successful send, persist the real Gmail threadId + messageId
+      // After every successful send, persist the real Gmail threadId + messageId
       // so all subsequent emails for this task chain into the same Gmail thread.
       if (taskId && result.gmailThreadId && result.gmailMessageId) {
         if (emailType === 'report_reminder') {
@@ -406,13 +397,13 @@ export async function sendEmailAsUser(
           await updateTaskEmailThreadId(taskId, result.gmailThreadId, result.gmailMessageId);
         }
       }
-      return { success: true, usedFallback: false, gmailThreadId: result.gmailThreadId, gmailMessageId: result.gmailMessageId, storedMessageId: result.storedMessageId };
+      return { success: true, usedFallback: false, gmailThreadId: result.gmailThreadId, gmailMessageId: result.gmailMessageId };
     }
 
     // Retry once with a fresh token
     tokenCache.delete(senderEmail); // force a fresh read on retry
     const retryToken = await getGmailToken(senderEmail);
-    if (retryToken && retryToken.refreshToken) {
+    if (retryToken && retryToken.refreshToken && !retryToken.needsReauth) {
       await logEmailFailure(senderEmail, toEmail, subject, 'Gmail API send failed — retrying');
       const refreshed = await refreshAccessToken(retryToken.refreshToken);
       if (refreshed) {
@@ -421,8 +412,8 @@ export async function sendEmailAsUser(
         const retry = await sendEmailViaGmail(accessToken, email);
         if (retry.success) {
           await logEmailSuccess(senderEmail, toEmail, subject);
-          // Use the Gmail-stored Message-ID if available for proper threading
-          const finalMessageId = retry.storedMessageId || retry.gmailMessageId;
+          // Use the generated Message-ID for threading
+          const finalMessageId = retry.gmailMessageId;
           if (taskId && retry.gmailThreadId && finalMessageId) {
             if (emailType === 'report_reminder') {
               const { updateReportReminderThreadId } = await import('./reportReminderScheduler');
@@ -431,9 +422,12 @@ export async function sendEmailAsUser(
               await updateTaskEmailThreadId(taskId, retry.gmailThreadId, finalMessageId);
             }
           }
-          return { success: true, usedFallback: false, gmailThreadId: retry.gmailThreadId, gmailMessageId: finalMessageId, storedMessageId: retry.storedMessageId };
+          return { success: true, usedFallback: false, gmailThreadId: retry.gmailThreadId, gmailMessageId: finalMessageId };
         }
       }
+    } else if (retryToken?.needsReauth) {
+      logger.error(`[EMAIL ERROR] Cannot retry for ${senderEmail} - account needs re-authentication`);
+      await logEmailFailure(senderEmail, toEmail, subject, 'Gmail API send failed - account needs re-authentication');
     }
 
     // Final error after retry exhausted
@@ -496,4 +490,126 @@ export async function sendAccountApprovalEmail(email: string): Promise<boolean> 
 
 export async function sendAccountRequestNotification(adminEmail: string, requesterName: string, requesterEmail: string): Promise<boolean> {
   return sendEmail({ to: adminEmail, subject: 'New account request', text: `${requesterName} (${requesterEmail}) has requested an account.` });
+}
+
+/**
+ * Validates that an email exists in the users collection (Google Sheets).
+ * This prevents spoofing by ensuring only valid users can send emails.
+ */
+async function validateUserExists(email: string): Promise<boolean> {
+  try {
+    const { generateGoogleSheetsToken, fetchSheetValues } = await import('./googleSheetsService');
+    const tokenData = await generateGoogleSheetsToken();
+    if (!tokenData || !tokenData.spreadsheetId) {
+      logger.warn(`validateUserExists: No spreadsheet access, cannot validate ${email}`);
+      return false;
+    }
+
+    const usersData = await fetchSheetValues(
+      tokenData.accessToken,
+      tokenData.spreadsheetId,
+      'users!A:Z'
+    );
+
+    if (!usersData || usersData.length < 2) {
+      logger.warn('validateUserExists: No users data found');
+      return false;
+    }
+
+    // Check if email exists in users (skip header row at index 0)
+    const normalizedEmail = email.trim().toLowerCase();
+    for (let i = 1; i < usersData.length; i++) {
+      const row = usersData[i];
+      const userEmail = row[2]?.trim().toLowerCase(); // Email column (index 2)
+      if (userEmail === normalizedEmail) {
+        return true;
+      }
+    }
+
+    logger.warn(`validateUserExists: Email ${email} not found in users collection`);
+    return false;
+  } catch (err) {
+    logger.error('Error validating user exists:', err);
+    return false;
+  }
+}
+
+/**
+ * Sends an email as the acting user when one exists (task creation, assignment,
+ * report submission, closure). Only truly system-originated mail (scheduled reminders
+ * with no acting user) uses the system sender — and even then, Reply-To points at
+ * the relevant team leader.
+ *
+ * @param opts - Email options including acting user email, recipients, subject, html
+ * @returns Promise with success flag and optional error message
+ */
+export async function sendTriggeredEmail(opts: {
+  actingUserEmail?: string;
+  to: string[];
+  subject: string;
+  html: string;
+  replyTo?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { actingUserEmail, to, subject, html, replyTo } = opts;
+
+    // Determine sender: use acting user if provided and valid, otherwise system sender
+    let senderEmail: string;
+    let useSystemSender = false;
+
+    if (actingUserEmail && actingUserEmail.trim()) {
+      // Validate that the acting user exists in the system
+      const isValidUser = await validateUserExists(actingUserEmail.trim());
+      if (isValidUser) {
+        senderEmail = actingUserEmail.trim();
+        logger.info(`[sendTriggeredEmail] Using acting user as sender: ${senderEmail}`);
+      } else {
+        logger.warn(`[sendTriggeredEmail] Acting user ${actingUserEmail} not found in users collection, falling back to system sender`);
+        senderEmail = config.DEFAULT_FALLBACK_EMAIL;
+        useSystemSender = true;
+      }
+    } else {
+      // No acting user provided - use system sender
+      senderEmail = config.DEFAULT_FALLBACK_EMAIL;
+      useSystemSender = true;
+      logger.info(`[sendTriggeredEmail] No acting user provided, using system sender: ${senderEmail}`);
+    }
+
+    if (!senderEmail) {
+      throw new Error('No sender available: actingUserEmail missing and DEFAULT_FALLBACK_EMAIL not set');
+    }
+
+    // Send email to each recipient
+    for (const recipient of to) {
+      const result = await sendEmailAsUser(
+        senderEmail,
+        recipient,
+        subject,
+        html,
+        undefined, // templateName
+        undefined, // templateVars
+        undefined, // threadId
+        undefined, // messageId
+        undefined, // taskId
+        undefined, // teamId
+        undefined, // subTeamId
+        undefined, // weekOf
+        undefined, // emailType
+        undefined, // ccEmails
+        undefined, // toRecipients
+        'triggered_email', // eventType
+        useSystemSender // forceSystemSender
+      );
+
+      if (!result.success) {
+        logger.error(`[sendTriggeredEmail] Failed to send email to ${recipient}: ${result.error}`);
+        return { success: false, error: result.error };
+      }
+    }
+
+    return { success: true };
+  } catch (err) {
+    logger.error('[sendTriggeredEmail] Error:', err);
+    return { success: false, error: String(err) };
+  }
 }

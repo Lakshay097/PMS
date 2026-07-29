@@ -1,0 +1,876 @@
+EMAIL SENDING LOGIC ANALYSIS AND RETRY ISSUE
+==============================================
+
+PROBLEM STATEMENT
+-----------------
+Excessive retrying behavior observed in scheduled report submission emails:
+- Multiple recipients showing "retrying" status before eventual success
+- Example logs show 2-3 second delays between retry attempts
+- Pattern: sent -> retrying (2-3s) -> sent for each recipient
+
+CURRENT EMAIL SENDING ARCHITECTURE
+-----------------------------------
+
+1. CORE EMAIL SERVICE (server/services/emailService.ts)
+   - Main function: sendEmailAsUser()
+   - Handles Gmail OAuth token management
+   - Implements retry logic on send failure
+   - Supports email threading via RFC headers
+   - Token caching with 60-second TTL
+
+2. EMAIL TRIGGER SERVICE (server/services/emailTriggerService.ts)
+   - triggerTaskCreationEmail() - Task creation notifications
+   - triggerTaskAssignmentEmail() - Task assignment notifications  
+   - triggerTaskDueSoonEmail() - Due soon reminders
+   - triggerTaskOverdueEmail() - Overdue task notifications
+   - triggerReportSubmissionEmail() - Report submission notifications
+   - triggerTaskClosureEmail() - Task completion/closure notifications
+
+3. REPORT REMINDER SCHEDULER (server/services/reportReminderScheduler.ts)
+   - checkAndSendReportReminders() - Main scheduler function
+   - sendReportReminder() - Sends scheduled report emails
+   - Runs hourly via startReportReminderScheduler()
+   - Uses Firestore for lock management
+   - Sends to all team leaders in one email (TO field)
+
+4. RECURRING TASK SCHEDULER (server/services/recurringTaskScheduler.ts)
+   - checkAndGenerateRecurringTaskInstances() - Generates recurring tasks
+   - Sends assignment emails for generated tasks
+   - Runs hourly via startRecurringTaskScheduler()
+   - Uses Google Sheets for lock management
+
+5. TASK DUE DATE SCHEDULER (server/services/taskDueDateScheduler.ts)
+   - checkAndSendDueDateReminders() - Checks for overdue/due-soon tasks
+   - Sends overdue and due-soon email notifications
+   - Runs hourly via startTaskDueDateScheduler()
+   - Uses Firestore for lock management
+
+RETRY MECHANISM ANALYSIS (emailService.ts lines 412-437)
+-------------------------------------------------------
+
+Current Retry Logic:
+1. First send attempt via sendEmailViaGmail()
+2. If failure occurs:
+   - Delete token cache for sender email
+   - Fetch fresh token from storage
+   - Refresh access token using refresh token
+   - Retry send with new access token
+   - Log retry attempt
+3. If retry succeeds: log success and return
+4. If retry fails: log final failure and return error
+
+RETRY ISSUE ROOT CAUSE
+----------------------
+
+The retry mechanism is triggered too aggressively. Based on the log pattern:
+
+1. **Initial send succeeds for some recipients** (ashwin.mishra@pw.live - sent immediately)
+2. **Subsequent recipients hit retry** (bharat.chaujar@pw.live, akshay.jain@pw.live, etc.)
+3. **Retry succeeds after 2-3 seconds**
+
+This suggests:
+- Gmail API rate limiting (too many requests in short time)
+- Token refresh happening unnecessarily when token is still valid
+- No exponential backoff between retry attempts
+- Sequential sending to multiple recipients without rate limit handling
+
+SPECIFIC ISSUES IDENTIFIED
+---------------------------
+
+1. **No Rate Limit Handling**
+   - Sending emails to multiple recipients sequentially
+   - No delay between sends to same sender
+   - Gmail API may rate limit after N requests per minute
+
+2. **Aggressive Token Refresh**
+   - Retry immediately refreshes token even if original token is valid
+   - Token cache deleted on first failure (line 413)
+   - May be unnecessary if failure is due to rate limiting, not token expiry
+
+3. **No Exponential Backoff**
+   - Retry happens immediately after token refresh
+   - No delay between first failure and retry
+   - Should implement backoff for rate limit errors
+
+4. **Sequential Processing**
+   - reportReminderScheduler sends to recipients one at a time
+   - No batching or parallel processing with rate limiting
+   - Each recipient triggers separate Gmail API call
+
+5. **Single Sender Bottleneck**
+   - All scheduled reports sent from same sender (rajeev.1@pw.live)
+   - Concentrates all API calls on one account
+   - Increases likelihood of rate limiting
+
+CURRENT CONFIGURATION
+----------------------
+
+Scheduled Report Emails (reportReminderScheduler.ts):
+- Sender: process.env.REMINDER_SENDER_EMAIL or config.DEFAULT_FALLBACK_EMAIL
+- Currently: rajeev.1@pw.live (from memory)
+- Recipients: All team leaders in TO field (one email per team)
+- Schedule: Hourly check, sends on configured reminder day
+- Threading: Uses teamId-based thread persistence
+- Force System Sender: true (line 293)
+
+Task Assignment Emails (emailTriggerService.ts):
+- Sender: Task assigner's email (acting user)
+- Recipients: Task assignees
+- Threading: Uses taskId-based thread persistence
+- Force System Sender: false
+
+Task Reporting Emails (emailTriggerService.ts):
+- Sender: Report submitter's email
+- Recipients: Task allocator
+- Threading: Uses taskId-based thread persistence
+- Force System Sender: false
+
+Overdue/Due-Soon Emails (taskDueDateScheduler.ts):
+- Sender: Task creator/assigner's email
+- Recipients: Task assignees
+- Threading: Uses taskId-based thread persistence
+- Force System Sender: false
+
+Recurring Task Emails (recurringTaskScheduler.ts):
+- Sender: Template assigner's email
+- Recipients: Template assignees
+- Threading: No threading (undefined)
+- Force System Sender: true (line 327)
+
+RECOMMENDED FIXES
+-----------------
+
+1. **Implement Rate Limit Handling**
+   - Add delay between sequential sends (e.g., 500ms-1s)
+   - Implement exponential backoff on 429 errors
+   - Track Gmail API rate limit headers if available
+
+2. **Improve Retry Logic**
+   - Only refresh token if error indicates token expiry (401)
+   - For other errors (429, 500), implement backoff without token refresh
+   - Add max retry limit (currently unlimited)
+
+3. **Batch Recipients Where Possible**
+   - For scheduled reports, already using toRecipients array
+   - Ensure single API call for multiple recipients
+   - Verify Gmail API supports multiple TO recipients
+
+4. **Distribute Load Across Senders**
+   - Consider rotating sender emails for scheduled reports
+   - Or use dedicated service account with higher rate limits
+   - Implement sender pool for high-volume sends
+
+5. **Add Monitoring**
+   - Log rate limit responses
+   - Track retry success rate
+   - Alert on high retry patterns
+
+6. **Token Cache Optimization**
+   - Don't delete cache on first failure
+   - Only invalidate if refresh fails
+   - Implement cache warming before bulk sends
+
+PRIORITY FIXES
+--------------
+
+HIGH PRIORITY (immediate):
+1. Add 500ms delay between sequential email sends
+2. Check error type before refreshing token (only on 401)
+3. Implement exponential backoff for rate limit errors
+
+MEDIUM PRIORITY:
+4. Add rate limit monitoring and logging
+5. Implement sender rotation for scheduled reports
+6. Add max retry limit to prevent infinite loops
+
+LOW PRIORITY:
+7. Optimize token cache management
+8. Implement batching for bulk sends
+9. Add sender pool for high-volume scenarios
+
+CODE LOCATIONS TO MODIFY
+-------------------------
+
+1. emailService.ts:
+   - Lines 412-437: Retry logic
+   - Lines 175-224: sendEmailViaGmail function
+   - Lines 23-31: Token cache logic
+
+2. reportReminderScheduler.ts:
+   - Lines 205-316: sendReportReminder function
+   - Lines 494-534: Main processing loop
+
+3. emailTriggerService.ts:
+   - All trigger functions: Add rate limit handling
+
+4. recurringTaskScheduler.ts:
+   - Lines 294-339: Email sending for recurring tasks
+
+5. taskDueDateScheduler.ts:
+   - Lines 262-305: Overdue/due-soon email sending
+
+TESTING RECOMMENDATIONS
+-----------------------
+
+1. Test with 5-10 recipients to verify rate limit handling
+2. Monitor logs for retry patterns after fixes
+3. Test token expiry scenario (manually expire token)
+4. Test rate limit scenario (send many emails quickly)
+5. Verify threading still works with delays
+6. Test sender rotation if implemented
+
+MONITORING METRICS TO TRACK
+---------------------------
+
+1. Email send success rate
+2. Retry rate (emails requiring retry)
+3. Average time per email send
+4. Rate limit error count
+5. Token refresh count
+6. Email delivery time (first to last recipient)
+
+CONCLUSION
+----------
+
+The retry issue is caused by aggressive retry logic without rate limit handling. The system is hitting Gmail API rate limits when sending multiple emails sequentially from the same sender. Implementing rate limit awareness, smarter retry logic, and adding delays between sends will resolve the excessive retrying behavior.
+
+=============================================================================
+RELEVANT CODE SECTIONS
+=============================================================================
+
+1. CORE EMAIL SERVICE - RETRY LOGIC (emailService.ts lines 412-437)
+--------------------------------------------------------------------
+
+    // Retry once with a fresh token
+    tokenCache.delete(senderEmail); // force a fresh read on retry
+    const retryToken = await getGmailToken(senderEmail);
+    if (retryToken && retryToken.refreshToken) {
+      await logEmailFailure(senderEmail, toEmail, subject, 'Gmail API send failed — retrying');
+      const refreshed = await refreshAccessToken(retryToken.refreshToken);
+      if (refreshed) {
+        accessToken = refreshed.access_token;
+        await updateGmailAccessToken(senderEmail, accessToken, refreshed.expires_in);
+        const retry = await sendEmailViaGmail(accessToken, email);
+        if (retry.success) {
+          await logEmailSuccess(senderEmail, toEmail, subject);
+          // Use the Gmail-stored Message-ID if available for proper threading
+          const finalMessageId = retry.storedMessageId || retry.gmailMessageId;
+          if (taskId && retry.gmailThreadId && finalMessageId) {
+            if (emailType === 'report_reminder') {
+              const { updateReportReminderThreadId } = await import('./reportReminderScheduler');
+              await updateReportReminderThreadId(taskId, toEmail, retry.gmailThreadId, finalMessageId);
+            } else {
+              await updateTaskEmailThreadId(taskId, retry.gmailThreadId, finalMessageId);
+            }
+          }
+          return { success: true, usedFallback: false, gmailThreadId: retry.gmailThreadId, gmailMessageId: finalMessageId, storedMessageId: retry.storedMessageId };
+        }
+      }
+    }
+
+    // Final error after retry exhausted
+    await logEmailFailure(senderEmail, toEmail, subject, 'Gmail API send failed after retry');
+    return { success: false, usedFallback: false, error: `Failed to send email via Gmail API for ${senderEmail}. Please check your Gmail connection in Settings.` };
+
+2. GMAIL API SEND FUNCTION (emailService.ts lines 175-224)
+----------------------------------------------------------
+
+async function sendEmailViaGmail(
+  accessToken: string,
+  email: EmailOptions
+): Promise<{ success: boolean; gmailThreadId?: string; gmailMessageId?: string; storedMessageId?: string }> {
+  try {
+    logger.info(`[GMAIL API DEBUG] Preparing to send email to ${email.to}`);
+    const { raw, messageId: outboundMessageId } = encodeEmail(email);
+
+    // RFC threading only — no threadId param in body
+    const body: Record<string, string> = { raw };
+
+    logger.info(`[GMAIL API DEBUG] Request body: ${JSON.stringify(body).substring(0, 200)}...`);
+
+    const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    logger.info(`[GMAIL API DEBUG] Response status: ${response.status}, ok: ${response.ok}`);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error(`[GMAIL API ERROR] Status: ${response.status}, Error: ${errorText}`);
+      return { success: false };
+    }
+
+    const data = await response.json();
+    logger.info(`[GMAIL API SUCCESS] threadId=${data.threadId}, apiMessageId=${data.id}, rfcMessageId=${outboundMessageId}`);
+
+    // FIX: Fetch the actual Message-ID that Gmail stored
+    const storedMessageId = await getGmailStoredMessageId(accessToken, data.id);
+    if (storedMessageId) {
+      logger.info(`Gmail stored Message-ID: ${storedMessageId}`);
+    } else {
+      logger.warn(`Could not fetch Gmail stored Message-ID, using generated: ${outboundMessageId}`);
+    }
+
+    // Return the Gmail-stored Message-ID if available, otherwise use our generated one
+    const finalMessageId = storedMessageId || outboundMessageId;
+
+    return { success: true, gmailThreadId: data.threadId, gmailMessageId: finalMessageId, storedMessageId };
+  } catch (err) {
+    logger.error('Error sending email via Gmail:', err);
+    return { success: false };
+  }
+}
+
+3. REPORT REMINDER SCHEDULER - SEND FUNCTION (reportReminderScheduler.ts lines 205-316)
+--------------------------------------------------------------------------------------
+
+async function sendReportReminder(
+  recipientEmails: string[],
+  team: TeamWithConfig,
+  isFirstTime: boolean,
+  weekOf: string
+): Promise<{ success: boolean; gmailThreadId?: string; gmailMessageId?: string }> {
+  try {
+    const templateName = isFirstTime ? 'template_scheduled_report_first' : 'template_scheduled_report_reminder';
+    const template = await getEmailTemplate(templateName);
+    
+    if (!template) {
+      logger.error(`Template not found: ${templateName}`);
+      return { success: false };
+    }
+
+    // Use first recipient for template variables (for credentials)
+    const primaryRecipient = recipientEmails[0];
+    let officialWorkMail = primaryRecipient;
+    let temporaryPassword = '';
+    
+    if (isFirstTime) {
+      // In a real implementation, you'd fetch the user's actual password
+      // For now, we'll use a placeholder
+      temporaryPassword = '123456';
+    }
+
+    const templateVars = {
+      TeamName: team.teamName,
+      day: team.meetingDay,
+      AppURL: config.APP_URL || 'https://pms-taskflow-556944241861.us-central1.run.app/',
+      OfficialWorkMail: officialWorkMail,
+      TemporaryPassword: temporaryPassword,
+    };
+
+    // Check for existing thread - use persistent thread key (teamId only, not week-specific)
+    // CRITICAL: If this is the first-time onboarding email, ALWAYS start a fresh thread
+    // regardless of whether a thread exists from previous test runs or errors.
+    // Only use existing thread for reminder emails (isFirstTime = false).
+    let threadId: string | undefined;
+    let messageId: string | undefined;
+
+    if (isFirstTime) {
+      // Onboarding email: always start fresh thread, never reply to existing thread
+      logger.info(`First-time onboarding email for ${team.teamName} - starting fresh thread`);
+      threadId = undefined;
+      messageId = undefined;
+    } else {
+      // Reminder email: must reply to existing thread
+      const threadInfo = await getOrCreateReportReminderThread(team.teamId, primaryRecipient);
+      if (!threadInfo) {
+        logger.error(`Failed to get or create thread for team ${team.teamId}`);
+        return { success: false };
+      }
+
+      if (!threadInfo.threadId) {
+        // BUG: Reminder email sent without existing thread - this shouldn't happen
+        // if onboarding status tracking is working correctly
+        logger.error(`Reminder email for ${team.teamName} but no existing thread found - onboarding may not have been sent`);
+        // For now, we'll allow it to start a new thread, but this should be investigated
+        threadId = undefined;
+        messageId = undefined;
+      } else {
+        threadId = threadInfo.threadId;
+        messageId = threadInfo.messageId;
+      }
+    }
+
+    // Use acting user email for scheduled report reminders with safe fallback
+    // For system-originated scheduled reminders, use REMINDER_SENDER_EMAIL or system fallback
+    const actingUserEmail = process.env.REMINDER_SENDER_EMAIL || config.DEFAULT_FALLBACK_EMAIL;
+    
+    const result = await sendEmailAsUser(
+      actingUserEmail,
+      primaryRecipient, // Primary TO recipient
+      template.subject,
+      template.body,
+      templateName,
+      templateVars,
+      threadId, // Gmail threadId for API
+      messageId, // RFC Message-ID for In-Reply-To header
+      team.teamId, // taskId - use teamId for thread persistence
+      team.teamId,
+      undefined, // subTeamId
+      weekOf,
+      'report_reminder',
+      undefined, // ccEmails
+      recipientEmails, // toRecipients - all leaders in TO field
+      'report_reminder', // eventType
+      true // forceSystemSender - scheduled reminders use system sender
+    );
+
+    if (result.success && result.gmailThreadId && result.gmailMessageId) {
+      // Save thread info - persistent thread across all weeks (simplified like task emails)
+      // Use the Gmail-stored Message-ID if available for proper threading
+      const finalMessageId = result.storedMessageId || result.gmailMessageId;
+      
+      await updateReportReminderThreadId(team.teamId, primaryRecipient, result.gmailThreadId, finalMessageId);
+
+      // Mark as first email sent for all recipients if applicable
+      if (isFirstTime) {
+        for (const recipient of recipientEmails) {
+          await markFirstReportEmailSent(recipient);
+        }
+      }
+    }
+
+    return result;
+  } catch (error) {
+    logger.error(`Error sending report reminder to ${team.teamName}:`, error);
+    return { success: false };
+  }
+}
+
+4. REPORT REMINDER SCHEDULER - MAIN LOOP (reportReminderScheduler.ts lines 494-534)
+----------------------------------------------------------------------------------
+
+for (const entity of entitiesToRemind) {
+  const recipients = getTeamRecipients(entity);
+  logger.info(`[SCHEDULER] Processing ${entity.teamName} (ID: ${entity.teamId}) with ${recipients.length} recipients: ${recipients.join(', ')}`);
+
+  // Skip if already sent to this team in this run
+  if (sentRecipients.has(entity.teamId)) {
+    logger.info(`[SCHEDULER] Skipping ${entity.teamName} - already sent in this run`);
+    continue;
+  }
+
+  // Check if any recipient is first-time (if any is first-time, treat as first-time for the team)
+  let isFirstTimeForTeam = false;
+  for (const recipient of recipients) {
+    if (!(await hasReceivedFirstReportEmail(recipient))) {
+      isFirstTimeForTeam = true;
+      break;
+    }
+  }
+  logger.info(`[SCHEDULER] Sending to ${entity.teamName} - First time for team: ${isFirstTimeForTeam}`);
+
+  const result = await sendReportReminder(recipients, entity, isFirstTimeForTeam, weekOf);
+
+  if (result.success) {
+    successCount++;
+    sentRecipients.add(entity.teamId);
+    logger.info(`[SCHEDULER] ✓ Report reminder sent to ${entity.teamName} for ${recipients.length} recipients`);
+  } else {
+    failureCount++;
+    logger.error(`[SCHEDULER] ✗ Failed to send report reminder to ${entity.teamName}`);
+
+    // Log failure for admin visibility
+    await firestoreAdmin.collection('report_reminder_failures').add({
+      teamId: entity.teamId,
+      teamName: entity.teamName,
+      recipientEmails: recipients.join(', '),
+      weekOf,
+      reason: 'Email send failed',
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+
+5. TASK ASSIGNMENT EMAIL TRIGGER (emailTriggerService.ts lines 170-270)
+------------------------------------------------------------------------
+
+export async function triggerTaskAssignmentEmail(
+  assignerEmail: string,
+  assignedToEmail: string,
+  task: any
+): Promise<void> {
+  try {
+    if (!(await isEmailTypeEnabled('task_assignment'))) {
+      logger.info(`triggerTaskAssignmentEmail: disabled via email_enabled_task_assignment setting`);
+      return;
+    }
+    logger.info(`[TRIGGER DEBUG] triggerTaskAssignmentEmail called: assigner=${assignerEmail}, assignedTo=${assignedToEmail}, task=${task.TaskID}`);
+    const recipients = assignedToEmail.split(',').map((e: string) => e.trim()).filter(Boolean);
+    const threadTaskId = task.ParentTaskID || task.TaskID;
+    const rootTitle = task.Title.replace(/^Follow-up #\d+:\s*/i, '');
+    const emailSubject = `[${threadTaskId}] ${rootTitle}`;
+    const threadInfo = await getOrCreateTaskEmailThread(threadTaskId, recipients[0]);
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+
+    const usersMap = await loadUsersNameMap();
+    // FIX: Use task.CreatedByEmail/AssignedByEmail if assignerEmail not provided
+    const actualAssignerEmail = assignerEmail || task.CreatedByEmail || task.AssignedByEmail || task.CreatedBy || task.creatorEmail;
+    if (!actualAssignerEmail) {
+      logger.error(`[TRIGGER ERROR] No assigner email found for task ${task.TaskID}`);
+      return;
+    }
+    const assignedByName = usersMap.get(actualAssignerEmail.trim().toLowerCase()) || actualAssignerEmail;
+
+    logger.info(`Assignment email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
+
+    // All known participants for this task = assigner + all assignees.
+    // Every email CCs everyone except the current sender and primary To,
+    // so the full thread is visible to all parties regardless of who sends next.
+    const allKnown = [
+      actualAssignerEmail,
+      ...recipients,
+      ...(threadInfo?.participants?.split(',').map((p: string) => p.trim()).filter(Boolean) || []),
+    ];
+    const uniqueKnown = [...new Set(allKnown.map(e => e.toLowerCase()))];
+
+    // Track sent recipients in this batch to prevent duplicates
+    const sentRecipients = new Set<string>();
+
+    for (const recipient of recipients) {
+      // Skip if already sent to this recipient in this batch
+      if (sentRecipients.has(recipient.toLowerCase())) {
+        logger.info(`[TRIGGER DEBUG] Skipping ${recipient} - already sent in this batch`);
+        continue;
+      }
+
+      logger.info(`[TRIGGER DEBUG] Sending to recipient: ${recipient}`);
+      const assignedToName = usersMap.get(recipient.trim().toLowerCase()) || recipient;
+
+      // TO = everyone except sender (actualAssignerEmail) - first recipient is primary TO, others are additional TO
+      const toRecipients = uniqueKnown
+        .filter(e => e !== actualAssignerEmail.toLowerCase())
+        .map(e => allKnown.find(a => a.toLowerCase() === e) || e);
+
+      logger.info(`[TRIGGER DEBUG] TO recipients: ${toRecipients.join(', ') || 'none'}`);
+
+      const result = await sendEmailAsUser(
+        actualAssignerEmail,
+        recipient,
+        emailSubject,
+        '',
+        'template_assigned_email',
+        {
+          TaskID: task.TaskID,
+          Title: task.Title,
+          Description: task.Description || task.description || '',
+          Priority: task.Priority,
+          DueDate: task.DueDate,
+          AssignedToEmail: recipient,
+          AssignedToName: assignedToName,
+          AssignedByEmail: assignerEmail,
+          AssignedByName: assignedByName,
+          AttachmentLink: task.AttachmentLink || 'No attachment',
+          app_url: appUrl,
+        },
+        threadInfo?.threadId,
+        threadInfo?.messageId,
+        threadTaskId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        toRecipients,
+        'task_assignment',
+        false
+      );
+      logger.info(`[TRIGGER DEBUG] Email send result for ${recipient}: success=${result.success}, usedFallback=${result.usedFallback}, error=${result.error || 'none'}`);
+      if (!result.success && result.error) {
+        logger.error(`[TRIGGER ERROR] Failed to send email to ${recipient}: ${result.error}`);
+      } else if (result.success) {
+        sentRecipients.add(recipient.toLowerCase());
+      }
+    }
+  } catch (err) {
+    logger.error('[TRIGGER ERROR] Error triggering task assignment email:', err);
+  }
+}
+
+6. TASK OVERDUE EMAIL TRIGGER (emailTriggerService.ts lines 347-420)
+---------------------------------------------------------------------
+
+export async function triggerTaskOverdueEmail(
+  creatorEmail: string,
+  assignedToEmail: string,
+  task: any
+): Promise<void> {
+  try {
+    if (!(await isEmailTypeEnabled('task_delay'))) {
+      logger.info(`triggerTaskOverdueEmail: disabled via email_enabled_task_delay setting`);
+      return;
+    }
+    const recipients = assignedToEmail.split(',').map((e: string) => e.trim()).filter(Boolean);
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const threadTaskId = task.ParentTaskID || task.TaskID;
+    const rootTitle = task.Title.replace(/^Follow-up #\d+:\s*/i, '');
+    const emailSubject = `[${threadTaskId}] ${rootTitle}`;
+    const threadInfo = await getOrCreateTaskEmailThread(threadTaskId, recipients[0]);
+
+    const usersMap = await loadUsersNameMap();
+    const assignedByName = usersMap.get(creatorEmail.trim().toLowerCase()) || creatorEmail;
+
+    logger.info(`Overdue email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
+
+    const allKnown = [
+      creatorEmail,
+      ...recipients,
+      ...(threadInfo?.participants?.split(',').map((p: string) => p.trim()).filter(Boolean) || []),
+    ];
+    const uniqueKnown = [...new Set(allKnown.map(e => e.toLowerCase()))];
+
+    for (const recipient of recipients) {
+      const assignedToName = usersMap.get(recipient.trim().toLowerCase()) || recipient;
+      const toRecipients = uniqueKnown
+        .filter(e => e !== creatorEmail.toLowerCase())
+        .map(e => allKnown.find(a => a.toLowerCase() === e) || e);
+
+      await sendEmailAsUser(
+        creatorEmail,
+        recipient,
+        emailSubject,
+        '',
+        'task_overdue',
+        {
+          task_name: task.Title,
+          Title: task.Title,
+          TaskID: task.TaskID,
+          Description: task.Description || task.description || '',
+          due_date: task.DueDate,
+          DueDate: task.DueDate,
+          priority: task.Priority,
+          Priority: task.Priority,
+          assigned_to: recipient,
+          AssignedToEmail: recipient,
+          AssignedToName: assignedToName,
+          AssignedByName: assignedByName,
+          app_url: appUrl,
+        },
+        threadInfo?.threadId,
+        threadInfo?.messageId,
+        threadTaskId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        toRecipients,
+        'task_overdue',
+        false
+      );
+    }
+  } catch (err) {
+    logger.error('Error triggering task overdue email:', err);
+  }
+}
+
+7. TASK CLOSURE EMAIL TRIGGER (emailTriggerService.ts lines 501-590)
+---------------------------------------------------------------------
+
+export async function triggerTaskClosureEmail(
+  closedByEmail: string,
+  assignedToEmail: string,
+  task: any,
+  closeRemark: string,
+  allocatorEmail?: string
+): Promise<void> {
+  try {
+    if (!(await isEmailTypeEnabled('task_completion'))) {
+      logger.info(`triggerTaskClosureEmail: disabled via email_enabled_task_completion setting`);
+      return;
+    }
+    if (!closedByEmail) {
+      logger.error('Task closure email FAILED: closedByEmail is undefined or empty');
+      return;
+    }
+    if (!assignedToEmail) {
+      logger.error('Task closure email FAILED: assignedToEmail is undefined or empty');
+      return;
+    }
+    if (!task || !task.TaskID) {
+      logger.error('Task closure email FAILED: task or task.TaskID is undefined');
+      return;
+    }
+
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    const threadTaskId = task.ParentTaskID || task.TaskID;
+    const rootTitle = task.Title.replace(/^Follow-up #\d+:\s*/i, '');
+    const emailSubject = `[${threadTaskId}] ${rootTitle}`;
+
+    // Primary recipient: allocator (task creator/assigner) if provided, else fall back to assignedToEmail
+    const toEmail = allocatorEmail || assignedToEmail;
+    const threadInfo = await getOrCreateTaskEmailThread(threadTaskId, toEmail);
+
+    const usersMap = await loadUsersNameMap();
+    const closedByName = usersMap.get(closedByEmail.trim().toLowerCase()) || closedByEmail;
+    const toName = usersMap.get(toEmail.trim().toLowerCase()) || toEmail;
+
+    logger.info(`Closure email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
+
+    // All known parties: closer, allocator, all assignees, plus anyone already in thread.
+    // CC = everyone except sender (closedByEmail) and primary To (toEmail).
+    const assignees = assignedToEmail.split(',').map((e: string) => e.trim()).filter(Boolean);
+    const allKnown = [
+      closedByEmail,
+      toEmail,
+      ...assignees,
+      ...(threadInfo?.participants?.split(',').map((p: string) => p.trim()).filter(Boolean) || []),
+    ];
+    const uniqueKnown = [...new Set(allKnown.map(e => e.toLowerCase()))];
+    const toRecipients = uniqueKnown
+      .filter(e => e !== closedByEmail.toLowerCase() && e !== toEmail.toLowerCase())
+      .map(e => allKnown.find(a => a.toLowerCase() === e) || e);
+
+    logger.info(`[TRIGGER DEBUG] Closure email: sender=${closedByEmail}, to=${toEmail}, toRecipients=${toRecipients.join(', ') || 'none'}`);
+
+    await sendEmailAsUser(
+      closedByEmail,  // sender = person closing the task (Lakshay)
+      toEmail,        // to = allocator (Utsav) — mirrors report pattern
+      emailSubject,
+      '',
+      'task_closed',
+      {
+        task_name: task.Title,
+        task_id: task.TaskID,
+        Description: task.Description || task.description || '',
+        closed_by: closedByEmail,
+        ClosedByName: closedByName,
+        AssignedToName: toName,
+        close_remark: closeRemark,
+        completion_date: task.CompletionDate || new Date().toISOString().split('T')[0],
+        app_url: appUrl,
+      },
+      threadInfo?.threadId,
+      threadInfo?.messageId,
+      threadTaskId,
+      undefined, // teamId
+      undefined, // subTeamId
+      undefined, // weekOf
+      undefined, // emailType
+      undefined,
+      toRecipients,
+      'task_closure',
+      false
+    );
+  } catch (err) {
+    console.error('Task closure email FAILED:', err);
+    logger.error('Error triggering task closure email:', err);
+  }
+}
+
+8. RECURRING TASK SCHEDULER - EMAIL SENDING (recurringTaskScheduler.ts lines 294-339)
+--------------------------------------------------------------------------------------
+
+// Trigger assignment email for the newly generated task
+try {
+  const recipients = template.AssignedToEmail.split(',').map((e: string) => e.trim()).filter(Boolean);
+  const appUrl = config.APP_URL || 'http://localhost:3000';
+  const emailSubject = `[${newTaskId}] ${template.Title} - [Cycle ${cycleKey}]`;
+  
+  for (const recipient of recipients) {
+    const emailSuccess = await sendEmailAsUser(
+      template.AssignedByEmail,
+      recipient,
+      emailSubject,
+      '',
+      'template_assigned_email',
+      {
+        TaskID: newTaskId,
+        Title: `${template.Title} - [Cycle ${cycleKey}]`,
+        Description: template.Description || '',
+        Priority: template.Priority,
+        DueDate: dueDate,
+        AssignedToEmail: recipient,
+        AssignedToName: recipient, // Could be enhanced with name lookup
+        AssignedByEmail: template.AssignedByEmail,
+        AssignedByName: template.AssignedByEmail, // Could be enhanced with name lookup
+      },
+      undefined, // threadId
+      undefined, // messageId
+      undefined, // taskId
+      undefined, // teamId
+      undefined, // subTeamId
+      undefined, // weekOf
+      undefined, // emailType
+      undefined, // ccEmails
+      undefined, // toRecipients
+      'recurring_task_assignment', // eventType
+      true // forceSystemSender - system-generated email
+    );
+    
+    if (emailSuccess) {
+      logger.info(`RecurringTaskScheduler: Email sent to ${recipient} for task ${newTaskId}`);
+    } else {
+      logger.warn(`RecurringTaskScheduler: Failed to send email to ${recipient} for task ${newTaskId}`);
+    }
+  }
+} catch (emailErr) {
+  logger.error(`RecurringTaskScheduler: Error sending email for task ${newTaskId}`, emailErr);
+  // Don't mark as error - task was still generated successfully
+}
+
+9. TASK DUE DATE SCHEDULER - EMAIL SENDING (taskDueDateScheduler.ts lines 262-305)
+------------------------------------------------------------------------------------
+
+try {
+  await triggerTaskOverdueEmail(
+    assignedByEmail,
+    assignedToEmail,
+    {
+      TaskID: taskId,
+      Title: title,
+      Description: description,
+      DueDate: dueDate,
+      Priority: priority,
+    }
+  );
+  overdueCount++;
+} catch (err) {
+  logger.error(`TaskDueDateScheduler: Failed to send overdue email for task ${taskId}`, err);
+}
+
+// ... (similar for due-soon emails)
+
+try {
+  await triggerTaskDueSoonEmail(
+    assignedByEmail,
+    assignedToEmail,
+    {
+      TaskID: taskId,
+      Title: title,
+      Description: description,
+      DueDate: dueDate,
+      Priority: priority,
+    }
+  );
+  dueSoonCount++;
+} catch (err) {
+  logger.error(`TaskDueDateScheduler: Failed to send due-soon email for task ${taskId}`, err);
+}
+
+10. TOKEN CACHE LOGIC (emailService.ts lines 23-31)
+----------------------------------------------------
+
+// Short-lived cache to avoid repeated Sheets API reads for the same sender
+// when sending many emails back-to-back (e.g. scheduled report reminders).
+const TOKEN_CACHE_TTL_MS = 60 * 1000;
+const tokenCache = new Map<string, { token: Awaited<ReturnType<typeof getGmailToken>>; expiresAt: number }>();
+
+async function getGmailTokenCached(email: string): ReturnType<typeof getGmailToken> {
+  const cached = tokenCache.get(email);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.token;
+  }
+  const token = await getGmailToken(email);
+  tokenCache.set(email, { token, expiresAt: Date.now() + TOKEN_CACHE_TTL_MS });
+  return token;
+}
+
+=============================================================================
+END OF CODE SECTIONS
+=============================================================================

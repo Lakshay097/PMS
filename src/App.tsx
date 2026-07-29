@@ -26,6 +26,7 @@ import { initAuth, sheetsApi } from './lib/sheetsService';
 import { checkAndGenerateRecurringTasks, evaluateOverdueTasks } from './lib/taskEngine';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { useAuth } from './contexts/AuthContext';
+import { useTheme } from './contexts/ThemeContext';
 import { changePassword } from './api/auth';
 import { triggerReportSubmissionEmail, triggerTaskClosureEmail } from './api/emailTrigger';
 import { useGmailStatus } from './hooks/useGmailStatus';
@@ -96,6 +97,8 @@ const AddTeamModal = lazy(() => import('./components/features/tasks/AddTeamModal
 type ActiveView = 'dashboard' | 'tasks' | 'templates' | 'admin';
 
 export default function App() {
+  const { isDarkMode } = useTheme();
+
   // Database States loaded from LocalStorage - MUST be called before any conditional logic
   const {
     users,
@@ -285,21 +288,6 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     return localStorage.getItem('PMS_sidebar_collapsed') === 'true';
   });
-
-  // Theme state with localStorage persistence
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    const savedTheme = localStorage.getItem('PMS_theme');
-    return savedTheme === 'dark';
-  });
-
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-      document.documentElement.setAttribute('data-theme', 'light');
-    }
-    localStorage.setItem('PMS_theme', isDarkMode ? 'dark' : 'light');
-  }, [isDarkMode]);
 
   const [isEditingPassword, setIsEditingPassword] = useState(false);
   const [newProfilePassword, setNewProfilePassword] = useState('');
@@ -822,7 +810,7 @@ export default function App() {
   };
 
   if (dbIsLoading) {
-    return <DashboardSkeleton isDarkMode={isDarkMode} />;
+    return <DashboardSkeleton />;
   }
 
   if (!activeUser) {
@@ -857,7 +845,7 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans antialiased ${isDarkMode ? 'bg-[#0F141F] text-slate-200' : 'bg-slate-50 text-slate-800'}`}>
+    <div className="min-h-screen flex flex-col font-sans antialiased bg-app text-primary">
       
       {/* PWA Banners */}
       <InstallBanner />
@@ -872,25 +860,25 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className={`fixed top-5 right-5 z-[9999] max-w-sm w-full border shadow-2xl rounded-2xl p-4 flex gap-3 text-xs font-semibold leading-relaxed ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}
+            className="fixed top-5 right-5 z-[9999] max-w-sm w-full border shadow-2xl rounded-2xl p-4 flex gap-3 text-xs font-semibold leading-relaxed bg-surface border-token"
           >
             <div className={`mt-0.5 h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-              simulationMessage.type === 'success' ? (isDarkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-800') :
-              simulationMessage.type === 'error' ? (isDarkMode ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-800') : (isDarkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-800')
+              simulationMessage.type === 'success' ? 'bg-[var(--color-success-bg)] text-[var(--color-success-fg)]' :
+              simulationMessage.type === 'error' ? 'bg-[var(--color-danger-bg)] text-[var(--color-danger-fg)]' : 'bg-[var(--color-info-bg)] text-[var(--color-info-fg)]'
             }`}>
               {simulationMessage.type === 'success' ? <CheckCircle size={14} /> :
                simulationMessage.type === 'error' ? <AlertTriangle size={14} /> : <Info size={14} />}
             </div>
             <div className="flex-1 space-y-1">
-              <div className={`font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+              <div className="font-bold text-primary">
                 {simulationMessage.type === 'success' ? 'Success Alert' :
                  simulationMessage.type === 'error' ? 'System Error' : 'System Information'}
               </div>
-              <p className={`leading-snug ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{simulationMessage.text}</p>
+              <p className="leading-snug text-secondary">{simulationMessage.text}</p>
             </div>
             <button
               onClick={() => setSimulationMessage(null)}
-              className={`ml-1 p-1 rounded-lg transition-all h-6 w-6 flex items-center justify-center shrink-0 border-none cursor-pointer ${isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+              className="ml-1 p-1 rounded-lg transition-all h-6 w-6 flex items-center justify-center shrink-0 border-none cursor-pointer text-muted hover:text-secondary hover-surface"
             >
               <X size={14} />
             </button>
@@ -902,21 +890,21 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className={`fixed top-5 right-5 z-[9999] max-w-sm w-full border shadow-2xl rounded-2xl p-4 flex gap-3 text-xs font-semibold leading-relaxed ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}
+            className="fixed top-5 right-5 z-[9999] max-w-sm w-full border shadow-2xl rounded-2xl p-4 flex gap-3 text-xs font-semibold leading-relaxed bg-surface border-token"
           >
-            <div className={`mt-0.5 h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 ${isDarkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-800'}`}>
+            <div className="mt-0.5 h-6 w-6 rounded-full flex items-center justify-center flex-shrink-0 bg-[var(--color-warning-bg)] text-[var(--color-warning-fg)]">
               <AlertTriangle size={14} />
             </div>
             <div className="flex-1 space-y-1">
-              <div className={`font-bold ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>Database Status</div>
-              <p className={`leading-snug ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{databaseSwitchMessage}</p>
+              <div className="font-bold text-primary">Database Status</div>
+              <p className="leading-snug text-secondary">{databaseSwitchMessage}</p>
             </div>
             <button
               onClick={() => {
                 // Clear the message by forcing a re-render
                 // The hook will auto-clear after timeout
               }}
-              className={`ml-1 p-1 rounded-lg transition-all h-6 w-6 flex items-center justify-center shrink-0 border-none cursor-pointer ${isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+              className="ml-1 p-1 rounded-lg transition-all h-6 w-6 flex items-center justify-center shrink-0 border-none cursor-pointer text-muted hover:text-secondary hover-surface"
             >
               <X size={14} />
             </button>
@@ -1206,8 +1194,6 @@ export default function App() {
             throw error;
           }
         }}
-        isDarkMode={isDarkMode}
-        onToggleTheme={() => setIsDarkMode(!isDarkMode)}
         onSyncDatabase={handleManualSync}
         isSyncing={dbIsSyncing}
         lastSyncTime={lastSyncTime}
@@ -1270,7 +1256,6 @@ export default function App() {
             usersList={users}
             teamsList={teams}
             subTeamsList={subTeams}
-            isDarkMode={isDarkMode}
           />
         )}
 
@@ -1298,7 +1283,6 @@ export default function App() {
               setIsDrawerOpen(false);
               setSelectedTask(null);
             }}
-            isDarkMode={isDarkMode}
           />
         )}
 
@@ -1316,8 +1300,6 @@ export default function App() {
               setIsEditProfileModalOpen(false);
               setIsChangePasswordModalOpen(true);
             }}
-            isDarkMode={isDarkMode}
-            onToggleTheme={() => setIsDarkMode(!isDarkMode)}
           />
         )}
 

@@ -1,6 +1,33 @@
 import React from 'react';
-import KPICard from '../../shared/KPICard';
-import { Users, Calendar, Mail, FileText, Settings, Activity, ChevronRight, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import {
+  Users,
+  Calendar,
+  Mail,
+  FileText,
+  Settings,
+  Activity,
+  ChevronRight,
+  AlertCircle,
+  Clock,
+  Database,
+  RefreshCw,
+  CheckCircle,
+} from 'lucide-react';
+import { Badge, Card, EmptyState, TimeAgo } from '../../shared/ui';
+
+/**
+ * Admin Console home — redesigned.
+ *
+ * What changed vs. the previous version:
+ *  - Database sync status + one-click sync moved into the header (the props
+ *    existed on AdminPage but were never surfaced anywhere)
+ *  - KPI strip leads with what needs attention: overdue tasks turn red and
+ *    jump to the front when > 0; numbers use tabular figures
+ *  - Module cards carry real health states (dot + label), tighter density
+ *  - Activity feed uses relative timestamps ("3m ago") with the full
+ *    timestamp on hover, and has a proper empty state
+ *  - Quick actions are wired to props instead of dead buttons
+ */
 
 interface AdminHomeProps {
   onNavigateToModule?: (module: string) => void;
@@ -8,188 +35,329 @@ interface AdminHomeProps {
   templates?: any[];
   audits?: any[];
   tasks?: any[];
+  // surfaced from AdminPage — previously accepted but never rendered
+  onSyncDatabase?: () => void;
+  isSyncing?: boolean;
+  lastSyncTime?: string;
+  dbConnectionStatus?: 'connected' | 'disconnected' | 'error';
+  // quick actions — previously dead buttons
+  onRunScheduler?: () => void;
+  onSendTestEmail?: () => void;
+  onExportAudit?: () => void;
 }
 
-export default function AdminHome({ onNavigateToModule, users = [], templates = [], audits = [], tasks = [] }: AdminHomeProps) {
-  const activeUsersCount = users.filter(u => u.Active).length;
-  const activeTemplatesCount = templates.filter(t => t.Active).length;
+export default function AdminHome({
+  onNavigateToModule,
+  users = [],
+  templates = [],
+  audits = [],
+  tasks = [],
+  onSyncDatabase,
+  isSyncing,
+  lastSyncTime,
+  dbConnectionStatus = 'connected',
+  onRunScheduler,
+  onSendTestEmail,
+  onExportAudit,
+}: AdminHomeProps) {
+  const activeUsers = users.filter((u) => u.Active).length;
+  const pendingUsers = users.filter((u) => !u.Active).length;
+  const activeTemplates = templates.filter((t) => t.Active).length;
   const today = new Date().toISOString().split('T')[0];
-  const overdueTasksCount = tasks.filter(t => {
-    if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
-    return t.DueDate < today;
-  }).length;
+  const overdue = tasks.filter(
+    (t) => t.Status !== 'Closed' && t.Status !== 'Reviewed' && t.DueDate < today
+  ).length;
+
+  const kpis = [
+    {
+      id: 'overdue',
+      label: 'Overdue tasks',
+      value: overdue,
+      note: overdue > 0 ? 'Need attention now' : 'All on schedule',
+      tone: overdue > 0 ? 'danger' : 'success',
+      icon: <AlertCircle size={16} />,
+    },
+    {
+      id: 'users',
+      label: 'Active users',
+      value: activeUsers,
+      note: pendingUsers > 0 ? `${pendingUsers} awaiting approval` : 'Directory current',
+      tone: pendingUsers > 0 ? 'warning' : 'neutral',
+      icon: <Users size={16} />,
+    },
+    {
+      id: 'schedulers',
+      label: 'Active blueprints',
+      value: activeTemplates,
+      note: 'Recurring task generators',
+      tone: activeTemplates > 0 ? 'neutral' : 'warning',
+      icon: <Calendar size={16} />,
+    },
+    {
+      id: 'audit',
+      label: 'Audit records',
+      value: audits.length,
+      note: 'System events logged',
+      tone: 'neutral',
+      icon: <FileText size={16} />,
+    },
+  ] as const;
+
+  const toneColor: Record<string, string> = {
+    danger: 'var(--color-danger)',
+    warning: 'var(--color-warning)',
+    success: 'var(--color-success)',
+    neutral: 'var(--color-text-muted)',
+  };
 
   const modules = [
     {
       id: 'identities',
       label: 'Identity directory',
-      description: 'Manage users, roles, and access permissions',
-      icon: <Users size={24} />,
-      health: 'healthy',
-      healthLabel: `${activeUsersCount} active users`,
+      description: 'Users, roles and access permissions',
+      icon: <Users size={20} />,
+      healthy: true,
+      healthLabel: `${activeUsers} active`,
     },
     {
       id: 'blueprints',
       label: 'Recurrence blueprints',
-      description: 'Configure automated task generation schedules',
-      icon: <Calendar size={24} />,
-      health: activeTemplatesCount > 0 ? 'healthy' : 'warning',
-      healthLabel: `${activeTemplatesCount} active blueprints`,
+      description: 'Automated task generation schedules',
+      icon: <Calendar size={20} />,
+      healthy: activeTemplates > 0,
+      healthLabel: activeTemplates > 0 ? `${activeTemplates} running` : 'None active',
     },
     {
       id: 'templates',
       label: 'Email templates',
-      description: 'Customize notification and alert templates',
-      icon: <Mail size={24} />,
-      health: 'healthy',
-      healthLabel: 'Templates configured',
+      description: 'Notification and alert content',
+      icon: <Mail size={20} />,
+      healthy: true,
+      healthLabel: 'Configured',
     },
     {
       id: 'audit',
       label: 'Audit ledger',
-      description: 'View system events and change history',
-      icon: <FileText size={24} />,
-      health: 'healthy',
-      healthLabel: `${audits.length} records logged`,
+      description: 'System events and change history',
+      icon: <FileText size={20} />,
+      healthy: true,
+      healthLabel: `${audits.length} records`,
     },
     {
       id: 'settings',
       label: 'Global settings',
-      description: 'Configure system parameters and business rules',
-      icon: <Settings size={24} />,
-      health: 'healthy',
-      healthLabel: 'Configuration current',
+      description: 'System parameters and business rules',
+      icon: <Settings size={20} />,
+      healthy: true,
+      healthLabel: 'Current',
     },
   ];
 
-  const recentSystemEvents = audits.slice(0, 4).map((audit, index) => ({
-    id: audit.AuditID || index,
-    message: audit.Action || 'System event recorded',
-    time: audit.Timestamp ? new Date(audit.Timestamp).toLocaleString() : 'Recently',
-    type: audit.Action?.toLowerCase().includes('error') ? 'warning' : 'info',
-  }));
+  const events = audits.slice(0, 5);
+
+  const dbBadge =
+    dbConnectionStatus === 'connected'
+      ? { variant: 'success' as const, label: 'Database connected' }
+      : dbConnectionStatus === 'error'
+        ? { variant: 'danger' as const, label: 'Database error' }
+        : { variant: 'warning' as const, label: 'Database disconnected' };
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-semibold text-[#0f172a]">Admin Console</h1>
-        <p className="text-sm text-muted mt-1">System operations and configuration</p>
-      </div>
-
-      {/* Admin KPI Strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard
-          label="Active identities"
-          value={activeUsersCount.toString()}
-          note="Users with active access"
-        />
-        <KPICard
-          label="Active schedulers"
-          value={activeTemplatesCount.toString()}
-          note="Recurring task generators"
-        />
-        <KPICard
-          label="Overdue tasks"
-          value={overdueTasksCount.toString()}
-          note="Tasks requiring attention"
-        />
-        <KPICard
-          label="Audit records"
-          value={audits.length.toString()}
-          note="System events logged"
-        />
-      </div>
-
-      {/* Module Cards */}
-      <div>
-        <h2 className="text-lg font-semibold text-[#0f172a] mb-4">System Modules</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {modules.map((module) => (
+    <div className="admin-root p-6 space-y-6">
+      {/* Header: title + live system status */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>
+            Admin Console
+          </h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            System operations and configuration
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant={dbBadge.variant} dot>
+            {dbBadge.label}
+          </Badge>
+          {onSyncDatabase && (
             <button
-              key={module.id}
-              onClick={() => onNavigateToModule?.(module.id)}
-              className="bg-surface rounded-lg border border-[var(--color-border)] p-6 hover:shadow-md transition-shadow text-left group"
+              onClick={onSyncDatabase}
+              disabled={isSyncing}
+              className="flex items-center gap-2 rounded-[var(--radius-sm)] border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-60"
+              style={{
+                borderColor: 'var(--color-border)',
+                background: 'var(--color-surface)',
+                color: 'var(--color-text)',
+              }}
+              title={lastSyncTime ? `Last sync: ${lastSyncTime}` : undefined}
             >
-              <div className="flex items-start justify-between mb-4">
-                <div className="p-3 bg-blue-50 rounded-lg text-[var(--color-accent)] group-hover:bg-[var(--color-accent)] group-hover:text-white transition-colors">
-                  {module.icon}
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className={`w-2 h-2 rounded-full ${module.health === 'healthy' ? 'bg-[var(--color-success)]' : 'bg-[var(--color-danger)]'}`} />
-                  <span className="text-xs text-muted">{module.healthLabel}</span>
-                </div>
-              </div>
-              <h3 className="text-base font-semibold text-[#0f172a] mb-1">{module.label}</h3>
-              <p className="text-sm text-muted mb-4">{module.description}</p>
-              <div className="flex items-center gap-1 text-sm text-[var(--color-accent)] group-hover:underline">
-                <span>Open module</span>
-                <ChevronRight size={16} />
-              </div>
+              <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+              {isSyncing ? 'Syncing…' : 'Sync now'}
             </button>
-          ))}
+          )}
         </div>
       </div>
 
-      {/* System Activity Preview */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-[#0f172a]">System Activity</h2>
-          <button
-            onClick={() => onNavigateToModule?.('audit')}
-            className="text-sm text-[var(--color-accent)] hover:underline"
-          >
-            Open audit log →
-          </button>
-        </div>
-        <div className="bg-surface rounded-lg border border-[var(--color-border)]">
-          <div className="divide-y divide-[var(--color-border)]">
-            {recentSystemEvents.map((event) => (
-              <div key={event.id} className="p-4 flex items-start gap-3">
-                <div className={`p-2 rounded-full ${
-                  event.type === 'success' ? 'bg-green-100 text-[var(--color-success)]' :
-                  event.type === 'warning' ? 'bg-amber-100 text-[var(--color-warning)]' :
-                  'bg-blue-100 text-[var(--color-accent)]'
-                }`}>
-                  {event.type === 'success' && <CheckCircle size={16} />}
-                  {event.type === 'warning' && <AlertCircle size={16} />}
-                  {event.type === 'info' && <Clock size={16} />}
+      {/* KPI strip — attention first */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {kpis.map((kpi) => (
+          <Card key={kpi.id}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+                {kpi.label}
+              </span>
+              <span style={{ color: toneColor[kpi.tone] }}>{kpi.icon}</span>
+            </div>
+            <div
+              className="mt-2 text-3xl font-semibold tabular-nums"
+              style={{ color: kpi.tone === 'danger' ? 'var(--color-danger)' : 'var(--color-text)' }}
+            >
+              {kpi.value}
+            </div>
+            <p className="mt-1 text-xs" style={{ color: toneColor[kpi.tone] }}>
+              {kpi.note}
+            </p>
+          </Card>
+        ))}
+      </div>
+
+      {/* Two-column: modules + activity */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Modules */}
+        <div className="lg:col-span-2">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+            Modules
+          </h2>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {modules.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => onNavigateToModule?.(m.id)}
+                className="group rounded-[var(--radius-lg)] border p-4 text-left transition-shadow hover:shadow-[var(--shadow-md)]"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] transition-colors"
+                    style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)' }}
+                  >
+                    {m.icon}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="truncate text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                        {m.label}
+                      </h3>
+                      <ChevronRight
+                        size={15}
+                        className="shrink-0 transition-transform group-hover:translate-x-0.5"
+                        style={{ color: 'var(--color-text-muted)' }}
+                      />
+                    </div>
+                    <p className="truncate text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                      {m.description}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm text-[#0f172a]">{event.message}</p>
-                  <p className="text-xs text-muted mt-1">{event.time}</p>
+                <div className="mt-3 flex items-center gap-1.5 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ background: m.healthy ? 'var(--color-success)' : 'var(--color-warning)' }}
+                  />
+                  {m.healthLabel}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
-      </div>
 
-      {/* Quick Actions */}
-      <div>
-        <h2 className="text-lg font-semibold text-[#0f172a] mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button className="bg-surface rounded-lg border border-[var(--color-border)] p-4 hover:bg-gray-50 transition-colors text-left">
-            <div className="flex items-center gap-2 mb-2">
-              <Activity size={20} className="text-[var(--color-accent)]" />
-              <span className="text-sm font-medium text-[#0f172a]">Run scheduler cycle</span>
+        {/* Activity + quick actions */}
+        <div className="space-y-6">
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+                Recent activity
+              </h2>
+              <button
+                onClick={() => onNavigateToModule?.('audit')}
+                className="text-xs font-medium hover:underline"
+                style={{ color: 'var(--color-accent)' }}
+              >
+                Open audit log
+              </button>
             </div>
-            <p className="text-xs text-muted">Manually trigger recurring task generation</p>
-          </button>
-          <button className="bg-surface rounded-lg border border-[var(--color-border)] p-4 hover:bg-gray-50 transition-colors text-left">
-            <div className="flex items-center gap-2 mb-2">
-              <Mail size={20} className="text-[var(--color-accent)]" />
-              <span className="text-sm font-medium text-[#0f172a]">Send test notification</span>
+            <Card padded={false}>
+              {events.length === 0 ? (
+                <EmptyState
+                  icon={<Activity size={18} />}
+                  title="No activity yet"
+                  description="System events will appear here as they happen."
+                />
+              ) : (
+                <ul className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                  {events.map((a: any, i: number) => {
+                    const isWarn = a.Action?.toLowerCase().includes('error');
+                    return (
+                      <li key={a.AuditID || a.LogID || i} className="flex items-start gap-3 p-3.5">
+                        <span
+                          className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                          style={{
+                            background: isWarn ? 'var(--color-danger-soft)' : 'var(--color-accent-soft)',
+                            color: isWarn ? 'var(--color-danger)' : 'var(--color-accent)',
+                          }}
+                        >
+                          {isWarn ? <AlertCircle size={13} /> : <Clock size={13} />}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm" style={{ color: 'var(--color-text)' }}>
+                            {a.Action || 'System event recorded'}
+                          </p>
+                          <p className="mt-0.5 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                            {a.Timestamp || a.ActionDateTime ? (
+                              <TimeAgo iso={a.Timestamp || a.ActionDateTime} />
+                            ) : (
+                              'Recently'
+                            )}
+                          </p>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Card>
+          </div>
+
+          <div>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+              Quick actions
+            </h2>
+            <div className="space-y-2">
+              {[
+                { icon: <Activity size={16} />, label: 'Run scheduler cycle', note: 'Trigger recurring task generation', fn: onRunScheduler },
+                { icon: <Mail size={16} />, label: 'Send test notification', note: 'Verify the email system', fn: onSendTestEmail },
+                { icon: <Database size={16} />, label: 'Export audit log', note: 'Download event history', fn: onExportAudit },
+              ].map((qa) => (
+                <button
+                  key={qa.label}
+                  onClick={qa.fn}
+                  disabled={!qa.fn}
+                  className="flex w-full items-center gap-3 rounded-[var(--radius-md)] border p-3 text-left transition-colors disabled:opacity-50"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+                >
+                  <span style={{ color: 'var(--color-accent)' }}>{qa.icon}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                      {qa.label}
+                    </span>
+                    <span className="block truncate text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                      {qa.note}
+                    </span>
+                  </span>
+                  <ChevronRight size={14} style={{ color: 'var(--color-text-muted)' }} />
+                </button>
+              ))}
             </div>
-            <p className="text-xs text-muted">Verify email notification system</p>
-          </button>
-          <button className="bg-surface rounded-lg border border-[var(--color-border)] p-4 hover:bg-gray-50 transition-colors text-left">
-            <div className="flex items-center gap-2 mb-2">
-              <FileText size={20} className="text-[var(--color-accent)]" />
-              <span className="text-sm font-medium text-[#0f172a]">Export audit log</span>
-            </div>
-            <p className="text-xs text-muted">Download system event history</p>
-          </button>
+          </div>
         </div>
       </div>
     </div>

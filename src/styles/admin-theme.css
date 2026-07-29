@@ -1,0 +1,103 @@
+/* ============================================================================
+   Admin Console theme — single source of truth for color, elevation, focus.
+   Import once (e.g. in main.tsx): `import './styles/admin-theme.css'`
+
+   Dark mode: toggle the `dark` class on <html> or the admin root using the
+   existing `isDarkMode` prop — every token below has a dark counterpart, so
+   components never hardcode colors again.
+   ========================================================================== */
+
+:root {
+  /* Surfaces */
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f4f8;      /* table headers, wells */
+  --color-border: #e3e8ef;
+  --color-border-strong: #cbd5e1;
+
+  /* Text */
+  --color-text: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #64748b;
+
+  /* Brand + status */
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4ed8;
+  --color-accent-soft: #eff4ff;    /* icon chips, active nav */
+  --color-success: #16a34a;
+  --color-success-soft: #ecfdf3;
+  --color-warning: #d97706;
+  --color-warning-soft: #fffaeb;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fef2f2;
+
+  /* Elevation — subtle; borders do most of the work */
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05);
+  --shadow-md: 0 4px 12px -2px rgb(15 23 42 / 0.08);
+  --shadow-lg: 0 12px 32px -8px rgb(15 23 42 / 0.18);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-accent);
+}
+
+.dark {
+  --color-bg: #0b1120;
+  --color-surface: #111a2e;
+  --color-surface-2: #16213a;
+  --color-border: #24304a;
+  --color-border-strong: #334366;
+
+  --color-text: #e6ebf4;
+  --color-text-secondary: #a9b6cc;
+  --color-text-muted: #7c8aa5;
+
+  --color-accent: #5b8def;
+  --color-accent-hover: #7aa2f3;
+  --color-accent-soft: #16223d;
+  --color-success: #34c07c;
+  --color-success-soft: #10241b;
+  --color-warning: #e8a23d;
+  --color-warning-soft: #2a2110;
+  --color-danger: #ef6a6a;
+  --color-danger-soft: #2c1518;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 12px 32px -8px rgb(0 0 0 / 0.6);
+}
+
+/* Base */
+.admin-root {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-feature-settings: "cv02", "cv03"; /* Inter alternates, if loaded */
+}
+
+/* Numbers in KPIs / tables align cleanly */
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* One focus language everywhere — replaces per-element ring classes */
+.admin-root :is(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+/* Quieter scrollbars inside panels */
+.admin-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.admin-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 8px;
+}
+.admin-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* Motion discipline */
+@media (prefers-reduced-motion: reduce) {
+  .admin-root *, .admin-root *::before, .admin-root *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -291,14 +291,14 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
-        className="bg-white rounded-xl sm:rounded-xl shadow-xl border border-[#E5E7EB] w-full max-w-2xl overflow-hidden font-sans flex flex-col max-h-[90vh] sm:max-h-[85vh]"
+        className="bg-surface rounded-xl sm:rounded-xl shadow-xl border border-token w-full max-w-2xl overflow-hidden font-sans flex flex-col max-h-[90vh] sm:max-h-[85vh]"
       >
-        <div className="px-4 sm:px-6 py-3 sm:py-4.5 flex items-center justify-between border-b border-[#E5E7EB] bg-white">
+        <div className="px-4 sm:px-6 py-3 sm:py-4.5 flex items-center justify-between border-b border-token bg-surface">
           <div className="flex items-center space-x-1.5 sm:space-x-2.5">
             <ClipboardList className="text-[#2563EB]" size={16} />
-            <h3 className="font-bold text-sm sm:text-base tracking-tight font-sans text-slate-900">Configure New Task Allocation</h3>
+            <h3 className="font-bold text-sm sm:text-base tracking-tight font-sans text-primary">Configure New Task Allocation</h3>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer">
+          <button onClick={onClose} className="text-secondary hover:text-secondary transition-colors cursor-pointer">
             <X size={16} />
           </button>
         </div>
@@ -321,7 +321,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                 className={`py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg border text-[10px] sm:text-xs font-bold tracking-wider transition-all flex items-center justify-center space-x-1.5 sm:space-x-2 cursor-pointer ${
                   taskType === 'One-time'
                     ? 'bg-[#2563EB]/10 border-[#2563EB] text-[#2563EB]'
-                    : 'bg-white border-[#E5E7EB] text-slate-700 hover:bg-slate-50'
+                    : 'bg-surface border-token text-slate-700 hover-surface'
                 }`}
               >
                 <Calendar size={12} className="sm:size-3.5" />
@@ -335,7 +335,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                 className={`py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg border text-[10px] sm:text-xs font-bold tracking-wider transition-all flex items-center justify-center space-x-1.5 sm:space-x-2 cursor-pointer ${
                   taskType === 'Recurring'
                     ? 'bg-[#2563EB]/10 border-[#2563EB] text-[#2563EB]'
-                    : 'bg-white border-[#E5E7EB] text-slate-700 hover:bg-slate-50'
+                    : 'bg-surface border-token text-slate-700 hover-surface'
                 }`}
               >
                 <Repeat size={12} className="sm:size-3.5" />
@@ -356,7 +356,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Q3 Financial Ledger Verification"
-              className="w-full text-xs bg-slate-50 border border-[#E5E7EB] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+              className="w-full text-xs bg-slate-50 border border-token rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
               readOnly
             />
           </div>
@@ -371,7 +371,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Provide clean instructions, links to sheets, criteria for closing tasks, compliance expectations, etc."
-              className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg p-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+              className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg p-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
             ></textarea>
           </div>
 
@@ -393,12 +393,12 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                   }}
                   onFocus={() => setShowDropdown(true)}
                   placeholder="Search stakeholders by name or email..."
-                  className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                  className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                 />
                 {showDropdown && searchQuery && (
-                  <div className="absolute z-30 w-full mt-1 bg-white border border-[#E2E8F0] rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  <div className="absolute z-30 w-full mt-1 bg-surface border border-[#E2E8F0] rounded-lg shadow-lg max-h-48 overflow-y-auto">
                     {filteredStakeholders.length === 0 ? (
-                      <div className="p-3 text-slate-400 text-xs italic">No stakeholders found.</div>
+                      <div className="p-3 text-secondary text-xs italic">No stakeholders found.</div>
                     ) : (
                       filteredStakeholders.map(user => {
                         const isSelected = selectedEmails.includes(user.Email);
@@ -412,12 +412,12 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                               setSearchQuery('');
                               setShowDropdown(false);
                             }}
-                            className={`p-2.5 cursor-pointer text-xs hover:bg-slate-50 transition-colors ${
+                            className={`p-2.5 cursor-pointer text-xs hover-surface transition-colors ${
                               isSelected ? 'bg-slate-100 opacity-50' : ''
                             }`}
                           >
                             <div className="flex flex-col">
-                              <span className="font-semibold text-slate-900">{user.FullName}</span>
+                              <span className="font-semibold text-primary">{user.FullName}</span>
                               <span className="text-[10px] text-slate-500 font-mono">
                                 {isAdminLevel(currentUser.Role) ? `${user.Role} • ` : ''}{user.Email}
                               </span>
@@ -468,12 +468,12 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                     }}
                     onFocus={() => setShowTeamDropdown(true)}
                     placeholder="Search teams by name..."
-                    className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                   />
                   {showTeamDropdown && teamSearchQuery && (
-                    <div className="absolute z-30 w-full mt-1 bg-white border border-[#E2E8F0] rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    <div className="absolute z-30 w-full mt-1 bg-surface border border-[#E2E8F0] rounded-lg shadow-lg max-h-48 overflow-y-auto">
                       {visibleTeams.filter(t => t.TeamName.toLowerCase().includes(teamSearchQuery.toLowerCase())).length === 0 ? (
-                        <div className="p-3 text-slate-400 text-xs italic">No teams found.</div>
+                        <div className="p-3 text-secondary text-xs italic">No teams found.</div>
                       ) : (
                         visibleTeams.filter(t => t.TeamName.toLowerCase().includes(teamSearchQuery.toLowerCase())).map(team => {
                           const isSelected = selectedTeamIDs.includes(team.TeamID);
@@ -490,12 +490,12 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                                 setTeamSearchQuery('');
                                 setShowTeamDropdown(false);
                               }}
-                              className={`p-2.5 cursor-pointer text-xs hover:bg-slate-50 transition-colors ${
+                              className={`p-2.5 cursor-pointer text-xs hover-surface transition-colors ${
                                 isSelected ? 'bg-slate-100 opacity-50' : ''
                               }`}
                             >
                               <div className="flex flex-col">
-                                <span className="font-semibold text-slate-900">{team.TeamName}</span>
+                                <span className="font-semibold text-primary">{team.TeamName}</span>
                                 <span className="text-[10px] text-slate-500 font-mono">
                                   {teamUsers.length} members
                                 </span>
@@ -546,7 +546,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as any)}
-                className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
               >
                 <option value="Low">Low Priority</option>
                 <option value="Medium">Medium Priority</option>
@@ -567,7 +567,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                  className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                 />
               </div>
 
@@ -579,7 +579,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full text-xs bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                  className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                 />
               </div>
             </div>
@@ -605,7 +605,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                         setManualWeeklyDay('');
                       }
                     }}
-                    className="w-full text-xs bg-white border border-[#E5E7EB] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    className="w-full text-xs bg-surface border border-token rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                   >
                     <option value="Daily">Daily Interval</option>
                     <option value="Weekly">Weekly (Every {weeklyDayName})</option>
@@ -626,7 +626,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                         setManualWeeklyDay(e.target.value);
                         setUserSelectedDay(true);
                       }}
-                      className="w-full text-xs bg-white border border-[#E5E7EB] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                      className="w-full text-xs bg-surface border border-token rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                     >
                       <option value="Sunday">Sunday</option>
                       <option value="Monday">Monday</option>
@@ -647,7 +647,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full text-xs bg-white border border-[#E5E7EB] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    className="w-full text-xs bg-surface border border-token rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                   />
                 </div>
               </div>
@@ -663,7 +663,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
             </label>
             <div className="space-y-3">
               {/* File Upload */}
-              <div className="border-2 border-dashed border-[#E5E7EB] rounded-lg p-4 hover:border-[#2563EB] transition-colors">
+              <div className="border-2 border-dashed border-token rounded-lg p-4 hover:border-[#2563EB] transition-colors">
                 <input
                   type="file"
                   multiple
@@ -692,7 +692,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                   {uploadedFiles.map((file, index) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between bg-slate-50 border border-[#E5E7EB] rounded-lg px-3 py-2"
+                      className="flex items-center justify-between bg-slate-50 border border-token rounded-lg px-3 py-2"
                     >
                       <div className="flex items-center gap-2">
                         <File size={14} className="text-[#64748B]" />
@@ -712,11 +712,11 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
             </div>
           </div>
 
-          <div className="pt-3 sm:pt-4 border-t border-[#E5E7EB] flex items-center justify-end space-x-2 sm:space-x-3">
+          <div className="pt-3 sm:pt-4 border-t border-token flex items-center justify-end space-x-2 sm:space-x-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-[#E5E7EB] text-slate-700 hover:bg-slate-50 transition-all rounded-lg text-[10px] sm:text-xs font-bold tracking-wider cursor-pointer"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-token text-slate-700 hover-surface transition-all rounded-lg text-[10px] sm:text-xs font-bold tracking-wider cursor-pointer"
             >
               Cancel
             </button>

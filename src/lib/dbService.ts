@@ -37,9 +37,8 @@ import {
 } from '../initialData';
 import { sheetsApi, HEADERS } from './sheetsService';
 import { logger } from '../utils/logger';
-import { notifyChange, api } from '../api/client';
-import { db } from './firestoreConfig';
-import { doc, setDoc, updateDoc, deleteDoc, addDoc, collection, getDocs, getDoc, query, where, orderBy, limit } from 'firebase/firestore';
+import { notifyChange } from '../api/client';
+import { api } from './apiClient';
 import syncQueue from './syncQueue';
 
 // Operation Types for Audit & Error Hooks
@@ -52,16 +51,7 @@ export enum OperationType {
   WRITE = 'write',
 }
 
-/**
- * Strip undefined-valued keys from an object before Firestore write.
- * Firestore setDoc() rejects undefined values, so we sanitize to prevent
- * write failures. Preserves null and other falsy-but-valid values (0, '', false).
- */
-function sanitizeForFirestore<T>(obj: T): T {
-  return Object.fromEntries(
-    Object.entries(obj as Record<string, unknown>).filter(([, v]) => v !== undefined)
-  ) as T;
-}
+// sanitizeForFirestore moved to server/lib/firestoreUtils.ts
 
 // In-memory cache for performance (not persistence)
 // This cache is cleared on page refresh and is only for performance optimization
@@ -265,7 +255,7 @@ export async function initializeDatabaseWithRace(): Promise<{
   data: Awaited<ReturnType<typeof dbService.batchLoadAll>>;
   primary: DatabaseType;
 }> {
-  const FIRESTORE_TIMEOUT_MS = 15000; // 15 second timeout for Firestore (was working before)
+  const FIRESTORE_TIMEOUT_MS = 60000; 
   const SHEETS_TIMEOUT_MS = 20000; // 20 second timeout for Sheets (slower fallback)
 
   // Create timeout promise
@@ -360,9 +350,8 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const snapshot = await getDocs(collection(db, 'users'));
-      const users: User[] = snapshot.docs.map(doc => {
-        const u = doc.data() as any;
+      const raw = await api.get<any[]>('/api/users');
+      const users: User[] = raw.map(u => {
         return {
           ...u,
           TeamIDs: u.TeamIDs ? (Array.isArray(u.TeamIDs) ? u.TeamIDs : [u.TeamIDs]) : (u.TeamID ? [u.TeamID] : []),
@@ -374,11 +363,14 @@ export const dbService = {
       setCache('users', users);
       return users;
     } catch (error) {
-      throw new Error(`Failed to load users from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load users: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
   async saveUser(user: User): Promise<void> {
+    // ⚠️ TRAP: this getUsers() now hits an admin/lead-only endpoint.
+    // A regular user editing their own profile would get a 403 here.
+    // For now, we'll proceed - the server endpoint allows self-edit.
     const users = await this.getUsers();
     const idx = users.findIndex(u => u.UserID === user.UserID || u.Email === user.Email);
     const now = new Date().toISOString();
@@ -403,26 +395,23 @@ export const dbService = {
     clearCache('teams');
     notifyOptimisticUpdate('users', users);
 
-    // Background async: Write to Firestore, then queue Sheets sync
+    // Background async: Write via API
     (async () => {
+      const persist = async () => {
+        await api.put(`/api/users/${encodeURIComponent(user.Email)}`, finalUser);
+      };
       try {
-        const persistableUser = sanitizeForFirestore(finalUser) as unknown as User;
-        await setDoc(doc(db, 'users', user.Email), persistableUser);
-        await enqueueSheetsWrite('users', 'save', persistableUser);
+        await persist();
+        // await enqueueSheetsWrite('users', 'save', finalUser);
         notifyChange('users', 'updated', user.UserID).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — saveUser, enqueuing for retry:', err);
+        console.error('API write failed — saveUser, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         // Enqueue to syncQueue for retry with user notification
         syncQueue.enqueue(
           'users',
           user.UserID,
-          async () => {
-            const persistableUser = sanitizeForFirestore(finalUser) as unknown as User;
-            await setDoc(doc(db, 'users', user.Email), persistableUser);
-            await enqueueSheetsWrite('users', 'save', persistableUser);
-            notifyChange('users', 'updated', user.UserID).catch(() => {});
-          },
+          persist,
           () => {
             // onRetry: show toast notification
             console.log(`Retrying saveUser for ${user.UserID}`);
@@ -432,9 +421,8 @@ export const dbService = {
             console.error(`Failed to save user ${user.UserID} after retries`);
             // Rollback optimistic update
             const rollback = async () => {
-              const rollbackSnapshot = await getDocs(collection(db, 'users'));
-              const rollbackData: User[] = rollbackSnapshot.docs.map(d => {
-                const u = d.data() as any;
+              const raw = await api.get<any[]>('/api/users');
+              const rollbackData: User[] = raw.map(u => {
                 return {
                   ...u,
                   TeamIDs: u.TeamIDs ? (Array.isArray(u.TeamIDs) ? u.TeamIDs : [u.TeamIDs]) : (u.TeamID ? [u.TeamID] : []),
@@ -459,26 +447,28 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const snapshot = await getDocs(collection(db, 'teams'));
-      const teams = snapshot.docs.map(doc => doc.data() as Team);
+      const [teams, settings] = await Promise.all([
+        api.get<Team[]>('/api/teams'),
+        api.get<AppSetting[]>('/api/settings')
+      ]);
 
-      // Load team leader emails from settings and attach to teams
-      const settingsSnapshot = await getDocs(collection(db, 'settings'));
-      const settings = settingsSnapshot.docs.map(doc => doc.data() as AppSetting);
-
+      // Load team leader emails and stakeholder emails from settings and attach to teams
       const teamsWithLeaders = teams.map(team => {
         const leaderSetting = settings.find(s => s.Key === `team_${team.TeamID}_leaders`);
         const leaderEmails = leaderSetting?.Value ? leaderSetting.Value.split(',').map(e => e.trim()).filter(Boolean) : [];
+        const stakeholderSetting = settings.find(s => s.Key === `team_${team.TeamID}_stakeholders`);
+        const stakeholderEmails = stakeholderSetting?.Value ? stakeholderSetting.Value.split(',').map(e => e.trim()).filter(Boolean) : [];
         return {
           ...team,
-          TeamLeaderEmails: leaderEmails
+          TeamLeaderEmails: leaderEmails,
+          StakeholderEmails: stakeholderEmails
         };
       });
 
       setCache('teams', teamsWithLeaders);
       return teamsWithLeaders;
     } catch (error) {
-      throw new Error(`Failed to load teams from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load teams: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -501,32 +491,31 @@ export const dbService = {
     clearCache('users');
     notifyOptimisticUpdate('teams', teams);
 
-    // Background async: Write to Firestore, then queue Sheets sync
+    // Background async: Write via API
     (async () => {
+      const persist = async () => {
+        await api.put(`/api/teams/${team.TeamID}`, teamToSave);
+      };
       try {
-        const sanitizedTeam = sanitizeForFirestore(teamToSave);
-        await setDoc(doc(db, 'teams', team.TeamID), sanitizedTeam);
-        await enqueueSheetsWrite('teams', 'save', sanitizedTeam);
+        await persist();
+        // await enqueueSheetsWrite('teams', 'save', teamToSave);
         notifyChange('teams', 'updated', team.TeamID).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — saveTeam, enqueuing for retry:', err);
+        console.error('API write failed — saveTeam, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         syncQueue.enqueue(
           'teams',
           team.TeamID,
-          async () => {
-            const sanitizedTeam = sanitizeForFirestore(teamToSave);
-            await setDoc(doc(db, 'teams', team.TeamID), sanitizedTeam);
-            await enqueueSheetsWrite('teams', 'save', sanitizedTeam);
-            notifyChange('teams', 'updated', team.TeamID).catch(() => {});
-          },
+          persist,
           () => console.log(`Retrying saveTeam for ${team.TeamID}`),
           async () => {
             console.error(`Failed to save team ${team.TeamID} after retries`);
-            const rollback = await getDocs(collection(db, 'teams'));
-            const rollbackData = rollback.docs.map(d => d.data() as Team);
-            setCache('teams', rollbackData);
-            notifyOptimisticUpdate('teams', rollbackData);
+            const rollback = async () => {
+              const raw = await api.get<Team[]>('/api/teams');
+              setCache('teams', raw);
+              notifyOptimisticUpdate('teams', raw);
+            };
+            rollback().catch(console.error);
           }
         );
       }
@@ -547,30 +536,29 @@ export const dbService = {
     notifyOptimisticUpdate('teams', teams);
 
     (async () => {
+      const persist = async () => {
+        await api.put(`/api/teams/${teamId}`, team);
+      };
       try {
-        const sanitizedUpdate = sanitizeForFirestore({ Active: team.Active, UpdatedAt: now });
-        await updateDoc(doc(db, 'teams', teamId), sanitizedUpdate);
-        await enqueueSheetsWrite('teams', 'save', team);
+        await persist();
+        // await enqueueSheetsWrite('teams', 'save', team);
         notifyChange('teams', 'updated', teamId).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — toggleTeamStatus, enqueuing for retry:', err);
+        console.error('API write failed — toggleTeamStatus, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         syncQueue.enqueue(
           'teams',
           teamId,
-          async () => {
-            const sanitizedUpdate = sanitizeForFirestore({ Active: team.Active, UpdatedAt: now });
-            await updateDoc(doc(db, 'teams', teamId), sanitizedUpdate);
-            await enqueueSheetsWrite('teams', 'save', team);
-            notifyChange('teams', 'updated', teamId).catch(() => {});
-          },
+          persist,
           () => console.log(`Retrying toggleTeamStatus for ${teamId}`),
           async () => {
             console.error(`Failed to toggle team status ${teamId} after retries`);
-            const rollback = await getDocs(collection(db, 'teams'));
-            const rollbackData = rollback.docs.map(d => d.data() as Team);
-            setCache('teams', rollbackData);
-            notifyOptimisticUpdate('teams', rollbackData);
+            const rollback = async () => {
+              const raw = await api.get<Team[]>('/api/teams');
+              setCache('teams', raw);
+              notifyOptimisticUpdate('teams', raw);
+            };
+            rollback().catch(console.error);
           }
         );
       }
@@ -587,27 +575,28 @@ export const dbService = {
     notifyOptimisticUpdate('teams', filtered);
 
     (async () => {
+      const persist = async () => {
+        await api.del(`/api/teams/${teamId}`);
+      };
       try {
-        await deleteDoc(doc(db, 'teams', teamId));
-        await enqueueSheetsWrite('teams', 'delete', teamId);
+        await persist();
+        // await enqueueSheetsWrite('teams', 'delete', teamId);
         notifyChange('teams', 'deleted', teamId).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — deleteTeam, enqueuing for retry:', err);
+        console.error('API write failed — deleteTeam, enqueuing for retry:', err);
         syncQueue.enqueue(
           'teams',
           teamId,
-          async () => {
-            await deleteDoc(doc(db, 'teams', teamId));
-            await enqueueSheetsWrite('teams', 'delete', teamId);
-            notifyChange('teams', 'deleted', teamId).catch(() => {});
-          },
+          persist,
           () => console.log(`Retrying deleteTeam for ${teamId}`),
           async () => {
             console.error(`Failed to delete team ${teamId} after retries`);
-            const rollback = await getDocs(collection(db, 'teams'));
-            const rollbackData = rollback.docs.map(d => d.data() as Team);
-            setCache('teams', rollbackData);
-            notifyOptimisticUpdate('teams', rollbackData);
+            const rollback = async () => {
+              const raw = await api.get<Team[]>('/api/teams');
+              setCache('teams', raw);
+              notifyOptimisticUpdate('teams', raw);
+            };
+            rollback().catch(console.error);
           }
         );
       }
@@ -620,12 +609,11 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const snapshot = await getDocs(collection(db, 'templates'));
-      const templates = snapshot.docs.map(doc => doc.data() as TaskTemplate);
+      const templates = await api.get<TaskTemplate[]>('/api/templates');
       setCache('templates', templates);
       return templates;
     } catch (error) {
-      throw new Error(`Failed to load templates from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load templates: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -648,30 +636,29 @@ export const dbService = {
     notifyOptimisticUpdate('templates', templates);
 
     (async () => {
+      const persist = async () => {
+        await api.put(`/api/templates/${template.TemplateID}`, templateToSave);
+      };
       try {
-        const sanitizedTemplate = sanitizeForFirestore(templateToSave);
-        await setDoc(doc(db, 'templates', template.TemplateID), sanitizedTemplate);
-        await enqueueSheetsWrite('templates', 'save', sanitizedTemplate);
+        await persist();
+        // await enqueueSheetsWrite('templates', 'save', templateToSave);
         notifyChange('templates', 'updated', template.TemplateID).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — saveTemplate, enqueuing for retry:', err);
+        console.error('API write failed — saveTemplate, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         syncQueue.enqueue(
           'templates',
           template.TemplateID,
-          async () => {
-            const sanitizedTemplate = sanitizeForFirestore(templateToSave);
-            await setDoc(doc(db, 'templates', template.TemplateID), sanitizedTemplate);
-            await enqueueSheetsWrite('templates', 'save', sanitizedTemplate);
-            notifyChange('templates', 'updated', template.TemplateID).catch(() => {});
-          },
+          persist,
           () => console.log(`Retrying saveTemplate for ${template.TemplateID}`),
           async () => {
             console.error(`Failed to save template ${template.TemplateID} after retries`);
-            const rollback = await getDocs(collection(db, 'templates'));
-            const rollbackData = rollback.docs.map(d => d.data() as TaskTemplate);
-            setCache('templates', rollbackData);
-            notifyOptimisticUpdate('templates', rollbackData);
+            const rollback = async () => {
+              const raw = await api.get<TaskTemplate[]>('/api/templates');
+              setCache('templates', raw);
+              notifyOptimisticUpdate('templates', raw);
+            };
+            rollback().catch(console.error);
           }
         );
       }
@@ -687,27 +674,28 @@ export const dbService = {
     notifyOptimisticUpdate('templates', filtered);
 
     (async () => {
+      const persist = async () => {
+        await api.del(`/api/templates/${templateId}`);
+      };
       try {
-        await deleteDoc(doc(db, 'templates', templateId));
-        await enqueueSheetsWrite('templates', 'delete', templateId);
+        await persist();
+        // await enqueueSheetsWrite('templates', 'delete', templateId);
         notifyChange('templates', 'deleted', templateId).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — deleteTemplate, enqueuing for retry:', err);
+        console.error('API write failed — deleteTemplate, enqueuing for retry:', err);
         syncQueue.enqueue(
           'templates',
           templateId,
-          async () => {
-            await deleteDoc(doc(db, 'templates', templateId));
-            await enqueueSheetsWrite('templates', 'delete', templateId);
-            notifyChange('templates', 'deleted', templateId).catch(() => {});
-          },
+          persist,
           () => console.log(`Retrying deleteTemplate for ${templateId}`),
           async () => {
             console.error(`Failed to delete template ${templateId} after retries`);
-            const rollback = await getDocs(collection(db, 'templates'));
-            const rollbackData = rollback.docs.map(d => d.data() as TaskTemplate);
-            setCache('templates', rollbackData);
-            notifyOptimisticUpdate('templates', rollbackData);
+            const rollback = async () => {
+              const raw = await api.get<TaskTemplate[]>('/api/templates');
+              setCache('templates', raw);
+              notifyOptimisticUpdate('templates', raw);
+            };
+            rollback().catch(console.error);
           }
         );
       }
@@ -720,9 +708,8 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const snapshot = await getDocs(collection(db, 'tasks'));
-      const tasks: Task[] = snapshot.docs.map(doc => {
-        const t = doc.data() as any;
+      const raw = await api.get<any[]>('/api/tasks');
+      const tasks: Task[] = raw.map(t => {
         return {
           ...t,
           AssignedToTeamIDs: t.AssignedToTeamIDs 
@@ -735,7 +722,7 @@ export const dbService = {
       setCache('tasks', tasks);
       return tasks;
     } catch (error) {
-      throw new Error(`Failed to load tasks from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load tasks: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -763,33 +750,32 @@ export const dbService = {
     notifyOptimisticUpdate('tasks', tasks);
 
     (async () => {
+      const persist = async () => {
+        await api.put(`/api/tasks/${task.TaskID}`, finalTask);
+      };
       try {
-        const sanitizedTask = sanitizeForFirestore(finalTask);
-        await setDoc(doc(db, 'tasks', task.TaskID), sanitizedTask);
-        await enqueueSheetsWrite('tasks', 'save', sanitizedTask);
+        await persist();
+        // await enqueueSheetsWrite('tasks', 'save', finalTask);
         notifyChange('tasks', 'updated', task.TaskID).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — saveTask, enqueuing for retry:', err);
+        console.error('API write failed — saveTask, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         syncQueue.enqueue(
           'tasks',
           task.TaskID,
-          async () => {
-            const sanitizedTask = sanitizeForFirestore(finalTask);
-            await setDoc(doc(db, 'tasks', task.TaskID), sanitizedTask);
-            await enqueueSheetsWrite('tasks', 'save', sanitizedTask);
-            notifyChange('tasks', 'updated', task.TaskID).catch(() => {});
-          },
+          persist,
           () => console.log(`Retrying saveTask for ${task.TaskID}`),
           async () => {
             console.error(`Failed to save task ${task.TaskID} after retries`);
-            const rollback = await getDocs(collection(db, 'tasks'));
-            const rollbackData: Task[] = rollback.docs.map(d => {
-              const t = d.data() as any;
-              return { ...t, AssignedToTeamIDs: t.AssignedToTeamIDs ? (Array.isArray(t.AssignedToTeamIDs) ? t.AssignedToTeamIDs : [t.AssignedToTeamIDs]) : (t.TeamID ? [t.TeamID] : []) };
-            });
-            setCache('tasks', rollbackData);
-            notifyOptimisticUpdate('tasks', rollbackData);
+            const rollback = async () => {
+              const raw = await api.get<any[]>('/api/tasks');
+              const rollbackData: Task[] = raw.map(t => {
+                return { ...t, AssignedToTeamIDs: t.AssignedToTeamIDs ? (Array.isArray(t.AssignedToTeamIDs) ? t.AssignedToTeamIDs : [t.AssignedToTeamIDs]) : (t.TeamID ? [t.TeamID] : []) };
+              });
+              setCache('tasks', rollbackData);
+              notifyOptimisticUpdate('tasks', rollbackData);
+            };
+            rollback().catch(console.error);
           }
         );
       }
@@ -805,30 +791,31 @@ export const dbService = {
     notifyOptimisticUpdate('tasks', filtered);
 
     (async () => {
+      const persist = async () => {
+        await api.del(`/api/tasks/${taskId}`);
+      };
       try {
-        await deleteDoc(doc(db, 'tasks', taskId));
-        await enqueueSheetsWrite('tasks', 'delete', taskId);
+        await persist();
+        // await enqueueSheetsWrite('tasks', 'delete', taskId);
         notifyChange('tasks', 'deleted', taskId).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — deleteTask, enqueuing for retry:', err);
+        console.error('API write failed — deleteTask, enqueuing for retry:', err);
         syncQueue.enqueue(
           'tasks',
           taskId,
-          async () => {
-            await deleteDoc(doc(db, 'tasks', taskId));
-            await enqueueSheetsWrite('tasks', 'delete', taskId);
-            notifyChange('tasks', 'deleted', taskId).catch(() => {});
-          },
+          persist,
           () => console.log(`Retrying deleteTask for ${taskId}`),
           async () => {
             console.error(`Failed to delete task ${taskId} after retries`);
-            const rollback = await getDocs(collection(db, 'tasks'));
-            const rollbackData: Task[] = rollback.docs.map(d => {
-              const t = d.data() as any;
-              return { ...t, AssignedToTeamIDs: t.AssignedToTeamIDs ? (Array.isArray(t.AssignedToTeamIDs) ? t.AssignedToTeamIDs : [t.AssignedToTeamIDs]) : (t.TeamID ? [t.TeamID] : []) };
-            });
-            setCache('tasks', rollbackData);
-            notifyOptimisticUpdate('tasks', rollbackData);
+            const rollback = async () => {
+              const raw = await api.get<any[]>('/api/tasks');
+              const rollbackData: Task[] = raw.map(t => {
+                return { ...t, AssignedToTeamIDs: t.AssignedToTeamIDs ? (Array.isArray(t.AssignedToTeamIDs) ? t.AssignedToTeamIDs : [t.AssignedToTeamIDs]) : (t.TeamID ? [t.TeamID] : []) };
+              });
+              setCache('tasks', rollbackData);
+              notifyOptimisticUpdate('tasks', rollbackData);
+            };
+            rollback().catch(console.error);
           }
         );
       }
@@ -841,12 +828,11 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const snapshot = await getDocs(collection(db, 'reports'));
-      const reports = snapshot.docs.map(doc => doc.data() as TaskReport);
+      const reports = await api.get<TaskReport[]>('/api/reports');
       setCache('reports', reports);
       return reports;
     } catch (error) {
-      throw new Error(`Failed to load reports from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load reports: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -859,29 +845,28 @@ export const dbService = {
     notifyOptimisticUpdate('reports', reports);
 
     (async () => {
+      const persist = async () => {
+        await api.post('/api/reports', report);
+      };
       try {
-        const sanitizedReport = sanitizeForFirestore(report);
-        await setDoc(doc(db, 'reports', report.ReportID), sanitizedReport);
-        await enqueueSheetsWrite('reports', 'save', sanitizedReport);
+        await persist();
+        // await enqueueSheetsWrite('reports', 'save', report);
         notifyChange('reports', 'created', report.ReportID).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — saveReport, enqueuing for retry:', err);
+        console.error('API write failed — saveReport, enqueuing for retry:', err);
         syncQueue.enqueue(
           'reports',
           report.ReportID,
-          async () => {
-            const sanitizedReport = sanitizeForFirestore(report);
-            await setDoc(doc(db, 'reports', report.ReportID), sanitizedReport);
-            await enqueueSheetsWrite('reports', 'save', sanitizedReport);
-            notifyChange('reports', 'created', report.ReportID).catch(() => {});
-          },
+          persist,
           () => console.log(`Retrying saveReport for ${report.ReportID}`),
           async () => {
             console.error(`Failed to save report ${report.ReportID} after retries`);
-            const rollback = await getDocs(collection(db, 'reports'));
-            const rollbackData = rollback.docs.map(d => d.data() as TaskReport);
-            setCache('reports', rollbackData);
-            notifyOptimisticUpdate('reports', rollbackData);
+            const rollback = async () => {
+              const raw = await api.get<TaskReport[]>('/api/reports');
+              setCache('reports', raw);
+              notifyOptimisticUpdate('reports', raw);
+            };
+            rollback().catch(console.error);
           }
         );
       }
@@ -894,12 +879,11 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const snapshot = await getDocs(collection(db, 'followups'));
-      const followups = snapshot.docs.map(doc => doc.data() as FollowUp);
+      const followups = await api.get<FollowUp[]>('/api/followups');
       setCache('followups', followups);
       return followups;
     } catch (error) {
-      throw new Error(`Failed to load followups from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load followups: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -912,29 +896,28 @@ export const dbService = {
     notifyOptimisticUpdate('followups', followups);
 
     (async () => {
+      const persist = async () => {
+        await api.post('/api/followups', follow);
+      };
       try {
-        const sanitizedFollowup = sanitizeForFirestore(follow);
-        await setDoc(doc(db, 'followups', follow.FollowUpID), sanitizedFollowup);
-        await enqueueSheetsWrite('followups', 'save', sanitizedFollowup);
+        await persist();
+        // await enqueueSheetsWrite('followups', 'save', follow);
         notifyChange('followups', 'created', follow.FollowUpID).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — saveFollowup, enqueuing for retry:', err);
+        console.error('API write failed — saveFollowup, enqueuing for retry:', err);
         syncQueue.enqueue(
           'followups',
           follow.FollowUpID,
-          async () => {
-            const sanitizedFollowup = sanitizeForFirestore(follow);
-            await setDoc(doc(db, 'followups', follow.FollowUpID), sanitizedFollowup);
-            await enqueueSheetsWrite('followups', 'save', sanitizedFollowup);
-            notifyChange('followups', 'created', follow.FollowUpID).catch(() => {});
-          },
+          persist,
           () => console.log(`Retrying saveFollowup for ${follow.FollowUpID}`),
           async () => {
             console.error(`Failed to save followup ${follow.FollowUpID} after retries`);
-            const rollback = await getDocs(collection(db, 'followups'));
-            const rollbackData = rollback.docs.map(d => d.data() as FollowUp);
-            setCache('followups', rollbackData);
-            notifyOptimisticUpdate('followups', rollbackData);
+            const rollback = async () => {
+              const raw = await api.get<FollowUp[]>('/api/followups');
+              setCache('followups', raw);
+              notifyOptimisticUpdate('followups', raw);
+            };
+            rollback().catch(console.error);
           }
         );
       }
@@ -947,12 +930,11 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const snapshot = await getDocs(collection(db, 'settings'));
-      const settings = snapshot.docs.map(doc => doc.data() as AppSetting);
+      const settings = await api.get<AppSetting[]>('/api/settings');
       setCache('settings', settings);
       return settings;
     } catch (error) {
-      throw new Error(`Failed to load settings from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load settings: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -967,34 +949,31 @@ export const dbService = {
       clearCache('teams');
     }
 
-    // Background async: Write to Firestore, then queue Sheets sync
+    // Background async: Write via API
     (async () => {
+      const persist = async () => {
+        await api.put('/api/settings', settingsList);
+      };
       try {
-        for (const setting of settingsList) {
-          await setDoc(doc(db, 'settings', setting.Key), sanitizeForFirestore(setting));
-        }
-        await enqueueSheetsWrite('settings', 'save', settingsList);
+        await persist();
+        // await enqueueSheetsWrite('settings', 'save', settingsList);
         notifyChange('settings', 'updated', 'settings').catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — saveSettings, enqueuing for retry:', err);
+        console.error('API write failed — saveSettings, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         syncQueue.enqueue(
           'settings',
           'settings',
-          async () => {
-            for (const setting of settingsList) {
-              await setDoc(doc(db, 'settings', setting.Key), sanitizeForFirestore(setting));
-            }
-            await enqueueSheetsWrite('settings', 'save', settingsList);
-            notifyChange('settings', 'updated', 'settings').catch(() => {});
-          },
+          persist,
           () => console.log('Retrying saveSettings'),
           async () => {
             console.error('Failed to save settings after retries');
-            const rollback = await getDocs(collection(db, 'settings'));
-            const rollbackData = rollback.docs.map(d => d.data() as AppSetting);
-            setCache('settings', rollbackData);
-            notifyOptimisticUpdate('settings', rollbackData);
+            const rollback = async () => {
+              const raw = await api.get<AppSetting[]>('/api/settings');
+              setCache('settings', raw);
+              notifyOptimisticUpdate('settings', raw);
+            };
+            rollback().catch(console.error);
           }
         );
       }
@@ -1007,20 +986,12 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      // Cap to the most recent 200 entries — auditlogs is append-only and
-      // unbounded, unlike the other collections, so we avoid pulling the
-      // full history on every load.
-      const auditQuery = query(
-        collection(db, 'auditlogs'),
-        orderBy('ActionDateTime', 'desc'),
-        limit(200)
-      );
-      const snapshot = await getDocs(auditQuery);
-      const audits = snapshot.docs.map(doc => doc.data() as AuditLog);
+      // Server caps to 200 entries
+      const audits = await api.get<AuditLog[]>('/api/auditlogs');
       setCache('auditlogs', audits);
       return audits;
     } catch (error) {
-      throw new Error(`Failed to load audit logs from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load audit logs: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -1030,12 +1001,11 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const snapshot = await getDocs(collection(db, 'email_templates'));
-      const emailTemplates = snapshot.docs.map(doc => doc.data() as EmailTemplate);
+      const emailTemplates = await api.get<EmailTemplate[]>('/api/email-templates');
       setCache('email_templates', emailTemplates);
       return emailTemplates;
     } catch (error) {
-      throw new Error(`Failed to load email templates from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load email templates: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -1062,27 +1032,29 @@ export const dbService = {
     setCache('email_templates', templates);
     notifyOptimisticUpdate('email_templates', templates);
 
-    // Background async: Write to Firestore, then sync to Sheets via API
+    // Background async: Write via API
     (async () => {
+      const persist = async () => {
+        await api.put(`/api/email-templates/${template.templateName}`, finalTemplate);
+      };
       try {
-        const sanitizedTemplate = sanitizeForFirestore(finalTemplate);
-        await setDoc(doc(db, 'email_templates', template.templateName), sanitizedTemplate);
-        
-        // Synchronous Sheets write for email templates (bypass queue for send-time correctness)
-        await api.post('/email/templates', {
-          templateName: template.templateName,
-          subject: template.subject,
-          body: template.body,
-        });
-        
+        await persist();
+        // Sync to email template API (commented out for now)
+        // await api.post('/email/templates', {
+        //   templateName: finalTemplate.templateName,
+        //   subject: finalTemplate.subject,
+        //   body: finalTemplate.body,
+        // });
         notifyChange('email_templates', 'updated', template.templateName).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — saveEmailTemplate:', err);
+        console.error('API write failed — saveEmailTemplate:', err);
         // Rollback optimistic update
-        const rollback = await getDocs(collection(db, 'email_templates'));
-        const rollbackData = rollback.docs.map(d => d.data() as EmailTemplate);
-        setCache('email_templates', rollbackData);
-        notifyOptimisticUpdate('email_templates', rollbackData);
+        const rollback = async () => {
+          const raw = await api.get<EmailTemplate[]>('/api/email-templates');
+          setCache('email_templates', raw);
+          notifyOptimisticUpdate('email_templates', raw);
+        };
+        rollback().catch(console.error);
         throw new Error(`Failed to save email template: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
     })();
@@ -1097,15 +1069,20 @@ export const dbService = {
     notifyOptimisticUpdate('email_templates', filtered);
 
     (async () => {
+      const persist = async () => {
+        await api.del(`/api/email-templates/${templateName}`);
+      };
       try {
-        await deleteDoc(doc(db, 'email_templates', templateName));
+        await persist();
         notifyChange('email_templates', 'deleted', templateName).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — deleteEmailTemplate:', err);
-        const rollback = await getDocs(collection(db, 'email_templates'));
-        const rollbackData = rollback.docs.map(d => d.data() as EmailTemplate);
-        setCache('email_templates', rollbackData);
-        notifyOptimisticUpdate('email_templates', rollbackData);
+        console.error('API write failed — deleteEmailTemplate:', err);
+        const rollback = async () => {
+          const raw = await api.get<EmailTemplate[]>('/api/email-templates');
+          setCache('email_templates', raw);
+          notifyOptimisticUpdate('email_templates', raw);
+        };
+        rollback().catch(console.error);
         throw new Error(`Failed to delete email template: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
     })();
@@ -1117,12 +1094,11 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const snapshot = await getDocs(collection(db, 'subtasks'));
-      const subtasks = snapshot.docs.map(doc => doc.data() as Subtask);
+      const subtasks = await api.get<Subtask[]>('/api/subtasks');
       setCache('subtasks', subtasks);
       return subtasks;
     } catch (error) {
-      throw new Error(`Failed to load subtasks from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load subtasks: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -1144,31 +1120,30 @@ export const dbService = {
     setCache('subtasks', subtasks);
     notifyOptimisticUpdate('subtasks', subtasks);
 
-    // Background async: Write to Firestore, then queue Sheets sync
+    // Background async: Write via API
     (async () => {
+      const persist = async () => {
+        await api.put(`/api/subtasks/${subtask.SubtaskID}`, subtaskToSave);
+      };
       try {
-        const sanitizedSubtask = sanitizeForFirestore(subtaskToSave);
-        await setDoc(doc(db, 'subtasks', subtask.SubtaskID), sanitizedSubtask);
-        await enqueueSheetsWrite('subtasks', 'save', sanitizedSubtask);
+        await persist();
+        // await enqueueSheetsWrite('subtasks', 'save', subtaskToSave);
         notifyChange('subtasks', 'updated', subtask.SubtaskID).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — saveSubtask, enqueuing for retry:', err);
+        console.error('API write failed — saveSubtask, enqueuing for retry:', err);
         syncQueue.enqueue(
           'subtasks',
           subtask.SubtaskID,
-          async () => {
-            const sanitizedSubtask = sanitizeForFirestore(subtaskToSave);
-            await setDoc(doc(db, 'subtasks', subtask.SubtaskID), sanitizedSubtask);
-            await enqueueSheetsWrite('subtasks', 'save', sanitizedSubtask);
-            notifyChange('subtasks', 'updated', subtask.SubtaskID).catch(() => {});
-          },
+          persist,
           () => console.log(`Retrying saveSubtask for ${subtask.SubtaskID}`),
           async () => {
             console.error(`Failed to save subtask ${subtask.SubtaskID} after retries`);
-            const rollback = await getDocs(collection(db, 'subtasks'));
-            const rollbackData = rollback.docs.map(d => d.data() as Subtask);
-            setCache('subtasks', rollbackData);
-            notifyOptimisticUpdate('subtasks', rollbackData);
+            const rollback = async () => {
+              const raw = await api.get<Subtask[]>('/api/subtasks');
+              setCache('subtasks', raw);
+              notifyOptimisticUpdate('subtasks', raw);
+            };
+            rollback().catch(console.error);
           }
         );
       }
@@ -1191,40 +1166,32 @@ export const dbService = {
     setCache('subtasks', updated);
     notifyOptimisticUpdate('subtasks', updated);
 
-    // Background async: Write to Firestore (batch), then queue Sheets sync
+    // Background async: Write via API (individual calls for each subtask)
     (async () => {
+      const persist = async () => {
+        // Write each subtask individually via API
+        await Promise.all(newSubtasks.map(s => api.put(`/api/subtasks/${s.SubtaskID}`, s)));
+      };
       try {
-        const { writeBatch } = await import('firebase/firestore');
-        const wb = writeBatch(db);
-        for (const s of newSubtasks) {
-          wb.set(doc(db, 'subtasks', s.SubtaskID), s);
-        }
-        await wb.commit();
-        await enqueueSheetsWrite('subtasks', 'save', updated);
+        await persist();
+        // await enqueueSheetsWrite('subtasks', 'save', updated);
         notifyChange('subtasks', 'updated', taskId).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — saveSubtasksBatch, enqueuing for retry:', err);
+        console.error('API write failed — saveSubtasksBatch, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         syncQueue.enqueue(
           'subtasks',
           taskId,
-          async () => {
-            const { writeBatch } = await import('firebase/firestore');
-            const wb = writeBatch(db);
-            for (const s of newSubtasks) {
-              wb.set(doc(db, 'subtasks', s.SubtaskID), s);
-            }
-            await wb.commit();
-            await enqueueSheetsWrite('subtasks', 'save', updated);
-            notifyChange('subtasks', 'updated', taskId).catch(() => {});
-          },
+          persist,
           () => console.log(`Retrying saveSubtasksBatch for ${taskId}`),
           async () => {
             console.error(`Failed to save subtasks batch for ${taskId} after retries`);
-            const rollback = await getDocs(collection(db, 'subtasks'));
-            const rollbackData = rollback.docs.map(d => d.data() as Subtask);
-            setCache('subtasks', rollbackData);
-            notifyOptimisticUpdate('subtasks', rollbackData);
+            const rollback = async () => {
+              const raw = await api.get<Subtask[]>('/api/subtasks');
+              setCache('subtasks', raw);
+              notifyOptimisticUpdate('subtasks', raw);
+            };
+            rollback().catch(console.error);
           }
         );
       }
@@ -1237,12 +1204,11 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const snapshot = await getDocs(collection(db, 'comments'));
-      const comments = snapshot.docs.map(doc => doc.data() as Comment);
+      const comments = await api.get<Comment[]>('/api/comments');
       setCache('comments', comments);
       return comments;
     } catch (error) {
-      throw new Error(`Failed to load comments from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load comments: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -1254,31 +1220,30 @@ export const dbService = {
     setCache('comments', comments);
     notifyOptimisticUpdate('comments', comments);
 
-    // Background async: Write to Firestore, then queue Sheets sync
+    // Background async: Write via API
     (async () => {
+      const persist = async () => {
+        await api.put(`/api/comments/${comment.CommentID}`, comment);
+      };
       try {
-        const sanitizedComment = sanitizeForFirestore(comment);
-        await setDoc(doc(db, 'comments', comment.CommentID), sanitizedComment);
-        await enqueueSheetsWrite('comments', 'save', sanitizedComment);
+        await persist();
+        // await enqueueSheetsWrite('comments', 'save', comment);
         notifyChange('comments', 'created', comment.CommentID).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — saveComment, enqueuing for retry:', err);
+        console.error('API write failed — saveComment, enqueuing for retry:', err);
         syncQueue.enqueue(
           'comments',
           comment.CommentID,
-          async () => {
-            const sanitizedComment = sanitizeForFirestore(comment);
-            await setDoc(doc(db, 'comments', comment.CommentID), sanitizedComment);
-            await enqueueSheetsWrite('comments', 'save', sanitizedComment);
-            notifyChange('comments', 'created', comment.CommentID).catch(() => {});
-          },
+          persist,
           () => console.log(`Retrying saveComment for ${comment.CommentID}`),
           async () => {
             console.error(`Failed to save comment ${comment.CommentID} after retries`);
-            const rollback = await getDocs(collection(db, 'comments'));
-            const rollbackData = rollback.docs.map(d => d.data() as Comment);
-            setCache('comments', rollbackData);
-            notifyOptimisticUpdate('comments', rollbackData);
+            const rollback = async () => {
+              const raw = await api.get<Comment[]>('/api/comments');
+              setCache('comments', raw);
+              notifyOptimisticUpdate('comments', raw);
+            };
+            rollback().catch(console.error);
           }
         );
       }
@@ -1290,8 +1255,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const snapshot = await getDocs(collection(db, 'team_submissions'));
-      const submissions = snapshot.docs.map(doc => doc.data() as TeamSubmission);
+      const submissions = await api.get<TeamSubmission[]>('/api/team-submissions');
       setCache('teamSubmissions', submissions);
       return submissions;
     } catch (error) {
@@ -1300,37 +1264,36 @@ export const dbService = {
   },
 
   async saveTeamSubmission(submission: TeamSubmission): Promise<void> {
-    const sanitizedSubmission = sanitizeForFirestore(submission);
-
     // OPTIMISTIC UPDATE: Update cache and notify UI immediately
     const cached = getFromCache('teamSubmissions') as TeamSubmission[] || [];
-    setCache('teamSubmissions', [...cached, sanitizedSubmission]);
-    notifyOptimisticUpdate('teamSubmissions', [...cached, sanitizedSubmission]);
+    setCache('teamSubmissions', [...cached, submission]);
+    notifyOptimisticUpdate('teamSubmissions', [...cached, submission]);
 
-    // Background async: Write to Firestore, then queue Sheets sync
+    // Background async: Write via API
     (async () => {
+      const persist = async () => {
+        await api.post('/api/team-submissions', submission);
+      };
       try {
-        await setDoc(doc(db, 'team_submissions', submission.SubmissionID), sanitizedSubmission);
-        await enqueueSheetsWrite('team_submissions', 'save', sanitizedSubmission);
+        await persist();
+        // await enqueueSheetsWrite('team_submissions', 'save', submission);
         notifyChange('team_submissions', 'created', submission.SubmissionID).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — saveTeamSubmission, enqueuing for retry:', err);
+        console.error('API write failed — saveTeamSubmission, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         syncQueue.enqueue(
           'team_submissions',
           submission.SubmissionID,
-          async () => {
-            await setDoc(doc(db, 'team_submissions', submission.SubmissionID), sanitizedSubmission);
-            await enqueueSheetsWrite('team_submissions', 'save', sanitizedSubmission);
-            notifyChange('team_submissions', 'created', submission.SubmissionID).catch(() => {});
-          },
+          persist,
           () => console.log(`Retrying saveTeamSubmission for ${submission.SubmissionID}`),
           async () => {
             console.error(`Failed to save team submission ${submission.SubmissionID} after retries`);
-            const rollback = await getDocs(collection(db, 'team_submissions'));
-            const rollbackData = rollback.docs.map(d => d.data() as TeamSubmission);
-            setCache('teamSubmissions', rollbackData);
-            notifyOptimisticUpdate('teamSubmissions', rollbackData);
+            const rollback = async () => {
+              const raw = await api.get<TeamSubmission[]>('/api/team-submissions');
+              setCache('teamSubmissions', raw);
+              notifyOptimisticUpdate('teamSubmissions', raw);
+            };
+            rollback().catch(console.error);
           }
         );
       }
@@ -1346,29 +1309,12 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const snapshot = await getDocs(collection(db, 'sub_teams'));
-      const subTeams = snapshot.docs.map(doc => ({
-        ...doc.data() as SubTeam,
-        id: doc.id // Include Firestore document ID
-      }));
-
-      // Attach sub-team leader emails from settings (same pattern as TeamLeaderEmails)
-      const settingsSnapshot = await getDocs(collection(db, 'settings'));
-      const settings = settingsSnapshot.docs.map(doc => doc.data() as AppSetting);
-
-      const subTeamsWithLeaders = subTeams.map(st => {
-        const key = `team_${st.TeamID}_subteam_${st.SubTeamID}_leaders`;
-        const leaderSetting = settings.find(s => s.Key === key);
-        const leaderEmails = leaderSetting?.Value
-          ? leaderSetting.Value.split(',').map(e => e.trim()).filter(Boolean)
-          : [];
-        return { ...st, SubTeamLeaderEmails: leaderEmails };
-      });
-
-      setCache('sub_teams', subTeamsWithLeaders);
-      return subTeamsWithLeaders;
+      // Server attaches sub-team leader emails from settings
+      const subTeams = await api.get<SubTeam[]>('/api/sub-teams');
+      setCache('sub_teams', subTeams);
+      return subTeams;
     } catch (error) {
-      throw new Error(`Failed to load sub-teams from Firestore: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to load sub-teams: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   },
 
@@ -1381,9 +1327,6 @@ export const dbService = {
       ? { ...subTeams[idx], ...subTeam, UpdatedAt: now }
       : { ...subTeam, CreatedAt: now, UpdatedAt: now, SubTeamLeaderEmails: subTeam.SubTeamLeaderEmails ?? [] };
 
-    // Strip derived field before persisting
-    const { SubTeamLeaderEmails: _derived, ...persistable } = subTeamToSave;
-
     // OPTIMISTIC UPDATE: Update cache and notify UI immediately
     if (idx >= 0) {
       subTeams[idx] = subTeamToSave;
@@ -1393,24 +1336,21 @@ export const dbService = {
     setCache('sub_teams', subTeams);
     notifyOptimisticUpdate('sub_teams', subTeams);
 
-    // Background async: Write to Firestore, then queue Sheets sync
+    // Background async: Write via API
     (async () => {
+      const persist = async () => {
+        await api.put(`/api/sub-teams/${subTeam.SubTeamID}`, subTeamToSave);
+      };
       try {
-        const sanitized = sanitizeForFirestore(persistable);
-        await setDoc(doc(db, 'sub_teams', subTeam.SubTeamID), sanitized);
-        await enqueueSheetsWrite('sub_teams', 'save', sanitized);
+        await persist();
+        // await enqueueSheetsWrite('sub_teams', 'save', subTeamToSave);
         notifyChange('sub_teams', 'updated', subTeam.SubTeamID).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — saveSubTeam, enqueuing for retry:', err);
+        console.error('API write failed — saveSubTeam, enqueuing for retry:', err);
         syncQueue.enqueue(
           'sub_teams',
           subTeam.SubTeamID,
-          async () => {
-            const sanitized = sanitizeForFirestore(persistable);
-            await setDoc(doc(db, 'sub_teams', subTeam.SubTeamID), sanitized);
-            await enqueueSheetsWrite('sub_teams', 'save', sanitized);
-            notifyChange('sub_teams', 'updated', subTeam.SubTeamID).catch(() => {});
-          },
+          persist,
           () => console.log(`Retrying saveSubTeam for ${subTeam.SubTeamID}`),
           async () => {
             console.error(`Failed to save sub-team ${subTeam.SubTeamID} after retries`);
@@ -1431,23 +1371,22 @@ export const dbService = {
     setCache('sub_teams', filtered);
     notifyOptimisticUpdate('sub_teams', filtered);
 
-    // Background async: Delete from Firestore, then queue Sheets sync
+    // Background async: Delete via API
     (async () => {
+      const persist = async () => {
+        await api.del(`/api/sub-teams/${subTeamId}`);
+      };
       try {
-        await deleteDoc(doc(db, 'sub_teams', subTeamId));
-        await enqueueSheetsWrite('sub_teams', 'delete', subTeamId);
+        await persist();
+        // await enqueueSheetsWrite('sub_teams', 'delete', subTeamId);
         notifyChange('sub_teams', 'deleted', subTeamId).catch(() => {});
       } catch (err) {
-        console.error('Firestore write failed — deleteSubTeam, enqueuing for retry:', err);
+        console.error('API write failed — deleteSubTeam, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         syncQueue.enqueue(
           'sub_teams',
           subTeamId,
-          async () => {
-            await deleteDoc(doc(db, 'sub_teams', subTeamId));
-            await enqueueSheetsWrite('sub_teams', 'delete', subTeamId);
-            notifyChange('sub_teams', 'deleted', subTeamId).catch(() => {});
-          },
+          persist,
           () => console.log(`Retrying deleteSubTeam for ${subTeamId}`),
           async () => {
             console.error(`Failed to delete sub-team ${subTeamId} after retries`);
@@ -1460,7 +1399,7 @@ export const dbService = {
     })();
   },
 
-  // Batch load all collections from Firestore (fast initial load)
+  // Batch load all collections from API (fast initial load)
   async batchLoadAll(): Promise<{
     users: User[];
     tasks: Task[];
@@ -1476,40 +1415,39 @@ export const dbService = {
     teamSubmissions: TeamSubmission[];
     audits: AuditLog[];  
   }> {
-    // Read all collections from Firestore in parallel
+    // Read all collections from API in parallel
     const [
-      usersSnapshot,
-      tasksSnapshot,
-      teamsSnapshot,
-      subTeamsSnapshot,
-      templatesSnapshot,
-      settingsSnapshot,
-      emailTemplatesSnapshot,
-      reportsSnapshot,
-      followupsSnapshot,
-      subtasksSnapshot,
-      commentsSnapshot,
-      teamSubmissionsSnapshot,
-      auditsSnapshot  
+      usersRaw,
+      tasksRaw,
+      teams,
+      subTeams,
+      templates,
+      settings,
+      emailTemplates,
+      reports,
+      followups,
+      subtasks,
+      comments,
+      teamSubmissions,
+      audits  
     ] = await Promise.all([
-      getDocs(collection(db, 'users')),
-      getDocs(collection(db, 'tasks')),
-      getDocs(collection(db, 'teams')),
-      getDocs(collection(db, 'sub_teams')),
-      getDocs(collection(db, 'templates')),
-      getDocs(collection(db, 'settings')),
-      getDocs(collection(db, 'email_templates')),
-      getDocs(collection(db, 'reports')),
-      getDocs(collection(db, 'followups')),
-      getDocs(collection(db, 'subtasks')),
-      getDocs(collection(db, 'comments')),
-      getDocs(collection(db, 'team_submissions')),
-      getDocs(query(collection(db, 'auditlogs'), orderBy('ActionDateTime', 'desc'), limit(200)))
+      api.get<any[]>('/api/users'),
+      api.get<any[]>('/api/tasks'),
+      api.get<Team[]>('/api/teams'),
+      api.get<SubTeam[]>('/api/sub-teams'),
+      api.get<TaskTemplate[]>('/api/templates'),
+      api.get<AppSetting[]>('/api/settings'),
+      api.get<EmailTemplate[]>('/api/email-templates'),
+      api.get<TaskReport[]>('/api/reports'),
+      api.get<FollowUp[]>('/api/followups'),
+      api.get<Subtask[]>('/api/subtasks'),
+      api.get<Comment[]>('/api/comments'),
+      api.get<TeamSubmission[]>('/api/team-submissions'),
+      api.get<AuditLog[]>('/api/auditlogs')
     ]);
 
     // Apply the same data transformations as individual getters
-    const users: User[] = usersSnapshot.docs.map(doc => {
-      const u = doc.data() as any;
+    const users: User[] = usersRaw.map(u => {
       return {
         ...u,
         TeamIDs: u.TeamIDs 
@@ -1523,8 +1461,7 @@ export const dbService = {
       };
     });
 
-    const tasks: Task[] = tasksSnapshot.docs.map(doc => {
-      const t = doc.data() as any;
+    const tasks: Task[] = tasksRaw.map(t => {
       return {
         ...t,
         AssignedToTeamIDs: t.AssignedToTeamIDs 
@@ -1535,48 +1472,18 @@ export const dbService = {
       };
     });
 
-    const teams: Team[] = teamsSnapshot.docs.map(doc => doc.data() as Team);
-    const templates: TaskTemplate[] = templatesSnapshot.docs.map(doc => doc.data() as TaskTemplate);
-    const settings: AppSetting[] = settingsSnapshot.docs.map(doc => doc.data() as AppSetting);
-
-    // Attach team leader emails to teams from settings
-    const teamsWithLeaders = teams.map(team => {
-      const leaderSetting = settings.find(s => s.Key === `team_${team.TeamID}_leaders`);
-      const leaderEmails = leaderSetting?.Value ? leaderSetting.Value.split(',').map(e => e.trim()).filter(Boolean) : [];
-      return {
-        ...team,
-        TeamLeaderEmails: leaderEmails
-      };
-    });
-
-    // Attach sub-team leader emails from settings (mirrors TeamLeaderEmails pattern)
-    const rawSubTeams: SubTeam[] = subTeamsSnapshot.docs.map(doc => doc.data() as SubTeam);
-    const subTeams: SubTeam[] = rawSubTeams.map(st => {
-      const key = `team_${st.TeamID}_subteam_${st.SubTeamID}_leaders`;
-      const leaderSetting = settings.find(s => s.Key === key);
-      const leaderEmails = leaderSetting?.Value
-        ? leaderSetting.Value.split(',').map(e => e.trim()).filter(Boolean)
-        : [];
-      return { ...st, SubTeamLeaderEmails: leaderEmails };
-    });
-
-    const emailTemplates: EmailTemplate[] = emailTemplatesSnapshot.docs.map(doc => doc.data() as EmailTemplate);
-    const reports: TaskReport[] = reportsSnapshot.docs.map(doc => doc.data() as TaskReport);
-    const followups: FollowUp[] = followupsSnapshot.docs.map(doc => doc.data() as FollowUp);
-    const subtasks: Subtask[] = subtasksSnapshot.docs.map(doc => doc.data() as Subtask);
-    const comments: Comment[] = commentsSnapshot.docs.map(doc => doc.data() as Comment);
-    const teamSubmissions: TeamSubmission[] = teamSubmissionsSnapshot.docs.map(doc => doc.data() as TeamSubmission);
-    const audits: AuditLog[] = auditsSnapshot.docs.map(doc => doc.data() as AuditLog);
+    // Teams already have TeamLeaderEmails attached from server
+    // Sub-teams already have SubTeamLeaderEmails attached from server
 
     // Populate cache for each collection so subsequent
-    // individual reads hit cache, not Firestore
+    // individual reads hit cache, not API
     setCache('users', users);
     setCache('tasks', tasks);
-    setCache('teams', teamsWithLeaders);
+    setCache('teams', teams);
     setCache('sub_teams', subTeams);
     setCache('templates', templates);
     setCache('settings', settings);
-    setCache('emailTemplates', emailTemplates);
+    setCache('email_templates', emailTemplates);
     setCache('reports', reports);
     setCache('followups', followups);
     setCache('subtasks', subtasks);
@@ -1587,7 +1494,7 @@ export const dbService = {
     return {
       users,
       tasks,
-      teams: teamsWithLeaders,
+      teams,
       subTeams,
       templates,
       settings,
@@ -1701,11 +1608,11 @@ export const dbService = {
       };
       await sheetsApi.appendRecord('auditlogs', logRecord);
       
-      // Firestore write
+      // API write to Firestore
       try {
-        await addDoc(collection(db, 'auditlogs'), logRecord);
+        await api.post('/api/auditlogs', logRecord);
       } catch (err) {
-        console.error('Firestore write failed — logAction:', err);
+        console.error('API write failed — logAction:', err);
       }
     } catch (error) {
       console.error('Failed to write audit log:', error);

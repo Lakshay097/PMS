@@ -1,10 +1,11 @@
 ﻿import { Request, Response } from 'express';
-import { login, generateUserId } from '../services/authService';
+import { login, generateUserId, refreshToken } from '../services/authService';
 import { generateGoogleSheetsToken, fetchSheetValues, appendSheetValues, updateSheetValues } from '../services/googleSheetsService';
-import { BadRequestError, NotFoundError, InternalServerError } from '../utils/AppError';
+import { BadRequestError, NotFoundError, InternalServerError, UnauthorizedError } from '../utils/AppError';
 import { AuthRequest } from '../middleware/auth';
 import bcrypt from 'bcrypt';
 import { firestoreAdmin } from '../services/firebaseAdmin';
+import * as cookie from 'cookie';
 
 /**
  * Login request body
@@ -417,6 +418,73 @@ interface BulkUserUploadRequestBody {
     TeamName: string;
     Password: string;
   }>;
+}
+
+/**
+ * POST /api/refresh-token
+ * Endpoint to refresh JWT access token using refresh token
+ * This endpoint does NOT require authentication (refresh token is passed in body)
+ * Sets new tokens in httpOnly cookies for security
+ */
+export async function refreshTokenHandler(req: Request, res: Response): Promise<void> {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    throw new BadRequestError("Refresh token is required");
+  }
+
+  const { refreshAccessTokenFromRefreshToken } = await import('../services/authService');
+  const newTokens = refreshAccessTokenFromRefreshToken(refreshToken);
+
+  if (!newTokens) {
+    throw new UnauthorizedError("Invalid or expired refresh token");
+  }
+
+  // Set tokens in httpOnly cookies for security
+  res.setHeader('Set-Cookie', [
+    cookie.serialize('auth_token', newTokens.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 3600, // 1 hour
+      path: '/',
+    }),
+    cookie.serialize('refresh_token', newTokens.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+      path: '/',
+    }),
+  ]);
+
+  res.json({
+    token: newTokens.token,
+    refreshToken: newTokens.refreshToken,
+    expiresIn: newTokens.expiresIn
+  });
+}
+
+/**
+ * POST /api/refresh-token-legacy
+ * Protected endpoint to refresh JWT token (legacy, for backward compatibility)
+ * @deprecated Use /api/refresh-token with refresh token instead
+ */
+export async function refreshTokenHandlerLegacy(req: AuthRequest, res: Response): Promise<void> {
+  const user = req.user;
+  
+  if (!user || !user.email || !user.userId || !user.role || !user.fullName) {
+    throw new BadRequestError("Invalid user data in token");
+  }
+
+  const newTokenData = refreshToken(
+    user.email,
+    user.userId,
+    user.role,
+    user.fullName
+  );
+
+  res.json(newTokenData);
 }
 
 /**

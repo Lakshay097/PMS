@@ -1,6 +1,26 @@
 import React, { useState } from 'react';
-import FormField from '../../shared/FormField';
-import { Save, AlertTriangle, Clock, Shield, Bell, Calendar, Server, CheckCircle } from 'lucide-react';
+import { Save, AlertTriangle, Shield, Bell, Calendar, Server, CheckCircle, RotateCcw } from 'lucide-react';
+import { Badge, Card, Switch } from '../../shared/ui';
+
+/**
+ * Global Settings — redesigned.
+ *
+ * What changed vs. the previous version:
+ *  - Booleans use a proper Switch instead of a 16px checkbox (a master
+ *    "Enable Scheduler" kill-switch deserves a deliberate control)
+ *  - Settings render as compact rows inside one card per category, instead
+ *    of one full-width card + Save button per setting; modified rows get an
+ *    accent bar and a "Modified" badge so dirty state is visible at a glance
+ *  - One save model: the sticky bar saves everything; the per-setting Save
+ *    button forest is gone
+ *  - The risky-change confirmation names the setting and shows old → new
+ *    values instead of a generic "are you sure"
+ *  - Category rail shows a dot on categories with unsaved changes
+ *
+ * NOTE: this component still ships with the local defaults the original had.
+ * To actually persist, pass `onUpdateSetting` (and initial values via
+ * `initialValues`) from AdminPage — handleSaveAll calls it per changed key.
+ */
 
 interface Setting {
   key: string;
@@ -16,389 +36,293 @@ interface Setting {
 
 interface GlobalSettingsProps {
   onBack?: () => void;
+  initialValues?: Record<string, string>;
+  onUpdateSetting?: (key: string, value: string) => Promise<void> | void;
 }
 
-export default function GlobalSettings({ onBack }: GlobalSettingsProps) {
+const DEFAULT_SETTINGS: Setting[] = [
+  { key: 'task_default_priority', name: 'Default task priority', description: 'Priority assigned to new tasks', value: 'Medium', type: 'select', options: ['Low', 'Medium', 'High', 'Critical'], category: 'task-rules', lastChanged: '2024-01-15' },
+  { key: 'task_auto_close_days', name: 'Auto-archive completed tasks', description: 'Days after completion before tasks are archived', value: '30', type: 'number', category: 'task-rules', lastChanged: '2024-01-10' },
+  { key: 'task_require_description', name: 'Require task description', description: 'Make the description field mandatory', value: 'true', type: 'boolean', category: 'task-rules', lastChanged: '2024-01-05' },
+  { key: 'scheduler_enabled', name: 'Enable scheduler', description: 'Master switch for recurring task generation', value: 'true', type: 'boolean', category: 'scheduler', risky: true, lastChanged: '2024-01-20' },
+  { key: 'scheduler_timezone', name: 'Scheduler timezone', description: 'Timezone used to schedule generation runs', value: 'UTC', type: 'select', options: ['UTC', 'America/New_York', 'Europe/London', 'Asia/Tokyo', 'Asia/Kolkata'], category: 'scheduler', lastChanged: '2024-01-18' },
+  { key: 'scheduler_retry_attempts', name: 'Retry failed runs', description: 'Retry attempts for failed scheduler runs', value: '3', type: 'number', category: 'scheduler', lastChanged: '2024-01-12' },
+  { key: 'email_enabled', name: 'Enable email notifications', description: 'Master switch for all outgoing email', value: 'true', type: 'boolean', category: 'notifications', lastChanged: '2024-01-22' },
+  { key: 'email_overdue_alert', name: 'Overdue task alerts', description: 'Email users when their tasks become overdue', value: 'true', type: 'boolean', category: 'notifications', lastChanged: '2024-01-15' },
+  { key: 'email_digest_frequency', name: 'Digest frequency', description: 'How often digest emails are sent', value: 'daily', type: 'select', options: ['daily', 'weekly', 'never'], category: 'notifications', lastChanged: '2024-01-08' },
+  { key: 'auth_session_timeout', name: 'Session timeout (minutes)', description: 'Inactivity before a session expires', value: '60', type: 'number', category: 'security', lastChanged: '2024-01-25' },
+  { key: 'auth_2fa_required', name: 'Require two-factor authentication', description: 'Enforce 2FA for every account', value: 'false', type: 'boolean', category: 'security', risky: true, lastChanged: '2024-01-20' },
+  { key: 'auth_password_min_length', name: 'Minimum password length', description: 'Characters required for passwords', value: '8', type: 'number', category: 'security', lastChanged: '2024-01-10' },
+  { key: 'env_mode', name: 'Environment mode', description: 'Current deployment environment', value: 'production', type: 'select', options: ['development', 'staging', 'production'], category: 'environment', risky: true, lastChanged: '2024-01-01' },
+  { key: 'env_maintenance_mode', name: 'Maintenance mode', description: 'Take the application offline for maintenance', value: 'false', type: 'boolean', category: 'environment', risky: true, lastChanged: '2024-01-28' },
+];
+
+const CATEGORIES = [
+  { id: 'task-rules', label: 'Task rules', icon: <CheckCircle size={16} /> },
+  { id: 'scheduler', label: 'Scheduler', icon: <Calendar size={16} /> },
+  { id: 'notifications', label: 'Notifications', icon: <Bell size={16} /> },
+  { id: 'security', label: 'Security', icon: <Shield size={16} /> },
+  { id: 'environment', label: 'Environment', icon: <Server size={16} /> },
+];
+
+export default function GlobalSettings({ onBack, initialValues, onUpdateSetting }: GlobalSettingsProps) {
   const [activeCategory, setActiveCategory] = useState('task-rules');
-  const [settings, setSettings] = useState<Setting[]>([
-    {
-      key: 'task_default_priority',
-      name: 'Default Task Priority',
-      description: 'The priority level assigned to new tasks by default',
-      value: 'Medium',
-      type: 'select',
-      options: ['Low', 'Medium', 'High', 'Critical'],
-      category: 'task-rules',
-      lastChanged: '2024-01-15',
-    },
-    {
-      key: 'task_auto_close_days',
-      name: 'Auto-Close Completed Tasks',
-      description: 'Number of days after completion before tasks are automatically archived',
-      value: '30',
-      type: 'number',
-      category: 'task-rules',
-      lastChanged: '2024-01-10',
-    },
-    {
-      key: 'task_require_description',
-      name: 'Require Task Description',
-      description: 'Whether task description is mandatory when creating tasks',
-      value: 'true',
-      type: 'boolean',
-      category: 'task-rules',
-      lastChanged: '2024-01-05',
-    },
-    {
-      key: 'scheduler_enabled',
-      name: 'Enable Scheduler',
-      description: 'Master switch for the recurring task generation system',
-      value: 'true',
-      type: 'boolean',
-      category: 'scheduler',
-      risky: true,
-      lastChanged: '2024-01-20',
-    },
-    {
-      key: 'scheduler_timezone',
-      name: 'Scheduler Timezone',
-      description: 'Timezone used for scheduling recurring task generation',
-      value: 'UTC',
-      type: 'select',
-      options: ['UTC', 'America/New_York', 'Europe/London', 'Asia/Tokyo'],
-      category: 'scheduler',
-      lastChanged: '2024-01-18',
-    },
-    {
-      key: 'scheduler_retry_attempts',
-      name: 'Retry Failed Runs',
-      description: 'Number of retry attempts for failed scheduler runs',
-      value: '3',
-      type: 'number',
-      category: 'scheduler',
-      lastChanged: '2024-01-12',
-    },
-    {
-      key: 'email_enabled',
-      name: 'Enable Email Notifications',
-      description: 'Master switch for all email notifications',
-      value: 'true',
-      type: 'boolean',
-      category: 'notifications',
-      lastChanged: '2024-01-22',
-    },
-    {
-      key: 'email_overdue_alert',
-      name: 'Overdue Task Alerts',
-      description: 'Send email alerts when tasks become overdue',
-      value: 'true',
-      type: 'boolean',
-      category: 'notifications',
-      lastChanged: '2024-01-15',
-    },
-    {
-      key: 'email_digest_frequency',
-      name: 'Digest Email Frequency',
-      description: 'How often to send digest emails to users',
-      value: 'daily',
-      type: 'select',
-      options: ['daily', 'weekly', 'never'],
-      category: 'notifications',
-      lastChanged: '2024-01-08',
-    },
-    {
-      key: 'auth_session_timeout',
-      name: 'Session Timeout',
-      description: 'Minutes of inactivity before user session expires',
-      value: '60',
-      type: 'number',
-      category: 'security',
-      lastChanged: '2024-01-25',
-    },
-    {
-      key: 'auth_2fa_required',
-      name: 'Require Two-Factor Authentication',
-      description: 'Enforce 2FA for all user accounts',
-      value: 'false',
-      type: 'boolean',
-      category: 'security',
-      risky: true,
-      lastChanged: '2024-01-20',
-    },
-    {
-      key: 'auth_password_min_length',
-      name: 'Minimum Password Length',
-      description: 'Minimum number of characters required for passwords',
-      value: '8',
-      type: 'number',
-      category: 'security',
-      lastChanged: '2024-01-10',
-    },
-    {
-      key: 'env_mode',
-      name: 'Environment Mode',
-      description: 'Current deployment environment',
-      value: 'production',
-      type: 'select',
-      options: ['development', 'staging', 'production'],
-      category: 'environment',
-      risky: true,
-      lastChanged: '2024-01-01',
-    },
-    {
-      key: 'env_maintenance_mode',
-      name: 'Maintenance Mode',
-      description: 'Disable the application for maintenance',
-      value: 'false',
-      type: 'boolean',
-      category: 'environment',
-      risky: true,
-      lastChanged: '2024-01-28',
-    },
-  ]);
+  const [settings, setSettings] = useState<Setting[]>(() =>
+    DEFAULT_SETTINGS.map((s) => ({ ...s, value: initialValues?.[s.key] ?? s.value }))
+  );
+  const [pending, setPending] = useState<Record<string, string>>({});
+  const [confirming, setConfirming] = useState<{ key: string; value: string } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const [unsavedChanges, setUnsavedChanges] = useState<Record<string, string>>({});
-  const [showConfirmation, setShowConfirmation] = useState<string | null>(null);
+  const currentValue = (s: Setting) => pending[s.key] ?? s.value;
+  const isDirty = (s: Setting) => pending[s.key] !== undefined && pending[s.key] !== s.value;
+  const dirtyKeys = Object.keys(pending).filter((k) => {
+    const s = settings.find((x) => x.key === k);
+    return s && pending[k] !== s.value;
+  });
+  const dirtyByCategory = (cat: string) =>
+    dirtyKeys.some((k) => settings.find((s) => s.key === k)?.category === cat);
 
-  const categories = [
-    { id: 'task-rules', label: 'Task Rules', icon: <CheckCircle size={18} /> },
-    { id: 'scheduler', label: 'Scheduler', icon: <Calendar size={18} /> },
-    { id: 'notifications', label: 'Notifications', icon: <Bell size={18} /> },
-    { id: 'security', label: 'Security', icon: <Shield size={18} /> },
-    { id: 'environment', label: 'Environment', icon: <Server size={18} /> },
-  ];
-
-  const filteredSettings = settings.filter(s => s.category === activeCategory);
-
-  const handleSettingChange = (key: string, value: string) => {
-    setUnsavedChanges({ ...unsavedChanges, [key]: value });
-  };
-
-  const handleSave = (key: string) => {
-    const setting = settings.find(s => s.key === key);
-    if (setting && unsavedChanges[key]) {
-      setSettings(settings.map(s => 
-        s.key === key 
-          ? { ...s, value: unsavedChanges[key], lastChanged: new Date().toISOString().split('T')[0] }
-          : s
-      ));
-      setUnsavedChanges({ ...unsavedChanges, [key]: '' });
+  const stage = (setting: Setting, value: string) => {
+    if (setting.risky && value !== setting.value) {
+      setConfirming({ key: setting.key, value });
+    } else {
+      setPending((p) => ({ ...p, [setting.key]: value }));
     }
   };
 
-  const handleSaveAll = () => {
-    setSettings(settings.map(s => 
-      unsavedChanges[s.key] 
-        ? { ...s, value: unsavedChanges[s.key], lastChanged: new Date().toISOString().split('T')[0] }
-        : s
-    ));
-    setUnsavedChanges({});
+  const confirmRisky = () => {
+    if (confirming) setPending((p) => ({ ...p, [confirming.key]: confirming.value }));
+    setConfirming(null);
   };
 
-  const handleRiskySettingChange = (key: string, value: string) => {
-    setShowConfirmation(key);
-  };
+  const revert = (key: string) =>
+    setPending((p) => {
+      const { [key]: _, ...rest } = p;
+      return rest;
+    });
 
-  const confirmRiskyChange = () => {
-    if (showConfirmation) {
-      handleSettingChange(showConfirmation, unsavedChanges[showConfirmation] || settings.find(s => s.key === showConfirmation)?.value || '');
-      setShowConfirmation(null);
+  const saveAll = async () => {
+    setIsSaving(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      for (const key of dirtyKeys) {
+        await onUpdateSetting?.(key, pending[key]);
+      }
+      setSettings((all) =>
+        all.map((s) => (dirtyKeys.includes(s.key) ? { ...s, value: pending[s.key], lastChanged: today } : s))
+      );
+      setPending({});
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const hasUnsavedChanges = Object.keys(unsavedChanges).some(key => unsavedChanges[key]);
+  const visible = settings.filter((s) => s.category === activeCategory);
+  const confirmingSetting = confirming ? settings.find((s) => s.key === confirming.key) : null;
+
+  const inputStyle: React.CSSProperties = {
+    background: 'var(--color-surface)',
+    borderColor: 'var(--color-border)',
+    color: 'var(--color-text)',
+  };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="admin-root p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            {onBack && (
-              <button
-                onClick={onBack}
-                className="text-sm text-[var(--color-accent)] hover:underline"
-              >
-                ← Admin
-              </button>
-            )}
-            <h1 className="text-xl font-semibold text-[#0f172a]">Global Settings</h1>
-          </div>
-          <p className="text-sm text-muted mt-1">Configure system parameters and business rules</p>
+      <div>
+        <div className="flex items-center gap-2">
+          {onBack && (
+            <button onClick={onBack} className="text-sm hover:underline" style={{ color: 'var(--color-accent)' }}>
+              ← Admin
+            </button>
+          )}
+          <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>
+            Global Settings
+          </h1>
         </div>
+        <p className="mt-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+          System parameters and business rules
+        </p>
       </div>
 
-      <div className="flex gap-6">
-        {/* Left Category Rail */}
-        <div className="w-56 flex-shrink-0">
-          <nav className="space-y-1">
-            {categories.map((category) => (
+      <div className="flex flex-col gap-6 lg:flex-row">
+        {/* Category rail with dirty dots */}
+        <nav className="flex gap-1 overflow-x-auto lg:w-52 lg:shrink-0 lg:flex-col" aria-label="Setting categories">
+          {CATEGORIES.map((cat) => {
+            const active = activeCategory === cat.id;
+            return (
               <button
-                key={category.id}
-                onClick={() => setActiveCategory(category.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md text-sm font-medium transition-colors ${
-                  activeCategory === category.id
-                    ? 'bg-[var(--color-accent)] text-white'
-                    : 'text-[#0f172a] hover:bg-gray-100'
-                }`}
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className="flex items-center gap-2.5 whitespace-nowrap rounded-[var(--radius-md)] px-3.5 py-2.5 text-sm font-medium transition-colors"
+                style={{
+                  background: active ? 'var(--color-accent-soft)' : 'transparent',
+                  color: active ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                }}
               >
-                {category.icon}
-                <span>{category.label}</span>
+                {cat.icon}
+                <span className="flex-1 text-left">{cat.label}</span>
+                {dirtyByCategory(cat.id) && (
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: 'var(--color-warning)' }} />
+                )}
               </button>
-            ))}
-          </nav>
-        </div>
+            );
+          })}
+        </nav>
 
-        {/* Main Settings Panel */}
-        <div className="flex-1 space-y-6">
-          {filteredSettings.map((setting) => (
-            <div key={setting.key} className="bg-surface rounded-lg border border-[var(--color-border)] p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-base font-semibold text-[#0f172a]">{setting.name}</h3>
-                    {setting.risky && (
-                      <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-medium">
-                        <AlertTriangle size={12} />
-                        <span>Risky</span>
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted mb-4">{setting.description}</p>
-                  
-                  <FormField>
-                    {setting.type === 'boolean' ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={unsavedChanges[setting.key] !== undefined ? unsavedChanges[setting.key] === 'true' : setting.value === 'true'}
-                          onChange={(e) => {
-                            const newValue = e.target.checked.toString();
-                            if (setting.risky) {
-                              handleRiskySettingChange(setting.key, newValue);
-                            } else {
-                              handleSettingChange(setting.key, newValue);
-                            }
-                          }}
-                          className="w-4 h-4 rounded border-[var(--color-border)] text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
-                        />
-                        <span className="text-sm text-[#0f172a]">
-                          {unsavedChanges[setting.key] !== undefined ? unsavedChanges[setting.key] === 'true' : setting.value === 'true' ? 'Enabled' : 'Disabled'}
+        {/* Settings rows */}
+        <div className="flex-1 space-y-4">
+          <Card padded={false}>
+            <ul className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+              {visible.map((setting) => {
+                const dirty = isDirty(setting);
+                const value = currentValue(setting);
+                return (
+                  <li
+                    key={setting.key}
+                    className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-6"
+                    style={{ boxShadow: dirty ? 'inset 3px 0 0 var(--color-accent)' : 'none' }}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                          {setting.name}
                         </span>
+                        {setting.risky && (
+                          <Badge variant="warning" dot>Risky</Badge>
+                        )}
+                        {dirty && <Badge variant="accent">Modified</Badge>}
                       </div>
-                    ) : setting.type === 'select' && setting.options ? (
-                      <select
-                        value={unsavedChanges[setting.key] !== undefined ? unsavedChanges[setting.key] : setting.value}
-                        onChange={(e) => {
-                          if (setting.risky) {
-                            handleRiskySettingChange(setting.key, e.target.value);
-                          } else {
-                            handleSettingChange(setting.key, e.target.value);
-                          }
-                        }}
-                        className="w-full max-w-xs px-3 py-2 bg-gray-50 border border-[var(--color-border)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
-                      >
-                        {setting.options.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type={setting.type === 'number' ? 'number' : 'text'}
-                        value={unsavedChanges[setting.key] !== undefined ? unsavedChanges[setting.key] : setting.value}
-                        onChange={(e) => {
-                          if (setting.risky) {
-                            handleRiskySettingChange(setting.key, e.target.value);
-                          } else {
-                            handleSettingChange(setting.key, e.target.value);
-                          }
-                        }}
-                        className="w-full max-w-xs px-3 py-2 bg-gray-50 border border-[var(--color-border)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
-                      />
-                    )}
-                  </FormField>
-
-                  <div className="flex items-center gap-4 mt-4 text-xs text-muted">
-                    <div className="flex items-center gap-1">
-                      <Clock size={12} />
-                      <span>Last changed: {setting.lastChanged}</span>
+                      <p className="mt-0.5 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                        {setting.description}
+                        {setting.lastChanged && <> · Last changed {setting.lastChanged}</>}
+                      </p>
                     </div>
-                    <a href="/admin/audit" className="text-[var(--color-accent)] hover:underline">
-                      View audit
-                    </a>
-                  </div>
-                </div>
 
+                    <div className="flex shrink-0 items-center gap-2">
+                      {setting.type === 'boolean' ? (
+                        <Switch
+                          checked={value === 'true'}
+                          onChange={(next) => stage(setting, String(next))}
+                          label={setting.name}
+                        />
+                      ) : setting.type === 'select' && setting.options ? (
+                        <select
+                          value={value}
+                          onChange={(e) => stage(setting, e.target.value)}
+                          className="rounded-[var(--radius-sm)] border px-2.5 py-1.5 text-sm"
+                          style={inputStyle}
+                        >
+                          {setting.options.map((o) => (
+                            <option key={o} value={o}>{o}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type={setting.type === 'number' ? 'number' : 'text'}
+                          value={value}
+                          onChange={(e) => stage(setting, e.target.value)}
+                          className="w-28 rounded-[var(--radius-sm)] border px-2.5 py-1.5 text-sm text-right tabular-nums"
+                          style={inputStyle}
+                        />
+                      )}
+                      {dirty && (
+                        <button
+                          onClick={() => revert(setting.key)}
+                          aria-label={`Revert ${setting.name}`}
+                          title="Revert"
+                          className="rounded p-1.5 transition-colors hover:bg-[var(--color-surface-2)]"
+                          style={{ color: 'var(--color-text-muted)' }}
+                        >
+                          <RotateCcw size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+
+          {/* Sticky save bar — the single save model */}
+          {dirtyKeys.length > 0 && (
+            <div
+              className="sticky bottom-4 flex items-center justify-between gap-3 rounded-[var(--radius-lg)] border p-3.5"
+              style={{
+                background: 'var(--color-surface)',
+                borderColor: 'var(--color-border)',
+                boxShadow: 'var(--shadow-lg)',
+              }}
+            >
+              <span className="text-sm" style={{ color: 'var(--color-text)' }}>
+                <strong className="tabular-nums">{dirtyKeys.length}</strong>{' '}
+                setting{dirtyKeys.length === 1 ? '' : 's'} modified
+              </span>
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleSave(setting.key)}
-                  disabled={!unsavedChanges[setting.key]}
-                  className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-md text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                  onClick={() => setPending({})}
+                  disabled={isSaving}
+                  className="rounded-[var(--radius-sm)] border px-3.5 py-2 text-sm font-medium disabled:opacity-50"
+                  style={inputStyle}
                 >
-                  <Save size={16} />
-                  <span>Save</span>
+                  Discard
                 </button>
-              </div>
-            </div>
-          ))}
-
-          {/* Sticky Save Summary */}
-          {hasUnsavedChanges && (
-            <div className="sticky bottom-6 bg-surface rounded-lg border border-[var(--color-border)] p-4 shadow-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-medium text-[#0f172a]">Unsaved changes</div>
-                  <div className="text-xs text-muted">
-                    {Object.keys(unsavedChanges).filter(key => unsavedChanges[key]).length} settings modified
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setUnsavedChanges({})}
-                    className="px-4 py-2 border border-[var(--color-border)] rounded-md text-sm text-[#0f172a] hover:bg-gray-50 transition-colors"
-                  >
-                    Discard
-                  </button>
-                  <button
-                    onClick={handleSaveAll}
-                    className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-md text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors"
-                  >
-                    <Save size={16} />
-                    <span>Save all</span>
-                  </button>
-                </div>
+                <button
+                  onClick={saveAll}
+                  disabled={isSaving}
+                  className="flex items-center gap-2 rounded-[var(--radius-sm)] px-3.5 py-2 text-sm font-medium text-white transition-colors disabled:opacity-60"
+                  style={{ background: 'var(--color-accent)' }}
+                >
+                  <Save size={15} />
+                  {isSaving ? 'Saving…' : 'Save changes'}
+                </button>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Confirmation Modal */}
-      {showConfirmation && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-surface rounded-lg shadow-2xl max-w-md w-full mx-4 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-amber-100 rounded-full">
-                <AlertTriangle size={20} className="text-amber-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-[#0f172a]">Confirm Risky Change</h3>
+      {/* Risky confirmation — names the change */}
+      {confirming && confirmingSetting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          <div
+            className="w-full max-w-md rounded-[var(--radius-lg)] border p-6"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', boxShadow: 'var(--shadow-lg)' }}
+          >
+            <div className="mb-3 flex items-center gap-3">
+              <span
+                className="flex h-9 w-9 items-center justify-center rounded-full"
+                style={{ background: 'var(--color-warning-soft)', color: 'var(--color-warning)' }}
+              >
+                <AlertTriangle size={18} />
+              </span>
+              <h3 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+                Change “{confirmingSetting.name}”?
+              </h3>
             </div>
-            <p className="text-sm text-muted mb-6">
-              This setting is marked as risky and may affect system behavior. Are you sure you want to change it?
+            <p className="mb-1 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+              This setting affects system-wide behavior.
             </p>
-            <div className="flex items-center justify-end gap-2">
+            <p className="mb-5 text-sm tabular-nums" style={{ color: 'var(--color-text)' }}>
+              <span style={{ color: 'var(--color-text-muted)' }}>{confirmingSetting.value}</span>
+              {' → '}
+              <strong>{confirming.value}</strong>
+            </p>
+            <div className="flex justify-end gap-2">
               <button
-                onClick={() => setShowConfirmation(null)}
-                className="px-4 py-2 border border-[var(--color-border)] rounded-md text-sm text-[#0f172a] hover:bg-gray-50 transition-colors"
+                onClick={() => setConfirming(null)}
+                className="rounded-[var(--radius-sm)] border px-3.5 py-2 text-sm font-medium"
+                style={inputStyle}
               >
                 Cancel
               </button>
               <button
-                onClick={confirmRiskyChange}
-                className="px-4 py-2 bg-[var(--color-accent)] text-white rounded-md text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors"
+                onClick={confirmRisky}
+                className="rounded-[var(--radius-sm)] px-3.5 py-2 text-sm font-medium text-white"
+                style={{ background: 'var(--color-warning)' }}
               >
-                Confirm change
+                Apply change
               </button>
             </div>
           </div>

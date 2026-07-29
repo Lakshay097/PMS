@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import { config } from '../config';
 import { BadRequestError, InternalServerError, UnauthorizedError } from '../utils/AppError';
 import { generateGoogleSheetsToken, fetchSheetValues } from './googleSheetsService';
+import { logger } from '../utils/logger';
 
 /**
  * User response interface
@@ -22,8 +23,10 @@ export interface UserResponse {
  */
 export interface LoginResponse {
   token: string;
+  refreshToken: string;
   user: UserResponse;
   expiresIn: string;
+  refreshTokenExpiresIn: string;
 }
 
 /**
@@ -34,9 +37,9 @@ export function generateUserId(): string {
 }
 
 /**
- * Creates a JWT token for a user
+ * Creates a JWT access token for a user (short-lived)
  */
-export function createToken(
+export function createAccessToken(
   email: string,
   userId: string,
   role: string,
@@ -50,8 +53,39 @@ export function createToken(
       fullName
     },
     config.JWT_SECRET,
-    { expiresIn: config.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] }
+    { expiresIn: config.JWT_EXPIRATION_SECONDS + 's' as jwt.SignOptions['expiresIn'] }
   );
+}
+
+/**
+ * Creates a JWT refresh token for a user (long-lived)
+ */
+export function createRefreshToken(
+  email: string,
+  userId: string
+): string {
+  return jwt.sign(
+    {
+      email: email.toLowerCase(),
+      userId,
+      type: 'refresh'
+    },
+    config.JWT_SECRET,
+    { expiresIn: '30d' as jwt.SignOptions['expiresIn'] } // 30 days
+  );
+}
+
+/**
+ * Creates a JWT token for a user (legacy, for backward compatibility)
+ * @deprecated Use createAccessToken and createRefreshToken instead
+ */
+export function createToken(
+  email: string,
+  userId: string,
+  role: string,
+  fullName: string
+): string {
+  return createAccessToken(email, userId, role, fullName);
 }
 
 /**
@@ -125,10 +159,12 @@ export async function login(email: string, password: string): Promise<LoginRespo
   const teamName = foundUser[6]; // TeamName (G)
   const active   = foundUser[7] === 'true' || foundUser[7] === true;
 
-  const token = createToken(normalizedEmail, userId, role, fullName);
+  const accessToken = createAccessToken(normalizedEmail, userId, role, fullName);
+  const refreshToken = createRefreshToken(normalizedEmail, userId);
 
   return {
-    token,
+    token: accessToken,
+    refreshToken,
     user: {
       email: normalizedEmail,
       UserID: userId,
@@ -138,7 +174,8 @@ export async function login(email: string, password: string): Promise<LoginRespo
       TeamName: teamName,
       Active: active,
     },
-    expiresIn: config.JWT_EXPIRES_IN,
+    expiresIn: config.JWT_EXPIRATION_SECONDS + 's',
+    refreshTokenExpiresIn: '30d',
   };
 }
 
@@ -151,4 +188,46 @@ export function verifyToken(token: string): any {
   } catch (err) {
     return null;
   }
+}
+
+/**
+ * Refreshes a JWT access token using a refresh token
+ * @param refreshToken - The refresh token
+ * @returns New access token and refresh token, or null if invalid
+ */
+export function refreshAccessTokenFromRefreshToken(refreshToken: string): { token: string; refreshToken: string; expiresIn: string } | null {
+  try {
+    const decoded = jwt.verify(refreshToken, config.JWT_SECRET) as any;
+    
+    // Verify this is a refresh token
+    if (decoded.type !== 'refresh') {
+      logger.warn('Invalid refresh token: not a refresh token type');
+      return null;
+    }
+    
+    // Create new tokens
+    const newAccessToken = createAccessToken(decoded.email, decoded.userId, decoded.role, decoded.fullName);
+    const newRefreshToken = createRefreshToken(decoded.email, decoded.userId);
+    
+    return {
+      token: newAccessToken,
+      refreshToken: newRefreshToken,
+      expiresIn: config.JWT_EXPIRATION_SECONDS + 's'
+    };
+  } catch (err) {
+    logger.warn('Invalid refresh token:', err);
+    return null;
+  }
+}
+
+/**
+ * Refreshes a JWT token (creates a new token with same user data)
+ * @deprecated Use refreshAccessTokenFromRefreshToken instead
+ */
+export function refreshToken(email: string, userId: string, role: string, fullName: string): { token: string; expiresIn: string } {
+  const newToken = createToken(email, userId, role, fullName);
+  return {
+    token: newToken,
+    expiresIn: config.JWT_EXPIRES_IN
+  };
 }

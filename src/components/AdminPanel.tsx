@@ -1,7 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { User as UserType, TaskTemplate, AppSetting, Team, SubTeam, EmailTemplate } from '../types';
+import { parseAndValidateUsersCsv, downloadCsvTemplate, CsvRowError, CsvUserRow } from '../utils/csv';
+import { generateUniqueId } from '../utils/id';
+import { useDebounce } from '../hooks';
 import { ROLE } from '../constants/status';
+import { FormField, Input, Select, SearchInput } from './shared/FormField';
 import {
   Users,
   Repeat,
@@ -34,13 +38,8 @@ import {
   Save,
   Loader2
 } from 'lucide-react';
-import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import { TextStyle } from '@tiptap/extension-text-style';
-import Color from '@tiptap/extension-color';
-import FontFamily from '@tiptap/extension-font-family';
-import { dbService } from '../lib/dbService';
-import { getUnsubmittedTeams, getEmailDeliveryFailures, EmailDeliveryFailure, getTeamReportConfigs, updateTeamReportConfig, TeamReportConfig } from '../api/teamReminder';
+import { getUnsubmittedTeams, getEmailDeliveryFailures, EmailDeliveryFailure, getTeamReportConfigs, updateTeamReportConfig, TeamReportConfig, getJobRuns, JobRun, getGmailReauthRequired, GmailReauthRequired } from '../api/teamReminder';
+import EmailTemplatesTab from './admin/EmailTemplatesTab';
 import { UnsubmittedTeam } from '../api/teamReminder';
 
 interface AdminPanelProps {
@@ -71,6 +70,7 @@ interface AdminPanelProps {
   onSendInviteEmail?: (email: string, fullName: string, role: string) => void;
   onSyncDatabase?: () => void;
   onRefreshUsers?: () => Promise<void>;
+  onRefreshEmailTemplates?: () => Promise<void>;
   isDarkMode?: boolean;
 }
 
@@ -101,6 +101,7 @@ export default function AdminPanel({
   onSendInviteEmail,
   onSyncDatabase,
   onRefreshUsers,
+  onRefreshEmailTemplates,
   subTeams = [],
   isDarkMode = false,
 }: AdminPanelProps) {
@@ -125,21 +126,29 @@ export default function AdminPanel({
   const loadUnsubmittedTeams = async () => {
     setIsLoadingUnsubmitted(true);
     setIsLoadingFailures(true);
+    setIsLoadingJobRuns(true);
+    setIsLoadingReauth(true);
     try {
-      const [unsubmittedResponse, failuresResponse] = await Promise.all([
+      const [unsubmittedResponse, failuresResponse, jobRunsResponse, reauthResponse] = await Promise.all([
         getUnsubmittedTeams(),
-        getEmailDeliveryFailures()
+        getEmailDeliveryFailures(),
+        getJobRuns(5, 'report_reminder'), // Get last 5 report reminder job runs
+        getGmailReauthRequired() // Get Gmail accounts needing re-auth
       ]);
       setUnsubmittedTeams(unsubmittedResponse.unsubmittedTeams);
       setEmailDeliveryFailures(failuresResponse.failures);
+      setJobRuns(jobRunsResponse.jobRuns);
+      setGmailReauthRequired(reauthResponse.reauthRequired);
     } catch (error) {
       console.error('Failed to load missing reports data:', error);
     } finally {
       setIsLoadingUnsubmitted(false);
       setIsLoadingFailures(false);
+      setIsLoadingJobRuns(false);
+      setIsLoadingReauth(false);
     }
   };
-  
+
   // Create User state
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -148,11 +157,13 @@ export default function AdminPanel({
   const [teamSelections, setTeamSelections] = useState<string[]>([]);
   const [password, setPassword] = useState('');
   const [userSuccessMessage, setUserSuccessMessage] = useState<string | null>(null);
+  const [userErrorMessage, setUserErrorMessage] = useState<string | null>(null);
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
 
   // Bulk CSV Upload state
   const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvPreview, setCsvPreview] = useState<any[]>([]);
-  const [csvErrors, setCsvErrors] = useState<any[]>([]);
+  const [csvPreview, setCsvPreview] = useState<CsvUserRow[]>([]);
+  const [csvErrors, setCsvErrors] = useState<CsvRowError[]>([]);
   const [isProcessingCsv, setIsProcessingCsv] = useState(false);
   const [csvUploadResult, setCsvUploadResult] = useState<{ success: number; failed: number } | null>(null);
   const [showRegistrationGuide, setShowRegistrationGuide] = useState(true);
@@ -179,16 +190,23 @@ export default function AdminPanel({
   const [subTeamError, setSubTeamError] = useState<string | null>(null);
   const [expandedSubTeamId, setExpandedSubTeamId] = useState<string | null>(null);
 
+  // Which user row's team-assignment dropdown is open (table multiselect)
+  const [openTeamDropdownFor, setOpenTeamDropdownFor] = useState<string | null>(null);
+
+  // Which tab is active inside the Manage Team modal
+  const [manageModalTab, setManageModalTab] = useState<'members' | 'leaders' | 'stakeholders' | 'subteams'>('members');
+
   // Missing Reports state
   const [unsubmittedTeams, setUnsubmittedTeams] = useState<UnsubmittedTeam[]>([]);
   const [isLoadingUnsubmitted, setIsLoadingUnsubmitted] = useState(false);
   const [emailDeliveryFailures, setEmailDeliveryFailures] = useState<EmailDeliveryFailure[]>([]);
   const [isLoadingFailures, setIsLoadingFailures] = useState(false);
+  const [jobRuns, setJobRuns] = useState<JobRun[]>([]);
+  const [isLoadingJobRuns, setIsLoadingJobRuns] = useState(false);
+  const [gmailReauthRequired, setGmailReauthRequired] = useState<GmailReauthRequired[]>([]);
+  const [isLoadingReauth, setIsLoadingReauth] = useState(false);
 
   // Keep modal-local leader/stakeholder state in sync with the teams prop.
-  // Without this, currentTeamLeaders is only loaded once when the modal opens
-  // (in the "Manage" button onClick) and becomes stale if onUpdateSetting or
-  // onUpdateSubTeamLeaders writes back through App.tsx while the modal is open.
   useEffect(() => {
     if (!expandedTeamId) return;
     const team = teams.find(t => t.TeamID === expandedTeamId);
@@ -196,8 +214,6 @@ export default function AdminPanel({
     setCurrentTeamLeaders(team.TeamLeaderEmails || []);
     setCurrentTeamStakeholders(team.StakeholderEmails || []);
   }, [teams, expandedTeamId]);
-
-
 
   const handleAddMember = (userEmail: string, teamId: string, teamName: string) => {
     const user = users.find(u => u.Email === userEmail);
@@ -226,7 +242,6 @@ export default function AdminPanel({
       const currentLeaders = currentTeamLeaders || [];
       if (!currentLeaders.includes(userEmail)) {
         const updatedLeaders = [...currentLeaders, userEmail];
-        console.log('[handleAssignTeamLeader] Assigning leader:', userEmail, 'to team:', teamId);
         await onUpdateSetting(`team_${teamId}_leaders`, updatedLeaders.join(','));
         setCurrentTeamLeaders(updatedLeaders);
       }
@@ -240,11 +255,9 @@ export default function AdminPanel({
     try {
       const currentLeaders = currentTeamLeaders || [];
       const newLeaders = [...new Set([...currentLeaders, ...Array.from(selectedTeamLeaders)])];
-      console.log('[handleAssignMultipleTeamLeaders] Assigning leaders to team:', teamId, 'current:', currentLeaders, 'new:', newLeaders);
       await onUpdateSetting(`team_${teamId}_leaders`, newLeaders.join(','));
       setCurrentTeamLeaders(newLeaders);
       setSelectedTeamLeaders(new Set());
-      console.log('[handleAssignMultipleTeamLeaders] Successfully assigned leaders');
     } catch (error) {
       console.error('[handleAssignMultipleTeamLeaders] Error assigning leaders:', error);
       alert('Failed to assign team leaders. Please try again.');
@@ -255,7 +268,6 @@ export default function AdminPanel({
     try {
       const currentLeaders = currentTeamLeaders || [];
       const updatedLeaders = currentLeaders.filter(email => email !== userEmail);
-      console.log('[handleRemoveTeamLeader] Removing leader:', userEmail, 'from team:', teamId);
       await onUpdateSetting(`team_${teamId}_leaders`, updatedLeaders.join(','));
       setCurrentTeamLeaders(updatedLeaders);
     } catch (error) {
@@ -269,7 +281,6 @@ export default function AdminPanel({
       const currentStakeholders = currentTeamStakeholders || [];
       if (!currentStakeholders.includes(userEmail)) {
         const updatedStakeholders = [...currentStakeholders, userEmail];
-        console.log('[handleAssignTeamStakeholder] Assigning stakeholder:', userEmail, 'to team:', teamId);
         await onUpdateSetting(`team_${teamId}_stakeholders`, updatedStakeholders.join(','));
         setCurrentTeamStakeholders(updatedStakeholders);
       }
@@ -283,7 +294,6 @@ export default function AdminPanel({
     try {
       const currentStakeholders = currentTeamStakeholders || [];
       const updatedStakeholders = currentStakeholders.filter(email => email !== userEmail);
-      console.log('[handleRemoveTeamStakeholder] Removing stakeholder:', userEmail, 'from team:', teamId);
       await onUpdateSetting(`team_${teamId}_stakeholders`, updatedStakeholders.join(','));
       setCurrentTeamStakeholders(updatedStakeholders);
     } catch (error) {
@@ -296,7 +306,6 @@ export default function AdminPanel({
     try {
       const currentStakeholders = currentTeamStakeholders || [];
       const newStakeholders = [...new Set([...currentStakeholders, ...Array.from(selectedTeamStakeholders)])];
-      console.log('[handleAssignMultipleTeamStakeholders] Assigning stakeholders to team:', teamId, 'new:', newStakeholders);
       await onUpdateSetting(`team_${teamId}_stakeholders`, newStakeholders.join(','));
       setCurrentTeamStakeholders(newStakeholders);
       setSelectedTeamStakeholders(new Set());
@@ -341,6 +350,40 @@ export default function AdminPanel({
   const [userSearchText, setUserSearchText] = useState('');
   const [templateSearchText, setTemplateSearchText] = useState('');
 
+  // PERFORMANCE: memoized, debounced filtering
+  const debouncedUserSearch = useDebounce(userSearchText, 250);
+  const debouncedTemplateSearch = useDebounce(templateSearchText, 250);
+
+  const filteredUsers = useMemo(() => {
+    const q = debouncedUserSearch.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter(
+      (u) =>
+        u.FullName.toLowerCase().includes(q) ||
+        u.Email.toLowerCase().includes(q) ||
+        u.Role.toLowerCase().includes(q) ||
+        u.TeamNames?.some((t) => t.toLowerCase().includes(q))
+    );
+  }, [users, debouncedUserSearch]);
+
+  const filteredTemplates = useMemo(() => {
+    const q = debouncedTemplateSearch.trim().toLowerCase();
+    if (!q) return templates;
+    return templates.filter(
+      (t) =>
+        t.Title.toLowerCase().includes(q) ||
+        t.Description.toLowerCase().includes(q) ||
+        t.AssignedToEmail.toLowerCase().includes(q)
+    );
+  }, [templates, debouncedTemplateSearch]);
+
+  // Lookup map — replaces repeated users.find(u => u.Email === ...) in render
+  const usersByEmail = useMemo(() => {
+    const m = new Map<string, (typeof users)[number]>();
+    users.forEach((u) => m.set(u.Email.toLowerCase(), u));
+    return m;
+  }, [users]);
+
   // Define template state
   const [tempTitle, setTempTitle] = useState('');
   const [tempDesc, setTempDesc] = useState('');
@@ -350,15 +393,6 @@ export default function AdminPanel({
   const [tempStartDate, setTempStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [templateSuccessMessage, setTemplateSuccessMessage] = useState<string | null>(null);
   const [templateErrorMessage, setTemplateErrorMessage] = useState<string | null>(null);
-
-  // Email template editor state
-  const [selectedEmailTemplateKey, setSelectedEmailTemplateKey] = useState<string>('template_assigned_email');
-  const [tempEmailSubject, setTempEmailSubject] = useState('');
-  const [tempEmailValue, setTempEmailValue] = useState('');
-  const [emailSaveSuccess, setEmailSaveSuccess] = useState(false);
-  const [selectedFont, setSelectedFont] = useState('sans-serif');
-  const [showVariableDropdown, setShowVariableDropdown] = useState(false);
-  const [showColorDropdown, setShowColorDropdown] = useState(false);
 
   // Weekly report requirements state
   const [reportRequirements, setReportRequirements] = useState<Record<string, { level: 'team' | 'subteam'; subTeamIds: string[] }>>({});
@@ -377,78 +411,9 @@ export default function AdminPanel({
     return team.Active && !hasLeaders && !hasStakeholders;
   });
 
-  // Tiptap editor for rich text
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      TextStyle,
-      Color,
-      FontFamily,
-    ],
-    content: tempEmailValue,
-    onUpdate: ({ editor }) => {
-      setTempEmailValue(editor.getHTML());
-    },
-    editorProps: {
-      attributes: {
-        class: 'focus:outline-none min-h-[300px] p-3 text-sm leading-relaxed',
-      },
-    },
-  });
-
-  // Update editor content when body changes from template selection
-  useEffect(() => {
-    if (editor && tempEmailValue !== editor.getHTML()) {
-      editor.commands.setContent(tempEmailValue);
-    }
-  }, [tempEmailValue, editor]);
-
   // Track settings Apply flashes
   const [settingSaveFlash, setSettingSaveFlash] = useState<string | null>(null);
   const [settingErrorFlash, setSettingErrorFlash] = useState<string | null>(null);
-
-  // Default template content for each type
-  const getDefaultTemplateContent = (key: string): { subject: string; body: string } => {
-    const defaults: Record<string, { subject: string; body: string }> = {
-      'template_task_creation': {
-        subject: 'New task created for you: {Title}',
-        body: 'Hello {AssignedToName},\n\nA new task has been created and assigned to you:\n\nTask ID: {TaskID}\nTitle: {Title}\nDescription: {Description}\nPriority: {Priority}\nDue Date: {DueDate}\nCreated By: {AssignedByName}\n\nPlease log in and start working on this task.\n\nBest regards,\n{AssignedByName}'
-      },
-      'template_assigned_email': {
-        subject: '{Title}',
-        body: 'Hello {AssignedToName},\n\nYou have been assigned a new task:\n\nTask ID: {TaskID}\nTitle: {Title}\nDescription: {Description}\nPriority: {Priority}\nDue Date: {DueDate}\nAssigned By: {AssignedByName}\n\nPlease review and start working on this task.\n\nBest regards,\n{AssignedByName}'
-      },
-      'template_delayed_email': {
-        subject: 'Task overdue: {Title}',
-        body: 'URGENT: Task Overdue Alert\n\nHello {AssignedToName},\n\nThe following task is now overdue:\n\nTask ID: {TaskID}\nTitle: {Title}\nDue Date: {DueDate}\nPriority: {Priority}\n\nPlease address this immediately.\n\nBest regards,\nPMS Team'
-      },
-      'template_scheduled_reminder': {
-        subject: 'Weekly Report Reminder: Submit PPT by {day} for {TeamName}',
-        body: 'Hello,\n\nThis is a reminder for team leaders of team "{TeamName}" to submit the weekly report by {day}.\n\nPlease log in and submit:\n{AppURL}\n\nBest regards,\nPMS Team'
-      },
-      'template_scheduled_report_reminder': {
-        subject: 'Scheduled Report Submission - {TeamName}',
-        body: 'Hello,\n\nThis is a reminder to submit the scheduled report for {TeamName} at least one day before the scheduled review meeting.\n\nMeeting Day: {day}\n\nPlease log in and upload the report:\n{AppURL}\n\nBest regards,\nPMS Team'
-      },
-      'report_submitted': {
-        subject: 'Progress Report: {Title} [{TaskID}]',
-        body: 'Hello {AllocatorName},\n\nA progress report has been submitted:\n\nTask: {Title}\nTask ID: {TaskID}\nSubmitted By: {SubmittedByName}\n\nReport Content:\n{report_content}\n\nBest regards,\n{SubmittedByName}'
-      },
-      'task_closed': {
-        subject: 'Task Closed: {task_name} [{task_id}]',
-        body: 'Hello {AssignedToName},\n\nThe following task has been marked as closed:\n\nTask: {task_name}\nTask ID: {task_id}\nClosed By: {ClosedByName}\n\nClose Remarks:\n{close_remark}\n\nBest regards,\n{ClosedByName}'
-      }
-    };
-    return defaults[key] || { subject: '', body: '' };
-  };
-
-  // Sync state whenever the selected email template type keys changes
-  React.useEffect(() => {
-    const template = emailTemplates.find(t => t.templateName === selectedEmailTemplateKey);
-    const defaultContent = getDefaultTemplateContent(selectedEmailTemplateKey);
-    setTempEmailSubject(template?.subject || defaultContent.subject);
-    setTempEmailValue(template?.body || defaultContent.body);
-  }, [selectedEmailTemplateKey, emailTemplates]);
 
   // Load weekly report requirements from settings
   React.useEffect(() => {
@@ -488,48 +453,75 @@ export default function AdminPanel({
     }
   };
 
-  const handleUserCreateSubmit = (e: React.FormEvent) => {
+  const handleUserCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim() || !email.trim() || !password.trim()) return;
+    setUserErrorMessage(null);
 
-    if (password.length < 6) {
-      setUserSuccessMessage('Password must be at least 6 characters');
-      setTimeout(() => setUserSuccessMessage(null), 3000);
-      return;
+    const cleanName = fullName.trim();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanManager = managerEmail.trim().toLowerCase();
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    const fail = (msg: string) => {
+      setUserErrorMessage(msg);
+      setTimeout(() => setUserErrorMessage(null), 4000);
+    };
+
+    if (!cleanName || !cleanEmail || !password.trim())
+      return fail('Full name, email and password are required.');
+    if (!emailRe.test(cleanEmail)) return fail('Enter a valid email address.');
+    if (users.some((u) => u.Email.trim().toLowerCase() === cleanEmail))
+      return fail(`A user with email ${cleanEmail} already exists.`);
+    if (password.length < 6) return fail('Password must be at least 6 characters.');
+
+    if (role === ROLE.SUB_STAKEHOLDER) {
+      if (!cleanManager) return fail('Manager email is required for sub-stakeholders.');
+      if (!emailRe.test(cleanManager)) return fail('Enter a valid manager email.');
+      if (cleanManager === cleanEmail) return fail('A user cannot be their own manager.');
+      if (!users.some((u) => u.Email.trim().toLowerCase() === cleanManager))
+        return fail('Manager email doesn’t match any existing user.');
     }
 
-    const matchedTeams = teams.filter(t => teamSelections.includes(t.TeamID));
-    const newId = `USR-${Math.floor(100 + Math.random() * 899)}`;
+    const matchedTeams = teams.filter((t) => teamSelections.includes(t.TeamID));
+    const newId = generateUniqueId('USR', new Set(users.map((u) => u.UserID)));
+    const now = new Date().toISOString();
 
-    onAddUser({
-      UserID: newId,
-      FullName: fullName.trim(),
-      Email: email.trim().toLowerCase(),
-      Role: role,
-      ManagerEmail: role === 'Stakeholder' ? managerEmail.trim().toLowerCase() : '',
-      TeamIDs: teamSelections,
-      TeamNames: matchedTeams.map(t => t.TeamName),
-      Active: true,
-      CanCreateFollowUp: true,
-      CanCloseTask: true,
-      Password: password,
-      CreatedAt: new Date().toISOString(),
-      UpdatedAt: new Date().toISOString()
-    });
+    try {
+      setIsCreatingUser(true);
+      await onAddUser({
+        UserID: newId,
+        FullName: cleanName,
+        Email: cleanEmail,
+        Role: role,
+        // FIX: manager belongs to SUB-stakeholders, not stakeholders
+        ManagerEmail: role === ROLE.SUB_STAKEHOLDER ? cleanManager : '',
+        TeamIDs: teamSelections,
+        TeamNames: matchedTeams.map((t) => t.TeamName),
+        Active: true,
+        CanCreateFollowUp: true,
+        CanCloseTask: true,
+        Password: password,
+        CreatedAt: now,
+        UpdatedAt: now,
+      });
 
-    // Send invite email if the function is available
-    if (onSendInviteEmail) {
-      onSendInviteEmail(email.trim().toLowerCase(), fullName.trim(), role);
+      onSendInviteEmail?.(cleanEmail, cleanName, role);
+
+      setUserSuccessMessage(
+        `User ${cleanName} (${newId}) created${onSendInviteEmail ? ' — invite email sent' : ''}.`
+      );
+      setTimeout(() => setUserSuccessMessage(null), 4000);
+
+      setFullName('');
+      setEmail('');
+      setManagerEmail('');
+      setTeamSelections([]);
+      setPassword('');
+    } catch (err: any) {
+      fail(err?.message || 'Failed to create user. Try again.');
+    } finally {
+      setIsCreatingUser(false);
     }
-
-    setUserSuccessMessage(`Identity ${newId} authorized successfully. Invite email sent.`);
-    setTimeout(() => setUserSuccessMessage(null), 3000);
-
-    setFullName('');
-    setEmail('');
-    setManagerEmail('');
-    setTeamSelections([]);
-    setPassword('');
   };
 
   const handleTeamCreateSubmit = (e: React.FormEvent) => {
@@ -555,101 +547,92 @@ export default function AdminPanel({
   };
 
   // CSV Processing functions
-  const parseCSV = (text: string): any[] => {
-    const lines = text.split('\n').filter(line => line.trim());
-    if (lines.length === 0) return [];
-    
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
-    const data = lines.slice(1).map(line => {
-      const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
-      const obj: any = {};
-      headers.forEach((header, index) => {
-        obj[header] = values[index] || '';
-      });
-      return obj;
-    });
-    
-    return data;
-  };
-
-  const validateCSVRow = (row: any): { valid: boolean; error?: string } => {
-    if (!row['Full Name'] || !row['Email']) {
-      return { valid: false, error: 'Missing Full Name or Email' };
-    }
-    
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(row['Email'])) {
-      return { valid: false, error: 'Invalid email format' };
-    }
-    
-    // Check for duplicate email
-    if (users.some(u => u.Email.toLowerCase() === row['Email'].toLowerCase())) {
-      return { valid: false, error: 'Email already exists' };
-    }
-    
-    return { valid: true };
-  };
-
-  const handleCSVFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCsvFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     setCsvFile(file);
+    setCsvUploadResult(null);
+    setCsvErrors([]);
+    setCsvPreview([]);
+
     const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      const parsedData = parseCSV(text);
-      setCsvPreview(parsedData);
-      setCsvErrors([]);
-      setCsvUploadResult(null);
+    reader.onload = () => {
+      const text = String(reader.result ?? '');
+      const existingEmails = new Set(users.map((u) => u.Email.trim().toLowerCase()));
+      const { valid, errors } = parseAndValidateUsersCsv(text, existingEmails);
+      setCsvPreview(valid);
+      setCsvErrors(errors);
+    };
+    reader.onerror = () => {
+      setCsvErrors([{ rowNumber: 0, fullName: '', email: '', error: 'Could not read the file.' }]);
     };
     reader.readAsText(file);
+
+    // allow re-selecting the same file after a fix
+    e.target.value = '';
   };
 
   const handleCSVUpload = async () => {
     if (!csvPreview.length) return;
-    
     setIsProcessingCsv(true);
-    
+
     try {
       const { bulkUploadUsers } = await import('../api/auth');
-      
-      const usersToUpload = csvPreview.map(row => ({
-        FullName: row['Full Name'],
-        Email: row['Email'],
-        Role: row['Role'] || 'Stakeholder',
-        ManagerEmail: row['Manager Email'] || '',
-        TeamName: row['Team Name'] || '',
-        Password: row['Password'] || 'temp123'
-      }));
-      
-      const result = await bulkUploadUsers({ users: usersToUpload });
-      
+
+      const result = await bulkUploadUsers({
+        users: csvPreview.map((row) => ({
+          FullName: row.FullName,
+          Email: row.Email,
+          Role: row.Role,
+          ManagerEmail: row.ManagerEmail,
+          TeamName: row.TeamName,
+          Password: row.Password,
+        })),
+      });
+
       if (result.success) {
-        setCsvErrors(result.results.errors.map(err => ({
-          'Full Name': err.email,
-          'Email': err.email,
-          error: err.error
-        })));
-        setCsvUploadResult({ 
-          success: result.results.success, 
-          failed: result.results.failed 
+        const serverErrors: CsvRowError[] = (result.results.errors ?? []).map((err: any) => {
+          const match = csvPreview.find(
+            (r) => r.Email.toLowerCase() === String(err.email ?? '').toLowerCase()
+          );
+          return {
+            rowNumber: match?.rowNumber ?? 0,
+            fullName: match?.FullName ?? '',
+            email: err.email ?? '',
+            error: err.error ?? 'Server rejected this row',
+          };
         });
-        
-        // Refresh the user list after successful upload
+
+        // keep local validation errors visible alongside server errors
+        setCsvErrors((prev) => [...prev, ...serverErrors]);
+        setCsvUploadResult({
+          success: result.results.success,
+          failed: result.results.failed,
+        });
+
+        // clear the preview only on success
+        setCsvPreview([]);
+        setCsvFile(null);
         await onRefreshUsers?.();
+      } else {
+        setCsvUploadResult({ success: 0, failed: csvPreview.length });
       }
     } catch (error: any) {
       console.error('CSV upload error:', error);
-      setCsvErrors(csvPreview.map(row => ({
-        ...row,
-        error: error?.message || 'Upload failed'
-      })));
       setCsvUploadResult({ success: 0, failed: csvPreview.length });
+      setCsvErrors((prev) => [
+        ...prev,
+        {
+          rowNumber: 0,
+          fullName: '',
+          email: '',
+          error: error?.message || 'Upload failed — the preview is kept so you can retry.',
+        },
+      ]);
+      // NOTE: intentionally NOT clearing csvPreview/csvFile here
     } finally {
       setIsProcessingCsv(false);
-      setCsvPreview([]);
-      setCsvFile(null);
     }
   };
 
@@ -657,7 +640,7 @@ export default function AdminPanel({
     const headers = ['Full Name', 'Email', 'Role', 'Manager Email', 'Password'];
     const sampleRow = ['John Doe', 'john@example.com', 'Stakeholder', 'manager@example.com', 'temp123'];
     const csvContent = [headers.join(','), sampleRow.join(',')].join('\n');
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -669,13 +652,13 @@ export default function AdminPanel({
 
   const downloadErrorsCSV = () => {
     if (csvErrors.length === 0) return;
-    
-    const headers = ['Full Name', 'Email', 'Role', 'Manager Email', 'Password', 'Error'];
-    const rows = csvErrors.map(err => 
-      [err['Full Name'], err['Email'], err['Role'], err['Manager Email'], err['Password'], err.error].join(',')
+
+    const headers = ['Row', 'Full Name', 'Email', 'Error'];
+    const rows = csvErrors.map(err =>
+      [err.rowNumber, err.fullName, err.email, JSON.stringify(err.error ?? '')].join(',')
     );
     const csvContent = [headers.join(','), ...rows].join('\n');
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -688,81 +671,56 @@ export default function AdminPanel({
   const handleTemplateCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setTemplateErrorMessage(null);
-    if (!tempTitle.trim() || !tempDesc.trim() || !tempAssignToEmail) {
-      setTemplateErrorMessage("Please enter title, descriptions, and assign to an email address.");
+
+    // Guard: block action if session hasn't loaded
+    if (!currentUserEmail) {
+      setTemplateErrorMessage('Your session has not finished loading. Please wait a moment and try again.');
       return;
     }
 
-    const newId = `TMP-${Math.floor(500 + Math.random() * 499)}`;
-    const matchedUser = users.find(u => u.Email === tempAssignToEmail);
+    if (!tempTitle.trim() || !tempDesc.trim() || !tempAssignToEmail) {
+      setTemplateErrorMessage('Enter a title, description, and an assignee email.');
+      return;
+    }
+    if (!tempStartDate || Number.isNaN(new Date(tempStartDate).getTime())) {
+      setTemplateErrorMessage('Choose a valid start date.');
+      return;
+    }
 
-    const newTemplate: TaskTemplate = {
+    const matchedUser = users.find(
+      (u) => u.Email.toLowerCase() === tempAssignToEmail.toLowerCase()
+    );
+    if (!matchedUser) {
+      setTemplateErrorMessage('Assignee email doesn\'t match any existing user.');
+      return;
+    }
+
+    const newId = generateUniqueId('TMP', new Set(templates.map((t) => t.TemplateID)));
+    const now = new Date().toISOString();
+    const start = tempStartDate;
+
+    onAddTemplate({
       TemplateID: newId,
       Title: tempTitle.trim(),
       Description: tempDesc.trim(),
       Priority: tempPriority,
       RecurrenceType: tempRecurrence,
-      StartDate: tempStartDate || new Date().toISOString().split('T')[0],
-      NextGenerationDate: tempStartDate || new Date().toISOString().split('T')[0],
+      StartDate: start,
+      NextGenerationDate: start,
       LastGeneratedDate: null,
-      AssignedByEmail: 'admin@PMS.com',
-      AssignedToEmail: tempAssignToEmail,
-      AssignedToRole: (matchedUser ? matchedUser.Role : 'Stakeholder') as any,
-      TeamID: matchedUser && matchedUser.TeamIDs.length > 0 ? matchedUser.TeamIDs[0] : 'T-01',
+      AssignedByEmail: currentUserEmail,
+      AssignedToEmail: matchedUser.Email,
+      AssignedToRole: matchedUser.Role as any,
+      TeamID: matchedUser.TeamIDs.length > 0 ? matchedUser.TeamIDs[0] : 'T-01',
       Active: true,
-      CreatedAt: new Date().toISOString(),
-      UpdatedAt: new Date().toISOString()
-    };
+      CreatedAt: now,
+      UpdatedAt: now,
+    });
 
-    onAddTemplate(newTemplate);
-    setTemplateErrorMessage(null);
-    setTemplateSuccessMessage(`Recurrence Blueprint ${newId} synchronized successfully.`);
+    setTemplateSuccessMessage(`Recurrence blueprint ${newId} created.`);
     setTimeout(() => setTemplateSuccessMessage(null), 3000);
-
-    // Reset fields
     setTempTitle('');
     setTempDesc('');
-  };
-
-
-  const handleSaveEmailTemplateValue = async () => {
-    try {
-      const template = emailTemplates.find(t => t.templateName === selectedEmailTemplateKey);
-      
-      const serverTemplate = {
-        templateName: selectedEmailTemplateKey,
-        subject: tempEmailSubject,
-        body: tempEmailValue,
-        updatedAt: new Date().toISOString(),
-      };
-      
-      await dbService.saveEmailTemplate(serverTemplate);
-      
-      setEmailSaveSuccess(true);
-      setTimeout(() => setEmailSaveSuccess(false), 2500);
-    } catch (err) {
-      console.error('Error saving email template:', err);
-      alert('Failed to save template. Please try again.');
-    }
-  };
-
-  const handleInsertToken = (token: string) => {
-    if (editor) {
-      editor.chain().focus().insertContent(token).run();
-    }
-  };
-
-  const setFontFamily = (fontFamily: string) => {
-    if (editor) {
-      editor.chain().focus().setFontFamily(fontFamily).run();
-    }
-    setSelectedFont(fontFamily);
-  };
-
-  const setTextColor = (color: string) => {
-    if (editor) {
-      editor.chain().focus().setColor(color).run();
-    }
   };
 
   const handleReportRequirementChange = (teamId: string, level: 'team' | 'subteam') => {
@@ -776,11 +734,11 @@ export default function AdminPanel({
     setReportRequirements(prev => {
       const current = prev[teamId];
       if (!current || current.level !== 'subteam') return prev;
-      
+
       const newSubTeamIds = current.subTeamIds.includes(subTeamId)
         ? current.subTeamIds.filter(id => id !== subTeamId)
         : [...current.subTeamIds, subTeamId];
-      
+
       return {
         ...prev,
         [teamId]: { ...current, subTeamIds: newSubTeamIds }
@@ -817,245 +775,83 @@ export default function AdminPanel({
     }
   };
 
-  // Mock template renderer for Live Preview
-  const getSimulatedEmailPreviewStr = () => {
-    const isReport = selectedEmailTemplateKey === 'report_submitted';
-    const reporterEmail = "sales.lead@PMS.com";
-
-    const body = tempEmailValue
-      .replace(/{TaskID}/g, "TSK-0842-DEMO")
-      .replace(/{task_id}/g, "TSK-0842-DEMO")
-      .replace(/{Title}/g, "Prepare Staging Environment Backups")
-      .replace(/{task_name}/g, "Prepare Staging Environment Backups")
-      .replace(/{Description}/g, "Complete backup of staging environment before production deployment")
-      .replace(/{Priority}/g, "Critical")
-      .replace(/{priority}/g, "Critical")
-      .replace(/{DueDate}/g, "2026-06-25")
-      .replace(/{due_date}/g, "2026-06-25")
-      .replace(/{AssignedToEmail}/g, "sales.lead@PMS.com")
-      .replace(/{assigned_to}/g, "sales.lead@PMS.com")
-      .replace(/{AssignedByEmail}/g, isReport ? reporterEmail : "admin@PMS.com")
-      .replace(/{assigned_by}/g, reporterEmail)
-      .replace(/{ReportContent}/g, "Staging database backup successfully stored in GCP bucket pms-backups-staging-2026-06-25.")
-      .replace(/{report_content}/g, "Staging database backup successfully stored in GCP bucket pms-backups-staging-2026-06-25.")
-      .replace(/{AssignedToName}/g, "John Smith")
-      .replace(/{AssignedByName}/g, "Admin User")
-      .replace(/{close_remark}/g, "All staging verification tests passed, backups verified.")
-      .replace(/{closed_by}/g, "admin@PMS.com")
-      .replace(/{completion_date}/g, "2026-06-25")
-      .replace(/{TeamName}/g, "Engineering Team")
-      .replace(/{AppURL}/g, "http://localhost:3000");
-
-    const subject = tempEmailSubject
-      .replace(/{Title}/g, "Prepare Staging Environment Backups")
-      .replace(/{TaskID}/g, "TSK-0842-DEMO")
-      .replace(/{TeamName}/g, "Engineering Team");
-
-    return { subject, body };
-  };
-
-  const getAvailableTokens = () => {
-    const baseTokens = [
-      { token: "{TaskID}", desc: "Task Identifier Code" },
-      { token: "{Title}", desc: "Checklist Title" },
-      { token: "{Description}", desc: "Task Description" },
-      { token: "{Priority}", desc: "Importance Rank" },
-      { token: "{DueDate}", desc: "Target Due Date" },
-    ];
-    
-    if (selectedEmailTemplateKey === 'report_submitted') {
-      return [
-        ...baseTokens,
-        { token: "{assigned_by}", desc: "Reporter Email" },
-        { token: "{report_content}", desc: "Progress Report Content" },
-        { token: "{SubmittedByName}", desc: "Submitter Name" },
-        { token: "{AllocatorName}", desc: "Allocator Name" },
-        { token: "{AttachmentLink}", desc: "Attachment Link" },
-      ];
-    }
-    
-    if (selectedEmailTemplateKey === 'task_closed') {
-      return [
-        ...baseTokens,
-        { token: "{closed_by}", desc: "Closed By User Email" },
-        { token: "{ClosedByName}", desc: "Closed By Name" },
-        { token: "{AssignedToName}", desc: "Assignee Name" },
-        { token: "{close_remark}", desc: "Closure Remarks" },
-        { token: "{completion_date}", desc: "Date Task Was Closed" },
-      ];
-    }
-    
-    if (selectedEmailTemplateKey === 'template_scheduled_reminder' || selectedEmailTemplateKey === 'template_scheduled_report_reminder') {
-      return [
-        { token: "{TeamName}", desc: "Team Name" },
-        { token: "{AppURL}", desc: "Application URL" },
-        { token: "{day}", desc: "Meeting Day" },
-      ];
-    }
-
-    if (selectedEmailTemplateKey === 'template_task_creation') {
-      return [
-        ...baseTokens,
-        { token: "{AssignedToEmail}", desc: "Receiver Mail" },
-        { token: "{AssignedByEmail}", desc: "Creator Mail" },
-        { token: "{AssignedToName}", desc: "Receiver Name" },
-        { token: "{AssignedByName}", desc: "Creator Name" },
-        { token: "{AttachmentLink}", desc: "Attachment Link" },
-      ];
-    }
-    
-    return [
-      ...baseTokens,
-      { token: "{AssignedToEmail}", desc: "Receiver Mail" },
-      { token: "{AssignedByEmail}", desc: "Sender Mail" },
-      { token: "{AssignedToName}", desc: "Receiver Name" },
-      { token: "{AssignedByName}", desc: "Sender Name" },
-      { token: "{AttachmentLink}", desc: "Attachment Link" },
-    ];
-  };
-
   const getRoleBadgeColor = (role: string, isDarkMode: boolean) => {
     switch (role) {
       case 'Admin': return isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200';
       case 'Stakeholder': return isDarkMode ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-indigo-50 text-indigo-700 border-indigo-200';
       case 'Sub-stakeholder': return isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-700 border-amber-200';
-      default: return isDarkMode ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-slate-50 text-slate-700';
+      default: return isDarkMode ? 'bg-slate-500/10 text-secondary border-slate-500/20' : 'bg-slate-50 text-slate-700';
     }
   };
 
+  const adminTabs: { id: typeof activeAdminSubTab; label: string; icon: React.ReactNode }[] = [
+    { id: 'users', label: 'Users', icon: <Users size={14} /> },
+    { id: 'teams', label: 'Teams', icon: <Users size={14} /> },
+    { id: 'templates', label: 'Templates', icon: <Repeat size={14} /> },
+    { id: 'email_templates', label: 'Email', icon: <Mail size={14} /> },
+    { id: 'report_requirements', label: 'Reports', icon: <FileText size={14} /> },
+    { id: 'report_config', label: 'Report Config', icon: <Settings size={14} /> },
+    { id: 'missing_reports', label: 'Missing Reports', icon: <AlertCircle size={14} /> },
+  ];
+
   return (
-    <div className={`rounded-xl border overflow-hidden font-sans ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
-      
+    <div className={`rounded-xl border overflow-hidden font-sans ${isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-surface border-token'}`}>
+
       {/* Tab Navigation - scrollable on mobile */}
-      <div className={`px-4 md:px-6 py-4 border-b border-[#E5E7EB] ${isDarkMode ? 'border-[#1E293B]' : ''}`}>
+      <div className={`px-4 md:px-6 py-4 border-b ${isDarkMode ? 'border-[#334155]' : 'border-token'}`}>
         <div className={`flex rounded-lg p-1 gap-1 overflow-x-auto w-full sm:w-auto ${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-100'}`}>
-          <button
-            onClick={() => setActiveAdminSubTab('users')}
-            className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
-              activeAdminSubTab === 'users'
-                ? 'bg-blue-500 text-white'
-                : isDarkMode
-                ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-            }`}
-          >
-            <Users size={14} />
-            <span className="hidden sm:inline">Users</span>
-          </button>
-          <button
-            onClick={() => setActiveAdminSubTab('teams')}
-            className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
-              activeAdminSubTab === 'teams'
-                ? 'bg-blue-500 text-white'
-                : isDarkMode
-                ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-            }`}
-          >
-            <Users size={14} />
-            <span className="hidden sm:inline">Teams</span>
-          </button>
-          <button
-            onClick={() => setActiveAdminSubTab('templates')}
-            className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
-              activeAdminSubTab === 'templates'
-                ? 'bg-blue-500 text-white'
-                : isDarkMode
-                ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-            }`}
-          >
-            <Repeat size={14} />
-            <span className="hidden sm:inline">Templates</span>
-          </button>
-          <button
-            onClick={() => setActiveAdminSubTab('email_templates')}
-            className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
-              activeAdminSubTab === 'email_templates'
-                ? 'bg-blue-500 text-white'
-                : isDarkMode
-                ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-            }`}
-          >
-            <Mail size={14} />
-            <span className="hidden sm:inline">Email</span>
-          </button>
-          <button
-            onClick={() => setActiveAdminSubTab('report_requirements')}
-            className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
-              activeAdminSubTab === 'report_requirements'
-                ? 'bg-blue-500 text-white'
-                : isDarkMode
-                ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-            }`}
-          >
-            <FileText size={14} />
-            <span className="hidden sm:inline">Reports</span>
-          </button>
-          <button
-            onClick={() => setActiveAdminSubTab('report_config')}
-            className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
-              activeAdminSubTab === 'report_config'
-                ? 'bg-blue-500 text-white'
-                : isDarkMode
-                ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-            }`}
-          >
-            <Settings size={14} />
-            <span className="hidden sm:inline">Report Config</span>
-          </button>
-          <button
-            onClick={() => setActiveAdminSubTab('missing_reports')}
-            className={`flex items-center space-x-1 md:space-x-2 px-2 md:px-3 py-1.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer whitespace-nowrap ${
-              activeAdminSubTab === 'missing_reports'
-                ? 'bg-blue-500 text-white'
-                : isDarkMode
-                ? 'text-slate-400 hover:text-white hover:bg-[#334155]'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
-            }`}
-          >
-            <AlertCircle size={14} />
-            <span className="hidden sm:inline">Missing Reports</span>
-          </button>
+          {adminTabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveAdminSubTab(tab.id)}
+              className={`flex items-center gap-1.5 px-2.5 md:px-3.5 py-2 rounded-md text-xs font-semibold transition-all select-none cursor-pointer whitespace-nowrap ${
+                activeAdminSubTab === tab.id
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : isDarkMode
+                    ? 'text-slate-400 hover:text-white hover:bg-white/5'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white'
+              }`}
+            >
+              {tab.icon}
+              <span className="hidden sm:inline">{tab.label}</span>
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className={`p-4 md:p-6 ${isDarkMode ? 'bg-[#0F141F]' : 'bg-slate-50'}`}>
-        
+      <div className={`p-4 md:p-6 ${isDarkMode ? 'bg-[#0F172A]' : 'bg-slate-50/70'}`}>
+
         {/* SUBTAB 1: Users Mapping Directory */}
         {activeAdminSubTab === 'users' && (
-          <div className="space-y-8">
-            
+          <div className="space-y-6">
+
             {/* Pending approvals row if any */}
             {(() => {
               const pendingApprovals = users.filter(u => u.ApprovalStatus === 'pending' && !u.Active);
               if (pendingApprovals.length === 0) return null;
               return (
-                <div className={`border rounded-xl p-6 space-y-4 ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20' : 'bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200'}`}>
-                  <div className={`flex items-center space-x-3 ${isDarkMode ? 'text-amber-400' : 'text-amber-800'}`}>
+                <div className={`border rounded-xl p-5 space-y-4 ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20' : 'bg-amber-50 border-amber-200'}`}>
+                  <div className={`flex items-center gap-3 ${isDarkMode ? 'text-amber-400' : 'text-amber-800'}`}>
                     <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-amber-500/20' : 'bg-amber-100'}`}>
                       <Shield size={18} className={isDarkMode ? 'text-amber-400' : 'text-amber-600'} />
                     </div>
-                    <h4 className="font-bold text-sm">
+                    <h4 className="font-semibold text-sm">
                       Pending approvals ({pendingApprovals.length})
                     </h4>
                   </div>
-                  <div className="grid grid-cols-1 gap-4">
+                  <div className="grid grid-cols-1 gap-3">
                     {pendingApprovals.map(req => (
-                      <div key={req.UserID} className={`border rounded-xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:shadow-md transition-all ${isDarkMode ? 'bg-[#1E293B] border-amber-500/20' : 'bg-white border-[#E5E7EB]'}`}>
+                      <div key={req.UserID} className={`border rounded-lg p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${isDarkMode ? 'bg-[#1E293B] border-amber-500/20' : 'bg-white border-amber-200/80'}`}>
                         <div>
-                          <div className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{req.FullName}</div>
-                          <div className={`text-xs font-mono mt-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{req.Email}</div>
-                          <div className={`text-xs mt-2 p-2 rounded-lg inline-block ${isDarkMode ? 'bg-[#334155] text-slate-300' : 'bg-slate-50 text-slate-500'}`}>
-                            Role: <strong className={isDarkMode ? 'text-white' : 'text-slate-800'}>{req.Role}</strong> • Manager: {req.ManagerEmail || "Direct Admin"}
+                          <div className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{req.FullName}</div>
+                          <div className={`text-xs mt-0.5 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{req.Email}</div>
+                          <div className={`text-xs mt-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                            Role: <strong className={isDarkMode ? 'text-white' : 'text-slate-800'}>{req.Role}</strong> · Manager: {req.ManagerEmail || 'Direct Admin'}
                           </div>
                         </div>
                         <button
                           onClick={() => onApproveUser(req.Email)}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-md cursor-pointer border-none flex items-center space-x-2"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-4 py-2 rounded-lg transition-colors cursor-pointer border-none flex items-center gap-2"
                         >
                           <CheckSquare size={14} />
                           <span>Approve</span>
@@ -1068,18 +864,18 @@ export default function AdminPanel({
             })()}
 
             {/* How to register users — guide */}
-            <div className={`rounded-xl border overflow-hidden ${isDarkMode ? 'bg-gradient-to-br from-blue-500/5 via-[#1E293B] to-purple-500/5 border-blue-500/20' : 'bg-gradient-to-br from-blue-50 via-white to-indigo-50 border-blue-200/60'}`}>
+            <div className={`rounded-xl border overflow-hidden ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}>
               <button
                 type="button"
                 onClick={() => setShowRegistrationGuide(!showRegistrationGuide)}
-                className={`w-full flex items-center justify-between gap-3 p-4 sm:p-5 text-left transition-colors ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-white/60'}`}
+                className={`w-full flex items-center justify-between gap-3 p-4 sm:p-5 text-left transition-colors ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50'}`}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className={`p-2 rounded-xl shrink-0 ${isDarkMode ? 'bg-blue-500/15 ring-1 ring-blue-500/25' : 'bg-blue-100 ring-1 ring-blue-200'}`}>
+                  <div className={`p-2 rounded-lg shrink-0 ${isDarkMode ? 'bg-blue-500/15' : 'bg-blue-50'}`}>
                     <Info size={16} className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} />
                   </div>
                   <div className="min-w-0">
-                    <h4 className={`font-semibold text-sm sm:text-base ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    <h4 className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                       How to register users
                     </h4>
                     <p className={`text-xs mt-0.5 truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -1094,87 +890,78 @@ export default function AdminPanel({
               </button>
 
               {showRegistrationGuide && (
-                <div className={`px-4 sm:px-5 pb-4 sm:pb-5 pt-0 border-t ${isDarkMode ? 'border-blue-500/10' : 'border-blue-100'}`}>
+                <div className={`px-4 sm:px-5 pb-4 sm:pb-5 pt-0 border-t ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 mt-4">
-                    <div className={`relative rounded-xl p-4 border ${isDarkMode ? 'bg-[#0F141F]/80 border-[#334155]' : 'bg-white/80 border-slate-200 shadow-sm'}`}>
-                      <div className={`absolute -top-2.5 left-4 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${isDarkMode ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
-                        OPTION 1
-                      </div>
-                      <div className="flex items-start gap-3 mt-2">
-                        <div className={`p-2 rounded-lg shrink-0 ${isDarkMode ? 'bg-emerald-500/10' : 'bg-emerald-50'}`}>
-                          <Plus size={14} className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} />
+                    {[
+                      {
+                        badge: 'OPTION 1',
+                        badgeCls: isDarkMode ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700',
+                        icon: <Plus size={14} className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} />,
+                        iconBg: isDarkMode ? 'bg-emerald-500/10' : 'bg-emerald-50',
+                        title: 'Create manually',
+                        desc: 'Fill in the form below with name, email, role, teams, and password. The user can sign in immediately.',
+                      },
+                      {
+                        badge: 'OPTION 2',
+                        badgeCls: isDarkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700',
+                        icon: <FileSpreadsheet size={14} className={isDarkMode ? 'text-purple-400' : 'text-purple-600'} />,
+                        iconBg: isDarkMode ? 'bg-purple-500/10' : 'bg-purple-50',
+                        title: 'Bulk CSV import',
+                        desc: 'Download the template, add rows (Full Name, Email, Role, Manager Email, Password), then upload the CSV.',
+                      },
+                      {
+                        badge: 'OPTION 3',
+                        badgeCls: isDarkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700',
+                        icon: <UserPlus size={14} className={isDarkMode ? 'text-amber-400' : 'text-amber-600'} />,
+                        iconBg: isDarkMode ? 'bg-amber-500/10' : 'bg-amber-50',
+                        title: 'Self-service request',
+                        desc: 'Users click "Request Account" on the login page. Approve pending requests in the banner above.',
+                      },
+                    ].map(opt => (
+                      <div key={opt.badge} className={`relative rounded-xl p-4 border ${isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-white border-slate-200 shadow-sm'}`}>
+                        <div className={`absolute -top-2.5 left-4 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${opt.badgeCls}`}>
+                          {opt.badge}
                         </div>
-                        <div>
-                          <p className={`font-semibold text-xs sm:text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Create manually</p>
-                          <p className={`text-[11px] sm:text-xs mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                            Fill in the form below with name, email, role, teams, and password. The user can sign in immediately.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className={`relative rounded-xl p-4 border ${isDarkMode ? 'bg-[#0F141F]/80 border-[#334155]' : 'bg-white/80 border-slate-200 shadow-sm'}`}>
-                      <div className={`absolute -top-2.5 left-4 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${isDarkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>
-                        OPTION 2
-                      </div>
-                      <div className="flex items-start gap-3 mt-2">
-                        <div className={`p-2 rounded-lg shrink-0 ${isDarkMode ? 'bg-purple-500/10' : 'bg-purple-50'}`}>
-                          <FileSpreadsheet size={14} className={isDarkMode ? 'text-purple-400' : 'text-purple-600'} />
-                        </div>
-                        <div>
-                          <p className={`font-semibold text-xs sm:text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Bulk CSV import</p>
-                          <p className={`text-[11px] sm:text-xs mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                            Download the template, add rows (Full Name, Email, Role, Manager Email, Password), then upload the CSV.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className={`relative rounded-xl p-4 border ${isDarkMode ? 'bg-[#0F141F]/80 border-[#334155]' : 'bg-white/80 border-slate-200 shadow-sm'}`}>
-                      <div className={`absolute -top-2.5 left-4 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide ${isDarkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
-                        OPTION 3
-                      </div>
-                      <div className="flex items-start gap-3 mt-2">
-                        <div className={`p-2 rounded-lg shrink-0 ${isDarkMode ? 'bg-amber-500/10' : 'bg-amber-50'}`}>
-                          <UserPlus size={14} className={isDarkMode ? 'text-amber-400' : 'text-amber-600'} />
-                        </div>
-                        <div>
-                          <p className={`font-semibold text-xs sm:text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Self-service request</p>
-                          <p className={`text-[11px] sm:text-xs mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                            Users click <span className="font-medium">Request Account</span> on the login page. Approve pending requests in the banner above.
-                          </p>
+                        <div className="flex items-start gap-3 mt-2">
+                          <div className={`p-2 rounded-lg shrink-0 ${opt.iconBg}`}>{opt.icon}</div>
+                          <div>
+                            <p className={`font-semibold text-xs sm:text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{opt.title}</p>
+                            <p className={`text-[11px] sm:text-xs mt-1 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                              {opt.desc}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8">
-              
-              {/* Modern Provisioning Form */}
+            <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-4 xl:gap-6 items-start">
+
+              {/* Add user form */}
               <div className={`border rounded-xl p-5 space-y-4 shadow-sm h-fit ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}>
-                <div className={`flex items-center space-x-3 border-b pb-3 ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
-                  <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-blue-500/10' : 'bg-blue-100'}`}>
+                <div className={`flex items-center gap-3 border-b pb-3 ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
+                  <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-blue-500/10' : 'bg-blue-50'}`}>
                     <Plus size={18} className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} />
                   </div>
-                  <h4 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Add new user</h4>
+                  <h4 className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Add new user</h4>
                 </div>
 
                 {/* Bulk CSV Upload Section */}
-                <div className={`p-3 rounded-xl border space-y-2 ${isDarkMode ? 'bg-[#334155]/50 border-[#475569]' : 'bg-slate-50/80 border-slate-200'}`}>
+                <div className={`p-3 rounded-xl border space-y-2 ${isDarkMode ? 'bg-[#334155]/50 border-[#475569]' : 'bg-slate-50 border-slate-200'}`}>
                   <div className={`flex items-center justify-between gap-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                     <div className="flex items-center gap-2">
                       <FileSpreadsheet size={14} className={isDarkMode ? 'text-purple-400' : 'text-purple-600'} />
-                      <span className="text-xs font-bold">Bulk CSV Upload</span>
+                      <span className="text-xs font-semibold">Bulk CSV upload</span>
                     </div>
                     <button
                       type="button"
                       onClick={downloadCSVTemplate}
-                      className={`text-[10px] font-bold px-2 py-1 rounded-lg transition-colors shrink-0 ${isDarkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+                      className={`text-[10px] font-semibold px-2 py-1 rounded-md transition-colors shrink-0 ${isDarkMode ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
                     >
-                      Download Template
+                      Download template
                     </button>
                   </div>
                   <label className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg border-2 border-dashed cursor-pointer transition-colors ${isDarkMode ? 'border-[#475569] hover:border-blue-500/50 bg-[#1E293B]/50' : 'border-slate-300 hover:border-blue-400 bg-white'}`}>
@@ -1185,24 +972,24 @@ export default function AdminPanel({
                     <input
                       type="file"
                       accept=".csv"
-                      onChange={handleCSVFileChange}
+                      onChange={handleCsvFileSelect}
                       className="hidden"
                     />
                   </label>
                   {csvPreview.length > 0 && (
                     <div className="space-y-2">
-                      <div className={`text-xs font-bold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      <div className={`text-xs font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                         Preview ({csvPreview.length} rows):
                       </div>
-                      <div className={`max-h-24 overflow-y-auto text-xs p-2 rounded border ${isDarkMode ? 'bg-[#0F141F] border-[#475569]' : 'bg-white border-slate-200'}`}>
+                      <div className={`max-h-24 overflow-y-auto text-xs p-2 rounded border ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}>
                         {csvPreview.slice(0, 5).map((row, i) => (
                           <div key={i} className={`py-0.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                            {row['Full Name']} ({row['Email']})
+                            {row.FullName} ({row.Email})
                           </div>
                         ))}
                         {csvPreview.length > 5 && (
                           <div className={`text-xs italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                            ...and {csvPreview.length - 5} more
+                            …and {csvPreview.length - 5} more
                           </div>
                         )}
                       </div>
@@ -1210,86 +997,86 @@ export default function AdminPanel({
                         type="button"
                         onClick={handleCSVUpload}
                         disabled={isProcessingCsv}
-                        className={`w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white font-bold text-xs py-1.5 rounded-lg transition-colors`}
+                        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white font-semibold text-xs py-2 rounded-lg transition-colors"
                       >
-                        {isProcessingCsv ? 'Processing...' : 'Import Users'}
+                        {isProcessingCsv ? 'Processing…' : 'Import users'}
+                      </button>
+                    </div>
+                  )}
+                  {csvErrors.length > 0 && (
+                    <div className={`p-2 rounded-lg text-xs border ${isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-red-50 border-red-200 text-red-700'}`}>
+                      {csvErrors.length} row{csvErrors.length === 1 ? '' : 's'} skipped due to validation errors.
+                      <button type="button" onClick={downloadErrorsCSV} className="ml-2 underline font-semibold">
+                        Download errors
                       </button>
                     </div>
                   )}
                   {csvUploadResult && (
-                    <div className={`p-2 rounded-lg text-xs ${csvUploadResult.failed === 0 ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
+                    <div className={`p-2 rounded-lg text-xs border ${csvUploadResult.failed === 0
+                      ? (isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-emerald-50 text-emerald-800 border-emerald-200')
+                      : (isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50 text-amber-800 border-amber-200')}`}>
                       {csvUploadResult.success} imported, {csvUploadResult.failed} failed
                       {csvUploadResult.failed > 0 && (
                         <button
                           type="button"
                           onClick={downloadErrorsCSV}
-                          className="ml-2 underline font-bold"
+                          className="ml-2 underline font-semibold"
                         >
-                          Download Errors
+                          Download errors
                         </button>
                       )}
                     </div>
                   )}
                 </div>
-                
+
                 {userSuccessMessage && (
-                  <div className={`p-3 text-sm rounded-xl font-semibold flex items-center gap-2 ${isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-800 bg-emerald-50 border-emerald-200'}`}>
+                  <div className={`p-3 text-sm rounded-lg font-medium flex items-center gap-2 border ${isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-800 bg-emerald-50 border-emerald-200'}`}>
                     <CheckCircle size={16} className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} />
                     <span>{userSuccessMessage}</span>
                   </div>
                 )}
 
+                {userErrorMessage && (
+                  <div className={`p-3 text-sm rounded-lg font-medium flex items-center gap-2 border ${isDarkMode ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-red-700 bg-red-50 border-red-200'}`}>
+                    <AlertCircle size={16} className="shrink-0" />
+                    <span>{userErrorMessage}</span>
+                  </div>
+                )}
+
                 <form onSubmit={handleUserCreateSubmit} className="space-y-3">
-                  <div>
-                    <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Full name</label>
-                    <input
-                      type="text"
-                      required
+                  <FormField label="Full name" required>
+                    <Input
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="e.g. Rachel Zane"
-                      className={`w-full text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-600' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-500'}`}
                     />
-                  </div>
+                  </FormField>
 
-                  <div>
-                    <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Email address</label>
-                    <input
+                  <FormField label="Email address" required>
+                    <Input
                       type="email"
-                      required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="e.g. rachel@PMS.com"
-                      className={`w-full text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-600' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-500'}`}
                     />
-                  </div>
+                  </FormField>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Role</label>
-                      <div className="relative">
-                      <select
-                        value={role}
-                        onChange={(e) => setRole(e.target.value as any)}
-                        className={`w-full text-sm rounded-xl pl-3 pr-8 py-2.5 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
-                      >
+                    <FormField label="Role">
+                      <Select value={role} onChange={(e) => setRole(e.target.value as any)}>
                         <option value="Admin">Admin</option>
                         <option value="Stakeholder">Stakeholder</option>
-                      </select>
-                      <ChevronDown size={14} className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} />
-                      </div>
-                    </div>
+                      </Select>
+                    </FormField>
 
-                    <div>
-                      <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Manager email</label>
-                      <input
+                    <FormField label="Manager email">
+                      <Input
                         type="email"
                         value={managerEmail}
                         onChange={(e) => setManagerEmail(e.target.value)}
                         placeholder="e.g. sales.lead@PMS.com"
-                        className={`w-full text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-600' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-500'}`}
                       />
-                    </div>
+                    </FormField>
                   </div>
 
                   <div>
@@ -1303,18 +1090,18 @@ export default function AdminPanel({
                             dropdown.classList.toggle('hidden');
                           }
                         }}
-                        className={`w-full text-sm rounded-xl px-3 py-2.5 border appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all cursor-pointer text-left flex items-center justify-between ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
+                        className={`w-full text-sm rounded-lg px-3 py-2.5 border appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all cursor-pointer text-left flex items-center justify-between ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
                       >
                         <span>{teamSelections.length === 0 ? 'Select teams' : `${teamSelections.length} selected`}</span>
                         <ChevronDown size={14} className={isDarkMode ? 'text-slate-400' : 'text-slate-400'} />
                       </button>
                       <div
                         id="teams-dropdown"
-                        className={`absolute z-10 w-full mt-1 border rounded-xl shadow-lg max-h-48 overflow-y-auto hidden ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}
+                        className={`absolute z-10 w-full mt-1 border rounded-lg shadow-lg max-h-48 overflow-y-auto hidden ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}
                       >
                         {teams.length > 0 ? (
                           teams.map(t => (
-                            <label key={t.TeamID} className="flex items-center space-x-2 px-3 py-2 hover:bg-slate-100 dark:hover:bg-[#334155] cursor-pointer">
+                            <label key={t.TeamID} className={`flex items-center gap-2 px-3 py-2 cursor-pointer ${isDarkMode ? 'hover:bg-[#334155]' : 'hover:bg-slate-50'}`}>
                               <input
                                 type="checkbox"
                                 value={t.TeamID}
@@ -1326,13 +1113,13 @@ export default function AdminPanel({
                                     setTeamSelections(teamSelections.filter(id => id !== t.TeamID));
                                   }
                                 }}
-                                className={`w-4 h-4 rounded cursor-pointer accent-[#2563EB] focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'border-[#475569] bg-[#334155]' : 'border-slate-300'}`}
+                                className="w-4 h-4 rounded cursor-pointer accent-[#2563EB] focus:ring-2 focus:ring-blue-500"
                               />
                               <span className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{t.TeamName}</span>
                             </label>
                           ))
                         ) : (
-                          <p className={`text-sm italic p-3 ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>No teams available</p>
+                          <p className="text-sm italic p-3 text-slate-500">No teams available</p>
                         )}
                       </div>
                     </div>
@@ -1341,7 +1128,7 @@ export default function AdminPanel({
                         {teamSelections.map(teamId => {
                           const team = teams.find(t => t.TeamID === teamId);
                           return team ? (
-                            <span key={teamId} className={`inline-flex items-center gap-1 border text-[10px] font-bold px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
+                            <span key={teamId} className={`inline-flex items-center gap-1 border text-[10px] font-semibold px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
                               {team.TeamName}
                               <button
                                 type="button"
@@ -1357,191 +1144,184 @@ export default function AdminPanel({
                     )}
                   </div>
 
-                  <div>
-                    <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Password</label>
-                    <input
+                  <FormField label="Password" required>
+                    <Input
                       type="password"
-                      required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="e.g. ••••••"
-                      className={`w-full text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-600' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-500'}`}
                     />
-                  </div>
+                  </FormField>
 
                   <button
                     type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-2.5 text-sm font-bold transition-all duration-200 shadow-md cursor-pointer border-none flex items-center justify-center space-x-2"
+                    disabled={isCreatingUser}
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg py-2.5 text-sm font-semibold transition-colors shadow-sm cursor-pointer border-none flex items-center justify-center gap-2"
                   >
-                    <Plus size={16} />
-                    <span>Create user</span>
+                    {isCreatingUser ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                    <span>{isCreatingUser ? 'Creating…' : 'Create user'}</span>
                   </button>
                 </form>
               </div>
 
-              {/* Advanced Directory List */}
-              <div className="lg:col-span-2 space-y-4">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="relative w-full sm:w-80">
-                    <Search className={`absolute left-3 top-2.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={14} />
-                    <input
-                      type="text"
+              {/* User directory */}
+              <div className="space-y-3 min-w-0">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <SearchInput
                       value={userSearchText}
-                      onChange={(e) => setUserSearchText(e.target.value)}
-                      placeholder="Search mapping name, email, or role..."
-                      className={`w-full text-xs rounded-lg pl-9 pr-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-600' : 'bg-white border-[#E5E7EB] text-slate-800 placeholder-slate-500'}`}
+                      onChange={setUserSearchText}
+                      placeholder={`Search ${users.length} users…`}
                     />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[10px] font-bold tracking-widest font-mono ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>
+                    <span className={`text-sm whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                       {users.length} users
+                      {userSearchText && ` · ${filteredUsers.length} results`}
                     </span>
-                    {userSearchText && (
-                      <span className={`text-[10px] font-medium ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                        • {users.filter(u =>
-                          u.FullName.toLowerCase().includes(userSearchText.toLowerCase()) ||
-                          u.Email.toLowerCase().includes(userSearchText.toLowerCase()) ||
-                          u.Role.toLowerCase().includes(userSearchText.toLowerCase())
-                        ).length} results
-                      </span>
-                    )}
                   </div>
                 </div>
 
-                <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
-                  <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: 'calc(100vh - 300px)' }}>
-                    <table className="w-full text-sm">
-                      <thead className={`${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-50'} sticky top-0 z-10`}>
+                <div className={`max-h-[calc(100dvh-320px)] overflow-y-auto overflow-x-auto border rounded-xl shadow-sm ${isDarkMode ? 'border-[#334155] bg-[#1E293B]' : 'border-slate-200 bg-white'}`}>
+                  <table className="w-full text-xs">
+                    <thead className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#0F172A]' : 'bg-slate-50'}`}>
+                      <tr className={`border-b ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                        <th className={`px-2 py-2 text-left font-semibold text-[10px] uppercase tracking-wide whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>User</th>
+                        <th className={`px-2 py-2 text-left font-semibold text-[10px] uppercase tracking-wide whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Teams</th>
+                        <th className={`px-2 py-2 text-left font-semibold text-[10px] uppercase tracking-wide whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Manager</th>
+                        <th className={`px-2 py-2 text-left font-semibold text-[10px] uppercase tracking-wide whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Role</th>
+                        <th className={`px-2 py-2 text-left font-semibold text-[10px] uppercase tracking-wide whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`divide-y ${isDarkMode ? 'divide-[#334155]' : 'divide-slate-100'}`}>
+                      {filteredUsers.length === 0 ? (
                         <tr>
-                          <th className={`px-3 py-3 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>User</th>
-                          <th className={`px-3 py-3 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Teams</th>
-                          <th className={`px-3 py-3 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Manager</th>
-                          <th className={`px-3 py-3 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Role</th>
-                          <th className={`px-3 py-3 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Status</th>
+                          <td colSpan={5} className="px-4 py-12 text-center">
+                            <div className="flex flex-col items-center justify-center space-y-3">
+                              <Users size={40} className={isDarkMode ? 'text-slate-600' : 'text-slate-300'} />
+                              <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                {userSearchText ? 'No users match your search' : 'No users found'}
+                              </p>
+                            </div>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody className={`divide-y ${isDarkMode ? 'divide-[#334155]' : 'divide-slate-200'}`}>
-                      {(() => {
-                        const filteredUsers = users.filter(u =>
-                          u.FullName.toLowerCase().includes(userSearchText.toLowerCase()) ||
-                          u.Email.toLowerCase().includes(userSearchText.toLowerCase()) ||
-                          u.Role.toLowerCase().includes(userSearchText.toLowerCase())
-                        );
-
-                        if (filteredUsers.length === 0) {
-                          return (
-                            <tr>
-                              <td colSpan={5} className="px-4 py-12 text-center">
-                                <div className="flex flex-col items-center justify-center space-y-3">
-                                  <Users size={40} className={isDarkMode ? 'text-slate-600' : 'text-slate-300'} />
-                                  <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                                    {userSearchText ? 'No users match your search' : 'No users found'}
-                                  </p>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        }
-
-                        return filteredUsers.map(user => {
+                      ) : (
+                        filteredUsers.map(user => {
                           const isBanned = !user.Active;
                           return (
-                            <tr 
+                            <tr
                               key={user.UserID}
-                              className={`transition-colors ${isDarkMode ? 'hover:bg-[#1E293B]/60' : 'hover:bg-slate-50'} ${isBanned ? isDarkMode ? 'bg-red-500/5' : 'bg-red-50/30' : ''}`}
+                              className={`transition-colors ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50'} ${isBanned ? (isDarkMode ? 'bg-red-500/5' : 'bg-red-50/40') : ''}`}
                             >
-                              <td className="px-3 py-3" style={{ minWidth: 0 }}>
+                              <td className="px-2 py-2 align-top">
                                 <div className="min-w-0">
-                                  <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'} truncate`}>{user.FullName}</div>
-                                  <div className={`text-xs font-mono ${isDarkMode ? 'text-blue-400' : 'text-blue-600'} truncate`}>{user.Email}</div>
-                                  <div className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'} truncate`}>{user.UserID}</div>
+                                  <div className={`font-semibold truncate text-[11px] ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{user.FullName}</div>
+                                  <div className={`text-[10px] truncate ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>{user.Email}</div>
+                                  <div className={`text-[9px] font-mono truncate ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{user.UserID}</div>
                                 </div>
                               </td>
-                              <td className="px-3 py-3" style={{ minWidth: 0 }}>
-                                {/* Editable team assignments — Admin can add/remove teams per user */}
-                                <div className="space-y-1.5 min-w-0">
+                              <td className="px-2 py-2 align-top">
+                                <div className="space-y-1.5 min-w-[140px] max-w-[220px]">
                                   <div className="flex flex-wrap gap-1">
                                     {(user.TeamNames || []).map((tName, i) => {
                                       const tId = (user.TeamIDs || [])[i];
                                       return (
-                                        <span key={i} className={`inline-flex items-center gap-1 border text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
+                                        <span key={i} className={`inline-flex items-center gap-1 border text-[9px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
                                           {tName}
                                           <button
                                             type="button"
                                             title={`Remove from ${tName}`}
                                             onClick={() => handleRemoveMember(user.Email, tId, tName)}
-                                            className={`ml-0.5 rounded-full hover:opacity-70 transition-opacity ${isDarkMode ? 'text-indigo-300' : 'text-indigo-500'}`}
+                                            className={`rounded-full hover:opacity-70 transition-opacity ${isDarkMode ? 'text-indigo-300' : 'text-indigo-500'}`}
                                           >
-                                            <X size={9} />
+                                            <X size={8} />
                                           </button>
                                         </span>
                                       );
                                     })}
                                     {(user.TeamNames || []).length === 0 && (
-                                      <span className={`text-[10px] italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>No teams</span>
+                                      <span className={`text-[9px] italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>No teams</span>
                                     )}
                                   </div>
-                                  {/* Inline team add dropdown */}
-                                  <select
-                                    defaultValue=""
-                                    onChange={(e) => {
-                                      const selectedTeam = teams.find(t => t.TeamID === e.target.value);
-                                      if (selectedTeam) {
-                                        handleAddMember(user.Email, selectedTeam.TeamID, selectedTeam.TeamName);
-                                      }
-                                      e.target.value = '';
-                                    }}
-                                    className={`w-full text-[10px] rounded px-1 py-0.5 border focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer min-w-0 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}
-                                    style={{ minWidth: 0 }}
-                                  >
-                                    <option value="" disabled>+ Add</option>
-                                    {teams.filter(t => t.Active && !(user.TeamIDs || []).includes(t.TeamID)).map(t => (
-                                      <option key={t.TeamID} value={t.TeamID}>{t.TeamName}</option>
-                                    ))}
-                                  </select>
+
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      onClick={() => setOpenTeamDropdownFor(openTeamDropdownFor === user.UserID ? null : user.UserID)}
+                                      className={`w-full flex items-center justify-between gap-1 text-[9px] font-semibold rounded px-1.5 py-1 border transition-colors cursor-pointer ${isDarkMode ? 'bg-[#0F172A] border-[#334155] text-slate-300 hover:bg-[#334155]/60' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                                    >
+                                      <span>+ Add / edit teams</span>
+                                      <ChevronDown size={10} className={`transition-transform ${openTeamDropdownFor === user.UserID ? 'rotate-180' : ''}`} />
+                                    </button>
+
+                                    {openTeamDropdownFor === user.UserID && (
+                                      <>
+                                        {/* click anywhere outside to close */}
+                                        <div className="fixed inset-0 z-10" onClick={() => setOpenTeamDropdownFor(null)} />
+                                        <div className={`absolute z-20 left-0 mt-1 w-48 border rounded-lg shadow-lg max-h-44 overflow-y-auto ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}>
+                                          {teams.filter(t => t.Active).length > 0 ? (
+                                            teams.filter(t => t.Active).map(t => {
+                                              const checked = (user.TeamIDs || []).includes(t.TeamID);
+                                              return (
+                                                <label key={t.TeamID} className={`flex items-center gap-2 px-2.5 py-1.5 text-xs cursor-pointer ${isDarkMode ? 'hover:bg-[#334155] text-slate-300' : 'hover:bg-slate-50 text-slate-700'}`}>
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={(e) => {
+                                                      if (e.target.checked) {
+                                                        handleAddMember(user.Email, t.TeamID, t.TeamName);
+                                                      } else {
+                                                        handleRemoveMember(user.Email, t.TeamID, t.TeamName);
+                                                      }
+                                                    }}
+                                                    className="w-3.5 h-3.5 rounded cursor-pointer accent-[#2563EB] focus:ring-2 focus:ring-blue-500 shrink-0"
+                                                  />
+                                                  <span className="truncate">{t.TeamName}</span>
+                                                </label>
+                                              );
+                                            })
+                                          ) : (
+                                            <p className="text-xs italic p-3 text-slate-500">No teams available</p>
+                                          )}
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
                                 </div>
                               </td>
-                              <td className="px-3 py-3" style={{ minWidth: 0 }}>
+                              <td className="px-2 py-2 align-top">
                                 {user.ManagerEmail ? (
-                                  <span className={`text-xs font-mono block truncate ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} title={user.ManagerEmail}>{user.ManagerEmail}</span>
+                                  <span className={`text-[10px] block truncate max-w-[150px] ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} title={user.ManagerEmail}>{user.ManagerEmail}</span>
                                 ) : (
-                                  <span className={`text-xs italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} title="Reports directly to Super Admin">—</span>
+                                  <span className={`text-[10px] italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} title="Reports directly to Super Admin">—</span>
                                 )}
                               </td>
-                              <td className="px-3 py-3" style={{ minWidth: 0 }}>
-                                <div className="relative inline-block min-w-0">
+                              <td className="px-2 py-2 align-top">
                                 <select
                                   value={user.Role}
                                   onChange={(e) => onUpdateUserRole(user.Email, e.target.value as any)}
-                                  className={`text-xs uppercase font-bold pl-1.5 pr-5 py-1 rounded border appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer min-w-0 ${isDarkMode ? 'bg-[#1E293B] text-white border-[#334155]' : 'bg-white text-slate-800 border-slate-200'}`}
-                                  style={{ minWidth: 0 }}
+                                  className={`text-[10px] font-semibold rounded px-1.5 py-1 border cursor-pointer ${isDarkMode ? 'bg-[#0F172A] border-[#334155] text-white' : 'bg-white border-slate-200 text-slate-700'}`}
                                 >
                                   <option value="Admin">Admin</option>
                                   <option value="Stakeholder">Stakeholder</option>
                                   <option value="Sub-stakeholder">Sub-stakeholder</option>
                                 </select>
-                                <ChevronDown size={10} className="pointer-events-none absolute right-1 top-1/2 -translate-y-1/2 opacity-60" />
-                                </div>
                               </td>
-                              <td className="px-3 py-3" style={{ minWidth: 0 }}>
+                              <td className="px-2 py-2 align-top">
                                 <button
                                   onClick={() => onToggleUserStatus(user.Email)}
-                                  className={`text-[10px] font-extrabold tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer ${
-                                    user.Active
-                                      ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
-                                      : isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
-                                  }`}
+                                  className={`text-[9px] font-bold tracking-wider py-1 px-2 rounded-md border transition-colors cursor-pointer ${user.Active
+                                    ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                                    : isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'
+                                    }`}
                                 >
                                   {user.Active ? 'Active' : 'Banned'}
                                 </button>
                               </td>
                             </tr>
                           );
-                        });
-                      })()}
+                        })
+                      )}
                     </tbody>
                   </table>
-                  </div>
                 </div>
               </div>
             </div>
@@ -1550,91 +1330,93 @@ export default function AdminPanel({
 
         {/* SUBTAB 2: Teams Management */}
         {activeAdminSubTab === 'teams' && (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {/* Needs Attention Banner */}
             {teamsNeedingAttention.length > 0 && (
               <div className={`border rounded-xl p-4 ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20' : 'bg-amber-50 border-amber-200'}`}>
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-amber-500/20' : 'bg-amber-100'}`}>
+                  <div className={`p-2 rounded-lg shrink-0 ${isDarkMode ? 'bg-amber-500/20' : 'bg-amber-100'}`}>
                     <AlertCircle size={18} className={isDarkMode ? 'text-amber-400' : 'text-amber-600'} />
                   </div>
-                  <div className="flex-1">
-                    <h4 className={`font-bold text-sm ${isDarkMode ? 'text-amber-400' : 'text-amber-800'}`}>
-                      {teamsNeedingAttention.length} Team(s) Need Attention
+                  <div className="flex-1 min-w-0">
+                    <h4 className={`font-semibold text-sm ${isDarkMode ? 'text-amber-400' : 'text-amber-800'}`}>
+                      {teamsNeedingAttention.length} team{teamsNeedingAttention.length === 1 ? '' : 's'} need attention
                     </h4>
-                    <p className={`text-xs mt-1 ${isDarkMode ? 'text-amber-400/80' : 'text-amber-700'}`}>
-                      These teams have no team leaders or stakeholders assigned. Report emails cannot be sent until recipients are assigned.
+                    <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-amber-400/80' : 'text-amber-700'}`}>
+                      No team leaders or stakeholders assigned — report emails can't be sent until recipients are assigned.
                     </p>
                   </div>
-                  <button
-                    onClick={() => {
-                      const firstTeam = teamsNeedingAttention[0];
-                      setExpandedTeamId(firstTeam.TeamID);
-                      setSelectedUsersToAdd(new Set());
-                      setSelectedTeamLeaders(new Set());
-                      setSelectedTeamStakeholders(new Set());
-                      setMemberSearchQuery('');
-                      setCurrentTeamLeaders(firstTeam.TeamLeaderEmails || []);
-                      setCurrentTeamStakeholders(firstTeam.StakeholderEmails || []);
-                    }}
-                    className={`text-xs px-3 py-1.5 rounded font-bold ${isDarkMode ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
-                  >
-                    Fix Now
-                  </button>
                 </div>
-                <div className="mt-3 space-y-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   {teamsNeedingAttention.map(team => (
-                    <div key={team.TeamID} className={`text-xs flex items-center gap-2 ${isDarkMode ? 'text-amber-400/80' : 'text-amber-700'}`}>
-                      <span className={`font-medium ${isDarkMode ? 'text-amber-400' : 'text-amber-800'}`}>{team.TeamName}</span>
-                      <span className={`font-mono ${isDarkMode ? 'text-amber-400/60' : 'text-amber-600'}`}>({team.TeamID})</span>
-                    </div>
+                    <button
+                      key={team.TeamID}
+                      type="button"
+                      title={`Assign leaders for ${team.TeamName}`}
+                      onClick={() => {
+                        setExpandedTeamId(team.TeamID);
+                        setManageModalTab('members');
+                        setSelectedUsersToAdd(new Set());
+                        setSelectedTeamLeaders(new Set());
+                        setSelectedTeamStakeholders(new Set());
+                        setMemberSearchQuery('');
+                        setCurrentTeamLeaders(team.TeamLeaderEmails || []);
+                        setCurrentTeamStakeholders(team.StakeholderEmails || []);
+                      }}
+                      className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-colors cursor-pointer ${isDarkMode ? 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20' : 'bg-white border-amber-300 text-amber-800 hover:bg-amber-100'}`}
+                    >
+                      <span>{team.TeamName}</span>
+                      <span className={`font-mono text-[10px] ${isDarkMode ? 'text-amber-400/60' : 'text-amber-600'}`}>{team.TeamID}</span>
+                    </button>
                   ))}
                 </div>
               </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 items-start">
               {/* Add Team Form */}
-              <div className={`border rounded-xl p-4 space-y-3 shadow-sm h-fit ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0]'}`}>
-                <div className={`flex items-center space-x-1.5 border-b pb-2 ${isDarkMode ? 'border-[#334155] text-white' : 'border-[#E2E8F0] text-[#0F172A]'}`}>
-                  <Plus size={16} className={isDarkMode ? 'text-blue-400' : 'text-[#2563EB]'} />
-                  <h4 className={`font-extrabold text-xs font-mono ${isDarkMode ? 'text-white' : 'text-[#010915]'}`}>Create new team</h4>
+              <div className={`border rounded-xl p-5 space-y-3 shadow-sm h-fit ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}>
+                <div className={`flex items-center gap-2 border-b pb-3 ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
+                  <div className={`p-1.5 rounded-lg ${isDarkMode ? 'bg-blue-500/10' : 'bg-blue-50'}`}>
+                    <Plus size={16} className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} />
+                  </div>
+                  <h4 className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Create new team</h4>
                 </div>
 
                 {teamSuccessMessage && (
-                  <div className={`p-2.5 text-xs rounded-lg font-semibold flex items-center gap-1 animate-pulse ${isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-800 bg-emerald-50 border-emerald-150'}`}>
+                  <div className={`p-2.5 text-xs rounded-lg font-medium flex items-center gap-1.5 border ${isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-800 bg-emerald-50 border-emerald-200'}`}>
                     <CheckCircle size={14} className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} />
                     <span>{teamSuccessMessage}</span>
                   </div>
                 )}
 
-                <form onSubmit={handleTeamCreateSubmit} className="space-y-2.5">
+                <form onSubmit={handleTeamCreateSubmit} className="space-y-3">
                   <div>
-                    <label className={`block text-[9.5px] font-bold tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Team name</label>
+                    <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Team name</label>
                     <input
                       type="text"
                       required
                       value={teamName}
                       onChange={(e) => setTeamName(e.target.value)}
                       placeholder="e.g. Engineering Team"
-                      className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-600' : 'bg-white border-[#E5E7EB] text-slate-800 placeholder-slate-500'}`}
+                      className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'}`}
                     />
                   </div>
 
                   <div>
-                    <label className={`block text-[9.5px] font-bold tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Description (optional)</label>
+                    <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Description (optional)</label>
                     <textarea
                       value={teamDescription}
                       onChange={(e) => setTeamDescription(e.target.value)}
-                      placeholder="e.g. Team description and purpose..."
+                      placeholder="e.g. Team description and purpose…"
                       rows={2}
-                      className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans resize-none ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-600' : 'bg-white border-[#E5E7EB] text-slate-800 placeholder-slate-500'}`}
+                      className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-sans resize-none ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'}`}
                     />
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-xs font-extrabold tracking-widest transition-all duration-150 shadow-md cursor-pointer border-none flex items-center justify-center space-x-1"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-semibold transition-colors shadow-sm cursor-pointer border-none flex items-center justify-center gap-1.5"
                   >
                     <Plus size={14} />
                     <span>Create team</span>
@@ -1642,133 +1424,128 @@ export default function AdminPanel({
                 </form>
               </div>
 
-              {/* Teams List */}
-              <div className="lg:col-span-2 space-y-4">
+              {/* Teams List — now ONLY the table, no unassigned section nested inside */}
+              <div className="lg:col-span-2 space-y-4 min-w-0">
                 <div className="flex items-center justify-between">
-                  <h4 className={`font-extrabold text-sm font-mono ${isDarkMode ? 'text-white' : 'text-[#0F172A]'}`}>All teams ({teams.length})</h4>
+                  <h4 className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>All teams ({teams.length})</h4>
                 </div>
 
-                <div className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                <div className={`border rounded-xl overflow-hidden shadow-sm ${isDarkMode ? 'border-[#334155] bg-[#1E293B]' : 'border-slate-200 bg-white'}`}>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                      <thead className={`${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-50'}`}>
-                        <tr>
-                          <th className={`px-3 py-2 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Team</th>
-                          <th className={`px-3 py-2 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Description</th>
-                          <th className={`px-3 py-2 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Members</th>
-                          <th className={`px-3 py-2 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Status</th>
-                          <th className={`px-3 py-2 text-left font-bold text-xs whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Actions</th>
+                      <thead className={isDarkMode ? 'bg-[#0F172A]' : 'bg-slate-50'}>
+                        <tr className={`border-b ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                          <th className={`px-4 py-3 text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Team</th>
+                          <th className={`px-4 py-3 text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Description</th>
+                          <th className={`px-4 py-3 text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Members</th>
+                          <th className={`px-4 py-3 text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Status</th>
+                          <th className={`px-4 py-3 text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Actions</th>
                         </tr>
                       </thead>
-                    <tbody className={`divide-y ${isDarkMode ? 'divide-[#334155]' : 'divide-slate-200'}`}>
-                      {teams.map(team => {
-                        const teamUsers = users.filter(u => u.TeamIDs.includes(team.TeamID));
-                        return (
-                          <tr key={team.TeamID} className={`transition-colors ${isDarkMode ? 'hover:bg-[#1E293B]/60' : 'hover:bg-slate-50'}`}>
-                            <td className="px-3 py-2" style={{ minWidth: 0 }}>
-                              <div className="min-w-0">
-                                {renamingTeamId === team.TeamID ? (
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="text"
-                                      value={newTeamName}
-                                      onChange={(e) => setNewTeamName(e.target.value)}
-                                      className={`text-xs font-bold px-2 py-1 rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-900'}`}
-                                      autoFocus
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') handleRenameTeam(team.TeamID, newTeamName);
-                                        if (e.key === 'Escape') cancelRenameTeam();
-                                      }}
-                                    />
-                                    <button
-                                      onClick={() => handleRenameTeam(team.TeamID, newTeamName)}
-                                      className={`text-[10px] px-2 py-1 rounded font-bold ${isDarkMode ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
-                                    >
-                                      Save
-                                    </button>
-                                    <button
-                                      onClick={cancelRenameTeam}
-                                      className={`text-[10px] px-2 py-1 rounded font-bold ${isDarkMode ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2">
-                                    <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'} truncate`}>{team.TeamName}</div>
-                                    <button
-                                      onClick={() => startRenameTeam(team.TeamID, team.TeamName)}
-                                      className={`text-[10px] px-1.5 py-0.5 rounded hover:bg-slate-200 dark:hover:bg-[#334155] transition-colors ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}
-                                      title="Rename team"
-                                    >
-                                      <Edit size={12} />
-                                    </button>
-                                  </div>
-                                )}
-                                <div className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'} truncate`}>{team.TeamID}</div>
-                              </div>
-                            </td>
-                            <td className="px-3 py-2" style={{ minWidth: 0 }}>
-                              <span className={`text-xs block truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} title={team.Description || 'No description'}>{team.Description || 'No description'}</span>
-                            </td>
-                            <td className="px-3 py-2" style={{ minWidth: 0 }}>
-                              <span className={`text-xs font-extrabold px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-[#2563EB]/10 text-[#2563EB]'}`}>
-                                {teamUsers.length}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2" style={{ minWidth: 0 }}>
-                              <button
-                                onClick={() => onToggleTeamStatus(team.TeamID)}
-                                className={`text-[10px] font-extrabold tracking-widest py-1 px-2.5 rounded-lg border transition-all cursor-pointer ${
-                                    team.Active
-                                    ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
-                                    : isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
-                                  }`}
-                              >
-                                {team.Active ? 'Active' : 'Inactive'}
-                              </button>
-                            </td>
-                            <td className="px-3 py-2" style={{ minWidth: 0 }}>
-                              <div className="flex gap-1">
+                      <tbody className={`divide-y ${isDarkMode ? 'divide-[#334155]' : 'divide-slate-100'}`}>
+                        {teams.map(team => {
+                          const teamUsers = users.filter(u => u.TeamIDs.includes(team.TeamID));
+                          return (
+                            <tr key={team.TeamID} className={`transition-colors ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-slate-50'}`}>
+                              <td className="px-4 py-3">
+                                <div className="min-w-0">
+                                  {renamingTeamId === team.TeamID ? (
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={newTeamName}
+                                        onChange={(e) => setNewTeamName(e.target.value)}
+                                        className={`text-xs font-semibold px-2 py-1 rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-900'}`}
+                                        autoFocus
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') handleRenameTeam(team.TeamID, newTeamName);
+                                          if (e.key === 'Escape') cancelRenameTeam();
+                                        }}
+                                      />
+                                      <button
+                                        onClick={() => handleRenameTeam(team.TeamID, newTeamName)}
+                                        className={`text-[10px] px-2 py-1 rounded font-semibold ${isDarkMode ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
+                                      >
+                                        Save
+                                      </button>
+                                      <button
+                                        onClick={cancelRenameTeam}
+                                        className={`text-[10px] px-2 py-1 rounded font-semibold ${isDarkMode ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5">
+                                      <div className={`font-semibold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{team.TeamName}</div>
+                                      <button
+                                        onClick={() => startRenameTeam(team.TeamID, team.TeamName)}
+                                        className={`p-1 rounded transition-colors ${isDarkMode ? 'text-slate-500 hover:text-slate-300 hover:bg-[#334155]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                                        title="Rename team"
+                                      >
+                                        <Edit size={12} />
+                                      </button>
+                                    </div>
+                                  )}
+                                  <div className={`text-[10px] font-mono truncate ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{team.TeamID}</div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`text-xs block truncate max-w-[200px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} title={team.Description || 'No description'}>{team.Description || <span className="italic opacity-70">No description</span>}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isDarkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700'}`}>
+                                  {teamUsers.length}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
                                 <button
-                                  type="button"
-                                  onClick={() => {
-                                    setExpandedTeamId(team.TeamID);
-                                    setSelectedUsersToAdd(new Set());
-                                    setSelectedTeamLeaders(new Set());
-                                    setSelectedTeamStakeholders(new Set());
-                                    setMemberSearchQuery('');
-
-                                    // Leaders/stakeholders are kept in sync by the
-                                    // useEffect watching [teams, expandedTeamId] above,
-                                    // which reads from the current `teams` prop whenever
-                                    // expandedTeamId changes (avoids stale-closure bugs
-                                    // from reading state set earlier in this same handler).
-                                    setCurrentTeamLeaders(team.TeamLeaderEmails || []);
-                                    setCurrentTeamStakeholders(team.StakeholderEmails || []);
-                                  }}
-                                  className={`px-2 py-1 text-[10px] font-bold tracking-wider rounded-lg border transition-colors cursor-pointer ${isDarkMode ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'}`}
+                                  onClick={() => onToggleTeamStatus(team.TeamID)}
+                                  className={`text-[10px] font-bold tracking-wider py-1 px-2.5 rounded-md border transition-colors cursor-pointer ${team.Active
+                                    ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                                    : isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'
+                                    }`}
                                 >
-                                  Manage
+                                  {team.Active ? 'Active' : 'Inactive'}
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (confirm(`Are you sure you want to delete the team "${team.TeamName}"? This will remove all member assignments to this team.`)) {
-                                      onDeleteTeam(team.TeamID);
-                                    }
-                                  }}
-                                  className={`px-2 py-1 text-[10px] font-bold tracking-wider rounded-lg border transition-colors cursor-pointer ${isDarkMode ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30' : 'bg-red-50 hover:bg-red-100 text-red-700 border-red-200'}`}
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setExpandedTeamId(team.TeamID);
+                                      setManageModalTab('members');
+                                      setSelectedUsersToAdd(new Set());
+                                      setSelectedTeamLeaders(new Set());
+                                      setSelectedTeamStakeholders(new Set());
+                                      setMemberSearchQuery('');
+                                      setCurrentTeamLeaders(team.TeamLeaderEmails || []);
+                                      setCurrentTeamStakeholders(team.StakeholderEmails || []);
+                                    }}
+                                    className={`px-2.5 py-1 text-[10px] font-bold tracking-wider rounded-md border transition-colors cursor-pointer ${isDarkMode ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'}`}
+                                  >
+                                    Manage
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (confirm(`Are you sure you want to delete the team "${team.TeamName}"? This will remove all member assignments to this team.`)) {
+                                        onDeleteTeam(team.TeamID);
+                                      }
+                                    }}
+                                    className={`px-2.5 py-1 text-[10px] font-bold tracking-wider rounded-md border transition-colors cursor-pointer ${isDarkMode ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30' : 'bg-red-50 hover:bg-red-100 text-red-700 border-red-200'}`}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                   {teams.length === 0 && (
                     <div className="text-center py-14">
                       <Users size={40} className={`mx-auto mb-3 ${isDarkMode ? 'text-slate-600' : 'text-slate-300'}`} />
@@ -1777,687 +1554,683 @@ export default function AdminPanel({
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
 
-                {/* Unassigned Users Section */}
-                {(() => {
-                  const unassignedUsers = users.filter(u => u.Active && (!u.TeamIDs || u.TeamIDs.length === 0));
-                  if (unassignedUsers.length === 0) return null;
-                  return (
-                    <div className={`mt-6 border rounded-xl overflow-hidden ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
-                      <div className={`px-4 py-3 border-b ${isDarkMode ? 'border-[#334155] bg-[#1E293B]' : 'border-slate-200 bg-slate-50'}`}>
-                        <h4 className={`font-extrabold text-sm font-mono ${isDarkMode ? 'text-white' : 'text-[#0F172A]'}`}>Unassigned Users ({unassignedUsers.length})</h4>
-                      </div>
-                      <div className={`divide-y ${isDarkMode ? 'divide-[#334155]' : 'divide-slate-200'}`}>
-                        {unassignedUsers.map(u => (
-                          <div key={u.UserID} className={`px-4 py-3 flex items-center justify-between ${isDarkMode ? 'hover:bg-[#1E293B]/60' : 'hover:bg-slate-50'}`}>
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${isDarkMode ? 'bg-slate-500/20 text-slate-400' : 'bg-slate-100 text-slate-600'}`}>
-                                {(u.FullName || '').split(' ').map(n => n[0]).join('').toUpperCase()}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className={`font-medium text-sm truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{u.FullName}</div>
-                                <div className={`text-xs truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{u.Email}</div>
-                              </div>
-                            </div>
-                            <span className={`text-xs font-bold px-2 py-1 rounded-full ${isDarkMode ? 'bg-slate-500/10 text-slate-400' : 'bg-slate-100 text-slate-600'}`}>
-                              {u.Role}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+            {/* Unassigned Users — now full width, redesigned as a card grid */}
+            {(() => {
+              const unassignedUsers = users.filter(u => u.Active && (!u.TeamIDs || u.TeamIDs.length === 0));
+              if (unassignedUsers.length === 0) return null;
+              return (
+                <div className={`border rounded-xl overflow-hidden shadow-sm ${isDarkMode ? 'border-amber-500/20 bg-[#1E293B]' : 'border-amber-200 bg-white'}`}>
+                  <div className={`px-4 py-3 border-b flex items-center justify-between ${isDarkMode ? 'border-[#334155] bg-[#0F172A]' : 'border-slate-200 bg-slate-50'}`}>
+                    <div className="flex items-center gap-2">
+                      <Users size={16} className={isDarkMode ? 'text-amber-400' : 'text-amber-600'} />
+                      <h4 className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Unassigned users</h4>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isDarkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
+                        {unassignedUsers.length}
+                      </span>
                     </div>
-                  );
-                })()}
-
-                {/* Team Management Drawer */}
-                {expandedTeamId && (() => {
-                  const team = teams.find(t => t.TeamID === expandedTeamId);
-                  if (!team) return null;
-                  const teamUsers = users.filter(u => u.TeamIDs.includes(team.TeamID));
-                  const availableUsers = users.filter(u => u.Active && !u.TeamIDs.includes(team.TeamID));
-                  const filteredAvailableUsers = availableUsers.filter(u => 
-                    u.FullName.toLowerCase().includes(memberSearchQuery.toLowerCase()) || 
-                    u.Email.toLowerCase().includes(memberSearchQuery.toLowerCase())
-                  );
-                  const currentLeaders = teamUsers.filter(u => currentTeamLeaders.includes(u.Email));
-                  const eligibleForLeadership = teamUsers.filter(u => !currentTeamLeaders.includes(u.Email));
-
-                  return (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                      <div className="absolute inset-0 bg-black/50" onClick={() => setExpandedTeamId(null)} />
-                      <div className={`relative w-full max-w-3xl max-h-[80vh] overflow-hidden rounded-xl shadow-2xl flex flex-col ${isDarkMode ? 'bg-[#1E293B]' : 'bg-white'}`}>
-                        {/* Header */}
-                        <div className={`flex-shrink-0 flex items-center justify-between p-6 border-b ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
-                          <div>
-                            <h3 className={`font-bold text-xl ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Manage {team.TeamName}</h3>
-                            <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{team.TeamID}</p>
-                          </div>
-                          <button
-                            onClick={() => setExpandedTeamId(null)}
-                            className={`flex-shrink-0 p-3 rounded-lg transition-colors hover:bg-opacity-80 ${isDarkMode ? 'hover:bg-[#334155] text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}
-                          >
-                            <X size={24} />
-                          </button>
+                    <span className={`text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Not on any team yet</span>
+                  </div>
+                  <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {unassignedUsers.map(u => (
+                      <div key={u.UserID} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors ${isDarkMode ? 'border-[#334155] bg-[#0F172A] hover:bg-[#334155]/40' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'}`}>
+                        <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${isDarkMode ? 'bg-slate-500/20 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>
+                          {(u.FullName || '').split(' ').map(n => n[0]).join('').toUpperCase()}
                         </div>
+                        <div className="flex-1 min-w-0">
+                          <div className={`font-medium text-sm truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{u.FullName}</div>
+                          <div className={`text-xs truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{u.Email}</div>
+                        </div>
+                        <span className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full ${isDarkMode ? 'bg-slate-500/10 text-slate-400' : 'bg-slate-200 text-slate-600'}`}>
+                          {u.Role}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
-                        {/* Scrollable Content */}
-                        <div className="flex-1 overflow-y-auto p-8">
-                          {/* Current Members Section */}
-                          <div className="mb-8">
-                            <h4 className={`font-bold text-base mb-4 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Current Members ({teamUsers.length})</h4>
-                            <div className={`space-y-3 max-h-64 overflow-y-auto ${teamUsers.length > 0 ? 'border rounded-xl p-4' : ''} ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
-                              {teamUsers.map(u => (
-                                <div key={u.UserID} className={`flex items-center justify-between p-4 rounded-lg min-h-[72px] ${isDarkMode ? 'bg-[#0F141F]' : 'bg-slate-50'}`}>
-                                  <div className="flex items-center gap-4 flex-1 min-w-0">
-                                    <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${isDarkMode ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
-                                      {(u.FullName || '').split(' ').map(n => n[0]).join('').toUpperCase()}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className={`font-medium text-base truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                                        {u.FullName}
-                                        {currentLeaders.some(l => l.Email === u.Email) && (
-                                          <span className={`ml-3 px-3 py-1 rounded-full text-xs font-bold ${isDarkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
-                                            Leader
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className={`text-sm truncate mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{u.Email}</div>
-                                    </div>
-                                  </div>
-                                  <button
-                                    onClick={() => handleRemoveMember(u.Email, team.TeamID, team.TeamName)}
-                                    className={`flex-shrink-0 p-3 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-50 text-red-500'}`}
-                                    title="Remove from team"
-                                  >
-                                    <X size={18} />
-                                  </button>
-                                </div>
-                              ))}
+            {/* Team Management Modal */}
+            {expandedTeamId && (() => {
+              const team = teams.find(t => t.TeamID === expandedTeamId);
+              if (!team) return null;
+              const teamUsers = users.filter(u => u.TeamIDs.includes(team.TeamID));
+              const availableUsers = users.filter(u => u.Active && !u.TeamIDs.includes(team.TeamID));
+              const filteredAvailableUsers = availableUsers.filter(u =>
+                u.FullName.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
+                u.Email.toLowerCase().includes(memberSearchQuery.toLowerCase())
+              );
+              const currentLeaders = teamUsers.filter(u => currentTeamLeaders.includes(u.Email));
+              const eligibleForLeadership = teamUsers.filter(u => !currentTeamLeaders.includes(u.Email));
+              const currentStakeholders = teamUsers.filter(u => currentTeamStakeholders.includes(u.Email));
+              const eligibleForStakeholder = teamUsers.filter(u => !currentTeamStakeholders.includes(u.Email));
+              const teamSubTeams = subTeams.filter(st => st.TeamID === team.TeamID && st.Active);
+
+              const tabs: { key: typeof manageModalTab; label: string; count: number }[] = [
+                { key: 'members', label: 'Members', count: teamUsers.length },
+                { key: 'leaders', label: 'Leaders', count: currentLeaders.length },
+                { key: 'stakeholders', label: 'Stakeholders', count: currentStakeholders.length },
+                { key: 'subteams', label: 'Sub-teams', count: teamSubTeams.length },
+              ];
+
+              const memberRow = (u: UserType, opts: { badge?: React.ReactNode; onRemove: () => void; removeTitle: string; avatarCls: string }) => (
+                <div key={u.UserID} className={`flex items-center justify-between px-3 py-2.5 rounded-lg ${isDarkMode ? 'bg-[#0F172A]' : 'bg-slate-50'}`}>
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${opts.avatarCls}`}>
+                      {(u.FullName || '').split(' ').map(n => n[0]).join('').toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className={`font-medium text-sm truncate flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                        <span className="truncate">{u.FullName}</span>
+                        {opts.badge}
+                      </div>
+                      <div className={`text-xs truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{u.Email}</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={opts.onRemove}
+                    className={`shrink-0 p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-50 text-red-500'}`}
+                    title={opts.removeTitle}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              );
+
+              return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                  <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={() => setExpandedTeamId(null)} />
+                  <div className={`relative w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-xl shadow-2xl flex flex-col border ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}>
+                    {/* Header */}
+                    <div className={`shrink-0 flex items-center justify-between px-6 py-4 border-b ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                      <div className="min-w-0">
+                        <h3 className={`font-semibold text-lg truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Manage {team.TeamName}</h3>
+                        <p className={`text-xs font-mono mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{team.TeamID}</p>
+                      </div>
+                      <button
+                        onClick={() => setExpandedTeamId(null)}
+                        className={`shrink-0 p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-[#334155] text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+
+                    {/* Tab bar */}
+                    <div className={`shrink-0 flex items-center gap-1 px-4 pt-2 border-b overflow-x-auto ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                      {tabs.map(tab => (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          onClick={() => setManageModalTab(tab.key)}
+                          className={`relative flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold whitespace-nowrap cursor-pointer transition-colors ${
+                            manageModalTab === tab.key
+                              ? (isDarkMode ? 'text-white' : 'text-slate-900')
+                              : (isDarkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600')
+                          }`}
+                        >
+                          <span>{tab.label}</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                            manageModalTab === tab.key
+                              ? (isDarkMode ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700')
+                              : (isDarkMode ? 'bg-slate-700/60 text-slate-400' : 'bg-slate-100 text-slate-500')
+                          }`}>{tab.count}</span>
+                          {manageModalTab === tab.key && (
+                            <span className="absolute left-0 right-0 -bottom-px h-0.5 bg-blue-600 rounded-full" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Scrollable Content */}
+                    <div className="flex-1 overflow-y-auto p-6">
+
+                      {/* MEMBERS TAB */}
+                      {manageModalTab === 'members' && (
+                        <div className="space-y-6">
+                          <section>
+                            <h4 className={`font-semibold text-sm mb-3 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Current members ({teamUsers.length})</h4>
+                            <div className={`space-y-2 max-h-60 overflow-y-auto ${teamUsers.length > 0 ? `border rounded-xl p-2 ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}` : ''}`}>
+                              {teamUsers.map(u => memberRow(u, {
+                                badge: currentLeaders.some(l => l.Email === u.Email) ? (
+                                  <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${isDarkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>Leader</span>
+                                ) : currentStakeholders.some(s => s.Email === u.Email) ? (
+                                  <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${isDarkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>Stakeholder</span>
+                                ) : undefined,
+                                onRemove: () => handleRemoveMember(u.Email, team.TeamID, team.TeamName),
+                                removeTitle: 'Remove from team',
+                                avatarCls: isDarkMode ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700',
+                              }))}
                               {teamUsers.length === 0 && (
-                                <div className={`text-center py-12 text-base ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                <div className={`text-center py-10 text-sm rounded-xl border border-dashed ${isDarkMode ? 'text-slate-400 border-[#334155]' : 'text-slate-500 border-slate-200'}`}>
                                   No members in this team yet.
                                 </div>
                               )}
                             </div>
-                          </div>
+                          </section>
 
-                          {/* Divider */}
-                          <div className={`h-px mb-8 ${isDarkMode ? 'bg-[#334155]' : 'bg-slate-200'}`} />
-
-                          {/* Team Leaders Section */}
-                          <div className="mb-8">
-                            <h4 className={`font-bold text-base mb-4 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Team Leaders ({currentLeaders.length})</h4>
-                            {teamUsers.length === 0 ? (
-                              <div className={`p-6 rounded-xl border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
-                                <p className="text-base font-medium">Add members first before assigning Team Leaders.</p>
-                              </div>
-                            ) : (
-                              <>
-                                <div className={`space-y-3 max-h-56 overflow-y-auto border rounded-xl p-4 mb-4 ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
-                                  {currentLeaders.map(u => (
-                                    <div key={u.UserID} className={`flex items-center justify-between p-4 rounded-lg min-h-[72px] ${isDarkMode ? 'bg-[#0F141F]' : 'bg-slate-50'}`}>
-                                      <div className="flex items-center gap-4 flex-1 min-w-0">
-                                        <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${isDarkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700'}`}>
-                                          {(u.FullName || '').split(' ').map(n => n[0]).join('').toUpperCase()}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                          <div className={`font-medium text-base truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{u.FullName}</div>
-                                          <div className={`text-sm truncate mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{u.Email}</div>
-                                        </div>
-                                      </div>
-                                      <button
-                                        onClick={() => handleRemoveTeamLeader(u.Email, team.TeamID)}
-                                        className={`flex-shrink-0 p-3 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-50 text-red-500'}`}
-                                        title="Remove as team leader"
-                                      >
-                                        <X size={18} />
-                                      </button>
-                                    </div>
-                                  ))}
-                                  {currentLeaders.length === 0 && (
-                                    <div className={`text-center py-8 text-base ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                                      No team leaders assigned yet.
-                                    </div>
-                                  )}
-                                </div>
-
-                                {eligibleForLeadership.length > 0 && (
-                                  <div>
-                                    <h5 className={`font-semibold text-sm mb-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Assign Team Leader</h5>
-                                    <div className={`space-y-3 max-h-56 overflow-y-auto border rounded-xl p-4 mb-4 ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
-                                      {eligibleForLeadership.map(u => (
-                                        <label key={u.UserID} className={`flex items-center gap-4 p-4 rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-[#334155]/50 transition-colors min-h-[72px] ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                                          <input
-                                            type="checkbox"
-                                            checked={selectedTeamLeaders.has(u.Email)}
-                                            onChange={(e) => {
-                                              const newSelected = new Set(selectedTeamLeaders);
-                                              if (e.target.checked) {
-                                                newSelected.add(u.Email);
-                                              } else {
-                                                newSelected.delete(u.Email);
-                                              }
-                                              setSelectedTeamLeaders(newSelected);
-                                            }}
-                                            className={`flex-shrink-0 w-5 h-5 rounded cursor-pointer accent-[#2563EB] focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'border-[#475569] bg-[#334155]' : 'border-slate-300'}`}
-                                          />
-                                          <div className="flex-1 min-w-0">
-                                            <div className="font-medium text-base truncate">{u.FullName}</div>
-                                            <div className={`text-sm truncate mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{u.Email}</div>
-                                          </div>
-                                        </label>
-                                      ))}
-                                    </div>
-                                    <button
-                                      onClick={() => handleAssignMultipleTeamLeaders(team.TeamID)}
-                                      disabled={selectedTeamLeaders.size === 0}
-                                      className={`w-full py-3 px-6 rounded-lg text-base font-bold transition-colors border-none cursor-pointer ${
-                                        selectedTeamLeaders.size === 0
-                                          ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                                          : isDarkMode ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                                      }`}
-                                    >
-                                      Assign Selected ({selectedTeamLeaders.size})
-                                    </button>
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-
-                          {/* Divider */}
-                          <div className={`h-px mb-8 ${isDarkMode ? 'bg-[#334155]' : 'bg-slate-200'}`} />
-
-                          {/* Sub-Teams Section */}
-                          {(() => {
-                            const teamSubTeams = subTeams.filter(st => st.TeamID === team.TeamID && st.Active);
-                            return (
-                              <div className="mb-8">
-                                <div className="flex items-center gap-3 mb-4">
-                                  <Layers size={18} className={isDarkMode ? 'text-indigo-400' : 'text-indigo-600'} />
-                                  <h4 className={`font-bold text-base ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                                    Sub-Teams ({teamSubTeams.length})
-                                  </h4>
-                                </div>
-
-                                {/* Existing sub-teams */}
-                                {teamSubTeams.length > 0 && (
-                                  <div className="space-y-3 mb-6">
-                                    {teamSubTeams.map(st => {
-                                      const stMembers = users.filter(u => u.SubTeamIDs?.includes(st.SubTeamID) && u.Active);
-                                      const stLeaders = st.SubTeamLeaderEmails ?? [];
-                                      const isExpanded = expandedSubTeamId === st.SubTeamID;
-                                      return (
-                                        <div key={st.SubTeamID} className={`border rounded-xl ${isDarkMode ? 'border-[#334155] bg-[#0F141F]' : 'border-slate-200 bg-slate-50'}`}>
-                                          {/* Sub-team header */}
-                                          <div className="flex items-center justify-between p-4">
-                                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                                              <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${isDarkMode ? 'bg-indigo-500/20' : 'bg-indigo-100'}`}>
-                                                <Layers size={14} className={isDarkMode ? 'text-indigo-400' : 'text-indigo-600'} />
-                                              </div>
-                                              <div className="flex-1 min-w-0">
-                                                <div className={`font-semibold text-sm truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{st.SubTeamName}</div>
-                                                <div className={`text-xs truncate ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                                                  {stMembers.length} member{stMembers.length !== 1 ? 's' : ''} · {stLeaders.length} leader{stLeaders.length !== 1 ? 's' : ''}
-                                                </div>
-                                              </div>
-                                            </div>
-                                            <div className="flex items-center gap-2 flex-shrink-0">
-                                              <button
-                                                type="button"
-                                                onClick={() => setExpandedSubTeamId(isExpanded ? null : st.SubTeamID)}
-                                                className={`px-2.5 py-1.5 text-[10px] font-bold rounded-lg border transition-colors cursor-pointer ${isDarkMode ? 'bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'}`}
-                                              >
-                                                {isExpanded ? 'Collapse' : 'Manage'}
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={async () => {
-                                                  if (!confirm(`Delete sub-team "${st.SubTeamName}"? Members will be unassigned.`)) return;
-                                                  await onDeleteSubTeam?.(st.SubTeamID);
-                                                }}
-                                                className={`p-1.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-50 text-red-500'}`}
-                                                title="Delete sub-team"
-                                              >
-                                                <X size={14} />
-                                              </button>
-                                            </div>
-                                          </div>
-
-                                          {/* Expanded sub-team management */}
-                                          {isExpanded && (
-                                            <div className={`border-t px-4 pb-4 pt-3 space-y-4 ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
-
-                                              {/* Members in this sub-team */}
-                                              <div>
-                                                <h6 className={`text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Members</h6>
-                                                {stMembers.length === 0 ? (
-                                                  <p className={`text-xs italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>No members assigned yet.</p>
-                                                ) : (
-                                                  <div className="flex flex-wrap gap-2">
-                                                    {stMembers.map(u => (
-                                                      <span key={u.UserID} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}>
-                                                        {u.FullName}
-                                                        <button
-                                                          type="button"
-                                                          title={`Remove ${u.FullName} from sub-team`}
-                                                          onClick={() => onRemoveUserFromSubTeam?.(u.Email, st.SubTeamID)}
-                                                          className="opacity-60 hover:opacity-100 transition-opacity"
-                                                        >
-                                                          <X size={10} />
-                                                        </button>
-                                                      </span>
-                                                    ))}
-                                                  </div>
-                                                )}
-                                                {/* Add member to sub-team */}
-                                                {(() => {
-                                                  // Multi-membership: eligible if not already in THIS sub-team
-                                                  const eligible = teamUsers.filter(u => !u.SubTeamIDs?.includes(st.SubTeamID));
-                                                  if (eligible.length === 0) return null;
-                                                  return (
-                                                    <select
-                                                      defaultValue=""
-                                                      onChange={e => {
-                                                        if (e.target.value) {
-                                                          onAssignUserToSubTeam?.(e.target.value, st.SubTeamID, st.SubTeamName);
-                                                        }
-                                                        e.target.value = '';
-                                                      }}
-                                                      className={`mt-2 w-full text-xs rounded-lg px-2 py-1.5 border focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}
-                                                    >
-                                                      <option value="" disabled>+ Assign team member…</option>
-                                                      {eligible.map(u => (
-                                                        <option key={u.UserID} value={u.Email}>{u.FullName}</option>
-                                                      ))}
-                                                    </select>
-                                                  );
-                                                })()}
-                                              </div>
-
-                                              {/* Leaders of this sub-team */}
-                                              <div>
-                                                <h6 className={`text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Sub-Team Leaders</h6>
-                                                {stLeaders.length === 0 ? (
-                                                  <p className={`text-xs italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>No leaders assigned.</p>
-                                                ) : (
-                                                  <div className="flex flex-wrap gap-2 mb-2">
-                                                    {stLeaders.map(email => {
-                                                      const u = users.find(x => x.Email.toLowerCase() === email.toLowerCase());
-                                                      return (
-                                                        <span key={email} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
-                                                          {u?.FullName ?? email}
-                                                          <button
-                                                            type="button"
-                                                            title="Remove as sub-team leader"
-                                                            onClick={() => {
-                                                              const updated = stLeaders.filter(e => e.toLowerCase() !== email.toLowerCase());
-                                                              onUpdateSubTeamLeaders?.(team.TeamID, st.SubTeamID, updated);
-                                                            }}
-                                                            className="opacity-60 hover:opacity-100 transition-opacity"
-                                                          >
-                                                            <X size={10} />
-                                                          </button>
-                                                        </span>
-                                                      );
-                                                    })}
-                                                  </div>
-                                                )}
-                                                {/* Assign leader dropdown — eligible = sub-team members not already leaders */}
-                                                {(() => {
-                                                  const eligible = stMembers.filter(u => !stLeaders.some(e => e.toLowerCase() === u.Email.toLowerCase()));
-                                                  if (eligible.length === 0) return null;
-                                                  return (
-                                                    <select
-                                                      defaultValue=""
-                                                      onChange={e => {
-                                                        if (!e.target.value) return;
-                                                        const updated = [...new Set([...stLeaders, e.target.value.toLowerCase()])];
-                                                        onUpdateSubTeamLeaders?.(team.TeamID, st.SubTeamID, updated);
-                                                        e.target.value = '';
-                                                      }}
-                                                      className={`w-full text-xs rounded-lg px-2 py-1.5 border focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}
-                                                    >
-                                                      <option value="" disabled>+ Assign sub-team leader…</option>
-                                                      {eligible.map(u => (
-                                                        <option key={u.UserID} value={u.Email}>{u.FullName}</option>
-                                                      ))}
-                                                    </select>
-                                                  );
-                                                })()}
-                                              </div>
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-
-                                {/* Create sub-team form */}
-                                {subTeamError && (
-                                  <div className={`mb-3 p-3 text-xs rounded-lg ${isDarkMode ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-700'}`}>{subTeamError}</div>
-                                )}
-                                <div className={`border rounded-xl p-4 space-y-3 ${isDarkMode ? 'border-[#334155] bg-[#0F141F]' : 'border-slate-200 bg-slate-50'}`}>
-                                  <h5 className={`text-xs font-bold tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Create Sub-Team</h5>
-                                  <input
-                                    type="text"
-                                    value={newSubTeamName}
-                                    onChange={e => setNewSubTeamName(e.target.value)}
-                                    placeholder="e.g. Sub-team name…"
-                                    className={`w-full text-xs rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-indigo-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-600' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-500'}`}
-                                  />
-                                  <input
-                                    type="text"
-                                    value={newSubTeamDesc}
-                                    onChange={e => setNewSubTeamDesc(e.target.value)}
-                                    placeholder="e.g. Description (optional)…"
-                                    className={`w-full text-xs rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-indigo-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-600' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-500'}`}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
-                                      setSubTeamError(null);
-                                      const name = newSubTeamName.trim();
-                                      if (!name) { setSubTeamError('Sub-team name is required.'); return; }
-                                      if (subTeams.some(st => st.TeamID === team.TeamID && st.SubTeamName.toLowerCase() === name.toLowerCase() && st.Active)) {
-                                        setSubTeamError('A sub-team with that name already exists in this team.');
-                                        return;
-                                      }
-                                      const now = new Date().toISOString();
-                                      const subTeamId = `ST-${team.TeamID}-${Date.now()}`;
-                                      await onSaveSubTeam?.({
-                                        id: subTeamId, // Firestore document ID
-                                        SubTeamID: subTeamId,
-                                        TeamID: team.TeamID,
-                                        SubTeamName: name,
-                                        Description: newSubTeamDesc.trim() || undefined,
-                                        Active: true,
-                                        CreatedAt: now,
-                                        UpdatedAt: now,
-                                        SubTeamLeaderEmails: [],
-                                      });
-                                      setNewSubTeamName('');
-                                      setNewSubTeamDesc('');
-                                    }}
-                                    className={`w-full py-2 text-xs font-bold rounded-lg border-none transition-colors cursor-pointer ${newSubTeamName.trim() ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`}
-                                    disabled={!newSubTeamName.trim()}
-                                  >
-                                    <Plus size={12} className="inline mr-1" />
-                                    Create Sub-Team
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })()}
-
-                          {/* Divider */}
-                          <div className={`h-px mb-8 ${isDarkMode ? 'bg-[#334155]' : 'bg-slate-200'}`} />
-
-                          {/* Add Members Section */}
-                          <div>
-                            <h4 className={`font-bold text-base mb-4 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Add Members</h4>
-                            <div className={`space-y-4`}>
-                              {/* Search Box */}
+                          <section>
+                            <h4 className={`font-semibold text-sm mb-3 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Add members</h4>
+                            <div className="space-y-3">
                               <div className="relative">
-                                <Search className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={18} />
+                                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} size={16} />
                                 <input
                                   type="text"
                                   value={memberSearchQuery}
                                   onChange={(e) => setMemberSearchQuery(e.target.value)}
-                                  placeholder="Search by name or email..."
-                                  className={`w-full pl-12 pr-4 py-3 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                                  placeholder="Search by name or email…"
+                                  className={`w-full pl-10 pr-4 py-2.5 rounded-lg text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'}`}
                                 />
                               </div>
-
-                              <div className={`space-y-3 max-h-64 overflow-y-auto border rounded-xl p-4 ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                              <div className={`space-y-1 max-h-60 overflow-y-auto border rounded-xl p-2 ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
                                 {filteredAvailableUsers.map(u => (
-                                  <label key={u.UserID} className={`flex items-center gap-4 p-4 rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-[#334155]/50 transition-colors min-h-[72px] ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                  <label key={u.UserID} className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${isDarkMode ? 'text-white hover:bg-[#334155]/50' : 'text-slate-900 hover:bg-slate-50'}`}>
                                     <input
                                       type="checkbox"
                                       checked={selectedUsersToAdd.has(u.Email)}
                                       onChange={(e) => {
                                         const newSelected = new Set(selectedUsersToAdd);
-                                        if (e.target.checked) {
-                                          newSelected.add(u.Email);
-                                        } else {
-                                          newSelected.delete(u.Email);
-                                        }
+                                        if (e.target.checked) newSelected.add(u.Email);
+                                        else newSelected.delete(u.Email);
                                         setSelectedUsersToAdd(newSelected);
                                       }}
-                                      className={`flex-shrink-0 w-5 h-5 rounded cursor-pointer accent-[#2563EB] focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'border-[#475569] bg-[#334155]' : 'border-slate-300'}`}
+                                      className="shrink-0 w-4 h-4 rounded cursor-pointer accent-[#2563EB] focus:ring-2 focus:ring-blue-500"
                                     />
                                     <div className="flex-1 min-w-0">
-                                      <div className="font-medium text-base truncate">{u.FullName}</div>
-                                      <div className={`text-sm truncate mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{u.Email}</div>
+                                      <div className="font-medium text-sm truncate">{u.FullName}</div>
+                                      <div className={`text-xs truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{u.Email}</div>
                                     </div>
                                   </label>
                                 ))}
                                 {filteredAvailableUsers.length === 0 && (
-                                  <div className={`text-center py-8 text-base ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                  <div className={`text-center py-6 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                                     {memberSearchQuery ? 'No users match your search.' : 'All active users are already members.'}
                                   </div>
                                 )}
                               </div>
                               <button
                                 onClick={() => {
-                                  selectedUsersToAdd.forEach(email => {
-                                    handleAddMember(email, team.TeamID, team.TeamName);
-                                  });
+                                  selectedUsersToAdd.forEach(email => handleAddMember(email, team.TeamID, team.TeamName));
                                   setSelectedUsersToAdd(new Set());
                                 }}
                                 disabled={selectedUsersToAdd.size === 0}
-                                className={`w-full py-3 px-6 rounded-lg text-base font-bold transition-colors border-none cursor-pointer ${
-                                  selectedUsersToAdd.size === 0
-                                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                                }`}
+                                className={`w-full py-2.5 px-4 rounded-lg text-sm font-semibold transition-colors border-none ${selectedUsersToAdd.size === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed dark:bg-slate-700 dark:text-slate-500' : 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'}`}
                               >
-                                Add Selected ({selectedUsersToAdd.size})
+                                Add selected ({selectedUsersToAdd.size})
                               </button>
                             </div>
-                          </div>
+                          </section>
                         </div>
-                      </div>
+                      )}
+
+                      {/* LEADERS TAB */}
+                      {manageModalTab === 'leaders' && (
+                        <section>
+                          {teamUsers.length === 0 ? (
+                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                              <p className="text-sm font-medium">Add members first before assigning team leaders.</p>
+                            </div>
+                          ) : (
+                            <>
+                              <div className={`space-y-2 max-h-48 overflow-y-auto border rounded-xl p-2 mb-3 ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                                {currentLeaders.map(u => memberRow(u, {
+                                  onRemove: () => handleRemoveTeamLeader(u.Email, team.TeamID),
+                                  removeTitle: 'Remove as team leader',
+                                  avatarCls: isDarkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700',
+                                }))}
+                                {currentLeaders.length === 0 && (
+                                  <div className={`text-center py-6 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No team leaders assigned yet.</div>
+                                )}
+                              </div>
+
+                              {eligibleForLeadership.length > 0 && (
+                                <div>
+                                  <h5 className={`font-semibold text-xs uppercase tracking-wide mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Assign team leader</h5>
+                                  <div className={`space-y-1 max-h-48 overflow-y-auto border rounded-xl p-2 mb-3 ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                                    {eligibleForLeadership.map(u => (
+                                      <label key={u.UserID} className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${isDarkMode ? 'text-white hover:bg-[#334155]/50' : 'text-slate-900 hover:bg-slate-50'}`}>
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedTeamLeaders.has(u.Email)}
+                                          onChange={(e) => {
+                                            const newSelected = new Set(selectedTeamLeaders);
+                                            if (e.target.checked) newSelected.add(u.Email);
+                                            else newSelected.delete(u.Email);
+                                            setSelectedTeamLeaders(newSelected);
+                                          }}
+                                          className="shrink-0 w-4 h-4 rounded cursor-pointer accent-[#2563EB] focus:ring-2 focus:ring-blue-500"
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                          <div className="font-medium text-sm truncate">{u.FullName}</div>
+                                          <div className={`text-xs truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{u.Email}</div>
+                                        </div>
+                                      </label>
+                                    ))}
+                                  </div>
+                                  <button
+                                    onClick={() => handleAssignMultipleTeamLeaders(team.TeamID)}
+                                    disabled={selectedTeamLeaders.size === 0}
+                                    className={`w-full py-2.5 px-4 rounded-lg text-sm font-semibold transition-colors border-none ${selectedTeamLeaders.size === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed dark:bg-slate-700 dark:text-slate-500' : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer'}`}
+                                  >
+                                    Assign selected ({selectedTeamLeaders.size})
+                                  </button>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </section>
+                      )}
+
+                      {/* STAKEHOLDERS TAB — new, mirrors Leaders exactly */}
+                      {manageModalTab === 'stakeholders' && (
+                        <section>
+                          {teamUsers.length === 0 ? (
+                            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                              <p className="text-sm font-medium">Add members first before assigning stakeholders.</p>
+                            </div>
+                          ) : (
+                            <>
+                              <div className={`space-y-2 max-h-48 overflow-y-auto border rounded-xl p-2 mb-3 ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                                {currentStakeholders.map(u => memberRow(u, {
+                                  onRemove: () => handleRemoveTeamStakeholder(u.Email, team.TeamID),
+                                  removeTitle: 'Remove as stakeholder',
+                                  avatarCls: isDarkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700',
+                                }))}
+                                {currentStakeholders.length === 0 && (
+                                  <div className={`text-center py-6 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No stakeholders assigned yet.</div>
+                                )}
+                              </div>
+
+                              {eligibleForStakeholder.length > 0 && (
+                                <div>
+                                  <h5 className={`font-semibold text-xs uppercase tracking-wide mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Assign stakeholder</h5>
+                                  <div className={`space-y-1 max-h-48 overflow-y-auto border rounded-xl p-2 mb-3 ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                                    {eligibleForStakeholder.map(u => (
+                                      <label key={u.UserID} className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${isDarkMode ? 'text-white hover:bg-[#334155]/50' : 'text-slate-900 hover:bg-slate-50'}`}>
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedTeamStakeholders.has(u.Email)}
+                                          onChange={(e) => {
+                                            const newSelected = new Set(selectedTeamStakeholders);
+                                            if (e.target.checked) newSelected.add(u.Email);
+                                            else newSelected.delete(u.Email);
+                                            setSelectedTeamStakeholders(newSelected);
+                                          }}
+                                          className="shrink-0 w-4 h-4 rounded cursor-pointer accent-[#2563EB] focus:ring-2 focus:ring-blue-500"
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                          <div className="font-medium text-sm truncate">{u.FullName}</div>
+                                          <div className={`text-xs truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{u.Email}</div>
+                                        </div>
+                                      </label>
+                                    ))}
+                                  </div>
+                                  <button
+                                    onClick={() => handleAssignMultipleTeamStakeholders(team.TeamID)}
+                                    disabled={selectedTeamStakeholders.size === 0}
+                                    className={`w-full py-2.5 px-4 rounded-lg text-sm font-semibold transition-colors border-none ${selectedTeamStakeholders.size === 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed dark:bg-slate-700 dark:text-slate-500' : 'bg-purple-600 hover:bg-purple-700 text-white cursor-pointer'}`}
+                                  >
+                                    Assign selected ({selectedTeamStakeholders.size})
+                                  </button>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </section>
+                      )}
+
+                      {/* SUB-TEAMS TAB — your existing sub-team markup, unchanged, just wrapped in this conditional */}
+                      {manageModalTab === 'subteams' && (
+                        <section>
+                          <div className="flex items-center gap-2 mb-3">
+                            <Layers size={16} className={isDarkMode ? 'text-indigo-400' : 'text-indigo-600'} />
+                            <h4 className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                              Sub-teams ({teamSubTeams.length})
+                            </h4>
+                          </div>
+
+                          {/* Existing sub-teams */}
+                          {teamSubTeams.length > 0 && (
+                            <div className="space-y-2 mb-4">
+                              {teamSubTeams.map(st => {
+                                const stMembers = users.filter(u => u.SubTeamIDs?.includes(st.SubTeamID) && u.Active);
+                                const stLeaders = st.SubTeamLeaderEmails ?? [];
+                                const isExpanded = expandedSubTeamId === st.SubTeamID;
+                                return (
+                                  <div key={st.SubTeamID} className={`border rounded-xl ${isDarkMode ? 'border-[#334155] bg-[#0F172A]' : 'border-slate-200 bg-slate-50'}`}>
+                                    {/* Sub-team header */}
+                                    <div className="flex items-center justify-between p-3">
+                                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                                        <div className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${isDarkMode ? 'bg-indigo-500/20' : 'bg-indigo-100'}`}>
+                                          <Layers size={14} className={isDarkMode ? 'text-indigo-400' : 'text-indigo-600'} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <div className={`font-semibold text-sm truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{st.SubTeamName}</div>
+                                          <div className={`text-xs truncate ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>
+                                            {stMembers.length} member{stMembers.length !== 1 ? 's' : ''} · {stLeaders.length} leader{stLeaders.length !== 1 ? 's' : ''}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        <button
+                                          type="button"
+                                          onClick={() => setExpandedSubTeamId(isExpanded ? null : st.SubTeamID)}
+                                          className={`px-2.5 py-1.5 text-[10px] font-bold rounded-md border transition-colors cursor-pointer ${isDarkMode ? 'bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border-indigo-500/30' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'}`}
+                                        >
+                                          {isExpanded ? 'Collapse' : 'Manage'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={async () => {
+                                            if (!confirm(`Delete sub-team "${st.SubTeamName}"? Members will be unassigned.`)) return;
+                                            await onDeleteSubTeam?.(st.SubTeamID);
+                                          }}
+                                          className={`p-1.5 rounded-md transition-colors ${isDarkMode ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-50 text-red-500'}`}
+                                          title="Delete sub-team"
+                                        >
+                                          <X size={14} />
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Expanded sub-team management */}
+                                    {isExpanded && (
+                                      <div className={`border-t px-3 pb-3 pt-3 space-y-4 ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+
+                                        {/* Members in this sub-team */}
+                                        <div>
+                                          <h6 className={`text-xs font-semibold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Members</h6>
+                                          {stMembers.length === 0 ? (
+                                            <p className={`text-xs italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>No members assigned yet.</p>
+                                          ) : (
+                                            <div className="flex flex-wrap gap-2">
+                                              {stMembers.map(u => (
+                                                <span key={u.UserID} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}>
+                                                  {u.FullName}
+                                                  <button
+                                                    type="button"
+                                                    title={`Remove ${u.FullName} from sub-team`}
+                                                    onClick={() => onRemoveUserFromSubTeam?.(u.Email, st.SubTeamID)}
+                                                    className="opacity-60 hover:opacity-100 transition-opacity"
+                                                  >
+                                                    <X size={10} />
+                                                  </button>
+                                                </span>
+                                              ))}
+                                            </div>
+                                          )}
+                                          {(() => {
+                                            // Multi-membership: eligible if not already in THIS sub-team
+                                            const eligible = teamUsers.filter(u => !u.SubTeamIDs?.includes(st.SubTeamID));
+                                            if (eligible.length === 0) return null;
+                                            return (
+                                              <select
+                                                defaultValue=""
+                                                onChange={e => {
+                                                  if (e.target.value) {
+                                                    onAssignUserToSubTeam?.(e.target.value, st.SubTeamID, st.SubTeamName);
+                                                  }
+                                                  e.target.value = '';
+                                                }}
+                                                className={`mt-2 w-full text-xs rounded-lg px-2 py-1.5 border focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}
+                                              >
+                                                <option value="" disabled>+ Assign team member…</option>
+                                                {eligible.map(u => (
+                                                  <option key={u.UserID} value={u.Email}>{u.FullName}</option>
+                                                ))}
+                                              </select>
+                                            );
+                                          })()}
+                                        </div>
+
+                                        {/* Leaders of this sub-team */}
+                                        <div>
+                                          <h6 className={`text-xs font-semibold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Sub-team leaders</h6>
+                                          {stLeaders.length === 0 ? (
+                                            <p className={`text-xs italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>No leaders assigned.</p>
+                                          ) : (
+                                            <div className="flex flex-wrap gap-2 mb-2">
+                                              {stLeaders.map(email => {
+                                                const u = users.find(x => x.Email.toLowerCase() === email.toLowerCase());
+                                                return (
+                                                  <span key={email} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                                                    {u?.FullName ?? email}
+                                                    <button
+                                                      type="button"
+                                                      title="Remove as sub-team leader"
+                                                      onClick={() => {
+                                                        const updated = stLeaders.filter(e => e.toLowerCase() !== email.toLowerCase());
+                                                        onUpdateSubTeamLeaders?.(team.TeamID, st.SubTeamID, updated);
+                                                      }}
+                                                      className="opacity-60 hover:opacity-100 transition-opacity"
+                                                    >
+                                                      <X size={10} />
+                                                    </button>
+                                                  </span>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+                                          {(() => {
+                                            const eligible = stMembers.filter(u => !stLeaders.some(e => e.toLowerCase() === u.Email.toLowerCase()));
+                                            if (eligible.length === 0) return null;
+                                            return (
+                                              <select
+                                                defaultValue=""
+                                                onChange={e => {
+                                                  if (!e.target.value) return;
+                                                  const updated = [...new Set([...stLeaders, e.target.value.toLowerCase()])];
+                                                  onUpdateSubTeamLeaders?.(team.TeamID, st.SubTeamID, updated);
+                                                  e.target.value = '';
+                                                }}
+                                                className={`w-full text-xs rounded-lg px-2 py-1.5 border focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}
+                                              >
+                                                <option value="" disabled>+ Assign sub-team leader…</option>
+                                                {eligible.map(u => (
+                                                  <option key={u.UserID} value={u.Email}>{u.FullName}</option>
+                                                ))}
+                                              </select>
+                                            );
+                                          })()}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* Create sub-team form */}
+                          {subTeamError && (
+                            <div className={`mb-3 p-3 text-xs rounded-lg ${isDarkMode ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-700'}`}>{subTeamError}</div>
+                          )}
+                          <div className={`border rounded-xl p-4 space-y-3 ${isDarkMode ? 'border-[#334155] bg-[#0F172A]' : 'border-slate-200 bg-slate-50'}`}>
+                            <h5 className={`text-xs font-semibold uppercase tracking-wide ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Create sub-team</h5>
+                            <input
+                              type="text"
+                              value={newSubTeamName}
+                              onChange={e => setNewSubTeamName(e.target.value)}
+                              placeholder="e.g. Sub-team name…"
+                              className={`w-full text-xs rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-indigo-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                            />
+                            <input
+                              type="text"
+                              value={newSubTeamDesc}
+                              onChange={e => setNewSubTeamDesc(e.target.value)}
+                              placeholder="e.g. Description (optional)…"
+                              className={`w-full text-xs rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-indigo-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
+                            />
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setSubTeamError(null);
+                                const name = newSubTeamName.trim();
+                                if (!name) { setSubTeamError('Sub-team name is required.'); return; }
+                                if (subTeams.some(st => st.TeamID === team.TeamID && st.SubTeamName.toLowerCase() === name.toLowerCase() && st.Active)) {
+                                  setSubTeamError('A sub-team with that name already exists in this team.');
+                                  return;
+                                }
+                                const now = new Date().toISOString();
+                                const subTeamId = `ST-${team.TeamID}-${Date.now()}`;
+                                await onSaveSubTeam?.({
+                                  id: subTeamId, // Firestore document ID
+                                  SubTeamID: subTeamId,
+                                  TeamID: team.TeamID,
+                                  SubTeamName: name,
+                                  Description: newSubTeamDesc.trim() || undefined,
+                                  Active: true,
+                                  CreatedAt: now,
+                                  UpdatedAt: now,
+                                  SubTeamLeaderEmails: [],
+                                });
+                                setNewSubTeamName('');
+                                setNewSubTeamDesc('');
+                              }}
+                              className={`w-full py-2 text-xs font-semibold rounded-lg border-none transition-colors ${newSubTeamName.trim() ? 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer' : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`}
+                              disabled={!newSubTeamName.trim()}
+                            >
+                              <Plus size={12} className="inline mr-1" />
+                              Create sub-team
+                            </button>
+                          </div>
+                        </section>
+                      )}
                     </div>
-                  );
-                })()}
-              </div>
-            </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
-        </div>
         )}
 
         {/* SUBTAB: Report Configuration */}
         {activeAdminSubTab === 'report_config' && (
           <div className="space-y-6">
-            <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}>
-              <h3 className={`font-bold text-lg mb-4 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Team Report Configuration</h3>
-              <p className={`text-sm mb-6 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+            <div className={`border rounded-xl p-5 md:p-6 shadow-sm ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}>
+              <h3 className={`font-semibold text-base mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Team report configuration</h3>
+              <p className={`text-sm mb-6 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                 Configure reminder and meeting days for each team's weekly report schedule.
               </p>
-              
-              <div className="space-y-4">
+
+              <div className="space-y-3">
                 {teams.map(team => {
                   const teamReq = reportRequirements[team.TeamID];
                   const isSubteamReporting = teamReq?.level === 'subteam';
                   const teamSubTeams = subTeams.filter(st => st.TeamID === team.TeamID && st.Active);
-                  
+
                   // Show sub-teams if configured for sub-team reporting OR if they have existing configs
                   const subTeamsWithConfigs = teamSubTeams.filter(st => teamReportConfigs[st.id]);
                   const shouldShowSubTeams = (isSubteamReporting && teamReq?.subTeamIds && teamReq.subTeamIds.length > 0) || subTeamsWithConfigs.length > 0;
-                  
-                  if (shouldShowSubTeams) {
-                    // Show individual sub-teams instead of parent team
-                    const subTeamsToShow = isSubteamReporting && teamReq?.subTeamIds 
-                      ? teamReq.subTeamIds.map(subTeamId => subTeams.find(st => st.SubTeamID === subTeamId && st.Active)).filter(Boolean)
-                      : subTeamsWithConfigs;
-                    
-                    return subTeamsToShow.map(subTeam => {
-                      if (!subTeam) return null;
-                      
-                      // Use sub-team document ID as config key (matches Firestore)
-                      // Fallback to SubTeamID if id is missing (for cached data)
-                      const configKey = subTeam.id || subTeam.SubTeamID;
-                      
-                      return (
-                        <div key={configKey} className={`border rounded-lg p-4 ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
-                          <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{subTeam.SubTeamName}</div>
-                              <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                                {team.TeamName} · {subTeam.SubTeamID}
-                              </div>
-                            </div>
-                            {editingReportConfigTeamId === configKey ? (
-                              <button
-                                onClick={() => handleSaveTeamReportConfig(configKey, editingReminderDay, editingMeetingDay)}
-                                className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
-                              >
-                                Save
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  setEditingReportConfigTeamId(configKey);
-                                  const config = teamReportConfigs[configKey];
-                                  setEditingReminderDay(config?.reminderDay || '');
-                                  setEditingMeetingDay(config?.meetingDay || '');
-                                }}
-                                className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
-                              >
-                                Edit
-                              </button>
-                            )}
+
+                  const configCard = (opts: { key: string; title: string; subtitle: string }) => {
+                    const configKey = opts.key;
+                    const isEditing = editingReportConfigTeamId === configKey;
+                    return (
+                      <div key={configKey} className={`border rounded-xl p-4 ${isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="min-w-0">
+                            <div className={`font-semibold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{opts.title}</div>
+                            <div className={`text-xs font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{opts.subtitle}</div>
                           </div>
-                          
-                          {editingReportConfigTeamId === configKey ? (
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <label className={`block text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Reminder Day</label>
-                                <select
-                                  value={editingReminderDay}
-                                  onChange={(e) => setEditingReminderDay(e.target.value)}
-                                  className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                >
-                                  <option value="">Not configured</option>
-                                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
-                                    <option key={day} value={day}>{day}</option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div>
-                                <label className={`block text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Meeting Day</label>
-                                <select
-                                  value={editingMeetingDay}
-                                  onChange={(e) => setEditingMeetingDay(e.target.value)}
-                                  className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                                >
-                                  <option value="">Not configured</option>
-                                  {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
-                                    <option key={day} value={day}>{day}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            </div>
+                          {isEditing ? (
+                            <button
+                              onClick={() => handleSaveTeamReportConfig(configKey, editingReminderDay, editingMeetingDay)}
+                              className={`text-xs px-3 py-1.5 rounded-md font-semibold ${isDarkMode ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
+                            >
+                              Save
+                            </button>
                           ) : (
-                            <div className="flex gap-6">
-                              <div>
-                                <span className={`text-xs font-bold block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Reminder Day</span>
-                                <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                                  {teamReportConfigs[configKey]?.reminderDay || <span className="text-slate-400 italic">Not configured</span>}
-                                </span>
-                              </div>
-                              <div>
-                                <span className={`text-xs font-bold block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Meeting Day</span>
-                                <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                                  {teamReportConfigs[configKey]?.meetingDay || <span className="text-slate-400 italic">Not configured</span>}
-                                </span>
-                              </div>
-                            </div>
+                            <button
+                              onClick={() => {
+                                setEditingReportConfigTeamId(configKey);
+                                const config = teamReportConfigs[configKey];
+                                setEditingReminderDay(config?.reminderDay || '');
+                                setEditingMeetingDay(config?.meetingDay || '');
+                              }}
+                              className={`text-xs px-3 py-1.5 rounded-md font-semibold ${isDarkMode ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
+                            >
+                              Edit
+                            </button>
                           )}
                         </div>
-                      );
-                    });
-                  }
-                  
-                  // Show parent team (team-level reporting or no config)
-                  return (
-                    <div key={team.TeamID} className={`border rounded-lg p-4 ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{team.TeamName}</div>
-                          <div className={`text-xs font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{team.TeamID}</div>
-                        </div>
-                        {editingReportConfigTeamId === team.TeamID ? (
-                          <button
-                            onClick={() => handleSaveTeamReportConfig(team.TeamID, editingReminderDay, editingMeetingDay)}
-                            className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
-                          >
-                            Save
-                          </button>
+
+                        {isEditing ? (
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Reminder day</label>
+                              <select
+                                value={editingReminderDay}
+                                onChange={(e) => setEditingReminderDay(e.target.value)}
+                                className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                              >
+                                <option value="">Not configured</option>
+                                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                                  <option key={day} value={day}>{day}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Meeting day</label>
+                              <select
+                                value={editingMeetingDay}
+                                onChange={(e) => setEditingMeetingDay(e.target.value)}
+                                className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                              >
+                                <option value="">Not configured</option>
+                                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                                  <option key={day} value={day}>{day}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
                         ) : (
-                          <button
-                            onClick={() => {
-                              setEditingReportConfigTeamId(team.TeamID);
-                              const config = teamReportConfigs[team.TeamID];
-                              setEditingReminderDay(config?.reminderDay || '');
-                              setEditingMeetingDay(config?.meetingDay || '');
-                            }}
-                            className={`text-xs px-3 py-1 rounded font-bold ${isDarkMode ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
-                          >
-                            Edit
-                          </button>
+                          <div className="flex gap-8">
+                            <div>
+                              <span className={`text-xs font-semibold block mb-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Reminder day</span>
+                              <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                {teamReportConfigs[configKey]?.reminderDay || <span className={`italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Not configured</span>}
+                              </span>
+                            </div>
+                            <div>
+                              <span className={`text-xs font-semibold block mb-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Meeting day</span>
+                              <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                {teamReportConfigs[configKey]?.meetingDay || <span className={`italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Not configured</span>}
+                              </span>
+                            </div>
+                          </div>
                         )}
                       </div>
-                      
-                      {editingReportConfigTeamId === team.TeamID ? (
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className={`block text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Reminder Day</label>
-                            <select
-                              value={editingReminderDay}
-                              onChange={(e) => setEditingReminderDay(e.target.value)}
-                              className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                            >
-                              <option value="">Not configured</option>
-                              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
-                                <option key={day} value={day}>{day}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className={`block text-xs font-bold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Meeting Day</label>
-                            <select
-                              value={editingMeetingDay}
-                              onChange={(e) => setEditingMeetingDay(e.target.value)}
-                              className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-slate-200 text-slate-800'}`}
-                            >
-                              <option value="">Not configured</option>
-                              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
-                                <option key={day} value={day}>{day}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex gap-6">
-                          <div>
-                            <span className={`text-xs font-bold block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Reminder Day</span>
-                            <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                              {teamReportConfigs[team.TeamID]?.reminderDay || <span className="text-slate-400 italic">Not configured</span>}
-                            </span>
-                          </div>
-                          <div>
-                            <span className={`text-xs font-bold block mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Meeting Day</span>
-                            <span className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                              {teamReportConfigs[team.TeamID]?.meetingDay || <span className="text-slate-400 italic">Not configured</span>}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
+                    );
+                  };
+
+                  if (shouldShowSubTeams) {
+                    // Show individual sub-teams instead of parent team
+                    const subTeamsToShow = isSubteamReporting && teamReq?.subTeamIds
+                      ? teamReq.subTeamIds.map(subTeamId => subTeams.find(st => st.SubTeamID === subTeamId && st.Active)).filter(Boolean)
+                      : subTeamsWithConfigs;
+
+                    return subTeamsToShow.map(subTeam => {
+                      if (!subTeam) return null;
+                      // Use sub-team document ID as config key (matches Firestore);
+                      // fallback to SubTeamID if id is missing (for cached data)
+                      const configKey = subTeam.id || subTeam.SubTeamID;
+                      return configCard({
+                        key: configKey,
+                        title: subTeam.SubTeamName,
+                        subtitle: `${team.TeamName} · ${subTeam.SubTeamID}`,
+                      });
+                    });
+                  }
+
+                  // Show parent team (team-level reporting or no config)
+                  return configCard({
+                    key: team.TeamID,
+                    title: team.TeamName,
+                    subtitle: team.TeamID,
+                  });
                 })}
               </div>
             </div>
@@ -2467,220 +2240,212 @@ export default function AdminPanel({
         {/* SUBTAB 4: Recurrence Blueprints Scheduler */}
         {activeAdminSubTab === 'templates' && (
           <div className="space-y-6">
-            
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 items-start">
+
               {/* Add Recurrence Blueprint Form */}
-              <div className={`border rounded-xl p-5 space-y-4 shadow-sm h-fit ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-[#E2E8F0]'}`}>
-                <div className={`flex items-center space-x-1.5 border-b pb-2 ${isDarkMode ? 'border-[#334155] text-white' : 'border-[#E2E8F0] text-[#0F172A]'}`}>
-                  <Plus size={16} className={isDarkMode ? 'text-blue-400' : 'text-[#2563EB]'} />
-                  <h4 className={`font-extrabold text-xs tracking-wider font-mono ${isDarkMode ? 'text-white' : 'text-[#010915]'}`}>Define new recurrence blueprint</h4>
+              <div className={`border rounded-xl p-5 space-y-4 shadow-sm h-fit ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}>
+                <div className={`flex items-center gap-2 border-b pb-3 ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
+                  <div className={`p-1.5 rounded-lg ${isDarkMode ? 'bg-blue-500/10' : 'bg-blue-50'}`}>
+                    <Plus size={16} className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} />
+                  </div>
+                  <h4 className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>New recurring task template</h4>
                 </div>
 
                 {templateSuccessMessage && (
-                  <div className={`p-3 text-xs rounded-lg font-bold flex items-center gap-1 animate-pulse ${isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-850 bg-emerald-50 border-emerald-150'}`}>
+                  <div className={`p-3 text-xs rounded-lg font-medium flex items-center gap-1.5 border ${isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-800 bg-emerald-50 border-emerald-200'}`}>
                     <CheckCircle size={14} className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} />
                     <span>{templateSuccessMessage}</span>
                   </div>
                 )}
 
                 {templateErrorMessage && (
-                  <div className={`p-3 text-xs rounded-lg font-bold flex items-center gap-1 animate-pulse ${isDarkMode ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-red-850 bg-red-50 border-red-150'}`}>
-                    <AlertCircle size={14} className={isDarkMode ? 'text-red-400' : 'text-red-600'} />
+                  <div className={`p-3 text-xs rounded-lg font-medium flex items-center gap-1.5 border ${isDarkMode ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-red-700 bg-red-50 border-red-200'}`}>
+                    <AlertCircle size={14} className="shrink-0" />
                     <span>{templateErrorMessage}</span>
                   </div>
                 )}
 
-                <form onSubmit={handleTemplateCreateSubmit} className="space-y-3.5">
+                <form onSubmit={handleTemplateCreateSubmit} className="space-y-3">
                   <div>
-                    <label className={`block text-[9.5px] font-bold tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Standard checklist title</label>
+                    <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Title</label>
                     <input
                       type="text"
                       required
                       value={tempTitle}
                       onChange={(e) => setTempTitle(e.target.value)}
                       placeholder="e.g. Fortnightly SOC2 Assets Audit"
-                      className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-600' : 'bg-white border-[#E2E8F0] text-slate-800 placeholder-slate-500'}`}
+                      className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'}`}
                     />
                   </div>
 
                   <div>
-                    <label className={`block text-[9.5px] font-bold tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Detailed description instructions</label>
+                    <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Description</label>
                     <textarea
                       required
                       value={tempDesc}
                       onChange={(e) => setTempDesc(e.target.value)}
-                      placeholder="e.g. Identify active cluster nodes, map pending anomalies, and verify signature certificates..."
+                      placeholder="e.g. Identify active cluster nodes, map pending anomalies, and verify signature certificates…"
                       rows={3}
-                      className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans resize-none ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-600' : 'bg-white border-[#E5E7EB] text-slate-800 placeholder-slate-500'}`}
+                      className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-sans resize-none ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'}`}
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className={`block text-[9.5px] font-bold tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Recurrence rate</label>
+                      <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Recurrence</label>
                       <div className="relative">
-                      <select
-                        value={tempRecurrence}
-                        onChange={(e) => setTempRecurrence(e.target.value as any)}
-                        className={`w-full text-xs rounded-lg pl-2 pr-7 py-2 appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-[#E2E8F0] text-slate-800'}`}
-                      >
-                        <option value="Daily">Daily</option>
-                        <option value="Weekly">Weekly</option>
-                        <option value="Monthly">Monthly</option>
-                        <option value="Quarterly">Quarterly</option>
-                        <option value="Half-yearly">Half-yearly</option>
-                      </select>
-                      <ChevronDown size={14} className={`pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className={`block text-[9.5px] font-bold tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Priority rank</label>
-                      <div className="relative">
-                      <select
-                        value={tempPriority}
-                        onChange={(e) => setTempPriority(e.target.value as any)}
-                        className={`w-full text-xs rounded-lg pl-2 pr-7 py-2 appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-[#E2E8F0] text-slate-800'}`}
-                      >
-                        <option value="Low">Low</option>
-                        <option value="Medium">Medium</option>
-                        <option value="High">High</option>
-                        <option value="Critical">Critical</option>
-                      </select>
-                      <ChevronDown size={14} className={`pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} />
+                        <select
+                          value={tempRecurrence}
+                          onChange={(e) => setTempRecurrence(e.target.value as any)}
+                          className={`w-full text-sm rounded-lg pl-3 pr-7 py-2 border appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
+                        >
+                          <option value="Daily">Daily</option>
+                          <option value="Weekly">Weekly</option>
+                          <option value="Monthly">Monthly</option>
+                          <option value="Quarterly">Quarterly</option>
+                          <option value="Half-yearly">Half-yearly</option>
+                        </select>
+                        <ChevronDown size={14} className={`pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} />
                       </div>
                     </div>
 
                     <div>
-                      <label className={`block text-[9.5px] font-bold tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Schedule start date</label>
-                      <input
-                        type="date"
-                        required
-                        value={tempStartDate}
-                        onChange={(e) => setTempStartDate(e.target.value)}
-                        className={`w-full text-xs rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-[#E2E8F0] text-slate-800'}`}
-                      />
+                      <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Priority</label>
+                      <div className="relative">
+                        <select
+                          value={tempPriority}
+                          onChange={(e) => setTempPriority(e.target.value as any)}
+                          className={`w-full text-sm rounded-lg pl-3 pr-7 py-2 border appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
+                        >
+                          <option value="Low">Low</option>
+                          <option value="Medium">Medium</option>
+                          <option value="High">High</option>
+                          <option value="Critical">Critical</option>
+                        </select>
+                        <ChevronDown size={14} className={`pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} />
+                      </div>
                     </div>
                   </div>
 
                   <div>
-                    <label className={`block text-[9.5px] font-bold tracking-widest mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Default responsible identity</label>
-                    <div className="relative">
-                    <select
+                    <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Start date</label>
+                    <input
+                      type="date"
                       required
-                      value={tempAssignToEmail}
-                      onChange={(e) => setTempAssignToEmail(e.target.value)}
-                      className={`w-full text-xs rounded-lg pl-2 pr-7 py-2 appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-white border-[#E2E8F0] text-slate-800'}`}
-                    >
-                      <option value="">Select recipient email...</option>
-                      {users.map(u => (
-                        <option key={u.Email} value={u.Email}>{u.FullName} ({u.Email})</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} className={`pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} />
+                      value={tempStartDate}
+                      onChange={(e) => setTempStartDate(e.target.value)}
+                      className={`w-full text-sm rounded-lg px-3 py-2 border focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Assign to</label>
+                    <div className="relative">
+                      <select
+                        required
+                        value={tempAssignToEmail}
+                        onChange={(e) => setTempAssignToEmail(e.target.value)}
+                        className={`w-full text-sm rounded-lg pl-3 pr-7 py-2 border appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
+                      >
+                        <option value="">Select recipient email…</option>
+                        {users.map(u => (
+                          <option key={u.Email} value={u.Email}>{u.FullName} ({u.Email})</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={14} className={`pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} />
                     </div>
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-xs font-extrabold tracking-widest transition-all duration-150 shadow-md cursor-pointer border-none flex items-center justify-center space-x-1"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-sm font-semibold transition-colors shadow-sm cursor-pointer border-none flex items-center justify-center gap-1.5"
                   >
                     <Plus size={14} />
-                    <span>Synchronize scheduler</span>
+                    <span>Create template</span>
                   </button>
                 </form>
               </div>
 
-              {/* Blueprints Database Directory */}
-              <div className="lg:col-span-2 space-y-4">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              {/* Templates directory */}
+              <div className="lg:col-span-2 space-y-4 min-w-0">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                   <div className="relative w-full sm:w-80">
-                    <Search className={`absolute left-3 top-2.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} size={14} />
+                    <Search className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} size={14} />
                     <input
                       type="text"
                       value={templateSearchText}
                       onChange={(e) => setTemplateSearchText(e.target.value)}
-                      placeholder="Search blueprints title or recipient..."
-                      className={`w-full text-xs rounded-lg pl-9 pr-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-600' : 'bg-white border-[#E5E7EB] text-slate-800 placeholder-slate-500'}`}
+                      placeholder="Search by title or recipient…"
+                      className={`w-full text-sm rounded-lg pl-9 pr-3 py-2 border focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400'}`}
                     />
                   </div>
-                  <span className={`text-[10px] font-bold tracking-widest font-mono ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>
-                    Blueprints Matrix: {templates.length} Scheduler Threads
+                  <span className={`text-xs font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    {filteredTemplates.length} of {templates.length} templates
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {templates
-                    .filter(t => 
-                      t.Title.toLowerCase().includes(templateSearchText.toLowerCase()) ||
-                      t.AssignedToEmail.toLowerCase().includes(templateSearchText.toLowerCase())
-                    )
-                    .map(template => {
-                      const isActive = template.Active;
-                      return (
-                        <div 
-                          key={template.TemplateID}
-                          className={`border rounded-xl p-5 flex flex-col justify-between gap-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${
-                            !isActive 
-                              ? isDarkMode ? 'border-red-500/20 bg-red-500/10' : 'border-red-200 bg-red-50/10'
-                              : isDarkMode ? 'border-[#334155] bg-[#1E293B]' : 'border-slate-200 bg-white'
+                  {filteredTemplates.map(template => {
+                    const isActive = template.Active;
+                    return (
+                      <div
+                        key={template.TemplateID}
+                        className={`border rounded-xl p-4 flex flex-col justify-between gap-3 shadow-sm transition-shadow hover:shadow-md ${!isActive
+                          ? isDarkMode ? 'border-red-500/20 bg-red-500/5' : 'border-red-200 bg-red-50/40'
+                          : isDarkMode ? 'border-[#334155] bg-[#1E293B]' : 'border-slate-200 bg-white'
                           }`}
-                        >
-                          <div className="space-y-3">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <h5 className={`font-extrabold text-sm sm:text-base ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{template.Title}</h5>
-                                <p className={`text-xs font-medium mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{template.RecurrenceType}</p>
-                              </div>
-                              <span className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{template.TemplateID}</span>
+                      >
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="min-w-0">
+                              <h5 className={`font-semibold text-sm truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{template.Title}</h5>
+                              <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{template.RecurrenceType}</p>
                             </div>
-
-                            <div className="flex gap-1.5">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                                template.Priority === 'Critical' ? isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200' :
-                                template.Priority === 'High' ? isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-orange-50 text-orange-700 border-orange-200' :
-                                template.Priority === 'Medium' ? isDarkMode ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                                isDarkMode ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-slate-50 text-slate-700 border-slate-200'
-                              }`}>
-                                {template.Priority} Priority
-                              </span>
-                            </div>
-
-                            <div className={`pt-2 border-t flex justify-between items-center text-xs ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
-                              <span className={`font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Assigned Target:</span>
-                              <span className={`font-semibold truncate max-w-[200px] ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{template.AssignedToEmail}</span>
-                            </div>
-
-                            <div className="flex justify-between items-center text-xs">
-                              <span className={`font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Next Run:</span>
-                              <span className={`font-mono font-semibold ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{template.NextGenerationDate}</span>
-                            </div>
+                            <span className={`text-[10px] font-mono shrink-0 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{template.TemplateID}</span>
                           </div>
 
-                          <div className={`flex items-center justify-between gap-3 pt-3 border-t ${isDarkMode ? 'border-[#334155]' : 'border-[#F1F5F9]'}`}>
-                            <span className={`text-[10px] font-mono ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Created {new Date(template.CreatedAt).toLocaleDateString()}</span>
-                            <button
-                              onClick={() => onToggleTemplateStatus(template.TemplateID)}
-                              className={`text-[10px] font-extrabold tracking-widest py-1.5 px-3 rounded-lg border transition-all cursor-pointer text-center ${
-                                template.Active
-                                  ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-[#ECFDF5] border-emerald-200 text-[#065F46] hover:bg-[#D1FAE5]'
-                                  : isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-[#FEF2F2] border-red-200 text-[#991B1B] hover:bg-[#FEE2E2]'
-                              }`}
-                            >
-                              {template.Active ? '● Running' : '■ Paused'}
-                            </button>
+                          <div className="flex gap-1.5">
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${template.Priority === 'Critical' ? (isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200') :
+                              template.Priority === 'High' ? (isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-orange-50 text-orange-700 border-orange-200') :
+                                template.Priority === 'Medium' ? (isDarkMode ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 'bg-yellow-50 text-yellow-700 border-yellow-200') :
+                                  (isDarkMode ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-slate-50 text-slate-700 border-slate-200')
+                              }`}>
+                              {template.Priority} priority
+                            </span>
+                          </div>
+
+                          <div className={`pt-2 border-t flex justify-between items-center text-xs gap-2 ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
+                            <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Assigned to</span>
+                            <span className={`font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{template.AssignedToEmail}</span>
+                          </div>
+
+                          <div className="flex justify-between items-center text-xs">
+                            <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Next run</span>
+                            <span className={`font-mono font-medium ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{template.NextGenerationDate}</span>
                           </div>
                         </div>
-                      );
-                    })}
+
+                        <div className={`flex items-center justify-between gap-3 pt-3 border-t ${isDarkMode ? 'border-[#334155]' : 'border-slate-100'}`}>
+                          <span className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Created {new Date(template.CreatedAt).toLocaleDateString()}</span>
+                          <button
+                            onClick={() => onToggleTemplateStatus(template.TemplateID)}
+                            className={`text-[10px] font-bold tracking-wider py-1.5 px-3 rounded-md border transition-colors cursor-pointer text-center ${template.Active
+                              ? isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                              : isDarkMode ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20' : 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'
+                              }`}
+                          >
+                            {template.Active ? '● Running' : '■ Paused'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                   {templates.length === 0 && (
                     <div className="col-span-2 text-center py-14">
                       <Repeat size={40} className={`mx-auto mb-3 ${isDarkMode ? 'text-slate-600' : 'text-slate-300'}`} />
                       <p className={`text-sm font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>No recurrence templates yet</p>
-                      <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Define a blueprint using the form on the left to get started.</p>
+                      <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Define a template using the form on the left to get started.</p>
                     </div>
                   )}
                 </div>
@@ -2689,320 +2454,79 @@ export default function AdminPanel({
           </div>
         )}
 
-        {/* SUBTAB 3: Specialized Email Template Customisation Workbench (STRICTLY REQUESTED CEILING OPTION) */}
+        {/* SUBTAB 3: Email templates (Sheets <-> App sync) */}
         {activeAdminSubTab === 'email_templates' && (
-          <div className="space-y-5 animate-fade-in">
-            <div className={`border rounded-xl p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-emerald-200'}`}>
-              <div>
-                <h4 className={`font-extrabold text-sm tracking-wider font-mono ${isDarkMode ? 'text-emerald-400' : 'text-emerald-900'}`}>Automated email templates workbench</h4>
-                <p className={`text-xs mt-1 max-w-2xl ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Configure structural boilerplate layouts for simulated emails. This allows customizable, client-wide alert configurations that will automatically fire during cycle execution and overdue audits.
-                </p>
-              </div>
-              <div className={`px-3 py-2 rounded-lg border flex gap-1.5 items-center ${isDarkMode ? 'bg-[#1E293B] border-emerald-500/20' : 'bg-white border-emerald-200'}`}>
-                <label className={`text-[10px] font-mono font-black tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Active selector:</label>
-                <select
-                  value={selectedEmailTemplateKey}
-                  onChange={(e) => setSelectedEmailTemplateKey(e.target.value as any)}
-                  className={`bg-transparent border-none font-extrabold text-xs focus:ring-0 outline-none cursor-pointer ${isDarkMode ? 'text-emerald-400' : 'text-emerald-800'}`}
-                >
-                  <option value="template_task_creation">Task Creation</option>
-                  <option value="template_assigned_email">Task Assignment</option>
-                  <option value="template_delayed_email">Task Delay (Due Soon / Overdue)</option>
-                  <option value="task_closed">Task Completion (Closure)</option>
-                  <option value="report_submitted">Task Reporting (Report Submitted)</option>
-                  <option value="template_scheduled_reminder">Scheduled Tasks (Weekly Reminder)</option>
-                  <option value="template_scheduled_report_reminder">Scheduled Reports (Report Reminder)</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              
-              {/* Left Side: Template Editor Box */}
-              <div className={`border border-[#E5E7EB] bg-white p-6 rounded-2xl shadow-sm space-y-4 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : ''}`}>
-                <div className={`flex justify-between items-center border-b pb-2 ${isDarkMode ? 'border-[#334155]' : 'border-[#E2E8F0]'}`}>
-                  <div className="flex items-center space-x-1.5">
-                    <Edit className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} size={16} />
-                    <h4 className={`font-bold text-xs tracking-wider font-mono ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>Template code composer</h4>
-                  </div>
-                  <span className={`text-[9.5px] font-mono font-bold uppercase ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`}>{selectedEmailTemplateKey}</span>
-                </div>
-
-                <div className="space-y-1">
-                  <label className={`block text-[10px] font-mono font-black tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Email subject</label>
-                  <input
-                    type="text"
-                    value={tempEmailSubject}
-                    onChange={(e) => setTempEmailSubject(e.target.value)}
-                    className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500 ${isDarkMode ? 'bg-[#1E293B] border-[#475569] text-white' : 'bg-white border-[#E5E7EB] text-slate-800'}`}
-                    placeholder="Enter email subject..."
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className={`block text-[10px] font-mono font-black tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Email body template editor</label>
-                  <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Write custom text or HTML code. Use the toolbar below for formatting and click the visual tokens to inject placeholders.</p>
-                </div>
-
-                {/* Rich Text Toolbar */}
-                <div className={`flex flex-wrap gap-1 p-2 rounded-lg border ${isDarkMode ? 'bg-[#334155] border-[#475569]' : 'bg-slate-50 border-slate-150'}`}>
-                  <button
-                    onClick={() => editor?.chain().focus().toggleBold().run()}
-                    className={`p-1.5 rounded transition-all ${editor?.isActive('bold') ? 'bg-emerald-500/20 text-emerald-400' : isDarkMode ? 'text-slate-400 hover:bg-[#475569]' : 'text-slate-600 hover:bg-slate-200'}`}
-                    title="Bold"
-                  >
-                    <Bold size={14} />
-                  </button>
-                  <button
-                    onClick={() => editor?.chain().focus().toggleItalic().run()}
-                    className={`p-1.5 rounded transition-all ${editor?.isActive('italic') ? 'bg-emerald-500/20 text-emerald-400' : isDarkMode ? 'text-slate-400 hover:bg-[#475569]' : 'text-slate-600 hover:bg-slate-200'}`}
-                    title="Italic"
-                  >
-                    <Italic size={14} />
-                  </button>
-                  <button
-                    onClick={() => editor?.chain().focus().toggleUnderline().run()}
-                    className={`p-1.5 rounded transition-all ${editor?.isActive('underline') ? 'bg-emerald-500/20 text-emerald-400' : isDarkMode ? 'text-slate-400 hover:bg-[#475569]' : 'text-slate-600 hover:bg-slate-200'}`}
-                    title="Underline"
-                  >
-                    <UnderlineIcon size={14} />
-                  </button>
-                  <div className="w-px bg-slate-300 mx-1" />
-                  <select
-                    value={selectedFont}
-                    onChange={(e) => setFontFamily(e.target.value)}
-                    className={`text-xs px-2 py-1 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 ${isDarkMode ? 'bg-[#1E293B] border-[#475569] text-white' : 'bg-white border-[#E5E7EB] text-slate-800'}`}
-                  >
-                    <option value="sans-serif">Sans Serif</option>
-                    <option value="serif">Serif</option>
-                    <option value="monospace">Monospace</option>
-                  </select>
-                  <button
-                    onClick={() => setShowColorDropdown(!showColorDropdown)}
-                    className={`p-1.5 rounded transition-all ${isDarkMode ? 'text-slate-400 hover:bg-[#475569]' : 'text-slate-600 hover:bg-slate-200'}`}
-                    title="Text Color"
-                  >
-                    <Palette size={14} />
-                  </button>
-                  {showColorDropdown && (
-                    <div className={`absolute z-10 p-2 rounded-lg border grid grid-cols-4 gap-1 ${isDarkMode ? 'bg-[#1E293B] border-[#475569]' : 'bg-white border-slate-200'}`}>
-                      {['#000000', '#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899'].map(color => (
-                        <button
-                          key={color}
-                          onClick={() => { setTextColor(color); setShowColorDropdown(false); }}
-                          className="w-6 h-6 rounded border border-slate-200"
-                          style={{ backgroundColor: color }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Interactive Token badges list */}
-                <div className={`p-3 rounded-lg border space-y-2 ${isDarkMode ? 'bg-[#334155] border-[#475569]' : 'bg-slate-50 border-slate-150'}`}>
-                  <span className={`block text-[8px] font-black font-mono tracking-widest ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Interactive placeholders (click to insert)</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {getAvailableTokens().map(tok => (
-                      <button
-                        key={tok.token}
-                        onClick={() => handleInsertToken(tok.token)}
-                        title={tok.desc}
-                        type="button"
-                        className={`text-[10px] sm:text-[11px] font-mono font-extrabold px-2 py-1 rounded transition-all cursor-pointer select-none ${isDarkMode ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-150'}`}
-                      >
-                        {tok.token}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Tiptap Editor */}
-                <div className={`border rounded-xl p-3 min-h-[300px] ${isDarkMode ? 'bg-[#1E293B] border-[#475569]' : 'bg-white border-slate-200'}`}>
-                  <EditorContent editor={editor} />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    {emailSaveSuccess && (
-                      <span className={`text-xs font-bold flex items-center space-x-1 animate-pulse ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                        <CheckCircle size={14} />
-                        <span>Changes Saved Successfully!</span>
-                      </span>
-                    )}
-                  </div>
-
-                  <button
-                    onClick={handleSaveEmailTemplateValue}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold tracking-widest px-6 py-2.5 rounded-xl shadow-md cursor-pointer transition-all border-none flex items-center space-x-1.5"
-                  >
-                    <CheckCircle size={13} />
-                    <span>Apply email layout</span>
-                  </button>
-                </div>
-
-                {/* Per-type enable/disable toggle — backed by settings key email_enabled_{type} */}
-                {(() => {
-                  const typeKeyMap: Record<string, string> = {
-                    'template_task_creation':          'email_enabled_task_creation',
-                    'template_assigned_email':         'email_enabled_task_assignment',
-                    'template_delayed_email':          'email_enabled_task_delay',
-                    'task_closed':                     'email_enabled_task_completion',
-                    'report_submitted':                'email_enabled_task_reporting',
-                    'template_scheduled_reminder':     'email_enabled_scheduled_tasks',
-                    'template_scheduled_report_reminder': 'email_enabled_scheduled_reports',
-                  };
-                  const settingKey = typeKeyMap[selectedEmailTemplateKey];
-                  if (!settingKey) return null;
-                  const currentValue = settings.find(s => s.Key === settingKey)?.Value ?? 'true';
-                  const isEnabled = currentValue !== 'false';
-                  return (
-                    <div className={`flex items-center justify-between p-3 rounded-xl border mt-2 ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
-                      <div>
-                        <span className={`text-xs font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>
-                          Email type enabled
-                        </span>
-                        <p className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                          Setting: <span className="font-mono">{settingKey}</span>
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const newValue = isEnabled ? 'false' : 'true';
-                          await onUpdateSetting(settingKey, newValue);
-                        }}
-                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${isEnabled ? 'bg-emerald-500' : isDarkMode ? 'bg-slate-600' : 'bg-slate-300'}`}
-                        role="switch"
-                        aria-checked={isEnabled}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isEnabled ? 'translate-x-5' : 'translate-x-0'}`}
-                        />
-                      </button>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Right Side: Live HTML / Text simulated email client card preview */}
-              <div className={`border border-[#E5E7EB] bg-white rounded-2xl p-6 flex flex-col justify-between shadow-2xl h-full min-h-[420px] ${isDarkMode ? 'bg-[#0F172A] border-[#1E293B] text-slate-100' : ''}`}>
-                <div>
-                  <div className={`flex items-center justify-between border-b pb-4 mb-4 ${isDarkMode ? 'border-[#1E293B]' : 'border-[#1E293B]'}`}>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 rounded-full bg-red-500" />
-                      <div className="w-3 h-3 rounded-full bg-yellow-500" />
-                      <div className="w-3 h-3 rounded-full bg-green-500" />
-                    </div>
-                    <span className="text-[10px] text-slate-400 font-mono font-bold tracking-widest uppercase">SIMULATED EMAIL CLIENT AGENT v2.1</span>
-                  </div>
-
-                  {/* Simulated Mail Header */}
-                  {(() => {
-                    const preview = getSimulatedEmailPreviewStr();
-                    return (
-                      <>
-                        <div className={`p-4 rounded-xl border space-y-2 font-mono text-[10px] leading-relaxed mb-4 ${isDarkMode ? 'bg-slate-900/80 border-[#1E293B] text-slate-300' : 'bg-slate-900/80 border-[#1E293B] text-slate-300'}`}>
-                          <div>
-                            <span className="text-slate-500 uppercase">From:</span> auto_alert@PMS.live
-                          </div>
-                          <div>
-                            <span className="text-slate-500 uppercase">To:</span> {selectedEmailTemplateKey === 'template_assigned_email' ? 'eng.director@PMS.com' : 'sales.lead@PMS.com, admin@PMS.com'}
-                          </div>
-                          <div>
-                            <span className="text-slate-500 uppercase">Subject:</span> {preview.subject || 'No subject'}
-                          </div>
-                        </div>
-
-                        {/* Mail Body Render Preview */}
-                        <div className="bg-white text-slate-800 p-5 rounded-xl min-h-[220px] shadow-inner font-sans border border-slate-200 text-xs font-semibold leading-relaxed overflow-y-auto">
-                          <div dangerouslySetInnerHTML={{ __html: preview.body }} />
-                          {!preview.body && <span className="text-slate-400 italic">No content configured. Type code inside the composer to view preview.</span>}
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-
-                <div className={`mt-4 pt-3 border-t text-[9.5px] font-mono font-medium leading-relaxed ${isDarkMode ? 'border-[#1E293B] text-slate-400' : 'border-[#1E293B] text-slate-400'}`}>
-                  Notice: Real-time changes above dynamically replace tags inside the simulation thread. Submit or generate tasks to view actual live results in the simulated logs list!
-                </div>
-              </div>
-            </div>
-          </div>
+          <EmailTemplatesTab
+            emailTemplates={emailTemplates}
+            onRefreshEmailTemplates={onRefreshEmailTemplates}
+            isDarkMode={isDarkMode}
+          />
         )}
 
         {/* SUBTAB 5: Weekly Report Requirements Configuration */}
         {activeAdminSubTab === 'report_requirements' && (
-          <div className="space-y-6 animate-fade-in">
-            <div className={`border rounded-xl p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${isDarkMode ? 'bg-blue-500/10 border-blue-500/20' : 'bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border-blue-200'}`}>
+          <div className="space-y-6">
+            <div className={`border rounded-xl p-5 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${isDarkMode ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-200'}`}>
               <div>
-                <h4 className={`font-extrabold text-sm tracking-wider font-mono ${isDarkMode ? 'text-blue-400' : 'text-blue-900'}`}>Weekly Report Requirements</h4>
+                <h4 className={`font-semibold text-sm ${isDarkMode ? 'text-blue-400' : 'text-blue-900'}`}>Weekly report requirements</h4>
                 <p className={`text-xs mt-1 max-w-2xl ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Configure which teams and sub-teams are required to submit weekly reports. Team leaders can submit for whole team or sub-teams. Sub-team leaders can only submit for their own sub-team.
+                  Configure which teams and sub-teams are required to submit weekly reports. Team leaders can submit for the whole team or sub-teams. Sub-team leaders can only submit for their own sub-team.
                 </p>
               </div>
               <button
                 onClick={handleSaveReportRequirements}
-                className={`px-4 py-2 rounded-lg text-xs font-bold tracking-wider transition-all cursor-pointer flex items-center space-x-2 ${
-                  isDarkMode 
-                    ? 'bg-blue-500 hover:bg-blue-600 text-white' 
-                    : 'bg-blue-500 hover:bg-blue-600 text-white'
-                }`}
+                className="px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white border-none shrink-0"
               >
                 <Save size={14} />
-                <span>Save Configuration</span>
+                <span>Save configuration</span>
               </button>
             </div>
 
             {reportRequirementsSaveSuccess && (
-              <div className={`flex items-center space-x-2 text-xs font-bold animate-pulse ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+              <div className={`flex items-center gap-2 text-xs font-semibold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
                 <CheckCircle size={14} />
                 <span>Configuration saved successfully!</span>
               </div>
             )}
 
-            <div className="space-y-4">
+            <div className="space-y-3">
               {teams.map(team => {
                 const teamRequirement = reportRequirements[team.TeamID];
                 const teamSubTeams = subTeams.filter(st => st.TeamID === team.TeamID && st.Active);
-                
+
                 return (
-                  <div key={team.TeamID} className={`border rounded-xl p-4 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-3 h-3 rounded-full ${team.Active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                        <h5 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{team.TeamName}</h5>
-                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
+                  <div key={team.TeamID} className={`border rounded-xl p-4 shadow-sm ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-white border-slate-200'}`}>
+                    <div className="flex items-center justify-between mb-3 gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${team.Active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                        <h5 className={`font-semibold text-sm truncate ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>{team.TeamName}</h5>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded shrink-0 ${isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-500'}`}>
                           {team.TeamID}
                         </span>
                       </div>
                       <select
                         value={teamRequirement?.level || 'team'}
                         onChange={(e) => handleReportRequirementChange(team.TeamID, e.target.value as 'team' | 'subteam')}
-                        className={`text-xs px-3 py-1.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer ${
-                          isDarkMode ? 'bg-[#0F141F] border-[#334155] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'
-                        }`}
+                        className={`text-xs px-3 py-1.5 rounded-lg border focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer shrink-0 ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
                       >
-                        <option value="team">Whole Team Reports</option>
-                        <option value="subteam">Sub-Team Reports</option>
+                        <option value="team">Whole team reports</option>
+                        <option value="subteam">Sub-team reports</option>
                       </select>
                     </div>
 
                     {teamRequirement?.level === 'subteam' && teamSubTeams.length > 0 && (
                       <div className="space-y-2">
-                        <label className={`text-[10px] font-mono font-bold tracking-widest ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                        <label className={`text-xs font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                           Select sub-teams that must submit reports:
                         </label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {teamSubTeams.map(subTeam => (
                             <label
                               key={subTeam.SubTeamID}
-                              className={`flex items-center space-x-2 p-2 rounded-lg cursor-pointer transition-all ${
-                                teamRequirement.subTeamIds.includes(subTeam.SubTeamID)
-                                  ? isDarkMode ? 'bg-blue-500/20 border-blue-500/30' : 'bg-blue-50 border-blue-200'
-                                  : isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-slate-50 border-slate-200'
-                              } ${isDarkMode ? 'border' : 'border'}`}
+                              className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors border ${teamRequirement.subTeamIds.includes(subTeam.SubTeamID)
+                                ? isDarkMode ? 'bg-blue-500/20 border-blue-500/30' : 'bg-blue-50 border-blue-200'
+                                : isDarkMode ? 'bg-[#0F172A] border-[#334155]' : 'bg-slate-50 border-slate-200'
+                                }`}
                             >
                               <input
                                 type="checkbox"
@@ -3029,16 +2553,16 @@ export default function AdminPanel({
               })}
             </div>
 
-            <div className={`p-4 rounded-lg border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20' : 'bg-amber-50 border-amber-200'}`}>
-              <div className="flex items-start space-x-3">
-                <Info size={16} className={isDarkMode ? 'text-amber-400' : 'text-amber-600'} />
+            <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20' : 'bg-amber-50 border-amber-200'}`}>
+              <div className="flex items-start gap-3">
+                <Info size={16} className={`mt-0.5 shrink-0 ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`} />
                 <div className={`text-xs ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                  <p className="font-bold mb-1">How this works:</p>
+                  <p className="font-semibold mb-1">How this works:</p>
                   <ul className="list-disc list-inside space-y-1">
-                    <li><strong>Whole Team Reports:</strong> Team leaders receive reminders and can submit reports for the entire team.</li>
-                    <li><strong>Sub-Team Reports:</strong> Only selected sub-team leaders receive reminders and can submit reports for their specific sub-team.</li>
+                    <li><strong>Whole team reports:</strong> Team leaders receive reminders and can submit reports for the entire team.</li>
+                    <li><strong>Sub-team reports:</strong> Only selected sub-team leaders receive reminders and can submit reports for their specific sub-team.</li>
                     <li><strong>Sub-team leader permissions:</strong> Can only submit reports for their own sub-team.</li>
-                    <li><strong>Team leader permissions:</strong> Can submit reports for whole team or any sub-team within their team.</li>
+                    <li><strong>Team leader permissions:</strong> Can submit reports for the whole team or any sub-team within their team.</li>
                   </ul>
                 </div>
               </div>
@@ -3048,40 +2572,34 @@ export default function AdminPanel({
 
         {/* SUBTAB 6: Missing Reports This Week */}
         {activeAdminSubTab === 'missing_reports' && (
-          <div className="space-y-6 animate-fade-in">
-            <div className={`border rounded-xl p-5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${isDarkMode ? 'bg-red-500/10 border-red-500/20' : 'bg-gradient-to-r from-red-500/10 to-orange-500/10 border-red-200'}`}>
+          <div className="space-y-6">
+            <div className={`border rounded-xl p-5 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${isDarkMode ? 'bg-red-500/10 border-red-500/20' : 'bg-red-50 border-red-200'}`}>
               <div>
-                <h4 className={`font-extrabold text-sm tracking-wider font-mono ${isDarkMode ? 'text-red-400' : 'text-red-900'}`}>Missing Reports This Week</h4>
+                <h4 className={`font-semibold text-sm ${isDarkMode ? 'text-red-400' : 'text-red-900'}`}>Missing reports this week</h4>
                 <p className={`text-xs mt-1 max-w-2xl ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                   Teams that have not submitted their weekly PPT report this week, or where proof emails failed to send.
                 </p>
               </div>
               <button
                 onClick={loadUnsubmittedTeams}
-                disabled={isLoadingUnsubmitted || isLoadingFailures}
-                className={`px-4 py-2 rounded-lg text-xs font-bold tracking-wider transition-all cursor-pointer flex items-center space-x-2 ${
-                  isDarkMode 
-                    ? 'bg-red-500 hover:bg-red-600 text-white' 
-                    : 'bg-red-500 hover:bg-red-600 text-white'
-                } ${(isLoadingUnsubmitted || isLoadingFailures) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={isLoadingUnsubmitted || isLoadingFailures || isLoadingJobRuns || isLoadingReauth}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white border-none shrink-0 ${(isLoadingUnsubmitted || isLoadingFailures || isLoadingJobRuns || isLoadingReauth) ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                <RefreshCw size={14} className={(isLoadingUnsubmitted || isLoadingFailures) ? 'animate-spin' : ''} />
+                <RefreshCw size={14} className={(isLoadingUnsubmitted || isLoadingFailures || isLoadingJobRuns || isLoadingReauth) ? 'animate-spin' : ''} />
                 <span>Refresh</span>
               </button>
             </div>
 
-            {(isLoadingUnsubmitted || isLoadingFailures) ? (
-              <div className={`flex items-center justify-center py-12 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                <div className="animate-spin mr-3">
-                  <RefreshCw size={20} />
-                </div>
-                <span className="text-sm">Loading missing reports...</span>
+            {(isLoadingUnsubmitted || isLoadingFailures || isLoadingJobRuns || isLoadingReauth) ? (
+              <div className={`flex items-center justify-center py-12 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                <RefreshCw size={20} className="animate-spin mr-3" />
+                <span className="text-sm">Loading missing reports…</span>
               </div>
             ) : unsubmittedTeams.length === 0 && emailDeliveryFailures.length === 0 ? (
-              <div className={`border rounded-xl p-8 text-center ${isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-200'}`}>
-                <div className={`flex items-center justify-center space-x-3 mb-3 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+              <div className={`border rounded-xl p-8 text-center ${isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-200'}`}>
+                <div className={`flex items-center justify-center gap-3 mb-3 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
                   <CheckCircle size={24} />
-                  <h5 className={`font-bold text-sm ${isDarkMode ? 'text-emerald-400' : 'text-emerald-800'}`}>All Reports Submitted</h5>
+                  <h5 className={`font-semibold text-sm ${isDarkMode ? 'text-emerald-400' : 'text-emerald-800'}`}>All reports submitted</h5>
                 </div>
                 <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                   All teams have submitted their weekly reports with confirmed proof emails. Great job!
@@ -3089,79 +2607,197 @@ export default function AdminPanel({
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Email Delivery Failures Section */}
-                {emailDeliveryFailures.length > 0 && (
+                {/* Gmail Re-auth Required Section */}
+                {gmailReauthRequired.length > 0 && (
                   <div className="space-y-3">
-                    <div className={`text-xs font-mono font-bold tracking-widest mb-2 ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>
-                      {emailDeliveryFailures.length} EMAIL DELIVERY FAILURE(S)
+                    <div className={`text-xs font-semibold uppercase tracking-wide ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>
+                      {gmailReauthRequired.length} Gmail account{gmailReauthRequired.length === 1 ? '' : 's'} needs re-authentication
                     </div>
-                    {emailDeliveryFailures.map((failure, index) => {
-                      const team = teams.find(t => t.TeamID === failure.teamId);
-                      const teamName = team?.TeamName || failure.teamId;
-                      return (
+                    <div className="space-y-3">
+                      {gmailReauthRequired.map((reauth, index) => (
                         <div
                           key={index}
-                          className={`border rounded-xl p-4 hover:shadow-md transition-all ${isDarkMode ? 'bg-[#1E293B] border-orange-500/20' : 'bg-white border-orange-200'}`}
+                          className={`border rounded-xl p-4 shadow-sm ${isDarkMode ? 'bg-[#1E293B] border-orange-500/20' : 'bg-white border-orange-200'}`}
                         >
                           <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center space-x-3">
+                            <div className="flex items-center gap-3">
                               <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-orange-500/20' : 'bg-orange-100'}`}>
                                 <AlertCircle size={16} className={isDarkMode ? 'text-orange-400' : 'text-orange-600'} />
                               </div>
                               <div>
-                                <div className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
-                                  {teamName}
+                                <div className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                                  {reauth.userEmail}
                                 </div>
-                                <div className={`text-[10px] font-mono mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                                  {failure.teamId}
+                                <div className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                  {new Date(reauth.timestamp).toLocaleString()}
                                 </div>
                               </div>
                             </div>
-                            <div className={`text-[10px] font-bold px-2 py-1 rounded ${isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-700'}`}>
-                              Email Failed
+                            <div className={`text-[10px] font-semibold px-2 py-1 rounded ${isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-700'}`}>
+                              Needs re-auth
                             </div>
                           </div>
-                          <div className={`text-xs mt-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                            <div><strong>Type:</strong> {failure.type === 'thursday_reminder' ? 'Thursday Reminder' : 'Proof Email'}</div>
-                            <div><strong>To:</strong> {failure.intendedRecipient}</div>
-                            <div><strong>Reason:</strong> {failure.reason}</div>
-                            <div><strong>Time:</strong> {new Date(failure.timestamp).toLocaleString()}</div>
+                          <div className={`text-xs mt-2 space-y-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                            <div><strong>Reason:</strong> {reauth.reason}</div>
+                            {reauth.error && <div><strong>Error:</strong> {reauth.error}</div>}
                           </div>
                         </div>
-                      );
-                    })}
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Email Delivery Failures Section */}
+                {emailDeliveryFailures.length > 0 && (
+                  <div className="space-y-3">
+                    <div className={`text-xs font-semibold uppercase tracking-wide ${isDarkMode ? 'text-orange-400' : 'text-orange-600'}`}>
+                      {emailDeliveryFailures.length} email delivery failure{emailDeliveryFailures.length === 1 ? '' : 's'}
+                    </div>
+                    <div className="space-y-3">
+                      {emailDeliveryFailures.map((failure, index) => {
+                        const team = teams.find(t => t.TeamID === failure.teamId);
+                        const teamName = team?.TeamName || failure.teamId;
+                        return (
+                          <div
+                            key={index}
+                            className={`border rounded-xl p-4 shadow-sm ${isDarkMode ? 'bg-[#1E293B] border-orange-500/20' : 'bg-white border-orange-200'}`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-orange-500/20' : 'bg-orange-100'}`}>
+                                  <AlertCircle size={16} className={isDarkMode ? 'text-orange-400' : 'text-orange-600'} />
+                                </div>
+                                <div>
+                                  <div className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                                    {teamName}
+                                  </div>
+                                  <div className={`text-[10px] font-mono mt-0.5 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                    {failure.teamId}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className={`text-[10px] font-semibold px-2 py-1 rounded ${isDarkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-700'}`}>
+                                Email failed
+                              </div>
+                            </div>
+                            <div className={`text-xs mt-2 space-y-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                              <div><strong>Type:</strong> {failure.type === 'thursday_reminder' ? 'Thursday Reminder' : 'Proof Email'}</div>
+                              <div><strong>To:</strong> {failure.intendedRecipient}</div>
+                              <div><strong>Reason:</strong> {failure.reason}</div>
+                              <div><strong>Time:</strong> {new Date(failure.timestamp).toLocaleString()}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
                 {/* Unsubmitted Teams Section */}
                 {unsubmittedTeams.length > 0 && (
                   <div className="space-y-3">
-                    <div className={`text-xs font-mono font-bold tracking-widest mb-2 ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
-                      {unsubmittedTeams.length} TEAM(S) NOT SUBMITTED
+                    <div className={`text-xs font-semibold uppercase tracking-wide ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
+                      {unsubmittedTeams.length} team{unsubmittedTeams.length === 1 ? '' : 's'} not submitted
                     </div>
                     {unsubmittedTeams.map(team => (
                       <div
                         key={team.teamId}
-                        className={`border rounded-xl p-4 flex items-center justify-between hover:shadow-md transition-all ${isDarkMode ? 'bg-[#1E293B] border-red-500/20' : 'bg-white border-red-200'}`}
+                        className={`border rounded-xl p-4 flex items-center justify-between shadow-sm ${isDarkMode ? 'bg-[#1E293B] border-red-500/20' : 'bg-white border-red-200'}`}
                       >
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center gap-3">
                           <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-red-500/20' : 'bg-red-100'}`}>
                             <AlertCircle size={16} className={isDarkMode ? 'text-red-400' : 'text-red-600'} />
                           </div>
                           <div>
-                            <div className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                            <div className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
                               {team.teamName}
                             </div>
-                            <div className={`text-[10px] font-mono mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                            <div className={`text-[10px] font-mono mt-0.5 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
                               {team.teamId}
                             </div>
                           </div>
                         </div>
-                        <div className={`text-[10px] font-bold px-2 py-1 rounded ${isDarkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700'}`}>
-                          Not Submitted
+                        <div className={`text-[10px] font-semibold px-2 py-1 rounded ${isDarkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700'}`}>
+                          Not submitted
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* Recent Job Runs Section */}
+                {jobRuns.length > 0 && (
+                  <div className="space-y-3">
+                    <div className={`text-xs font-semibold uppercase tracking-wide ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                      Recent scheduler runs
+                    </div>
+                    <div className="space-y-3">
+                      {jobRuns.map((jobRun, index) => (
+                        <div
+                          key={index}
+                          className={`border rounded-xl p-4 shadow-sm ${isDarkMode ? 'bg-[#1E293B] border-blue-500/20' : 'bg-white border-blue-200'}`}
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-lg ${isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
+                                <History size={16} className={isDarkMode ? 'text-blue-400' : 'text-blue-600'} />
+                              </div>
+                              <div>
+                                <div className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-800'}`}>
+                                  {jobRun.jobName}
+                                </div>
+                                <div className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                  {new Date(jobRun.timestamp).toLocaleString()}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] font-semibold px-2 py-1 rounded ${isDarkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
+                                {jobRun.successCount} sent
+                              </span>
+                              {jobRun.failureCount > 0 && (
+                                <span className={`text-[10px] font-semibold px-2 py-1 rounded ${isDarkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700'}`}>
+                                  {jobRun.failureCount} failed
+                                </span>
+                              )}
+                              <span className={`text-[10px] px-2 py-1 rounded ${isDarkMode ? 'bg-slate-500/20 text-slate-400' : 'bg-slate-100 text-slate-600'}`}>
+                                {jobRun.triggeredBy}
+                              </span>
+                            </div>
+                          </div>
+                          {jobRun.teamsProcessed.length > 0 && (
+                            <div className={`mt-3 pt-3 border-t ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                              <div className={`text-[10px] font-semibold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                                Teams processed ({jobRun.teamsProcessed.length})
+                              </div>
+                              <div className="space-y-1">
+                                {jobRun.teamsProcessed.slice(0, 5).map((team, teamIndex) => (
+                                  <div key={teamIndex} className="flex items-center justify-between text-[10px]">
+                                    <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
+                                      {team.teamName}
+                                    </span>
+                                    <span className={`font-semibold ${
+                                      team.status === 'sent' 
+                                        ? isDarkMode ? 'text-emerald-400' : 'text-emerald-600'
+                                        : team.status === 'failed'
+                                          ? isDarkMode ? 'text-red-400' : 'text-red-600'
+                                          : isDarkMode ? 'text-slate-500' : 'text-slate-500'
+                                    }`}>
+                                      {team.status}
+                                    </span>
+                                  </div>
+                                ))}
+                                {jobRun.teamsProcessed.length > 5 && (
+                                  <div className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-500'}`}>
+                                    +{jobRun.teamsProcessed.length - 5} more teams
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

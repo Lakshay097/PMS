@@ -1,297 +1,218 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
-:root {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  
-  /* Design Tokens - Colors - Light Theme (Default) */
-  --color-primary: #2563EB;
-  --color-primary-hover: #1D4ED8;
-  --color-action: #16A34A;
-  --color-action-hover: #15803D;
-  --color-danger: #DC2626;
-  --color-danger-bg: #FEF2F2;
-  --color-warning-bg: #FFFBEB;
-  --color-success-bg: #F0FDF4;
-  --color-admin-accent: #7C3AED;
-  --color-admin-bg: #EDE9FE;
-  --color-surface: #FFFFFF;
-  --color-surface-1: #F9FAFB;
-  --color-surface-2: #F3F4F6;
-  --color-border: #E5E7EB;
-  --color-border-strong: #D1D5DB;
-  --color-text-primary: #111827;
-  --color-text-secondary: #6B7280;
-  --color-text-muted: #9CA3AF;
-  
-  /* Legacy tokens for dark theme compatibility */
-  --color-background: #0A0E1A;
-  --color-accent: #2563eb;
-  --color-accent-hover: #1d4ed8;
-  --color-success: #16a34a;
-  --color-warning: #f59e0b;
+/* ============================================================
+   PMS Design Tokens
+   Single source of truth for both themes. Components must use
+   these variables (or the semantic utilities below) instead of
+   hardcoded hex values like #0f172a.
+   ============================================================ */
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  /* Brand */
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-soft: #eff6ff;   /* tinted bg behind primary actions */
+  --color-accent: var(--color-primary);
+
+  /* Surfaces */
+  --color-background: #f1f5f9;     /* app canvas */
+  --color-surface: #ffffff;        /* cards, panels, modals */
+  --color-surface-1: #f8fafc;      /* subtle inset areas */
+  --color-surface-2: #f1f5f9;      /* deeper inset / table headers */
+  --color-surface-hover: #f1f5f9;  /* hover state on rows/buttons */
+
+  /* Lines & text */
+  --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+  --color-text-inverse: #ffffff;
+
+  /* Status */
+  --color-success-bg: #ecfdf5;
+  --color-success-fg: #047857;
+  --color-warning-bg: #fffbeb;
+  --color-warning-fg: #b45309;
+  --color-danger-bg: #fef2f2;
+  --color-danger-fg: #b91c1c;
   --color-danger: #dc2626;
-  --color-muted: #64748b;
-  
-  /* Design Tokens - Typography */
-  --font-size-xs: 12px;
-  --font-size-sm: 14px;
-  --font-size-base: 16px;
-  --font-size-lg: 20px;
-  --font-size-xl: 24px;
-  
-  /* Design Tokens - Spacing */
-  --spacing-xs: 4px;
-  --spacing-sm: 8px;
-  --spacing-md: 16px;
-  --spacing-lg: 24px;
-  --spacing-xl: 32px;
-  --spacing-2xl: 48px;
-  
-  /* Design Tokens - Radius */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
-  
-  /* Design Tokens - Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --color-info-bg: #eff6ff;
+  --color-info-fg: #1d4ed8;
+
+  /* Elevation & overlay */
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.06), 0 1px 3px rgb(15 23 42 / 0.08);
+  --shadow-modal: 0 20px 45px rgb(15 23 42 / 0.25);
+  --color-overlay: rgb(15 23 42 / 0.5);
+
+  /* Focus ring */
+  --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-primary);
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.3);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.5);
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-primary: #3b82f6;
+  --color-primary-hover: #60a5fa;
+  --color-primary-soft: rgb(59 130 246 / 0.15);
+  --color-accent: var(--color-primary);
+
+  --color-background: #0a0e1a;
+  --color-surface: #0f141f;
+  --color-surface-1: #131a29;
+  --color-surface-2: #182136;
+  --color-surface-hover: rgb(148 163 184 / 0.08);
+
+  --color-border: #1e293b;
+  --color-border-strong: #334155;
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #cbd5e1;
+  --color-text-muted: #64748b;
+  --color-text-inverse: #0f172a;
+
+  --color-success-bg: rgb(16 185 129 / 0.14);
+  --color-success-fg: #34d399;
+  --color-warning-bg: rgb(245 158 11 / 0.14);
+  --color-warning-fg: #fbbf24;
+  --color-danger-bg: rgb(239 68 68 / 0.14);
+  --color-danger-fg: #f87171;
+  --color-danger: #ef4444;
+  --color-info-bg: rgb(59 130 246 / 0.14);
+  --color-info-fg: #93c5fd;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-modal: 0 24px 60px rgb(0 0 0 / 0.6);
+  --color-overlay: rgb(2 6 23 / 0.7);
+
+  --focus-ring: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-primary);
 }
 
-/* Base Styles */
-* {
-  box-sizing: border-box;
+/* ============================================================
+   Base
+   ============================================================ */
+
+html,
+body {
+  height: 100%;
 }
 
 body {
-  font-family: var(--font-sans);
-  font-size: var(--font-size-base);
-  color: var(--color-text-primary);
   background-color: var(--color-background);
+  color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  transition: background-color 0.3s, color 0.3s;
-  /* Mobile-friendly improvements */
-  -webkit-tap-highlight-color: transparent;
-  overscroll-behavior-y: contain;
-  min-height: 100vh;
+  text-rendering: optimizeLegibility;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Light Theme */
-[data-theme="light"] {
-  --color-background: #e8eef5;
-  --color-surface: #f5f7fa;
-  --color-border: #cbd5e1;
+/* Visible keyboard focus everywhere */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: 6px;
 }
 
-[data-theme="light"] body {
-  color: #1e293b;
+/* ============================================================
+   Semantic utilities — use these instead of hardcoded colors.
+   e.g. class="bg-surface text-primary border-token"
+   ============================================================ */
+
+@layer utilities {
+  .bg-app        { background-color: var(--color-background); }
+  .bg-surface    { background-color: var(--color-surface); }
+  .bg-surface-1  { background-color: var(--color-surface-1); }
+  .bg-surface-2  { background-color: var(--color-surface-2); }
+  .hover-surface:hover { background-color: var(--color-surface-hover); }
+
+  .text-primary   { color: var(--color-text-primary); }
+  .text-secondary { color: var(--color-text-secondary); }
+  .text-muted     { color: var(--color-text-muted); }
+
+  .border-token        { border-color: var(--color-border); }
+  .border-token-strong { border-color: var(--color-border-strong); }
+
+  .shadow-card  { box-shadow: var(--shadow-card); }
+  .shadow-modal { box-shadow: var(--shadow-modal); }
 }
 
-/* Dark Theme */
-[data-theme="dark"] {
-  --color-background: #0A0E1A;
-  --color-surface: #0F141F;
-  --color-border: #1E293B;
-}
+/* ============================================================
+   Mobile
+   IMPORTANT: the previous version of this file overrode Tailwind
+   utility classes globally on mobile (.flex-row, .grid-cols-2,
+   .p-6, min-width on every input, z-index !important, etc.).
+   That is what broke mobile layouts. All of those overrides are
+   intentionally REMOVED. Responsiveness now lives in components
+   via Tailwind's own sm:/md: variants.
+   ============================================================ */
 
-[data-theme="dark"] body {
-  color: #f8fafc;
-}
-
-/* Utility Classes */
-.text-xs { font-size: var(--font-size-xs); }
-.text-sm { font-size: var(--font-size-sm); }
-.text-base { font-size: var(--font-size-base); }
-.text-lg { font-size: var(--font-size-lg); }
-.text-xl { font-size: var(--font-size-xl); }
-
-.text-muted { color: var(--color-muted); }
-.text-accent { color: var(--color-accent); }
-.text-success { color: var(--color-success); }
-.text-warning { color: var(--color-warning); }
-.text-danger { color: var(--color-danger); }
-
-.bg-surface { background-color: var(--color-surface); }
-.bg-accent { background-color: var(--color-accent); }
-.bg-success { background-color: var(--color-success); }
-.bg-warning { background-color: var(--color-warning); }
-.bg-danger { background-color: var(--color-danger); }
-
-/* Animation Classes */
-.fade-in {
-  animation: fadeIn 0.2s ease-in-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.slide-in-right {
-  animation: slideInRight 0.3s ease-out;
-}
-
-@keyframes slideInRight {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
-}
-
-/* Mobile-specific improvements */
 @media (max-width: 768px) {
-  /* Auth page icon buttons keep compact sizing */
-  .auth-page .auth-icon-btn {
-    min-height: unset;
-    min-width: unset;
-    padding: 0.25rem;
+  /* Prevent iOS auto-zoom when focusing form fields.
+     Applies only to form controls; does not force widths. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
   }
 
-  .auth-page input {
-    min-height: unset;
-    min-width: unset;
-  }
-
-  /* Inline link pills should not get oversized touch targets */
-  a.inline-link-pill {
-    min-height: unset;
-    min-width: unset;
-  }
-
-  /* Larger touch targets for mobile (WCAG 2.5.5) */
-  button, a, input, select, textarea {
+  /* Comfortable touch targets on real tap targets only.
+     min-height only — never min-width, which broke inline
+     icons, checkboxes and pills before. */
+  button:not(.btn-compact),
+  [role='button']:not(.btn-compact) {
     min-height: 44px;
-    min-width: 44px;
-  }
-
-  /* Better spacing for mobile */
-  .space-y-4 > * + * {
-    margin-top: 1rem;
-  }
-
-  /* Responsive padding */
-  .p-6 {
-    padding: 1rem;
-  }
-  .px-6 {
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-  .py-4 {
-    padding-top: 0.75rem;
-    padding-bottom: 0.75rem;
-  }
-
-  /* Mobile-friendly text sizes */
-  h1, h2, h3, h4 {
-    font-size: clamp(1rem, 4vw, 1.5rem);
-  }
-
-  /* Prevent horizontal scroll on mobile */
-  body, html {
-    overflow-x: hidden;
-  }
-
-  /* Better form inputs for mobile */
-  input, select, textarea {
-    font-size: 16px; /* Prevent iOS zoom */
-  }
-
-  /* Mobile-friendly buttons */
-  button {
-    padding: 12px 16px;
-  }
-
-  /* Improve grid layouts for mobile */
-  .grid-cols-2 {
-    grid-template-columns: 1fr;
-  }
-  .grid-cols-3 {
-    grid-template-columns: 1fr;
-  }
-  .grid-cols-4 {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  /* Better table handling on mobile */
-  table {
-    font-size: 14px;
-  }
-  .table-container {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* Improve modal/drawer positioning on mobile */
-  .modal, .drawer {
-    max-width: 100vw;
-    max-height: 100vh;
-  }
-
-  /* Better flex layouts on mobile */
-  .flex-row {
-    flex-direction: column;
-  }
-  .flex-row.gap-4 {
-    gap: 0.5rem;
-  }
-
-  /* Improve card layouts */
-  .card {
-    margin-bottom: 1rem;
-  }
-
-  /* Fix mobile sidebar visibility */
-  aside {
-    width: 100% !important;
-    max-width: 280px;
-  }
-
-  /* Ensure mobile search modal is above everything */
-  .fixed.z-50 {
-    z-index: 9999 !important;
   }
 }
 
-/* PWA-specific styles */
-@media (display-mode: standalone) {
-  body {
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
+/* Horizontal-scroll containers for wide tables */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+.table-scroll table {
+  min-width: 640px;
+}
+
+/* PWA safe areas (notches, home indicator) */
+@supports (padding: env(safe-area-inset-top)) {
+  @media (display-mode: standalone) {
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
   }
 }
 
-/* Smooth scrolling for better mobile experience */
-html {
-  scroll-behavior: smooth;
-}
+/* ============================================================
+   Performance: the mobile "hang" fixes
+   - No global smooth scrolling (it fights JS scrolling and
+     causes jank in long lists).
+   - backdrop-filter blur is disabled on small screens; it is
+     one of the most expensive effects on mobile GPUs.
+   - All animation is disabled for users who ask for it.
+   ============================================================ */
 
-/* Prevent text selection on mobile for better app-like feel */
 @media (max-width: 768px) {
-  .no-select {
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
+  .backdrop-blur-sm,
+  .backdrop-blur,
+  .backdrop-blur-md,
+  .backdrop-blur-xl {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 
 interface DrawerProps {
   isOpen: boolean;
@@ -9,9 +9,20 @@ interface DrawerProps {
   title?: string;
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg';
-  position?: 'right' | 'left';
+  position?: 'left' | 'right';
 }
 
+/**
+ * Fixes vs previous version:
+ * - BUG: `md:${sizeClasses[size]}` builds class names at runtime
+ *   ("md:w-[560px]") that Tailwind's JIT never sees in source, so they are
+ *   never generated → the drawer had NO width constraint on desktop and
+ *   fell back to w-screen. Class strings are now complete literals.
+ * - BUG: `${position}-0` had the same problem ("right-0" built at runtime).
+ * - Mobile: full width with dvh height; content scrolls, header pinned.
+ * - Spring animation replaced with a short tween (mobile jank fix).
+ * - Escape closes; overlay uses theme overlay token.
+ */
 export default function Drawer({
   isOpen,
   onClose,
@@ -21,21 +32,26 @@ export default function Drawer({
   position = 'right',
 }: DrawerProps) {
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
     };
-  }, [isOpen]);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [isOpen, onClose]);
 
-  const sizeClasses = {
-    sm: 'w-[480px]',
-    md: 'w-[560px]',
-    lg: 'w-[640px]',
+  // Full literal strings so Tailwind JIT generates them.
+  const sizeClasses: Record<NonNullable<DrawerProps['size']>, string> = {
+    sm: 'sm:w-[480px]',
+    md: 'sm:w-[560px]',
+    lg: 'sm:w-[640px]',
   };
+  const positionClasses = position === 'right' ? 'right-0' : 'left-0';
 
   const drawerContent = (
     <AnimatePresence>
@@ -45,29 +61,37 @@ export default function Drawer({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/50 z-40"
+            className="fixed inset-0 z-40"
+            style={{ backgroundColor: 'var(--color-overlay)' }}
+            aria-hidden="true"
           />
           <motion.div
             initial={{ x: position === 'right' ? '100%' : '-100%' }}
             animate={{ x: 0 }}
             exit={{ x: position === 'right' ? '100%' : '-100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className={`fixed top-0 ${position}-0 h-full bg-surface shadow-2xl z-50 shrink-0 w-screen max-w-[90vw] md:${sizeClasses[size]}`}
+            transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
+            className={`fixed top-0 ${positionClasses} h-dvh z-50 bg-surface shadow-modal
+              w-full sm:max-w-[92vw] ${sizeClasses[size]} will-change-transform`}
           >
             <div className="flex flex-col h-full">
-              {title && (
-                <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)] shrink-0">
-                  <h2 className="text-lg font-semibold text-[#0f172a]">{title}</h2>
-                  <button
-                    onClick={onClose}
-                    className="p-2 hover:bg-gray-100 rounded-md transition-colors"
-                  >
-                    <X size={20} className="text-muted" />
-                  </button>
-                </div>
-              )}
-              <div className="flex-1 overflow-y-auto">{children}</div>
+              <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-token shrink-0">
+                <h2 className="text-base sm:text-lg font-semibold text-primary truncate">
+                  {title}
+                </h2>
+                <button
+                  onClick={onClose}
+                  className="p-2 -mr-2 rounded-md text-muted hover-surface shrink-0"
+                  aria-label="Close panel"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto overscroll-contain">{children}</div>
             </div>
           </motion.div>
         </>
@@ -78,6 +102,5 @@ export default function Drawer({
   if (typeof document !== 'undefined') {
     return createPortal(drawerContent, document.body);
   }
-
   return drawerContent;
 }

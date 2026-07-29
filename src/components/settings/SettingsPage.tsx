@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import FormField from '../shared/FormField';
-import { User, Lock, Bell, Sun, Moon, HelpCircle, Save, LogOut, Monitor, Smartphone, Mail, Link, Unlink, CheckCircle, AlertCircle } from 'lucide-react';
+import { User, Lock, Bell, HelpCircle, Save, LogOut, Monitor, Smartphone, Mail, Link, Unlink, CheckCircle, AlertCircle, Sun } from 'lucide-react';
 import { logger } from '../../utils/logger';
+import AppearanceSettings from './AppearanceSettings';
 
 interface SettingsPageProps {
   user?: {
@@ -16,7 +17,6 @@ interface SettingsPageProps {
 
 export default function SettingsPage({ user, onLogout }: SettingsPageProps) {
   const [activeSection, setActiveSection] = useState('profile');
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailLoading, setGmailLoading] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -210,7 +210,7 @@ export default function SettingsPage({ user, onLogout }: SettingsPageProps) {
                 />
               </FormField>
 
-              <FormField label="Email" helperText="Contact admin to change email address">
+              <FormField label="Email" hint="Contact admin to change email address">
                 <input
                   type="email"
                   value={formData.email}
@@ -454,7 +454,7 @@ export default function SettingsPage({ user, onLogout }: SettingsPageProps) {
                 </div>
               </FormField>
 
-              <FormField label="Deadline Reminders" helperText="Get notified before tasks are due">
+              <FormField label="Deadline Reminders" hint="Get notified before tasks are due">
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -466,7 +466,7 @@ export default function SettingsPage({ user, onLogout }: SettingsPageProps) {
                 </div>
               </FormField>
 
-              <FormField label="Update Summaries" helperText="Receive daily/weekly digest of task updates">
+              <FormField label="Update Summaries" hint="Receive daily/weekly digest of task updates">
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -490,63 +490,7 @@ export default function SettingsPage({ user, onLogout }: SettingsPageProps) {
             </div>
           )}
 
-          {activeSection === 'appearance' && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-lg font-semibold text-[#0f172a] mb-1">Appearance</h2>
-                <p className="text-sm text-muted">Customize the look and feel</p>
-              </div>
-
-              <FormField label="Theme Mode">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setIsDarkMode(false)}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-md border transition-colors ${
-                      !isDarkMode
-                        ? 'border-[var(--color-accent)] bg-blue-50 text-[var(--color-accent)]'
-                        : 'border-[var(--color-border)] hover:bg-gray-50'
-                    }`}
-                  >
-                    <Sun size={16} />
-                    <span className="text-sm">Light</span>
-                  </button>
-                  <button
-                    onClick={() => setIsDarkMode(true)}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-md border transition-colors ${
-                      isDarkMode
-                        ? 'border-[var(--color-accent)] bg-blue-50 text-[var(--color-accent)]'
-                        : 'border-[var(--color-border)] hover:bg-gray-50'
-                    }`}
-                  >
-                    <Moon size={16} />
-                    <span className="text-sm">Dark</span>
-                  </button>
-                </div>
-              </FormField>
-
-              <FormField label="Density Preference">
-                <select
-                  value={formData.density}
-                  onChange={(e) => setFormData({ ...formData, density: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-50 border border-[var(--color-border)] rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent"
-                >
-                  <option value="comfortable">Comfortable</option>
-                  <option value="compact">Compact</option>
-                  <option value="spacious">Spacious</option>
-                </select>
-              </FormField>
-
-              <div className="pt-4">
-                <button
-                  onClick={handleSave}
-                  className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-white rounded-md text-sm font-medium hover:bg-[var(--color-accent-hover)] transition-colors"
-                >
-                  <Save size={16} />
-                  <span>Save preferences</span>
-                </button>
-              </div>
-            </div>
-          )}
+          {activeSection === 'appearance' && <AppearanceSettings />}
 
           {activeSection === 'help' && (
             <div className="space-y-6">

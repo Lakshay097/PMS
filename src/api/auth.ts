@@ -19,8 +19,10 @@ export interface UserResponse {
 
 export interface LoginResponse {
   token: string;
+  refreshToken: string;
   user: UserResponse;
   expiresIn: string;
+  refreshTokenExpiresIn: string;
 }
 
 /**
@@ -116,4 +118,18 @@ export interface BulkUserUploadResponse {
 
 export async function bulkUploadUsers(data: BulkUserUploadRequest): Promise<BulkUserUploadResponse> {
   return api.post<BulkUserUploadResponse>('/bulk-upload-users', data);
+}
+
+export interface RefreshTokenRequest {
+  refreshToken: string;
+}
+
+export interface RefreshTokenResponse {
+  token: string;
+  refreshToken: string;
+  expiresIn: string;
+}
+
+export async function refreshToken(credentials: RefreshTokenRequest): Promise<RefreshTokenResponse> {
+  return api.post<RefreshTokenResponse>('/refresh-token', credentials, { skipAuth: true });
 }

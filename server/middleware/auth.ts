@@ -23,17 +23,22 @@ export const authenticateToken = (
   res: Response,
   next: NextFunction
 ): void => {
+  console.log('[auth] authenticateToken called for', req.path);
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
   if (!token) {
+    console.log('[auth] no token found');
     throw new UnauthorizedError('Access token required');
   }
 
+  console.log('[auth] verifying token...');
   jwt.verify(token, config.JWT_SECRET, (err: jwt.VerifyErrors | null, user: any) => {
     if (err) {
+      console.log('[auth] token verification failed:', err.message);
       throw new UnauthorizedError('Invalid or expired token');
     }
+    console.log('[auth] token verified successfully for user:', user?.email);
     req.user = user;
     next();
   });

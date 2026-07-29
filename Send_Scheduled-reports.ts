@@ -6,12 +6,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
-import { firestoreAdmin } from './services/firebaseAdmin';
-import { generateGoogleSheetsToken, fetchSheetValues } from './services/googleSheetsService';
-import { getEmailTemplate, replaceTemplateVariables } from './services/emailTemplateStorage';
-import { hasReceivedFirstReportEmail, markFirstReportEmailSent } from './services/userOnboardingService';
-import { sendEmailAsUser } from './services/emailService';
-import { getOrCreateTeamEmailThread, updateTeamEmailThreadId } from './services/emailLogService';
+import { firestoreAdmin } from './server/services/firebaseAdmin';
+import { generateGoogleSheetsToken, fetchSheetValues } from './server/services/googleSheetsService';
+import { getEmailTemplate, replaceTemplateVariables } from './server/services/emailTemplateStorage';
+import { hasReceivedFirstReportEmail, markFirstReportEmailSent } from './server/services/userOnboardingService';
+import { sendEmailAsUser } from './server/services/emailService';
+import { getOrCreateTeamEmailThread, updateTeamEmailThreadId } from './server/services/emailLogService';
 
 /**
  * USAGE

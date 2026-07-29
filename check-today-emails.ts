@@ -8,6 +8,12 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 
 import { generateGoogleSheetsToken, fetchSheetValues } from './server/services/googleSheetsService';
 
+interface EmailLog {
+  timestamp: string;
+  status: 'sent' | 'failed';
+  [key: string]: any;
+}
+
 async function checkTodayEmails() {
   try {
     console.log('=== Today\'s Email Log Check ===\n');
@@ -33,10 +39,17 @@ async function checkTodayEmails() {
     console.log(`Today's date: ${todayStr}\n`);
 
     // Filter today's emails
-    const todayEmails = emailLogs.slice(1).filter(row => {
+    const todayEmails: EmailLog[] = emailLogs.slice(1).filter(row => {
       const timestamp = row[0];
       return timestamp && timestamp.startsWith(todayStr);
-    });
+    }).map(row => ({
+      timestamp: row[0],
+      status: row[4] as 'sent' | 'failed',
+      sender: row[1],
+      recipient: row[2],
+      subject: row[3],
+      error: row[5]
+    }));
 
     if (todayEmails.length === 0) {
       console.log('No emails sent today');

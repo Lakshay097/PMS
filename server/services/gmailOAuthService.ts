@@ -10,6 +10,7 @@ export interface GmailToken {
   accessToken: string;
   tokenExpiry: string;
   connectedAt: string;
+  needsReauth?: boolean;
 }
 
 /**

@@ -32,6 +32,20 @@ router.post('/approve-user', authenticateToken, asyncWrapper(authController.appr
 router.post('/change-password', authenticateToken, asyncWrapper(authController.changePasswordHandler));
 
 /**
+ * POST /api/refresh-token
+ * Public endpoint to refresh JWT access token using refresh token
+ * No authentication required - refresh token is passed in request body
+ */
+router.post('/refresh-token', asyncWrapper(authController.refreshTokenHandler));
+
+/**
+ * POST /api/refresh-token-legacy
+ * Protected endpoint to refresh JWT token (legacy, for backward compatibility)
+ * @deprecated Use /api/refresh-token with refresh token instead
+ */
+router.post('/refresh-token-legacy', authenticateToken, asyncWrapper(authController.refreshTokenHandlerLegacy));
+
+/**
  * POST /api/bulk-upload-users
  * Protected endpoint to bulk upload users via CSV (Admin only)
  */

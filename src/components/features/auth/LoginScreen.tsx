@@ -74,7 +74,7 @@ export default function LoginScreen({ usersList, onLoginSuccess }: LoginScreenPr
             <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
               PMS
             </h1>
-            <p className="text-slate-400 text-xs sm:text-sm mt-1">Project Management System</p>
+            <p className="text-secondary text-xs sm:text-sm mt-1">Project Management System</p>
           </div>
         </div>
 
@@ -82,7 +82,7 @@ export default function LoginScreen({ usersList, onLoginSuccess }: LoginScreenPr
         <div className="bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-4 sm:p-8 space-y-5 sm:space-y-6 shadow-2xl">
           <div className="space-y-1 sm:space-y-2">
             <h2 className="text-xl sm:text-2xl font-semibold text-white">Welcome back</h2>
-            <p className="text-slate-400 text-xs sm:text-sm">Enter your credentials to access your workspace</p>
+            <p className="text-secondary text-xs sm:text-sm">Enter your credentials to access your workspace</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-5">

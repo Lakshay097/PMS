@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { OidcRequest } from '../middleware/oidcAuth';
+import { AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { checkAndSendReportReminders } from '../services/reportReminderScheduler';
 
@@ -31,7 +32,7 @@ export const runWeeklyReminders = async (req: OidcRequest, res: Response): Promi
     setImmediate(async () => {
       try {
         logger.info('[CLOUD SCHEDULER] Starting checkAndSendReportReminders()');
-        await checkAndSendReportReminders();
+        await checkAndSendReportReminders('scheduler', oidcEmail);
         logger.info('[CLOUD SCHEDULER] checkAndSendReportReminders() completed successfully');
       } catch (error) {
         logger.error('[CLOUD SCHEDULER] checkAndSendReportReminders() failed:', error);
@@ -48,5 +49,39 @@ export const runWeeklyReminders = async (req: OidcRequest, res: Response): Promi
         timestamp: new Date().toISOString()
       });
     }
+  }
+};
+
+/**
+ * POST /api/internal/manual-trigger-report-reminders
+ * Admin-only endpoint to manually trigger report reminders for testing
+ * 
+ * This endpoint:
+ * - Requires Admin authentication (JWT)
+ * - Invokes the same checkAndSendReportReminders function as the scheduler
+ * - Returns the job run log with per-team status
+ * - Bypasses the 9:30 AM time check (triggeredBy='manual')
+ */
+export const manualTriggerReportReminders = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const adminEmail = req.user?.email || 'unknown';
+    logger.info(`[MANUAL TRIGGER] Report reminders manually triggered by admin ${adminEmail}`);
+
+    // Run the reminder function synchronously and return results
+    const jobRunLog = await checkAndSendReportReminders('manual', adminEmail);
+
+    res.json({
+      success: true,
+      message: 'Report reminder job completed',
+      jobRun: jobRunLog,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('[MANUAL TRIGGER] Failed to trigger report reminders:', error);
+    res.status(500).json({
+      error: 'Failed to trigger report reminders',
+      timestamp: new Date().toISOString()
+    });
   }
 };

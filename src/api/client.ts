@@ -42,6 +42,90 @@ function getAuthToken(): string | null {
 }
 
 /**
+ * Get refresh token from localStorage
+ */
+function getRefreshToken(): string | null {
+  return localStorage.getItem('refresh_token');
+}
+
+/**
+ * Set auth token in localStorage
+ */
+function setAuthToken(token: string): void {
+  localStorage.setItem('auth_token', token);
+  localStorage.setItem('PMS_auth_token', token);
+}
+
+/**
+ * Set refresh token in localStorage
+ */
+function setRefreshToken(token: string): void {
+  localStorage.setItem('refresh_token', token);
+}
+
+/**
+ * Clear auth tokens from localStorage
+ */
+function clearAuthTokens(): void {
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('PMS_auth_token');
+  localStorage.removeItem('refresh_token');
+}
+
+// Track in-flight refresh to prevent race conditions
+let refreshPromise: Promise<boolean> | null = null;
+
+/**
+ * Refresh access token using refresh token
+ * Uses a single in-flight refresh pattern to prevent race conditions
+ */
+async function refreshAccessToken(): Promise<boolean> {
+  // If a refresh is already in progress, wait for it
+  if (refreshPromise) {
+    logger.log('Token refresh already in progress, waiting...');
+    return refreshPromise;
+  }
+
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    logger.warn('No refresh token available');
+    return false;
+  }
+
+  // Start the refresh and store the promise
+  refreshPromise = (async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/refresh-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!response.ok) {
+        logger.warn('Failed to refresh access token');
+        return false;
+      }
+
+      const data = await response.json();
+      setAuthToken(data.token);
+      setRefreshToken(data.refreshToken);
+      logger.log('Access token refreshed successfully');
+      return true;
+    } catch (error) {
+      logger.error('Error refreshing access token:', error);
+      return false;
+    } finally {
+      // Clear the promise after completion (success or failure)
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
+/**
  * Make an API request with error handling, authentication, and retry logic
  */
 export async function apiRequest<T = any>(
@@ -57,7 +141,6 @@ export async function apiRequest<T = any>(
   } = options;
 
   const url = `${API_BASE_URL}${endpoint}`;
-  console.log(`[API CLIENT DEBUG] Request URL: ${url}, Method: ${method}`);
 
   // Prepare headers
   const requestHeaders: Record<string, string> = {
@@ -75,6 +158,8 @@ export async function apiRequest<T = any>(
 
   // Retry logic with exponential backoff
   let lastError: Error | null = null;
+  let shouldRetryWithRefresh = false;
+  
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       // Prepare request
@@ -103,6 +188,34 @@ export async function apiRequest<T = any>(
         data = await response.json();
       } else {
         data = await response.text();
+      }
+
+      // Handle 401 Unauthorized - attempt silent refresh
+      if (response.status === 401 && !skipAuth) {
+        if (!shouldRetryWithRefresh) {
+          logger.warn('Received 401 response, attempting silent token refresh');
+          const refreshSuccess = await refreshAccessToken();
+          
+          if (refreshSuccess) {
+            // Update headers with new token and retry once
+            requestHeaders['Authorization'] = `Bearer ${getAuthToken()}`;
+            shouldRetryWithRefresh = true;
+            attempt--; // Retry this attempt with new token
+            continue;
+          } else {
+            // Refresh failed, clear tokens and redirect to login
+            clearAuthTokens();
+            window.location.href = '/login';
+            throw new ApiError('Session expired. Please log in again.', 401, data);
+          }
+        } else {
+          // Already retried with refreshed token but still got 401
+          // Clear tokens and redirect to login
+          logger.warn('Received 401 after token refresh, clearing tokens and redirecting');
+          clearAuthTokens();
+          window.location.href = '/login';
+          throw new ApiError('Session expired. Please log in again.', 401, data);
+        }
       }
 
       // Handle error responses

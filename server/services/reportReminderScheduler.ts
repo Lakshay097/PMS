@@ -2,9 +2,10 @@ import { firestoreAdmin } from './firebaseAdmin';
 import { logger } from '../utils/logger';
 import { sendEmailAsUser } from './emailService';
 import { getEmailTemplate } from './emailTemplateStorage';
-import { getTeamReportConfigs } from './teamReportConfigService';
+import { getTeamReportConfigs, TeamReportConfig } from './teamReportConfigService';
 import { hasReceivedFirstReportEmail, markFirstReportEmailSent } from './userOnboardingService';
 import { getOrCreateTeamEmailThread, updateTeamEmailThreadId } from './emailLogService';
+import crypto from 'crypto';
 
 /**
  * Gets or creates a report reminder email thread.
@@ -68,7 +69,57 @@ interface TeamWithConfig {
 }
 
 /**
+ * Gets the current day of week for a specific timezone
+ */
+function getCurrentDayOfWeekForTimezone(timezone: string): DayOfWeek {
+  const now = new Date();
+  const options: Intl.DateTimeFormatOptions = { timeZone: timezone, weekday: 'long' };
+  const dayName = new Intl.DateTimeFormat('en-US', options).format(now);
+  return dayName as DayOfWeek;
+}
+
+/**
+ * Gets current time info for a specific timezone
+ */
+function getCurrentTimeInfoForTimezone(timezone: string): { hour: number; minute: number } {
+  const now = new Date();
+  const options: Intl.DateTimeFormatOptions = {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  };
+  const formatter = new Intl.DateTimeFormat('en-US', options);
+  const parts = formatter.formatToParts(now);
+  const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+  const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
+  return { hour, minute };
+}
+
+/**
+ * Checks if it's time to send reminder for a team based on their timezone and reminder time
+ */
+function shouldSendReminderForTeam(config: TeamReportConfig): boolean {
+  const currentDay = getCurrentDayOfWeekForTimezone(config.timezone);
+  const timeInfo = getCurrentTimeInfoForTimezone(config.timezone);
+  const [reminderHour, reminderMinute] = config.reminderTime.split(':').map(Number);
+  
+  // Check if today is the reminder day
+  if (currentDay !== config.reminderDay) {
+    return false;
+  }
+  
+  // Check if current time is past the reminder time
+  if (timeInfo.hour < reminderHour || (timeInfo.hour === reminderHour && timeInfo.minute < reminderMinute)) {
+    return false;
+  }
+  
+  return true;
+}
+
+/**
  * Get the current day of week in the configured timezone
+ * @deprecated Use getCurrentDayOfWeekForTimezone instead
  */
 function getCurrentDayOfWeek(): DayOfWeek {
   const tz = process.env.TZ || 'Asia/Kolkata';
@@ -178,6 +229,67 @@ function getWeekOfDate(date: Date): string {
 }
 
 /**
+ * Atomically claim a reminder slot for a team using Firestore .create()
+ * Returns true if the slot was claimed (first to claim), false if already claimed
+ * This prevents race conditions where multiple processes might try to send simultaneously
+ */
+async function tryClaimReminderSlot(teamId: string, todayStr: string): Promise<boolean> {
+  try {
+    await firestoreAdmin.collection('report_reminder_sent_log').doc(`${teamId}_${todayStr}`).create({
+      teamId,
+      date: todayStr,
+      status: 'claimed',
+      claimedAt: new Date().toISOString(),
+    });
+    return true; // we own this slot
+  } catch (err: any) {
+    if (err.code === 6 || String(err.message).includes('ALREADY_EXISTS')) {
+      return false; // someone else already claimed/sent it
+    }
+    logger.error(`Error claiming reminder slot for team ${teamId}:`, err);
+    throw err; // fail CLOSED on unexpected Firestore errors — don't risk a duplicate send
+  }
+}
+
+/**
+ * Mark that a reminder was successfully sent today for a specific team
+ */
+async function markReminderSentToday(teamId: string, todayStr: string): Promise<void> {
+  try {
+    await firestoreAdmin.collection('report_reminder_sent_log').doc(`${teamId}_${todayStr}`).update({
+      status: 'sent',
+      sentAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    logger.error(`Error marking reminder sent for team ${teamId}:`, err);
+  }
+}
+
+/**
+ * Mark that a reminder send failed for a specific team
+ * This allows retries later in the day if needed
+ */
+async function markReminderFailed(teamId: string, todayStr: string, error: string): Promise<void> {
+  try {
+    await firestoreAdmin.collection('report_reminder_sent_log').doc(`${teamId}_${todayStr}`).update({
+      status: 'failed',
+      failedAt: new Date().toISOString(),
+      error,
+    });
+  } catch (err) {
+    logger.error(`Error marking reminder failed for team ${teamId}:`, err);
+  }
+}
+
+/**
+ * Generate a temporary password for onboarding emails
+ * Uses crypto.randomBytes for secure random generation
+ */
+function generateTempPassword(): string {
+  return crypto.randomBytes(9).toString('base64url'); // 12 chars, url-safe
+}
+
+/**
  * Check if a team has valid recipients (team leaders or stakeholders)
  */
 function hasValidRecipients(team: TeamWithConfig): boolean {
@@ -223,9 +335,9 @@ async function sendReportReminder(
     let temporaryPassword = '';
     
     if (isFirstTime) {
-      // In a real implementation, you'd fetch the user's actual password
-      // For now, we'll use a placeholder
-      temporaryPassword = '123456';
+      // Generate a temporary password for onboarding
+      temporaryPassword = generateTempPassword();
+      logger.info(`Generated temporary password for ${primaryRecipient}`);
     }
 
     const templateVars = {
@@ -269,11 +381,12 @@ async function sendReportReminder(
       }
     }
 
-    // Use configured reminder sender for scheduled report emails
-    const senderEmail = process.env.REMINDER_SENDER_EMAIL || config.DEFAULT_FALLBACK_EMAIL;
+    // Use acting user email for scheduled report reminders with safe fallback
+    // For system-originated scheduled reminders, use REMINDER_SENDER_EMAIL or system fallback
+    const actingUserEmail = process.env.REMINDER_SENDER_EMAIL || config.DEFAULT_FALLBACK_EMAIL;
     
     const result = await sendEmailAsUser(
-      senderEmail,
+      actingUserEmail,
       primaryRecipient, // Primary TO recipient
       template.subject,
       template.body,
@@ -289,15 +402,13 @@ async function sendReportReminder(
       undefined, // ccEmails
       recipientEmails, // toRecipients - all leaders in TO field
       'report_reminder', // eventType
-      false // forceSystemSender - use configured sender's OAuth token
+      true // forceSystemSender - scheduled reminders use system sender
     );
 
     if (result.success && result.gmailThreadId && result.gmailMessageId) {
       // Save thread info - persistent thread across all weeks (simplified like task emails)
-      // Use the Gmail-stored Message-ID if available for proper threading
-      const finalMessageId = result.storedMessageId || result.gmailMessageId;
-      
-      await updateReportReminderThreadId(team.teamId, primaryRecipient, result.gmailThreadId, finalMessageId);
+      // Use the generated Message-ID for threading (RFC-822 compliant)
+      await updateReportReminderThreadId(team.teamId, primaryRecipient, result.gmailThreadId, result.gmailMessageId);
 
       // Mark as first email sent for all recipients if applicable
       if (isFirstTime) {
@@ -314,29 +425,85 @@ async function sendReportReminder(
   }
 }
 
+interface JobRunLog {
+  jobName: string;
+  scheduledTime: string;
+  actualRunTime: string;
+  teamsProcessed: Array<{
+    teamId: string;
+    teamName: string;
+    status: 'sent' | 'failed' | 'skipped';
+    reason?: string;
+    recipients: string[];
+    gmailMessageId?: string;
+    error?: string;
+  }>;
+  successCount: number;
+  failureCount: number;
+  skippedCount: number;
+  triggeredBy: 'scheduler' | 'manual';
+  triggeredByUser?: string;
+}
+
+/**
+ * Logs a job run to Firestore for observability
+ */
+async function logJobRun(log: JobRunLog): Promise<void> {
+  try {
+    // Strip undefined values before writing to Firestore to avoid errors
+    // NOTE: This filter is shallow - only removes top-level undefined values.
+    // If JobRunLog ever gains nested objects with optional fields, this will need
+    // to be updated to recursively strip undefineds from nested structures.
+    const cleanLog = Object.fromEntries(
+      Object.entries(log).filter(([, v]) => v !== undefined)
+    );
+    await firestoreAdmin.collection('job_runs').add({
+      ...cleanLog,
+      timestamp: new Date().toISOString(),
+    });
+    logger.info(`[JOB RUN] Logged job run: ${log.jobName}, teams: ${log.teamsProcessed.length}, success: ${log.successCount}, failed: ${log.failureCount}`);
+  } catch (err) {
+    logger.error('[JOB RUN] Failed to log job run:', err);
+  }
+}
+
 /**
  * Main function to check and send report reminders
  * This should be called by a cron job (e.g., every hour)
  */
-export async function checkAndSendReportReminders(): Promise<void> {
+export async function checkAndSendReportReminders(triggeredBy: 'scheduler' | 'manual' = 'scheduler', triggeredByUser?: string): Promise<JobRunLog> {
   try {
     const currentDay = getCurrentDayOfWeek();
     const timeInfo = getCurrentTimeInfo();
     const now = new Date();
-    
-    // Only send emails after 9:30 AM IST (more robust than exact time check)
-    if (timeInfo.hour < 9 || (timeInfo.hour === 9 && timeInfo.minute < 30)) {
-      logger.info(`[SCHEDULER] Skipping report reminders - current time is ${timeInfo.hour}:${timeInfo.minute.toString().padStart(2, '0')} (scheduled for after 9:30)`);
-      return;
+
+    // Initialize job run log early so it's available for early returns
+    const jobRunLog: JobRunLog = {
+      jobName: 'report_reminder',
+      scheduledTime: now.toISOString(),
+      actualRunTime: new Date().toISOString(),
+      teamsProcessed: [],
+      successCount: 0,
+      failureCount: 0,
+      skippedCount: 0,
+      triggeredBy,
+      triggeredByUser,
+    };
+
+    // For manual triggers, skip the time check entirely
+    if (triggeredBy === 'manual') {
+      logger.info(`[SCHEDULER] Manual trigger - skipping time check`);
     }
     
-    logger.info(`[SCHEDULER] Checking report reminders for ${currentDay} at ${now.toISOString()}`);
+    logger.info(`[SCHEDULER] Checking report reminders for ${currentDay} at ${now.toISOString()} (triggered by: ${triggeredBy})`);
 
     // Fetch settings from Google Sheets
     const tokenData = await generateGoogleSheetsToken();
     if (!tokenData) {
       logger.error('[SCHEDULER] Failed to generate Google Sheets token');
-      return;
+      jobRunLog.teamsProcessed = [];
+      await logJobRun(jobRunLog);
+      return jobRunLog;
     }
 
     const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
@@ -345,16 +512,17 @@ export async function checkAndSendReportReminders(): Promise<void> {
     
     if (!settingsRows) {
       logger.error('[SCHEDULER] Failed to fetch settings sheet');
-      return;
+      jobRunLog.teamsProcessed = [];
+      await logJobRun(jobRunLog);
+      return jobRunLog;
     }
 
-    // Check if already sent today using Firestore for better reliability during deployments
-    const todayStr = new Date().toISOString().split('T')[0];
+    // Check for concurrent runs using short-lived mutex (prevents duplicate processes)
+    // This is NOT a "did we succeed today" flag - per-team tracking handles that
     const schedulerLockDoc = await firestoreAdmin.collection('scheduler_locks').doc('report_reminder').get();
     const lockData = schedulerLockDoc.exists ? schedulerLockDoc.data() : null;
 
     if (lockData) {
-      const lastRunDate = lockData.lastRunDate || '';
       const lastRunStatus = lockData.lastRunStatus || '';
       const lastRunTimestamp = lockData.lastRunTimestamp || '';
 
@@ -364,7 +532,7 @@ export async function checkAndSendReportReminders(): Promise<void> {
         try {
           const startTime = new Date(lastRunTimestamp).getTime();
           const elapsedMs = Date.now() - startTime;
-          if (elapsedMs > 5 * 60 * 1000) { // 5 minutes (reduced from 30 for faster recovery)
+          if (elapsedMs > 5 * 60 * 1000) { // 5 minutes
             isStaleRunning = true;
             logger.warn('[SCHEDULER] Previous run stale (running > 5 min), will retry');
           }
@@ -373,43 +541,34 @@ export async function checkAndSendReportReminders(): Promise<void> {
         }
       }
 
-      const alreadySentSuccessfully = lastRunDate === todayStr && (lastRunStatus === 'success' || lastRunStatus === 'partial_success');
-      const isRunningRecently = lastRunDate === todayStr && lastRunStatus === 'running' && !isStaleRunning;
-
-      if (alreadySentSuccessfully) {
-        logger.info('[SCHEDULER] Report reminders already sent successfully today, skipping');
-        return;
-      }
+      const isRunningRecently = lastRunStatus === 'running' && !isStaleRunning;
 
       if (isRunningRecently) {
-        logger.info('[SCHEDULER] Report reminders already running today, skipping to prevent duplicates');
-        return;
+        logger.info('[SCHEDULER] Report reminders already running, skipping to prevent concurrent execution');
+        return jobRunLog;
       }
     }
 
-    // Set lock to running with timestamp (Firestore transaction for atomicity)
+    // Set lock to running with timestamp (short-lived mutex only)
     await firestoreAdmin.collection('scheduler_locks').doc('report_reminder').set({
-      lastRunDate: todayStr,
       lastRunStatus: 'running',
       lastRunTimestamp: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }, { merge: true });
 
-    // Check email_enabled_scheduled_reports flag from Firestore (authoritative source)
+    try {
+      // Check email_enabled_scheduled_reports flag from Firestore (authoritative source)
     const scheduledReportsDoc = await firestoreAdmin.collection('settings').doc('email_enabled_scheduled_reports').get();
     const scheduledReportsEnabled = scheduledReportsDoc.exists 
       ? scheduledReportsDoc.data()?.Value === 'true'
       : true; // Default to enabled if setting doesn't exist
 
-    if (!scheduledReportsEnabled) {
-      logger.info('[SCHEDULER] Skipping — email_enabled_scheduled_reports is disabled in Firestore');
-      // Reset lock since we're not actually running
-      await firestoreAdmin.collection('scheduler_locks').doc('report_reminder').update({
-        lastRunStatus: 'skipped',
-        updatedAt: new Date().toISOString()
-      });
-      return;
-    }
+      if (!scheduledReportsEnabled) {
+        logger.info('[SCHEDULER] Skipping — email_enabled_scheduled_reports is disabled in Firestore');
+        jobRunLog.teamsProcessed = [];
+        await logJobRun(jobRunLog);
+        return jobRunLog;
+      }
 
     // Get all team report configurations
     const configs = await getTeamReportConfigs();
@@ -438,10 +597,39 @@ export async function checkAndSendReportReminders(): Promise<void> {
 
     // Process each configuration
     const entitiesToRemind: TeamWithConfig[] = [];
+    const todayStr = new Date().toISOString().split('T')[0];
 
     for (const config of configs) {
       if (!config.active) continue;
-      if (config.reminderDay !== currentDay) continue;
+      
+      // Atomically claim the reminder slot for this team (right before sending, not after eligibility check)
+      const claimed = await tryClaimReminderSlot(config.teamId, todayStr);
+      if (!claimed) {
+        logger.info(`[SCHEDULER] Skipping ${config.teamName} - slot already claimed/sent today`);
+        jobRunLog.skippedCount++;
+        jobRunLog.teamsProcessed.push({
+          teamId: config.teamId,
+          teamName: config.teamName,
+          status: 'skipped',
+          reason: 'Already sent today',
+          recipients: [],
+        });
+        continue;
+      }
+      
+      // Use per-team timezone check instead of global server time
+      if (!shouldSendReminderForTeam(config)) {
+        logger.info(`[SCHEDULER] Skipping ${config.teamName} - not time yet in their timezone (${config.timezone})`);
+        jobRunLog.skippedCount++;
+        jobRunLog.teamsProcessed.push({
+          teamId: config.teamId,
+          teamName: config.teamName,
+          status: 'skipped',
+          reason: 'Not time yet in team timezone',
+          recipients: [],
+        });
+        continue;
+      }
 
       let teamName: string;
       let leaderEmails: string[] = [];
@@ -497,6 +685,14 @@ export async function checkAndSendReportReminders(): Promise<void> {
       // Skip if already sent to this team in this run
       if (sentRecipients.has(entity.teamId)) {
         logger.info(`[SCHEDULER] Skipping ${entity.teamName} - already sent in this run`);
+        jobRunLog.teamsProcessed.push({
+          teamId: entity.teamId,
+          teamName: entity.teamName,
+          status: 'skipped',
+          reason: 'Already sent in this run',
+          recipients,
+        });
+        jobRunLog.skippedCount++;
         continue;
       }
 
@@ -515,10 +711,32 @@ export async function checkAndSendReportReminders(): Promise<void> {
       if (result.success) {
         successCount++;
         sentRecipients.add(entity.teamId);
+        // Mark this team as sent today (per-team tracking)
+        await markReminderSentToday(entity.teamId, todayStr);
         logger.info(`[SCHEDULER] ✓ Report reminder sent to ${entity.teamName} for ${recipients.length} recipients`);
+        jobRunLog.teamsProcessed.push({
+          teamId: entity.teamId,
+          teamName: entity.teamName,
+          status: 'sent',
+          recipients,
+          gmailMessageId: result.gmailMessageId,
+        });
       } else {
         failureCount++;
         logger.error(`[SCHEDULER] ✗ Failed to send report reminder to ${entity.teamName}`);
+
+        const errorReason = 'Email send failed';
+        jobRunLog.teamsProcessed.push({
+          teamId: entity.teamId,
+          teamName: entity.teamName,
+          status: 'failed',
+          reason: errorReason,
+          recipients,
+          error: errorReason,
+        });
+
+        // Mark as failed to allow retries later in the day if needed
+        await markReminderFailed(entity.teamId, todayStr, errorReason);
 
         // Log failure for admin visibility
         await firestoreAdmin.collection('report_reminder_failures').add({
@@ -526,7 +744,7 @@ export async function checkAndSendReportReminders(): Promise<void> {
           teamName: entity.teamName,
           recipientEmails: recipients.join(', '),
           weekOf,
-          reason: 'Email send failed',
+          reason: errorReason,
           timestamp: new Date().toISOString(),
         });
       }
@@ -534,18 +752,40 @@ export async function checkAndSendReportReminders(): Promise<void> {
 
     logger.info(`[SCHEDULER] Report reminder check complete: ${successCount} sent, ${failureCount} failed`);
 
-    // Update final status in Firestore (more reliable than Google Sheets)
-    const finalStatus = failureCount === 0 ? 'success' : 'partial_success';
-    await firestoreAdmin.collection('scheduler_locks').doc('report_reminder').update({
-      lastRunStatus: finalStatus,
-      lastRunTimestamp: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      successCount,
-      failureCount
-    });
+    // Update job run log counts
+    jobRunLog.successCount = successCount;
+    jobRunLog.failureCount = failureCount;
+
+      // Log the job run to Firestore
+      await logJobRun(jobRunLog);
+
+      return jobRunLog;
+    } finally {
+      // Clear the running lock regardless of success or failure (per-team tracking handles "sent today" logic)
+      await firestoreAdmin.collection('scheduler_locks').doc('report_reminder').update({
+        lastRunStatus: 'idle',
+        lastRunTimestamp: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
 
   } catch (error) {
     logger.error('Error in checkAndSendReportReminders:', error);
+    
+    // Log failed job run
+    const failedJobRun: JobRunLog = {
+      jobName: 'report_reminder',
+      scheduledTime: new Date().toISOString(),
+      actualRunTime: new Date().toISOString(),
+      teamsProcessed: [],
+      successCount: 0,
+      failureCount: 0,
+      skippedCount: 0,
+      triggeredBy,
+      triggeredByUser,
+    };
+    await logJobRun(failedJobRun);
+
     // Update status to failed on error (use Firestore for reliability)
     try {
       await firestoreAdmin.collection('scheduler_locks').doc('report_reminder').update({
@@ -557,6 +797,8 @@ export async function checkAndSendReportReminders(): Promise<void> {
     } catch (saveError) {
       logger.error('Failed to update error status:', saveError);
     }
+    
+    return failedJobRun;
   }
 }
 

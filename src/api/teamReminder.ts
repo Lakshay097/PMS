@@ -91,3 +91,61 @@ export async function getTeamReportConfigs(): Promise<TeamReportConfigsResponse>
 export async function updateTeamReportConfig(teamId: string, reminderDay: string, meetingDay: string): Promise<{ success: boolean; message: string }> {
   return api.put<{ success: boolean; message: string }>(`/report-reminders/config/${teamId}`, { reminderDay, meetingDay });
 }
+
+export interface JobRunTeamProcessed {
+  teamId: string;
+  teamName: string;
+  status: 'sent' | 'failed' | 'skipped';
+  reason?: string;
+  recipients: string[];
+  gmailMessageId?: string;
+  error?: string;
+}
+
+export interface JobRun {
+  jobName: string;
+  scheduledTime: string;
+  actualRunTime: string;
+  teamsProcessed: JobRunTeamProcessed[];
+  successCount: number;
+  failureCount: number;
+  skippedCount: number;
+  triggeredBy: 'scheduler' | 'manual';
+  triggeredByUser?: string;
+  timestamp: string;
+}
+
+export interface JobRunsResponse {
+  success: boolean;
+  jobRuns: JobRun[];
+  count: number;
+}
+
+export async function getJobRuns(limit?: number, jobName?: string): Promise<JobRunsResponse> {
+  const params = new URLSearchParams();
+  if (limit) params.append('limit', limit.toString());
+  if (jobName) params.append('jobName', jobName);
+  const queryString = params.toString();
+  return api.get<JobRunsResponse>(`/job-runs${queryString ? `?${queryString}` : ''}`);
+}
+
+export async function getLatestJobRun(jobName: string): Promise<{ success: boolean; jobRun: JobRun | null }> {
+  return api.get<{ success: boolean; jobRun: JobRun | null }>(`/job-runs/latest/${jobName}`);
+}
+
+export interface GmailReauthRequired {
+  userEmail: string;
+  reason: string;
+  error?: string;
+  timestamp: string;
+}
+
+export interface GmailReauthRequiredResponse {
+  success: boolean;
+  reauthRequired: GmailReauthRequired[];
+  count: number;
+}
+
+export async function getGmailReauthRequired(): Promise<GmailReauthRequiredResponse> {
+  return api.get<GmailReauthRequiredResponse>('/gmail-reauth-required');
+}

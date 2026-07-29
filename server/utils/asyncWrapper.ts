@@ -6,7 +6,7 @@ import { InternalServerError } from './AppError';
  * @param fn - Async function to wrap
  * @returns Express middleware function
  */
-export const asyncWrapper = (fn: (req: Request, res: Response, next: NextFunction) => Promise<any>) => {
+export const asyncWrapper = (fn: (req: any, res: Response, next: NextFunction) => Promise<any>) => {
   return (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };

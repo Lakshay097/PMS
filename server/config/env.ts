@@ -14,6 +14,7 @@ export function validateEnv(): void {
     'JWT_SECRET',
     'GOOGLE_SERVICE_ACCOUNT_EMAIL',
     'GOOGLE_PRIVATE_KEY',
+    'FIREBASE_PROJECT_ID',
   ];
 
   const missingVars: string[] = [];

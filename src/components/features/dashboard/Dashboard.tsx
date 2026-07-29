@@ -730,7 +730,7 @@ export default function Dashboard({
       case 'High': return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
       case 'Medium': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
       case 'Low': return 'bg-green-500/10 text-green-400 border-green-500/20';
-      default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
+      default: return 'bg-slate-500/10 text-secondary border-slate-500/20';
     }
   };
 
@@ -739,8 +739,8 @@ export default function Dashboard({
       case 'Overdue': return 'bg-red-500/10 text-red-400 border-red-500/20';
       case 'In progress': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
       case 'Submitted': return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
-      case 'Not Started': return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
-      default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
+      case 'Not Started': return 'bg-slate-500/10 text-secondary border-slate-500/20';
+      default: return 'bg-slate-500/10 text-secondary border-slate-500/20';
     }
   };
 
@@ -1098,16 +1098,16 @@ export default function Dashboard({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
           onClick={() => handleViewChange('tasks')}
-          className={`border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B] hover:border-purple-500/50' : 'bg-white border-[#E5E7EB]'}`}
+          className="border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all bg-surface border-token hover:border-purple-500/50"
         >
           <div className="flex items-center justify-between mb-2">
             <div className="w-7 h-7 sm:w-8 sm:h-8 bg-purple-500/10 rounded-lg flex items-center justify-center">
               <Activity className="text-purple-400" size={16} />
             </div>
-            <span className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>All statuses</span>
+            <span className="text-[9px] sm:text-[10px] text-muted">All statuses</span>
           </div>
-          <p className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{allTasks}</p>
-          <p className={`text-[10px] sm:text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>All Tasks</p>
+          <p className="text-xl sm:text-2xl font-bold text-primary">{allTasks}</p>
+          <p className="text-[10px] sm:text-xs mt-1 text-muted">All Tasks</p>
         </motion.div>
 
         <motion.div
@@ -1115,16 +1115,16 @@ export default function Dashboard({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           onClick={() => handleViewChange('tasks', 'In Progress,Submitted', 'status')}
-          className={`border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B] hover:border-blue-500/50' : 'bg-white border-[#E5E7EB]'}`}
+          className="border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all bg-surface border-token hover:border-blue-500/50"
         >
           <div className="flex items-center justify-between mb-2">
             <div className="w-7 h-7 sm:w-8 sm:h-8 bg-blue-500/10 rounded-lg flex items-center justify-center">
               <ClipboardList className="text-blue-400" size={16} />
             </div>
-            <span className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Open & in progress</span>
+            <span className="text-[9px] sm:text-[10px] text-muted">Open & in progress</span>
           </div>
-          <p className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{activeTasks}</p>
-          <p className={`text-[10px] sm:text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Active Tasks</p>
+          <p className="text-xl sm:text-2xl font-bold text-primary">{activeTasks}</p>
+          <p className="text-[10px] sm:text-xs mt-1 text-muted">Active Tasks</p>
         </motion.div>
 
         <motion.div
@@ -1132,16 +1132,16 @@ export default function Dashboard({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
           onClick={() => handleViewChange('tasks', 'Overdue', 'status')}
-          className={`border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B] hover:border-red-500/50' : 'bg-white border-[#E5E7EB]'}`}
+          className="border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all bg-surface border-token hover:border-red-500/50"
         >
           <div className="flex items-center justify-between mb-2">
             <div className="w-7 h-7 sm:w-8 sm:h-8 bg-red-500/10 rounded-lg flex items-center justify-center">
               <AlertTriangle className="text-red-400" size={16} />
             </div>
-            <span className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Past due date</span>
+            <span className="text-[9px] sm:text-[10px] text-muted">Past due date</span>
           </div>
-          <p className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{overdueTasks}</p>
-          <p className={`text-[10px] sm:text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Overdue</p>
+          <p className="text-xl sm:text-2xl font-bold text-primary">{overdueTasks}</p>
+          <p className="text-[10px] sm:text-xs mt-1 text-muted">Overdue</p>
         </motion.div>
 
         <motion.div
@@ -1149,16 +1149,16 @@ export default function Dashboard({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
           onClick={() => handleViewChange('tasks', 'today', 'dueDate')}
-          className={`border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B] hover:border-yellow-500/50' : 'bg-white border-[#E5E7EB]'}`}
+          className="border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all bg-surface border-token hover:border-yellow-500/50"
         >
           <div className="flex items-center justify-between mb-2">
             <div className="w-7 h-7 sm:w-8 sm:h-8 bg-yellow-500/10 rounded-lg flex items-center justify-center">
               <Clock className="text-yellow-400" size={16} />
             </div>
-            <span className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Deadline today</span>
+            <span className="text-[9px] sm:text-[10px] text-muted">Deadline today</span>
           </div>
-          <p className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{dueToday}</p>
-          <p className={`text-[10px] sm:text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Due Today</p>
+          <p className="text-xl sm:text-2xl font-bold text-primary">{dueToday}</p>
+          <p className="text-[10px] sm:text-xs mt-1 text-muted">Due Today</p>
         </motion.div>
 
         <motion.div
@@ -1166,16 +1166,16 @@ export default function Dashboard({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
           onClick={() => handleViewChange('tasks', 'Closed', 'completedThisWeek')}
-          className={`border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B] hover:border-green-500/50' : 'bg-white border-[#E5E7EB]'}`}
+          className="border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all bg-surface border-token hover:border-green-500/50"
         >
           <div className="flex items-center justify-between mb-2">
             <div className="w-7 h-7 sm:w-8 sm:h-8 bg-green-500/10 rounded-lg flex items-center justify-center">
               <CheckCircle className="text-green-400" size={16} />
             </div>
-            <span className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Last 7 days</span>
+            <span className="text-[9px] sm:text-[10px] text-muted">Last 7 days</span>
           </div>
-          <p className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{completedThisWeek}</p>
-          <p className={`text-[10px] sm:text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Completed This Week</p>
+          <p className="text-xl sm:text-2xl font-bold text-primary">{completedThisWeek}</p>
+          <p className="text-[10px] sm:text-xs mt-1 text-muted">Completed This Week</p>
         </motion.div>
       </div>
 
@@ -1184,12 +1184,12 @@ export default function Dashboard({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5 }}
-        className={`border rounded-xl ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}
+        className="border rounded-xl bg-surface border-token"
       >
-        <div className={`p-4 sm:p-6 border-b flex items-center justify-between border-[#E5E7EB] ${isDarkMode ? 'border-[#1E293B]' : ''}`}>
+        <div className="p-4 sm:p-6 border-b flex items-center justify-between border-token">
           <div className="flex items-center space-x-2 sm:space-x-3">
             <Bell className="text-orange-400" size={18} />
-            <h3 className={`font-semibold text-sm sm:text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Needs attention</h3>
+            <h3 className="font-semibold text-sm sm:text-lg text-primary">Needs attention</h3>
             <span className="bg-orange-500/10 text-orange-400 text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full border border-orange-500/20">
               {needsAttention.length} items
             </span>
@@ -1200,7 +1200,7 @@ export default function Dashboard({
             <ChevronRight size={16} />
           </button>
         </div>
-        <div className={`divide-y ${isDarkMode ? 'divide-[#1E293B]' : 'divide-slate-200'}`}>
+        <div className="divide-y divide-[var(--color-border)]">
           {needsAttention.map((task, index) => {
             const daysUntil = getDaysUntilDue(task.DueDate);
             const dueText = daysUntil < 0 ? 'Overdue' : daysUntil === 0 ? 'Today' : `${daysUntil} days`;
@@ -1212,7 +1212,7 @@ export default function Dashboard({
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.6 + index * 0.1 }}
                 onClick={(e) => { e.preventDefault(); onTaskClick(task); }}
-                className={`p-4 sm:p-6 transition-colors cursor-pointer ${isDarkMode ? 'hover:bg-[#1E293B]/30' : 'hover:bg-slate-50'}`}
+                className="p-4 sm:p-6 transition-colors cursor-pointer hover-surface"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -1224,16 +1224,16 @@ export default function Dashboard({
                         {task.Status}
                       </span>
                     </div>
-                    <h4 className={`font-medium text-sm sm:text-base mb-2 line-clamp-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    <h4 className="font-medium text-sm sm:text-base mb-2 line-clamp-2 text-primary">
                       {task.Title.length > 30 ? task.Title.substring(0, 30) + '...' : task.Title}
                     </h4>
-                    <div className={`flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-[10px] sm:text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-[10px] sm:text-xs text-muted">
                       <span>Due: {task.DueDate} {daysUntil > 0 && `(${dueText})`}</span>
                       <span>Assigned to: {task.AssignedToEmail.split('@')[0]}</span>
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className={`text-[10px] sm:text-xs font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{task.TaskID}</p>
+                    <p className="text-[10px] sm:text-xs font-mono text-muted">{task.TaskID}</p>
                   </div>
                 </div>
               </motion.div>
@@ -1248,12 +1248,12 @@ export default function Dashboard({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7 }}
-          className={`border rounded-xl ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}
+          className="border rounded-xl bg-surface border-token"
         >
-          <div className={`p-4 sm:p-6 border-b ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'}`}>
+          <div className="p-4 sm:p-6 border-b border-token">
             <div className="flex items-center space-x-2 sm:space-x-3">
               <AlertTriangle className="text-red-400" size={18} />
-              <h3 className={`font-semibold text-sm sm:text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Alerts</h3>
+              <h3 className="font-semibold text-sm sm:text-lg text-primary">Alerts</h3>
             </div>
           </div>
           <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
@@ -1273,13 +1273,13 @@ export default function Dashboard({
                         <Bell className="text-yellow-400 mt-0.5" size={16} />
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className={`font-medium text-xs sm:text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                        <p className="font-medium text-xs sm:text-sm text-primary">
                           {isOverdue ? 'Overdue task' : 'High priority task'}
                         </p>
-                        <p className={`text-[10px] sm:text-xs mt-1 line-clamp-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                        <p className="text-[10px] sm:text-xs mt-1 line-clamp-2 text-muted">
                           {task.TaskID}: {task.Title.length > 50 ? task.Title.substring(0, 50) + '...' : task.Title}
                         </p>
-                        <p className={`text-[10px] sm:text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                        <p className="text-[10px] sm:text-xs mt-1 text-muted">
                           Due: {task.DueDate} &bull; Priority: {task.Priority}
                         </p>
                       </div>
@@ -1288,7 +1288,7 @@ export default function Dashboard({
                 );
               })
             ) : (
-              <div className={`text-center py-6 sm:py-8 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+              <div className="text-center py-6 sm:py-8 text-muted">
                 <CheckCircle className="mx-auto mb-2 text-green-400" size={24} />
                 <p className="text-xs sm:text-sm">No alerts at this time</p>
                 <p className="text-[10px] sm:text-xs mt-1">All tasks are on track</p>
@@ -1301,12 +1301,12 @@ export default function Dashboard({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.8 }}
-          className={`border rounded-xl ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}
+          className="border rounded-xl bg-surface border-token"
         >
-          <div className={`p-6 border-b ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'}`}>
+          <div className="p-6 border-b border-token">
             <div className="flex items-center space-x-3">
               <Activity className="text-blue-400" size={20} />
-              <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Recent activity</h3>
+              <h3 className="font-semibold text-lg text-primary">Recent activity</h3>
             </div>
           </div>
           <div className="p-6 space-y-4">
@@ -1338,14 +1338,14 @@ export default function Dashboard({
                       handleViewChange('tasks');
                   }
                 }}
-                className="flex items-start space-x-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-[#1E293B]/30 rounded-lg p-2 -mx-2 transition-colors"
+                className="flex items-start space-x-3 cursor-pointer hover-surface dark:hover:bg-[#1E293B]/30 rounded-lg p-2 -mx-2 transition-colors"
               >
                 <div className="w-8 h-8 bg-blue-500/10 rounded-full flex items-center justify-center flex-shrink-0">
                   <Activity className="text-blue-400" size={14} />
                 </div>
                 <div>
-                  <p className={`text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{activity.action}</p>
-                  <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{activity.date}</p>
+                  <p className="text-sm text-primary">{activity.action}</p>
+                  <p className="text-xs mt-1 text-muted">{activity.date}</p>
                 </div>
               </div>
             ))}
@@ -1360,8 +1360,8 @@ export default function Dashboard({
       {/* Header with Create Task button and Content Type Toggle */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Tasks & Schedules</h2>
-          <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+          <h2 className="text-xl font-bold text-primary">Tasks & Schedules</h2>
+          <p className="text-sm mt-1 text-muted">
             {taskContentType === 'tasks'
               ? (isAdminLevel(currentUser.Role) ? 'Manage all tasks' : 'Manage your assigned tasks')
               : 'Manage recurring task schedules'
@@ -1370,14 +1370,12 @@ export default function Dashboard({
         </div>
         <div className="flex items-center space-x-3">
           {/* Content Type Toggle */}
-          <div className={`flex rounded-lg p-1 ${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-100'}`}>
+          <div className="flex rounded-lg p-1 bg-surface border-token">
             <button
               onClick={() => setTaskContentType('tasks')}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${taskContentType === 'tasks'
                   ? 'bg-blue-500 text-white'
-                  : isDarkMode
-                    ? 'text-slate-400 hover:text-white'
-                    : 'text-slate-600 hover:text-slate-900'
+                  : 'text-muted hover:text-primary'
                 }`}
             >
               Tasks
@@ -1386,9 +1384,7 @@ export default function Dashboard({
               onClick={() => setTaskContentType('schedules')}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${taskContentType === 'schedules'
                   ? 'bg-blue-500 text-white'
-                  : isDarkMode
-                    ? 'text-slate-400 hover:text-white'
-                    : 'text-slate-600 hover:text-slate-900'
+                  : 'text-muted hover:text-primary'
                 }`}
             >
               Schedules
@@ -1406,15 +1402,15 @@ export default function Dashboard({
 
       {/* Task Sub-tabs for Admin and Stakeholder only - only show for tasks */}
       {taskContentType === 'tasks' && (isAdminLevel(currentUser.Role) || currentUser.Role === ROLE.STAKEHOLDER) && (
-        <div className={`border rounded-xl p-4 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
+        <div className="border rounded-xl p-4 bg-surface border-token">
           <div className="flex items-center space-x-4">
             <button
               onClick={() => setTaskSubView('my-tasks')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${taskSubView === 'my-tasks'
                   ? 'bg-blue-500 text-white'
                   : isDarkMode
-                    ? 'bg-[#1E293B] text-slate-400 hover:text-white'
-                    : 'bg-slate-100 text-slate-600 hover:text-slate-900'
+                    ? 'bg-[#1E293B] text-secondary hover:text-white'
+                    : 'bg-slate-100 text-secondary hover:text-slate-900'
                 }`}
             >
               My Tasks
@@ -1424,8 +1420,8 @@ export default function Dashboard({
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${taskSubView === 'team-tasks'
                   ? 'bg-blue-500 text-white'
                   : isDarkMode
-                    ? 'bg-[#1E293B] text-slate-400 hover:text-white'
-                    : 'bg-slate-100 text-slate-600 hover:text-slate-900'
+                    ? 'bg-[#1E293B] text-secondary hover:text-white'
+                    : 'bg-slate-100 text-secondary hover:text-slate-900'
                 }`}
             >
               {isAdminLevel(currentUser.Role) ? 'Team Tasks' : 'Assigned by Me'}
@@ -1437,8 +1433,8 @@ export default function Dashboard({
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${taskSubView === 'assigned-by-me'
                     ? 'bg-blue-500 text-white'
                     : isDarkMode
-                      ? 'bg-[#1E293B] text-slate-400 hover:text-white'
-                      : 'bg-slate-100 text-slate-600 hover:text-slate-900'
+                      ? 'bg-[#1E293B] text-secondary hover:text-white'
+                      : 'bg-slate-100 text-secondary hover:text-slate-900'
                   }`}
               >
                 Assigned by Me
@@ -1486,30 +1482,30 @@ export default function Dashboard({
 
       {/* Show schedules content */}
       {taskContentType === 'schedules' && (
-        <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
-          <div className={`divide-y ${isDarkMode ? 'divide-[#1E293B]' : 'divide-slate-200'}`}>
+        <div className="border rounded-xl p-6 bg-surface border-token">
+          <div className="divide-y divide-[var(--color-border)]">
             {templates.filter(t => t.Active).length > 0 ? (
               templates.filter(t => t.Active).map((template) => (
                 <div key={template.TemplateID} className="py-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-2 mb-2">
-                        <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{template.Title}</h4>
+                        <h4 className="font-medium text-primary">{template.Title}</h4>
                         <span className={`text-xs font-bold px-2 py-1 rounded border ${getPriorityColor(template.Priority)}`}>
                           {template.Priority}
                         </span>
                       </div>
                       <div className="flex items-center space-x-4 text-sm">
-                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>{template.RecurrenceType}</span>
-                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>&bull; Next: {template.NextGenerationDate}</span>
+                        <span className="text-sm text-muted">{template.RecurrenceType}</span>
+                        <span className="text-sm text-muted">&bull; Next: {template.NextGenerationDate}</span>
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
                       <button
                         onClick={() => onNewTask()}
                         className={`px-3 py-1 text-xs font-bold tracking-wider rounded-lg transition-colors ${isDarkMode
-                            ? 'text-slate-700 hover:text-slate-900 bg-slate-200 hover:bg-slate-300'
-                            : 'text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200'
+                            ? 'text-slate-700 hover:text-primarybg-slate-200 hover:bg-slate-300'
+                            : 'text-secondary hover:text-primarybg-slate-100 hover:bg-slate-200'
                           }`}
                       >
                         Edit
@@ -1519,7 +1515,7 @@ export default function Dashboard({
                 </div>
               ))
             ) : (
-              <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No active schedules found</div>
+              <div className={`p-12 text-center text-muted`}>No active schedules found</div>
             )}
           </div>
         </div>
@@ -1539,13 +1535,13 @@ export default function Dashboard({
 
     return (
       <div className="space-y-6">
-        <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
+        <div className="border rounded-xl p-6 bg-surface border-token">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+              <h3 className="font-semibold text-lg text-primary">
                 Team Members
               </h3>
-              <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+              <p className="text-sm mt-1 text-muted">
                 Full roster — all members across all sub-teams
               </p>
             </div>
@@ -1570,7 +1566,7 @@ export default function Dashboard({
           </div>
 
           {visibleTeams.length === 0 ? (
-            <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            <div className={`p-12 text-center text-muted`}>
               {isAdminLevel(currentUser.Role) ? 'No active teams.' : 'You are not assigned to any team.'}
             </div>
           ) : (
@@ -1622,26 +1618,26 @@ export default function Dashboard({
                 };
 
                 return (
-                  <div key={team.TeamID} className={`border rounded-xl overflow-hidden ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
+                  <div key={team.TeamID} className="border rounded-xl overflow-hidden border-token">
                     {/* Team header */}
-                    <div className={`flex items-center justify-between px-5 py-3 ${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-50'}`}>
+                    <div className="flex items-center justify-between px-5 py-3 bg-surface border-token">
                       <div className="flex items-center gap-3">
                         <button
                           onClick={toggleCollapse}
-                          className="flex items-center justify-center w-6 h-6 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                          className="flex items-center justify-center w-6 h-6 rounded hover-surface transition-colors"
                         >
                           {isCollapsed ? (
-                            <ChevronRight size={16} className={isDarkMode ? 'text-slate-400' : 'text-slate-600'} />
+                            <ChevronRight size={16} className="text-muted" />
                           ) : (
-                            <ChevronDown size={16} className={isDarkMode ? 'text-slate-400' : 'text-slate-600'} />
+                            <ChevronDown size={16} className="text-muted" />
                           )}
                         </button>
-                        <h4 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{team.TeamName}</h4>
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${isDarkMode ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
+                        <h4 className="font-bold text-sm text-primary">{team.TeamName}</h4>
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full border bg-blue-500/10 border-blue-500/20 text-blue-400">
                           {allTeamMembers.length} member{allTeamMembers.length !== 1 ? 's' : ''}
                         </span>
                         {teamSubTeamList.length > 0 && (
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full border bg-indigo-500/10 border-indigo-500/20 text-indigo-400">
                             {teamSubTeamList.length} sub-team{teamSubTeamList.length !== 1 ? 's' : ''}
                           </span>
                         )}
@@ -1657,33 +1653,33 @@ export default function Dashboard({
                     </div>
 
                     {/* Member groups */}
-                    <div className={`divide-y ${isDarkMode ? 'divide-[#1E293B]' : 'divide-slate-100'}`}>
+                    <div className="divide-y divide-[var(--color-border)]">
                       {isCollapsed ? (
                         // Collapsed view: show only team leaders and sub-teams
                         <>
                           {/* Team leaders */}
                           {allTeamMembers.filter(m => team.TeamLeaderEmails?.includes(m.Email)).map(member => (
-                            <div key={member.Email} className={`px-5 py-3 flex items-center justify-between hover:bg-opacity-50 transition-colors ${isDarkMode ? 'hover:bg-[#1E293B]/40' : 'hover:bg-slate-50'}`}>
+                            <div key={member.Email} className="px-5 py-3 flex items-center justify-between hover:bg-opacity-50 transition-colors hover-surface">
                               <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
                                   <User className="text-white" size={14} />
                                 </div>
                                 <div>
-                                  <div className={`font-medium text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                  <div className="font-medium text-sm text-primary">
                                     {member.FullName}
                                   </div>
-                                  <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{member.Email}</div>
+                                  <div className="text-xs text-muted">{member.Email}</div>
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-amber-500/10 border-amber-500/20 text-amber-400">
                                   Team Leader
                                 </span>
                                 <span className={`text-xs font-bold px-2 py-0.5 rounded border ${member.Role === ROLE.ADMIN
-                                    ? isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200'
+                                    ? 'bg-red-500/10 text-red-400 border-red-500/20'
                                     : member.Role === ROLE.STAKEHOLDER
-                                      ? isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-700 border-blue-200'
-                                      : isDarkMode ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-slate-50 text-slate-700 border-slate-200'
+                                      ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                      : 'bg-slate-500/10 text-secondary border-slate-500/20'
                                   }`}>
                                   {member.Role}
                                 </span>
@@ -1692,11 +1688,11 @@ export default function Dashboard({
                           ))}
                           {/* Sub-teams (just names, no members) */}
                           {teamSubTeamList.map(st => (
-                            <div key={st.SubTeamID} className={`px-5 py-2 flex items-center gap-2 ${isDarkMode ? 'bg-[#0F141F]/60' : 'bg-slate-50/80'}`}>
-                              <span className={`text-[10px] font-bold tracking-widest uppercase ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                            <div key={st.SubTeamID} className="px-5 py-2 flex items-center gap-2 bg-surface border-token">
+                              <span className="text-[10px] font-bold tracking-widest uppercase text-muted">
                                 {st.SubTeamName}
                               </span>
-                              <span className={`text-[10px] ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
+                              <span className="text-[10px] text-muted">
                                 ({allTeamMembers.filter(m => m.SubTeamIDs?.includes(st.SubTeamID)).length} members)
                               </span>
                             </div>
@@ -1708,17 +1704,17 @@ export default function Dashboard({
                           <div key={group.label}>
                             {/* Sub-team label — only show when there are actual sub-teams */}
                             {teamSubTeamList.length > 0 && (
-                              <div className={`px-5 py-2 flex items-center gap-2 ${isDarkMode ? 'bg-[#0F141F]/60' : 'bg-slate-50/80'}`}>
-                                <span className={`text-[10px] font-bold tracking-widest uppercase ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                              <div className="px-5 py-2 flex items-center gap-2 bg-surface border-token">
+                                <span className="text-[10px] font-bold tracking-widest uppercase text-muted">
                                   {group.label}
                                 </span>
-                                <span className={`text-[10px] ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
+                                <span className="text-[10px] text-muted">
                                   ({group.members.length})
                                 </span>
                               </div>
                             )}
                             {group.members.length === 0 ? (
-                              <div className={`px-5 py-3 text-xs italic ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
+                              <div className="px-5 py-3 text-xs italic text-muted">
                                 No members in this sub-team
                               </div>
                             ) : (
@@ -1732,7 +1728,7 @@ export default function Dashboard({
                                   e => e.toLowerCase() === member.Email.toLowerCase()
                                 );
                                 return (
-                                  <div key={member.Email} className={`px-5 py-3 flex items-center justify-between hover:bg-opacity-50 transition-colors ${isDarkMode ? 'hover:bg-[#1E293B]/40' : 'hover:bg-slate-50'}`}>
+                                  <div key={member.Email} className="px-5 py-3 flex items-center justify-between hover:bg-opacity-50 transition-colors hover-surface">
                                     <div className="flex items-center gap-3">
                                       <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
                                         <User className="text-white" size={14} />
@@ -1741,7 +1737,7 @@ export default function Dashboard({
                                         <div className={`font-medium text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                                           {member.FullName}
                                         </div>
-                                        <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{member.Email}</div>
+                                        <div className={`text-xs ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`}>{member.Email}</div>
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -1759,7 +1755,7 @@ export default function Dashboard({
                                           ? isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200'
                                           : member.Role === ROLE.STAKEHOLDER
                                             ? isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-700 border-blue-200'
-                                            : isDarkMode ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-slate-50 text-slate-700 border-slate-200'
+                                            : 'bg-slate-500/10 text-secondary border-slate-500/20'
                                         }`}>
                                         {member.Role}
                                       </span>
@@ -1935,8 +1931,8 @@ export default function Dashboard({
     if (!reports || reports.length === 0) {
       return (
         <div className="space-y-6">
-          <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
-            <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+          <div className="border rounded-xl p-6 bg-surface border-token">
+            <div className={`p-12 text-center text-muted`}>
               No reports found
             </div>
           </div>
@@ -2016,10 +2012,21 @@ export default function Dashboard({
 
     return (
       <div className="space-y-6">
-        <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
+        <div className="border rounded-xl p-6 bg-surface border-token">
           <div className="flex items-center justify-between mb-6">
-            <h3 className={`font-semibold text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Progress Reports</h3>
+            <h3 className="font-semibold text-lg text-primary">Progress Reports</h3>
             <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowFlatView(!showFlatView)}
+                className={`text-sm px-3 py-1.5 rounded-lg transition-colors ${!showFlatView
+                    ? 'bg-blue-500 text-white'
+                    : isDarkMode
+                      ? 'text-secondary hover:text-white'
+                      : 'text-secondary hover:text-slate-900'
+                  }`}
+              >
+                {showFlatView ? 'Grouped View' : 'Flat View'}
+              </button>
                 <button
                   onClick={() => setShowExportModal(true)}
                   className="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2"
@@ -2027,60 +2034,25 @@ export default function Dashboard({
                   <Download size={16} />
                   Download Report
                 </button>
-              <button
-                onClick={() => setShowFlatView(!showFlatView)}
-                className={`text-sm px-3 py-1.5 rounded-lg transition-colors ${!showFlatView
-                    ? 'bg-blue-500 text-white'
-                    : isDarkMode
-                      ? 'text-slate-400 hover:text-white'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-              >
-                {showFlatView ? 'Grouped View' : 'Flat View'}
-              </button>
-              <button
-                onClick={() => {
-                  // Download all visible reports
-                  const visibleTaskIds = Array.from(reportsByTask.keys());
-                  if (visibleTaskIds.length > 0) {
-                    handleDownloadReportWithAttachments(visibleTaskIds[0]);
-                  }
-                }}
-                disabled={isGeneratingPdf || newDateFilteredReports.length === 0}
-                className={`text-sm px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2 ${isDarkMode
-                    ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20'
-                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-              >
-                {isGeneratingPdf ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Download size={14} />
-                )}
-                <span>Download with Attachments</span>
-              </button>
             </div>
           </div>
 
           {/* Report Filters */}
-          <div className={`border border-[#E5E7EB] bg-white rounded-xl p-4 flex flex-wrap gap-4 items-center mb-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : ''}`}>
-            <div className={`flex items-center space-x-2 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+          <div className="border border-token bg-surface rounded-xl p-4 flex flex-wrap gap-4 items-center mb-6">
+            <div className="flex items-center space-x-2 text-sm text-muted">
               <Filter size={16} />
               <span>Filters:</span>
             </div>
 
             {/* Search Input for Reports */}
             <div className="relative">
-              <Search size={14} className={`absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} sm:size-4`} />
+              <Search size={14} className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 text-muted sm:size-4" />
               <input
                 type="text"
                 placeholder="Search reports..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className={`pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode
-                    ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500'
-                    : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
-                  }`}
+                className="pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 bg-surface border-token text-primary placeholder-muted"
               />
             </div>
 
@@ -2108,7 +2080,7 @@ export default function Dashboard({
             {/* Date Range Filter for Reports */}
             <div className="flex items-center gap-2">
               <div className={`flex items-center gap-2 border rounded-lg px-3 py-2 text-sm ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
-                <Calendar size={16} className={isDarkMode ? 'text-slate-400' : 'text-slate-500'} />
+                <Calendar size={16} className={isDarkMode ? 'text-secondary' : 'text-slate-500'} />
                 <input
                   type="date"
                   value={filterDateFrom}
@@ -2117,9 +2089,9 @@ export default function Dashboard({
                   placeholder="From"
                 />
               </div>
-              <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>to</span>
+              <span className={isDarkMode ? 'text-secondary' : 'text-slate-500'}>to</span>
               <div className={`flex items-center gap-2 border rounded-lg px-3 py-2 text-sm ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
-                <Calendar size={16} className={isDarkMode ? 'text-slate-400' : 'text-slate-500'} />
+                <Calendar size={16} className={isDarkMode ? 'text-secondary' : 'text-slate-500'} />
                 <input
                   type="date"
                   value={filterDateTo}
@@ -2138,8 +2110,8 @@ export default function Dashboard({
                   setFilterDateTo('');
                 }}
                 className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${isDarkMode
-                    ? 'text-slate-400 hover:text-white hover:bg-[#334155]/50'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    ? 'text-secondary hover:text-white hover:bg-[#334155]/50'
+                    : 'text-secondary hover:text-primary hover:bg-slate-100'
                   }`}
               >
                 Clear Filters
@@ -2190,7 +2162,7 @@ export default function Dashboard({
                         <div className="flex-1">
                           <div className="flex items-start justify-between mb-3">
                             <div>
-                              <div className={`text-xs font-mono mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                              <div className={`text-xs font-mono mb-1 ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`}>
                                 Report ID: {report.ReportID || 'N/A'}
                               </div>
                               <div className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
@@ -2208,18 +2180,18 @@ export default function Dashboard({
                             </span>
                           </div>
                           <div className={`mb-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                            <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Work summary</div>
+                            <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`}>Work summary</div>
                             <p className="text-sm">{report.WorkSummary || 'No work summary provided'}</p>
                           </div>
                           {report.Blockers && (
                             <div className={`mb-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                              <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Blockers</div>
+                              <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`}>Blockers</div>
                               <p className="text-sm">{report.Blockers}</p>
                             </div>
                           )}
                           {report.NextAction && (
                             <div className={`mb-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                              <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Next action</div>
+                              <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`}>Next action</div>
                               <p className="text-sm">{report.NextAction}</p>
                             </div>
                           )}
@@ -2258,7 +2230,7 @@ export default function Dashboard({
                   );
                 })
               ) : (
-                <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No reports found</div>
+                <div className={`p-12 text-center text-muted`}>No reports found</div>
               )}
             </div>
           ) : (
@@ -2277,31 +2249,13 @@ export default function Dashboard({
                       >
                         <div className="flex-1 text-left">
                           <h4 className={`font-medium mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{task.Title || 'Untitled Task'}</h4>
-                          <div className={`flex items-center space-x-4 text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                          <div className={`flex items-center space-x-4 text-sm ${isDarkMode ? 'text-secondary' : 'text-secondary'}`}>
                             <span>Task: {task.TaskID || 'N/A'}</span>
                             <span>Due: {task.DueDate || 'N/A'}</span>
                             <span>{taskReports.length} report{taskReports.length !== 1 ? 's' : ''}</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDownloadReportWithAttachments(taskId);
-                            }}
-                            disabled={isGeneratingPdf}
-                            className={`p-2 rounded-lg transition-colors ${isDarkMode
-                                ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                              } disabled:opacity-50 disabled:cursor-not-allowed`}
-                            title="Download with Attachments"
-                          >
-                            {isGeneratingPdf ? (
-                              <Loader2 size={14} className="animate-spin" />
-                            ) : (
-                              <Download size={14} />
-                            )}
-                          </button>
                           <span className={`text-xs font-bold px-2 py-1 rounded border ${task.Status === 'Submitted' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
                               'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
                             }`}>
@@ -2333,17 +2287,17 @@ export default function Dashboard({
                           {taskReports.map((report) => (
                             <div
                               key={report.ReportID}
-                              className={`border border-[#E5E7EB] bg-white rounded-lg p-4 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : ''}`}
+                              className="border rounded-lg p-4 bg-surface border-token"
                             >
                               <div className="flex items-start justify-between mb-3">
                                 <div>
-                                  <div className={`text-xs font-mono mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                  <div className="text-xs font-mono mb-1 text-muted">
                                     Report ID: {report.ReportID || 'N/A'}
                                   </div>
-                                  <div className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                                  <div className="text-sm text-secondary">
                                     Submitted by: {report.SubmittedByEmail || 'Unknown'}
                                   </div>
-                                  <div className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                                  <div className="text-sm text-secondary">
                                     Date: {report.ReportDate || 'N/A'}
                                   </div>
                                 </div>
@@ -2355,18 +2309,18 @@ export default function Dashboard({
                                 </span>
                               </div>
                               <div className={`mb-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                                <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Work summary</div>
+                                <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`}>Work summary</div>
                                 <p className="text-sm">{report.WorkSummary || 'No work summary provided'}</p>
                               </div>
                               {report.Blockers && (
                                 <div className={`mb-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                                  <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Blockers</div>
+                                  <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`}>Blockers</div>
                                   <p className="text-sm">{report.Blockers}</p>
                                 </div>
                               )}
                               {report.NextAction && (
                                 <div className={`mb-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                                  <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Next action</div>
+                                  <div className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`}>Next action</div>
                                   <p className="text-sm">{report.NextAction}</p>
                                 </div>
                               )}
@@ -2393,7 +2347,7 @@ export default function Dashboard({
                   );
                 })
               ) : (
-                <div className={`p-12 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>No reports found</div>
+                <div className={`p-12 text-center text-muted`}>No reports found</div>
               )}
             </div>
           )}
@@ -2401,14 +2355,7 @@ export default function Dashboard({
           {/* Bulk Action Bar for Reports */}
           <BulkActionBar
             selectedCount={selectedReportCount}
-            actions={[
-              {
-                label: 'Download with Attachments',
-                icon: <Download size={16} />,
-                onClick: handleBulkDownload,
-                variant: 'primary',
-              },
-            ]}
+            actions={[]}
             onClear={clearReportSelection}
           />
         </div>
@@ -2489,16 +2436,16 @@ export default function Dashboard({
 
     return (
       <div className="space-y-4 sm:space-y-6">
-        <div className={`border rounded-xl p-4 sm:p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
+        <div className="border rounded-xl p-4 sm:p-6 bg-surface border-token">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
             <div>
-              <h3 className={`font-semibold text-base sm:text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Scheduled Reports</h3>
-              <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+              <h3 className="font-semibold text-base sm:text-lg text-primary">Scheduled Reports</h3>
+              <p className="text-xs sm:text-sm text-muted">
                 Weekly report submissions by team
               </p>
             </div>
             {submissionSuccess && (
-              <div className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium ${isDarkMode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700'}`}>
+              <div className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium bg-emerald-500/10 text-emerald-400">
                 Report submitted successfully!
               </div>
             )}
@@ -2506,19 +2453,19 @@ export default function Dashboard({
 
           {/* Admin-only: Show unsubmitted teams warning on Saturday */}
           {isAdminLevel(currentUser.Role) && unsubmittedTeams.length > 0 && (
-            <div className={`mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/30' : 'bg-amber-50 border-amber-200'}`}>
+            <div className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg border bg-amber-500/10 border-amber-500/30">
               <div className="flex items-start gap-2 sm:gap-3">
-                <AlertTriangle size={16} className={`shrink-0 mt-0.5 ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`} />
+                <AlertTriangle size={16} className="shrink-0 mt-0.5 text-amber-400" />
                 <div className="flex-1 min-w-0">
-                  <h4 className={`font-medium text-xs sm:text-sm ${isDarkMode ? 'text-amber-300' : 'text-amber-800'}`}>
+                  <h4 className="font-medium text-xs sm:text-sm text-amber-300">
                     Unsubmitted Weekly Reports
                   </h4>
-                  <p className={`text-[10px] sm:text-xs mt-1 ${isDarkMode ? 'text-amber-400/80' : 'text-amber-700'}`}>
+                  <p className="text-[10px] sm:text-xs mt-1 text-amber-400/80">
                     The following teams have not submitted their weekly report by Friday EOD:
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1.5 sm:gap-2">
                     {unsubmittedTeams.map(team => (
-                      <span key={team.TeamID} className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium ${isDarkMode ? 'bg-amber-500/20 text-amber-300' : 'bg-amber-100 text-amber-800'}`}>
+                      <span key={team.TeamID} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-amber-500/20 text-amber-300">
                         {team.TeamName}
                       </span>
                     ))}
@@ -2529,7 +2476,7 @@ export default function Dashboard({
           )}
 
           {visibleTeams.length === 0 ? (
-            <div className={`p-8 sm:p-12 text-center text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            <div className={`p-8 sm:p-12 text-center text-sm ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`}>
               {isAdminLevel(currentUser.Role) ? 'No teams available' : 'You are not assigned as a team leader to any team'}
             </div>
           ) : (
@@ -2556,7 +2503,7 @@ export default function Dashboard({
                         </div>
                         <div className="min-w-0">
                           <h4 className={`font-medium text-sm sm:text-base truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{team.TeamName}</h4>
-                          <p className={`text-[10px] sm:text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                          <p className={`text-[10px] sm:text-xs ${isDarkMode ? 'text-secondary' : 'text-secondary'}`}>
                             {teamMembers.length} member{teamMembers.length !== 1 ? 's' : ''}
                           </p>
                         </div>
@@ -2579,8 +2526,8 @@ export default function Dashboard({
                     {/* Thread */}
                     <div className={`border-t pt-3 sm:pt-4 ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
                       {filteredSubmissions.length === 0 ? (
-                        <div className={`p-3 sm:p-4 rounded-lg ${isDarkMode ? 'bg-[#0F141F]' : 'bg-white'}`}>
-                          <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} text-center`}>
+                        <div className={`p-3 sm:p-4 rounded-lg ${isDarkMode ? 'bg-[#0F141F]' : 'bg-surface'}`}>
+                          <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-secondary' : 'text-slate-500'} text-center`}>
                             No submissions yet for this team
                           </p>
                         </div>
@@ -2589,7 +2536,7 @@ export default function Dashboard({
                           {filteredSubmissions.map(submission => {
                             const submitter = users.find(u => u.Email === submission.SubmittedBy);
                             return (
-                              <div key={submission.SubmissionID} className={`p-3 sm:p-4 rounded-lg ${isDarkMode ? 'bg-[#0F141F]' : 'bg-white'}`}>
+                              <div key={submission.SubmissionID} className={`p-3 sm:p-4 rounded-lg ${isDarkMode ? 'bg-[#0F141F]' : 'bg-surface'}`}>
                                 <div className="flex items-start justify-between gap-2 mb-2">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
@@ -2599,7 +2546,7 @@ export default function Dashboard({
                                       <p className={`text-xs sm:text-sm font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                                         {submitter?.FullName || submission.SubmittedBy}
                                       </p>
-                                      <p className={`text-[10px] sm:text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                      <p className={`text-[10px] sm:text-xs ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`}>
                                         {new Date(submission.SubmittedAt).toLocaleString()}
                                       </p>
                                     </div>
@@ -2608,7 +2555,7 @@ export default function Dashboard({
                                     onClick={() => handleDownloadTeamSubmission(submission, team.TeamName)}
                                     disabled={isGeneratingPdf}
                                     title="Download report"
-                                    className={`p-1.5 rounded-lg transition-colors shrink-0 ${isDarkMode ? 'hover:bg-[#1E293B] text-slate-400 hover:text-blue-400' : 'hover:bg-slate-100 text-slate-500 hover:text-blue-600'} disabled:opacity-50`}
+                                    className={`p-1.5 rounded-lg transition-colors shrink-0 ${isDarkMode ? 'hover:bg-[#1E293B] text-secondary hover:text-blue-400' : 'hover:bg-slate-100 text-slate-500 hover:text-blue-600'} disabled:opacity-50`}
                                   >
                                     {isGeneratingPdf ? (
                                       <Loader2 size={14} className="animate-spin shrink-0" />
@@ -2648,7 +2595,7 @@ export default function Dashboard({
                     {/* Sub-teams */}
                     {teamSubTeams.length > 0 && (
                       <div className={`mt-3 sm:mt-4 pt-3 sm:pt-4 border-t ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
-                        <p className={`text-xs font-medium mb-2 sm:mb-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                        <p className={`text-xs font-medium mb-2 sm:mb-3 ${isDarkMode ? 'text-secondary' : 'text-secondary'}`}>
                           Sub-teams
                         </p>
                         <div className="space-y-2 sm:space-y-3">
@@ -2661,7 +2608,7 @@ export default function Dashboard({
                               .sort((a, b) => new Date(b.SubmittedAt).getTime() - new Date(a.SubmittedAt).getTime());
 
                             return (
-                              <div key={subTeam.SubTeamID} className={`border rounded-lg p-2 sm:p-3 ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-white border-slate-200'}`}>
+                              <div key={subTeam.SubTeamID} className={`border rounded-lg p-2 sm:p-3 ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-surface border-slate-200'}`}>
                                 <div className="flex items-center justify-between gap-2 mb-2">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-purple-500/20' : 'bg-purple-100'}`}>
@@ -2671,7 +2618,7 @@ export default function Dashboard({
                                       <h5 className={`text-xs sm:text-sm font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                                         {subTeam.SubTeamName}
                                       </h5>
-                                      <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                      <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-secondary'}`}>
                                         {subTeamMembers.length} member{subTeamMembers.length !== 1 ? 's' : ''}
                                       </p>
                                     </div>
@@ -2691,7 +2638,7 @@ export default function Dashboard({
                                   )}
                                 </div>
                                 {subTeamSubmissions.length > 0 && (
-                                  <div className={`mt-2 pt-2 border-t ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-100'}`}>
+                                  <div className={`mt-2 pt-2 border-t ${isDarkMode ? 'border-token' : 'border-slate-100'}`}>
                                     {subTeamSubmissions.slice(0, 2).map(submission => {
                                       const submitter = users.find(u => u.Email === submission.SubmittedBy);
                                       return (
@@ -2704,7 +2651,7 @@ export default function Dashboard({
                                               <p className={`text-[10px] sm:text-xs font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                                                 {submitter?.FullName || submission.SubmittedBy}
                                               </p>
-                                              <p className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                              <p className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-secondary'}`}>
                                                 {new Date(submission.SubmittedAt).toLocaleDateString()}
                                               </p>
                                             </div>
@@ -2734,7 +2681,7 @@ export default function Dashboard({
                                       );
                                     })}
                                     {subTeamSubmissions.length > 2 && (
-                                      <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                                      <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-secondary'}`}>
                                         +{subTeamSubmissions.length - 2} more submission{subTeamSubmissions.length - 2 !== 1 ? 's' : ''}
                                       </p>
                                     )}
@@ -2761,7 +2708,7 @@ export default function Dashboard({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ duration: 0.2 }}
-              className={`w-full max-w-lg rounded-xl p-4 sm:p-6 shadow-2xl border max-h-[90vh] overflow-y-auto ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}
+              className={`w-full max-w-lg rounded-xl p-4 sm:p-6 shadow-2xl border max-h-[90vh] overflow-y-auto ${isDarkMode ? 'bg-[#0F141F] border-token' : 'bg-surface border-token'}`}
             >
               <div className="flex items-center justify-between mb-4 sm:mb-6">
                 <h3 className={`font-semibold text-base sm:text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
@@ -2776,7 +2723,7 @@ export default function Dashboard({
                     setSubmissionSubTeamId(null);
                     setSubmissionError(null);
                   }}
-                  className={`p-1 rounded-lg transition-colors shrink-0 ${isDarkMode ? 'hover:bg-[#1E293B] text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}
+                  className={`p-1 rounded-lg transition-colors shrink-0 ${isDarkMode ? 'hover:bg-[#1E293B] text-secondary' : 'hover:bg-slate-100 text-slate-500'}`}
                 >
                   <X size={16} className="shrink-0" />
                 </button>
@@ -2827,7 +2774,7 @@ export default function Dashboard({
                               </option>
                             ))}
                           </select>
-                          <p className={`text-[10px] mt-1 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                          <p className={`text-[10px] mt-1 ${isDarkMode ? 'text-slate-500' : 'text-secondary'}`}>
                             {userIsSubTeamLeader && !userIsTeamLeader && !userIsAdmin ? 'You can only submit for your own sub-team' : 'Team leaders can submit for any sub-team'}
                           </p>
                         </div>
@@ -2867,11 +2814,11 @@ export default function Dashboard({
                       htmlFor="submission-file-upload"
                       className="flex flex-col items-center justify-center cursor-pointer"
                     >
-                      <Upload size={18} className={`shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
-                      <p className={`text-xs sm:text-sm font-medium mt-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                      <Upload size={18} className={`shrink-0 ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`} />
+                      <p className={`text-xs sm:text-sm font-medium mt-2 ${isDarkMode ? 'text-slate-300' : 'text-secondary'}`}>
                         Click to upload files
                       </p>
-                      <p className={`text-[10px] sm:text-xs ${isDarkMode ? 'text-slate-500' : 'text-slate-400'} text-center mt-1`}>
+                      <p className={`text-[10px] sm:text-xs ${isDarkMode ? 'text-slate-500' : 'text-secondary'} text-center mt-1`}>
                         PPT, Doc, PDF, or any file type
                       </p>
                     </label>
@@ -2885,7 +2832,7 @@ export default function Dashboard({
                           className={`flex items-center justify-between p-2 rounded-lg ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}
                         >
                           <div className="flex items-center gap-2 min-w-0">
-                            <File size={12} className={`shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
+                            <File size={12} className={`shrink-0 ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`} />
                             <span className={`text-xs sm:text-sm truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{file.name}</span>
                           </div>
                           <button
@@ -2933,7 +2880,7 @@ export default function Dashboard({
 
   const renderSettings = () => (
     <div className="space-y-6">
-      <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
+      <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-token' : 'bg-surface border-token'}`}>
         <h3 className={`font-semibold text-lg mb-6 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Account Settings</h3>
 
         <div className="space-y-6">
@@ -2941,7 +2888,7 @@ export default function Dashboard({
             <div className="flex items-center justify-between">
               <div>
                 <h4 className={`font-medium mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Profile Information</h4>
-                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Update your personal details</p>
+                <p className={`text-sm ${isDarkMode ? 'text-secondary' : 'text-secondary'}`}>Update your personal details</p>
               </div>
               <button
                 onClick={onEditProfile}
@@ -2956,7 +2903,7 @@ export default function Dashboard({
             <div className="flex items-center justify-between">
               <div>
                 <h4 className={`font-medium mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Change Password</h4>
-                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Update your password</p>
+                <p className={`text-sm ${isDarkMode ? 'text-secondary' : 'text-secondary'}`}>Update your password</p>
               </div>
               <button
                 onClick={onChangePassword}
@@ -2971,7 +2918,7 @@ export default function Dashboard({
             <div className="flex items-center justify-between">
               <div>
                 <h4 className={`font-medium mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Email Notifications</h4>
-                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Manage email notification preferences</p>
+                <p className={`text-sm ${isDarkMode ? 'text-secondary' : 'text-secondary'}`}>Manage email notification preferences</p>
               </div>
               <div className="flex items-center space-x-2">
                 <span className="text-green-400 text-sm font-medium">Enabled</span>
@@ -2989,13 +2936,13 @@ export default function Dashboard({
             <div className="flex items-center justify-between">
               <div>
                 <h4 className={`font-medium mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Email Integration</h4>
-                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Connect Gmail to send emails as yourself</p>
+                <p className={`text-sm ${isDarkMode ? 'text-secondary' : 'text-secondary'}`}>Connect Gmail to send emails as yourself</p>
               </div>
               <div className="flex items-center space-x-2">
                 {gmailConnected ? (
                   <span className="text-green-400 text-sm font-medium">Connected</span>
                 ) : (
-                  <span className="text-slate-400 text-sm font-medium">Not Connected</span>
+                  <span className="text-secondary text-sm font-medium">Not Connected</span>
                 )}
                 <button
                   onClick={gmailConnected ? handleDisconnectGmail : handleConnectGmail}
@@ -3018,7 +2965,7 @@ export default function Dashboard({
             <div className="flex items-center justify-between">
               <div>
                 <h4 className={`font-medium mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Theme Preference</h4>
-                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{isDarkMode ? 'Dark theme is currently active' : 'Light theme is currently active'}</p>
+                <p className={`text-sm ${isDarkMode ? 'text-secondary' : 'text-secondary'}`}>{isDarkMode ? 'Dark theme is currently active' : 'Light theme is currently active'}</p>
               </div>
               <button
                 onClick={() => onToggleTheme && onToggleTheme()}
@@ -3031,13 +2978,13 @@ export default function Dashboard({
         </div>
       </div>
 
-      <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
+      <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-token' : 'bg-surface border-token'}`}>
         <h3 className={`font-semibold text-lg mb-4 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Danger Zone</h3>
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <h4 className={`font-medium mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Delete Account</h4>
-              <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Permanently delete your account and all data</p>
+              <p className={`text-sm ${isDarkMode ? 'text-secondary' : 'text-secondary'}`}>Permanently delete your account and all data</p>
             </div>
             <button
               onClick={onLogout}
@@ -3064,10 +3011,10 @@ export default function Dashboard({
       {/* Mobile Search Modal */}
       {isMobileSearchOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 md:hidden flex items-start justify-center pt-20 px-4">
-          <div className={`w-full max-w-lg rounded-xl shadow-2xl p-4 ${isDarkMode ? 'bg-[#0F141F] border border-[#1E293B]' : 'bg-white border border-slate-200'}`}>
+          <div className={`w-full max-w-lg rounded-xl shadow-2xl p-4 ${isDarkMode ? 'bg-[#0F141F] border border-token' : 'bg-surface border border-slate-200'}`}>
             <div className="flex items-center gap-3">
               <div className="relative flex-1">
-                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} size={18} />
+                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`} size={18} />
                 <input
                   type="text"
                   placeholder="Search tasks, people..."
@@ -3076,13 +3023,13 @@ export default function Dashboard({
                   autoFocus
                   className={`w-full border rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm ${isDarkMode
                       ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-400'
-                      : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-500'
+                      : 'bg-slate-50 border-slate-200 text-primary placeholder-slate-500'
                     }`}
                 />
               </div>
               <button
                 onClick={() => setIsMobileSearchOpen(false)}
-                className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
+                className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-secondary hover:text-white' : 'hover:bg-slate-100 text-secondary hover:text-slate-900'}`}
               >
                 <X size={20} />
               </button>
@@ -3097,18 +3044,18 @@ export default function Dashboard({
       )}
 
       {/* Sidebar */}
-      <aside className={`${isSidebarVisible ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed md:fixed top-0 left-0 h-screen z-50 border-r flex flex-col transition-all duration-300 ease-in-out ${isAnyModalOpen ? 'opacity-40 pointer-events-none' : ''} ${isSidebarCollapsed ? 'md:w-16' : 'md:w-64'} ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
+      <aside className={`${isSidebarVisible ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed md:fixed top-0 left-0 h-screen z-50 border-r flex flex-col transition-all duration-300 ease-in-out ${isAnyModalOpen ? 'opacity-40 pointer-events-none' : ''} ${isSidebarCollapsed ? 'md:w-16' : 'md:w-64'} ${isDarkMode ? 'bg-[#0F141F] border-token' : 'bg-surface border-token'}`}>
         {/* Logo */}
-        <div className={`p-4 border-b flex items-center justify-center ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'} ${isSidebarCollapsed ? 'md:px-2' : 'md:px-6'} flex-shrink-0`}>
+        <div className={`p-4 border-b flex items-center justify-center ${isDarkMode ? 'border-token' : 'border-slate-200'} ${isSidebarCollapsed ? 'md:px-2' : 'md:px-6'} flex-shrink-0`}>
           <img src="/pw-logo.jpg" alt="PW Logo" className={`object-contain ${isSidebarCollapsed ? 'w-8 h-8' : 'w-10 h-10'}`} />
           {!isSidebarCollapsed && <span className="ml-3 font-bold text-lg hidden md:block">PMS</span>}
         </div>
 
         {/* Collapse Toggle Button */}
-        <div className={`p-2 border-b flex justify-center ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'} flex-shrink-0`}>
+        <div className={`p-2 border-b flex justify-center ${isDarkMode ? 'border-token' : 'border-slate-200'} flex-shrink-0`}>
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
+            className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-secondary hover:text-white' : 'hover:bg-slate-100 text-secondary hover:text-slate-900'}`}
             title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
@@ -3117,14 +3064,14 @@ export default function Dashboard({
 
         {/* User Info - Hidden when collapsed */}
         {!isSidebarCollapsed && (
-          <div className={`p-4 border-b ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'} flex-shrink-0`}>
+          <div className={`p-4 border-b ${isDarkMode ? 'border-token' : 'border-slate-200'} flex-shrink-0`}>
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full flex items-center justify-center">
                 <User className="text-white" size={18} />
               </div>
               <div>
                 <p className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{currentUser.FullName}</p>
-                <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{currentUser.Role}</p>
+                <p className={`text-xs ${isDarkMode ? 'text-secondary' : 'text-secondary'}`}>{currentUser.Role}</p>
               </div>
             </div>
           </div>
@@ -3134,12 +3081,12 @@ export default function Dashboard({
         <nav className={`flex-1 overflow-y-auto overflow-x-hidden ${isSidebarCollapsed ? 'px-2 py-4' : 'p-4 space-y-6'}`}>
           {/* Workspace Section */}
           <div>
-            {!isSidebarCollapsed && <p className={`text-xs font-bold tracking-wider mb-3 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Workspace</p>}
+            {!isSidebarCollapsed && <p className={`text-xs font-bold tracking-wider mb-3 ${isDarkMode ? 'text-slate-500' : 'text-secondary'}`}>Workspace</p>}
             <ul className="space-y-1">
               <li>
                 <button
                   onClick={() => handleViewChange('overview')}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'overview' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'overview' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-secondary hover:bg-slate-800/50 hover:text-white' : 'text-secondary hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   title={isSidebarCollapsed ? 'Overview' : ''}
                 >
@@ -3150,7 +3097,7 @@ export default function Dashboard({
               <li>
                 <button
                   onClick={() => handleViewChange('tasks')}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'tasks' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'tasks' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-secondary hover:bg-slate-800/50 hover:text-white' : 'text-secondary hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   title={isSidebarCollapsed ? 'Tasks' : ''}
                 >
@@ -3164,7 +3111,7 @@ export default function Dashboard({
               <li>
                 <button
                   onClick={() => handleViewChange('team')}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'team' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'team' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-secondary hover:bg-slate-800/50 hover:text-white' : 'text-secondary hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   title={isSidebarCollapsed ? 'Team' : ''}
                 >
@@ -3175,7 +3122,7 @@ export default function Dashboard({
               <li>
                 <button
                   onClick={() => handleViewChange('reports')}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'reports' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'reports' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-secondary hover:bg-slate-800/50 hover:text-white' : 'text-secondary hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   title={isSidebarCollapsed ? 'Reports' : ''}
                 >
@@ -3187,7 +3134,7 @@ export default function Dashboard({
                 <li>
                   <button
                     onClick={() => handleViewChange('scheduled-tasks')}
-                    className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'scheduled-tasks' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'scheduled-tasks' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-secondary hover:bg-slate-800/50 hover:text-white' : 'text-secondary hover:bg-slate-100 hover:text-slate-900'
                       }`}
                     title={isSidebarCollapsed ? 'Scheduled Reports' : ''}
                   >
@@ -3200,7 +3147,7 @@ export default function Dashboard({
                 <li>
                   <button
                     onClick={() => handleViewChange('admin')}
-                    className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'admin' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'admin' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-secondary hover:bg-slate-800/50 hover:text-white' : 'text-secondary hover:bg-slate-100 hover:text-slate-900'
                       }`}
                     title={isSidebarCollapsed ? 'Admin Panel' : ''}
                   >
@@ -3214,12 +3161,12 @@ export default function Dashboard({
 
           {/* Account Section */}
           <div>
-            {!isSidebarCollapsed && <p className={`text-xs font-bold tracking-wider mb-3 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Account</p>}
+            {!isSidebarCollapsed && <p className={`text-xs font-bold tracking-wider mb-3 ${isDarkMode ? 'text-slate-500' : 'text-secondary'}`}>Account</p>}
             <ul className="space-y-1">
               <li>
                 <button
                   onClick={() => handleViewChange('settings')}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'settings' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-slate-400 hover:bg-slate-800/50 hover:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'settings' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-secondary hover:bg-slate-800/50 hover:text-white' : 'text-secondary hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   title={isSidebarCollapsed ? 'Settings' : ''}
                 >
@@ -3232,7 +3179,7 @@ export default function Dashboard({
         </nav>
 
         {/* Sign Out */}
-        <div className={`p-4 border-t ${isDarkMode ? 'border-[#1E293B]' : 'border-slate-200'} flex-shrink-0`}>
+        <div className={`p-4 border-t ${isDarkMode ? 'border-token' : 'border-slate-200'} flex-shrink-0`}>
           <button
             onClick={onLogout}
             className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg font-medium text-sm transition-colors ${isDarkMode ? 'bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:text-red-300' : 'bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 hover:text-red-800'}`}
@@ -3245,15 +3192,15 @@ export default function Dashboard({
       </aside>
 
       {/* Main Content */}
-      <main className={`flex-1 overflow-y-auto transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'md:ml-16' : 'md:ml-64'} ${isDarkMode ? 'bg-[#0F141F]' : 'bg-white'}`}>
+      <main className={`flex-1 overflow-y-auto transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'md:ml-16' : 'md:ml-64'} ${isDarkMode ? 'bg-[#0F141F]' : 'bg-surface'}`}>
         {/* Header */}
-        <header className={`px-4 md:px-8 py-4 md:py-5 sticky top-0 z-30 border-b ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
+        <header className={`px-4 md:px-8 py-4 md:py-5 sticky top-0 z-30 border-b ${isDarkMode ? 'bg-[#0F141F] border-token' : 'bg-surface border-token'}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 md:space-x-4">
               {/* Toggle Sidebar Button - Hamburger menu for mobile */}
               <button
                 onClick={() => setIsSidebarVisible(!isSidebarVisible)}
-                className={`md:hidden p-2 md:p-2.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'}`}
+                className={`md:hidden p-2 md:p-2.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-secondary hover:text-white' : 'hover:bg-slate-100 text-secondary hover:text-slate-900'}`}
               >
                 <Menu size={20} />
               </button>
@@ -3264,7 +3211,7 @@ export default function Dashboard({
                 <h2 className={`text-xl md:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                   {activeView === 'scheduled-tasks' ? 'Scheduled Reports (Review Document)' : activeView === 'overview' ? 'Overview' : activeView.charAt(0).toUpperCase() + activeView.slice(1)}
                 </h2>
-                <p className={`text-xs md:text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Welcome back, {currentUser.FullName || currentUser.Email}</p>
+                <p className={`text-xs md:text-sm mt-1 ${isDarkMode ? 'text-secondary' : 'text-secondary'}`}>Welcome back, {currentUser.FullName || currentUser.Email}</p>
               </div>
             </div>
             <div className="flex items-center space-x-2 md:space-x-4">
@@ -3290,7 +3237,7 @@ export default function Dashboard({
               {/* Profile Button */}
               <button
                 onClick={onEditProfile}
-                className={`p-2 md:p-2.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-slate-400 hover:text-white' : 'hover:bg-gray-100 text-slate-600 hover:text-slate-900'}`}
+                className={`p-2 md:p-2.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-secondary hover:text-white' : 'hover-surface text-secondary hover:text-slate-900'}`}
                 title="Profile"
               >
                 <User size={20} />

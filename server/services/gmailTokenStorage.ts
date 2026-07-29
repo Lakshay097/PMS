@@ -151,7 +151,7 @@ export async function getGmailToken(userEmail: string): Promise<GmailToken | nul
     }
 
     const spreadsheetId = tokenData.spreadsheetId;
-    const values = await fetchSheetValues(tokenData.accessToken, spreadsheetId, 'user_tokens!A:E');
+    const values = await fetchSheetValues(tokenData.accessToken, spreadsheetId, 'user_tokens!A:F');
 
     if (!values || values.length < 2) {
       logger.warn(`[TOKEN STORAGE DEBUG] No values found in user_tokens sheet or only header row`);
@@ -172,6 +172,7 @@ export async function getGmailToken(userEmail: string): Promise<GmailToken | nul
           accessToken: row[2],
           tokenExpiry: row[3],
           connectedAt: row[4],
+          needsReauth: row[5] === 'true' || row[5] === true,
         };
       }
     }
@@ -301,8 +302,118 @@ export async function isGmailConnected(userEmail: string): Promise<boolean> {
   const token = await getGmailToken(userEmail);
   if (!token) return false;
   if (!token.refreshToken || token.refreshToken.length === 0) return false;
+  // Check if account needs re-authentication
+  if (token.needsReauth === true) return false;
   // Refresh tokens are long-lived and can be used to get new access tokens
   // Only check if a refresh token exists - don't check access token expiry
   // The emailService will handle token refresh when needed
   return true;
+}
+
+/**
+ * Marks a user's Gmail connection as needing re-authentication
+ * @param userEmail - User's email address
+ * @returns true if successful, false otherwise
+ */
+export async function markNeedsReauth(userEmail: string): Promise<boolean> {
+  try {
+    const tokenData = await generateGoogleSheetsToken();
+    if (!tokenData || !tokenData.spreadsheetId) {
+      logger.error('Failed to get Google Sheets token');
+      return false;
+    }
+
+    const spreadsheetId = tokenData.spreadsheetId;
+    const values = await fetchSheetValues(tokenData.accessToken, spreadsheetId, 'user_tokens!A:F');
+
+    if (!values) {
+      return false;
+    }
+
+    const normalizedEmail = userEmail.toLowerCase();
+
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+      if (row[0] === normalizedEmail) {
+        // Add needs_reauth column (F) if not present, or update it
+        if (row.length < 6) {
+          row.push('true');
+        } else {
+          row[5] = 'true';
+        }
+
+        const success = await updateSheetValues(
+          tokenData.accessToken,
+          spreadsheetId,
+          `user_tokens!A${i + 1}:F${i + 1}`,
+          [row]
+        );
+
+        if (success) {
+          logger.info(`Marked ${userEmail} as needing re-authentication`);
+        }
+
+        return success;
+      }
+    }
+
+    return false;
+  } catch (err) {
+    logger.error('Error marking needs reauth:', err);
+    return false;
+  }
+}
+
+/**
+ * Clears the needs_reauth flag for a user after successful re-authentication
+ * @param userEmail - User's email address
+ * @returns true if successful, false otherwise
+ */
+export async function clearNeedsReauth(userEmail: string): Promise<boolean> {
+  try {
+    const tokenData = await generateGoogleSheetsToken();
+    if (!tokenData || !tokenData.spreadsheetId) {
+      logger.error('Failed to get Google Sheets token');
+      return false;
+    }
+
+    const spreadsheetId = tokenData.spreadsheetId;
+    const values = await fetchSheetValues(tokenData.accessToken, spreadsheetId, 'user_tokens!A:F');
+
+    if (!values) {
+      return false;
+    }
+
+    const normalizedEmail = userEmail.toLowerCase();
+
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+      if (row[0] === normalizedEmail) {
+        // Ensure needs_reauth column exists and set to false
+        if (row.length < 6) {
+          row.push('false');
+        } else {
+          row[5] = 'false';
+        }
+
+        const success = await updateSheetValues(
+          tokenData.accessToken,
+          spreadsheetId,
+          `user_tokens!A${i + 1}:F${i + 1}`,
+          [row]
+        );
+
+        if (success) {
+          logger.info(`Cleared needs_reauth for ${userEmail}`);
+        }
+
+        return success;
+      }
+    }
+
+    return false;
+  } catch (err) {
+    logger.error('Error clearing needs reauth:', err);
+    return false;
+  }
 }
