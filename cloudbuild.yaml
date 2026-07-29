@@ -23,6 +23,8 @@ steps:
       - '--concurrency=80'
       - '--cpu-boost'
       - '--no-cpu-throttling'
+      - '--no-traffic'
+      - '--tag=candidate'
       - '--set-env-vars=GOOGLE_SERVICE_ACCOUNT_EMAIL=pms-service-account@pms-taskflow-500309.iam.gserviceaccount.com'
       - '--set-secrets=GOOGLE_PRIVATE_KEY=GOOGLE_PRIVATE_KEY:latest'
       - '--set-env-vars=FIREBASE_PROJECT_ID=pms-taskflow-aa254'
