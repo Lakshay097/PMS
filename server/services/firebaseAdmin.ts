@@ -1,6 +1,9 @@
 ﻿import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { logger } from '../utils/logger';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 let _firestoreAdmin: Firestore | null = null;
 
@@ -18,9 +21,31 @@ function getFirestoreAdmin(): Firestore {
   if (!getApps().length) {
     if (projectId && clientEmail && privateKey) {
       logger.info('Using explicit Firebase Admin credentials');
-      initializeApp({
-        credential: cert({ projectId, clientEmail, privateKey }),
-      });
+      try {
+        initializeApp({
+          credential: cert({ projectId, clientEmail, privateKey }),
+        });
+      } catch (err) {
+        logger.error('Failed to initialize Firebase Admin with explicit credentials:', err);
+        // Try using service account file as fallback
+        try {
+          const __filename = fileURLToPath(import.meta.url);
+          const __dirname = dirname(__filename);
+          const serviceAccountPath = join(__dirname, '../../pms-taskflow-aa254-firebase-adminsdk-fbsvc-96bbc9a0e2.json');
+          const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf8'));
+          logger.info('Using service account file as fallback');
+          initializeApp({
+            credential: cert(serviceAccount),
+          });
+        } catch (fileErr) {
+          logger.error('Failed to use service account file:', fileErr);
+          // Fall back to ADC
+          logger.info('Falling back to Application Default Credentials (ADC)');
+          initializeApp({
+            projectId: projectId,
+          });
+        }
+      }
     } else if (projectId) {
       logger.info('Using Application Default Credentials (ADC) for Firebase');
       initializeApp({

@@ -1,11 +1,4 @@
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-};
-
-export const db = getFirestore(initializeApp(firebaseConfig));
+// Client-side Firestore is disabled because this app uses JWT authentication
+// (not Firebase Authentication). Firestore security rules require Firebase Auth.
+// All database operations go through the backend API which uses Firebase Admin SDK.
+export const db = null;

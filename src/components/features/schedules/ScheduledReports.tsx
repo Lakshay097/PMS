@@ -122,7 +122,7 @@ export default function ScheduledReports({
       const isSubTeamLeader = subTeam?.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase());
       const team = teams.find(t => t.TeamID === submissionTeamId);
       const isTeamLeader = team?.TeamLeaderEmails?.includes(currentUser.Email);
-      if (!isSubTeamLeader && !isTeamLeader && !isAdminLevel(currentUser.Role)) {
+      if (!currentUser || (!isSubTeamLeader && !isTeamLeader && !isAdminLevel(currentUser.Role))) {
         setSubmissionError('You can only submit reports for your own sub-team');
         setTimeout(() => setSubmissionError(null), 3000);
         return;
@@ -237,9 +237,9 @@ export default function ScheduledReports({
 
   // Filter teams based on user role - Admin sees all, Team Leader or Stakeholder see their own
   // Sub-team leaders can also see their parent teams
-  const visibleTeams = isAdminLevel(currentUser.Role)
+  const visibleTeams = currentUser && isAdminLevel(currentUser.Role)
     ? teams.filter(t => t.Active)
-    : teams.filter(t => {
+    : currentUser ? teams.filter(t => {
       if (!t.Active) return false;
       const isTeamLeader = t.TeamLeaderEmails?.includes(currentUser.Email);
       const isStakeholder = t.StakeholderEmails?.includes(currentUser.Email);
@@ -249,7 +249,7 @@ export default function ScheduledReports({
         st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase())
       );
       return isTeamLeader || isStakeholder || isSubTeamLeader;
-    });
+    }) : [];
 
   // Get unsubmitted teams from settings (for Admin dashboard visibility on Saturday)
   const unsubmittedTeamsSetting = settings.find(s => s.Key === 'unsubmitted_teams_this_week');
@@ -279,7 +279,7 @@ export default function ScheduledReports({
         </div>
 
         {/* Admin-only: Show unsubmitted teams warning on Saturday */}
-        {isAdminLevel(currentUser.Role) && unsubmittedTeams.length > 0 && (
+        {currentUser && isAdminLevel(currentUser.Role) && unsubmittedTeams.length > 0 && (
           <div className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg border bg-amber-500/10 border-amber-500/30">
             <div className="flex items-start gap-2 sm:gap-3">
               <AlertTriangle size={16} className="shrink-0 mt-0.5 text-amber-400" />
@@ -304,7 +304,7 @@ export default function ScheduledReports({
 
         {visibleTeams.length === 0 ? (
           <div className={`p-8 sm:p-12 text-center text-sm ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`}>
-            {isAdminLevel(currentUser.Role) ? 'No teams available' : 'You are not assigned as a team leader to any team'}
+            {currentUser && isAdminLevel(currentUser.Role) ? 'No teams available' : 'You are not assigned as a team leader to any team'}
           </div>
         ) : (
           <div className="space-y-3 sm:space-y-4">
@@ -316,7 +316,7 @@ export default function ScheduledReports({
               const userIsSubTeamLeader = teamSubTeams.some(st =>
                 st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase())
               );
-              const canPost = userIsTeamLeader || userIsSubTeamLeader || isAdminLevel(currentUser.Role);
+              const canPost = userIsTeamLeader || userIsSubTeamLeader || (currentUser && isAdminLevel(currentUser.Role));
               const filteredSubmissions = teamSubmissions
                 .filter(s => s.TeamID === team.TeamID && !s.SubTeamID)
                 .sort((a, b) => new Date(b.SubmittedAt).getTime() - new Date(a.SubmittedAt).getTime());
@@ -618,7 +618,7 @@ export default function ScheduledReports({
                   const userIsSubTeamLeader = teamSubTeams.some(st =>
                     st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase())
                   );
-                  const userIsAdmin = isAdminLevel(currentUser.Role);
+                  const userIsAdmin = currentUser && isAdminLevel(currentUser.Role);
 
                   if (userIsTeamLeader || userIsSubTeamLeader || userIsAdmin) {
                     return (

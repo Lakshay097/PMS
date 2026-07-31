@@ -343,25 +343,6 @@ export default function App() {
     return cleanup;
   }, []);
 
-  // Migration trigger for Firestore seeding
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('migrate') === 'true') {
-      import('./lib/migrationScript').then(({ migrateFromSheets }) => {
-        migrateFromSheets().then(() => console.log('Migration complete'));
-      });
-    }
-  }, []);
-
-  // Firestore → Sheets sync worker (every 5 minutes)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      import('./lib/sheetsSyncWorker').then(({ syncFirestoreToSheets }) => {
-        syncFirestoreToSheets().catch(err => console.error('Sync worker error:', err));
-      });
-    }, 5 * 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, []);
 
   // Reload database when Firebase auth initializes
   useEffect(() => {

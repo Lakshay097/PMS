@@ -19,6 +19,9 @@ const TEAMS_CACHE_TTL = 5 * 60 * 1000; // 5 min
 const SUBTEAMS_CACHE_KEY = 'subTeams:all';
 const SUBTEAMS_CACHE_TTL = 5 * 60 * 1000; // 5 min
 
+// Clear stale cache on startup to prevent QuerySnapshot objects
+ttlCache.invalidateAll();
+
 export async function getAllSettingsCached() {
   return ttlCache.getOrFetch(SETTINGS_CACHE_KEY, SETTINGS_CACHE_TTL, async () => {
     const snapshot = await db.collection('settings').get();
@@ -34,17 +37,39 @@ export async function getAllUsersCached() {
 }
 
 export async function getAllTeamsCached() {
-  return ttlCache.getOrFetch(TEAMS_CACHE_KEY, TEAMS_CACHE_TTL, async () => {
+  // Try to get from cache, if invalid, invalidate and retry
+  const cached = ttlCache.getOrFetch(TEAMS_CACHE_KEY, TEAMS_CACHE_TTL, async () => {
     const snapshot = await db.collection('teams').get();
-    return snapshot.docs.map(doc => doc.data());
+    const teams = snapshot.docs.map(doc => doc.data());
+    logger.info(`[cache] Loaded ${teams.length} teams from Firestore`);
+    return teams;
   });
+
+  const data = await cached;
+  if (!Array.isArray(data)) {
+    logger.error('[cache] teams data is not an array, invalidating and retrying');
+    ttlCache.invalidate(TEAMS_CACHE_KEY);
+    // Retry by calling the function again
+    return getAllTeamsCached();
+  }
+  return data;
 }
 
 export async function getAllSubTeamsCached() {
-  return ttlCache.getOrFetch(SUBTEAMS_CACHE_KEY, SUBTEAMS_CACHE_TTL, async () => {
+  // Try to get from cache, if invalid, invalidate and retry
+  const cached = ttlCache.getOrFetch(SUBTEAMS_CACHE_KEY, SUBTEAMS_CACHE_TTL, async () => {
     const snapshot = await db.collection('sub_teams').get();
     return snapshot.docs.map(doc => doc.data());
   });
+
+  const data = await cached;
+  if (!Array.isArray(data)) {
+    logger.error('[cache] subTeams data is not an array, invalidating and retrying');
+    ttlCache.invalidate(SUBTEAMS_CACHE_KEY);
+    // Retry by calling the function again
+    return getAllSubTeamsCached();
+  }
+  return data;
 }
 
 // ============================================================================
@@ -270,11 +295,17 @@ router.get('/tasks', authenticateToken, async (req: AuthRequest, res) => {
     const users = await getAllUsersCached();
     logger.info('[api] got users from cache');
     const teams = await getAllTeamsCached();
-    logger.info('[api] got teams from cache');
+    logger.info('[api] got teams from cache, type:', Array.isArray(teams) ? 'array' : typeof teams);
     const subTeams = await getAllSubTeamsCached();
     logger.info('[api] got subTeams from cache');
     const settings = await getAllSettingsCached();
     logger.info('[api] got settings from cache');
+
+    // Ensure teams is an array
+    if (!Array.isArray(teams)) {
+      logger.error('teams is not an array:', teams);
+      throw new Error('teams data is not an array');
+    }
 
     // Attach derived fields to teams and sub-teams
     const teamsWithLeaders = teams.map((team: any) => {
@@ -304,6 +335,9 @@ router.get('/tasks', authenticateToken, async (req: AuthRequest, res) => {
 
     const userRoles = getUserRoles(currentUser, teamsWithLeaders, subTeamsWithLeaders, settings as any[]);
     const teamTasksFilter = getTeamTasksScope(currentUser, userRoles, users);
+    logger.info('[api] userRoles:', userRoles);
+    logger.info('[api] currentUser:', currentUser);
+    logger.info('[api] view:', view);
 
     // Apply view-based filtering
     const filteredTasks = allTasks.filter((task: any) => {
@@ -331,6 +365,7 @@ router.get('/tasks', authenticateToken, async (req: AuthRequest, res) => {
       return assignedToMe || assignedByMe || inTeamScope;
     });
 
+    logger.info('[api] filteredTasks count:', filteredTasks.length, 'out of', allTasks.length);
     res.json(filteredTasks);
   } catch (err) {
     logger.error('getTasks failed:', err);

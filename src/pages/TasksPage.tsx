@@ -3,6 +3,7 @@ import { Task, User as UserType, Team, SubTeam, AppSetting } from '../types';
 import TaskList from '../components/features/tasks/TaskList';
 import TaskFilters from '../components/features/tasks/TaskFilters';
 import { getUserRoles, getTeamTasksScope, splitEmails, shouldShowTeamTasksTab, shouldShowAssignedByMeTab } from '../utils/roleUtils';
+import { Plus } from 'lucide-react';
 
 interface TasksPageProps {
   tasks: Task[];
@@ -89,8 +90,9 @@ export default function TasksPage({
     <div className="space-y-6">
       {/* Task View Tabs */}
       <div className="sticky top-0 z-10 border rounded-xl p-4 bg-surface border-token">
-        <div className="flex items-center space-x-4">
-          <button
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <button
             onClick={() => setTaskSubView('my-tasks')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${taskSubView === 'my-tasks'
                 ? 'bg-blue-500 text-white'
