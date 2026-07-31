@@ -39,7 +39,7 @@ export async function getGmailAuthUrlHandler(req: AuthRequest, res: Response): P
     const authUrl = getGmailAuthUrl(state);
     
     res.json({
-      authUrl,
+      url: authUrl,
       state,
     });
   } catch (err) {
