@@ -35,8 +35,14 @@ async function startServer() {
   // Start task due date reminder scheduler
   startTaskDueDateScheduler();
 
-  // Start report reminder scheduler (hourly checks)
-  startReportReminderScheduler();
+  // Start report reminder scheduler (hourly checks) - ONLY in development
+  // In production, Cloud Scheduler handles this via /api/internal/run-weekly-reminders
+  if (config.NODE_ENV !== "production") {
+    startReportReminderScheduler();
+    logger.info('Local report reminder scheduler started (development mode)');
+  } else {
+    logger.info('Local report reminder scheduler disabled (production mode - Cloud Scheduler handles this)');
+  }
 
   // Start server-side Sheets sync controller (skip during build to avoid sync errors)
   if (process.env.SKIP_SHEETS_SYNC !== 'true') {

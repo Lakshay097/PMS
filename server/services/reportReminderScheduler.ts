@@ -399,9 +399,9 @@ async function sendReportReminder(
       }
     }
 
-    // Use acting user email for scheduled report reminders with safe fallback
-    // For system-originated scheduled reminders, use REMINDER_SENDER_EMAIL or system fallback
-    const actingUserEmail = process.env.REMINDER_SENDER_EMAIL || config.DEFAULT_FALLBACK_EMAIL;
+    // For scheduled report reminders, use the first team leader as the acting user
+    // This ensures emails are sent from a real user account, not a system sender
+    const actingUserEmail = primaryRecipient || recipientEmails[0] || config.DEFAULT_FALLBACK_EMAIL;
     
     const result = await sendEmailAsUser(
       actingUserEmail,
@@ -420,7 +420,7 @@ async function sendReportReminder(
       undefined, // ccEmails
       recipientEmails, // toRecipients - all leaders in TO field
       'report_reminder', // eventType
-      true // forceSystemSender - scheduled reminders use system sender
+      false // forceSystemSender - use acting user's Gmail account
     );
 
     if (result.success && result.gmailThreadId && result.gmailMessageId) {
