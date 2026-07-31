@@ -157,7 +157,52 @@ export default function App() {
 
   // Check whether the active user has a connected Gmail account.
   // Used to gate email sends and show a connect-prompt before any send is attempted.
-  const { isConnected: gmailConnected, connectGmail } = useGmailStatus(activeUser?.Email);
+  const { isConnected: gmailConnected, connectGmail, recheckStatus: recheckGmailStatus } = useGmailStatus(activeUser?.Email);
+
+  // Gmail integration state for SettingsPage
+  const [gmailLoading, setGmailLoading] = useState(false);
+  const [connectionMessage, setConnectionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleConnectGmail = async () => {
+    setGmailLoading(true);
+    try {
+      await connectGmail();
+    } catch (error) {
+      setConnectionMessage({ type: 'error', text: 'Failed to connect Gmail' });
+    } finally {
+      setGmailLoading(false);
+    }
+  };
+
+  const handleDisconnectGmail = async () => {
+    setGmailLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch('/api/gmail/disconnect', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        setConnectionMessage({ type: 'success', text: 'Gmail disconnected successfully' });
+        await recheckGmailStatus();
+      } else {
+        setConnectionMessage({ type: 'error', text: 'Failed to disconnect Gmail' });
+      }
+    } catch (error) {
+      setConnectionMessage({ type: 'error', text: 'Failed to disconnect Gmail' });
+    } finally {
+      setGmailLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('PMS_active_user_email');
+    localStorage.removeItem('PMS_auth_token');
+    localStorage.removeItem('PMS_user');
+    setActiveUserEmail('');
+    setActiveUser(null);
+    navigate(ROUTES.LOGIN);
+  };
 
   // React Router hooks for navigation
   const navigate = useNavigate();
@@ -1636,7 +1681,12 @@ export default function App() {
                   onEditProfile={() => setIsEditProfileModalOpen(true)}
                   onChangePassword={() => setIsChangePasswordModalOpen(true)}
                   onConfigureNotifications={() => setIsConfigureNotificationsModalOpen(true)}
-                  showGmailSection={false}
+                  onLogout={handleLogout}
+                  gmailConnected={gmailConnected}
+                  gmailLoading={gmailLoading}
+                  connectionMessage={connectionMessage}
+                  onConnectGmail={handleConnectGmail}
+                  onDisconnectGmail={handleDisconnectGmail}
                 />
                 </Suspense>
               </MainLayout>

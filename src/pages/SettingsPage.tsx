@@ -16,7 +16,6 @@ interface SettingsPageProps {
   connectionMessage?: { type: 'success' | 'error'; text: string } | null;
   onConnectGmail?: () => void;
   onDisconnectGmail?: () => void;
-  showGmailSection?: boolean;
 }
 
 export default function SettingsPage({
@@ -33,7 +32,6 @@ export default function SettingsPage({
   connectionMessage = null,
   onConnectGmail,
   onDisconnectGmail,
-  showGmailSection = false,
 }: SettingsPageProps) {
   return (
     <div className="p-6">
@@ -44,11 +42,11 @@ export default function SettingsPage({
           onChangePassword={onChangePassword}
           onConfigureNotifications={onConfigureNotifications}
           onLogout={onLogout}
-          gmailConnected={showGmailSection ? gmailConnected : false}
-          gmailLoading={showGmailSection ? gmailLoading : false}
-          connectionMessage={showGmailSection ? connectionMessage : null}
-          onConnectGmail={showGmailSection ? onConnectGmail : undefined}
-          onDisconnectGmail={showGmailSection ? onDisconnectGmail : undefined}
+          gmailConnected={gmailConnected}
+          gmailLoading={gmailLoading}
+          connectionMessage={connectionMessage}
+          onConnectGmail={onConnectGmail}
+          onDisconnectGmail={onDisconnectGmail}
         />
       </div>
     </div>
