@@ -66,7 +66,6 @@ export const initAuth = (
       }
     })
     .catch(err => {
-      console.error("Service Account API check failed:", err);
       if (active && onAuthFailure) {
         onAuthFailure(err instanceof Error ? err : new Error('Failed to initialize Google Sheets authentication'));
       }
@@ -162,7 +161,6 @@ const sheetsApiInternal = {
           return cachedSpreadsheetId;
         }
       } catch (e) {
-        console.warn('Cached spreadsheet could not be accessed, re-searching...', e);
         cachedSpreadsheetId = null;
       }
     }

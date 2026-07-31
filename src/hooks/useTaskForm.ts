@@ -76,7 +76,6 @@ export function useTaskForm({ initialTask, onSubmit }: UseTaskFormProps) {
       });
       return true;
     } catch (error) {
-      console.error('Error submitting task:', error);
       setServerError('Failed to submit task. Please try again.');
       return false;
     } finally {

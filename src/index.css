@@ -102,8 +102,8 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-h1, h2, h3, .font-display {
-  font-family: 'Cormorant Garamond', Georgia, serif;
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Inter', -apple-system, sans-serif;
 }
 
 input, select, button, textarea {

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { FormEvent } from 'react';
 import { X, User, Mail, Building2, Lock, Moon, Sun } from 'lucide-react';
 import { User as UserType } from '../types';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface EditProfileModalProps {
   isOpen: boolean;
@@ -9,11 +10,10 @@ interface EditProfileModalProps {
   currentUser: UserType;
   onSave: (updatedUser: Partial<UserType>) => void;
   onChangePassword?: () => void;
-  isDarkMode?: boolean;
-  onToggleTheme?: () => void;
 }
 
-export default function EditProfileModal({ isOpen, onClose, currentUser, onSave, onChangePassword, isDarkMode = false, onToggleTheme }: EditProfileModalProps) {
+export default function EditProfileModal({ isOpen, onClose, currentUser, onSave, onChangePassword }: EditProfileModalProps) {
+  const { isDarkMode, toggleTheme } = useTheme();
   const [fullName, setFullName] = useState(currentUser.FullName);
   const [email, setEmail] = useState(currentUser.Email);
   const [teamName, setTeamName] = useState(currentUser.TeamName);
@@ -36,9 +36,7 @@ export default function EditProfileModal({ isOpen, onClose, currentUser, onSave,
   };
 
   const handleToggleTheme = () => {
-    if (onToggleTheme) {
-      onToggleTheme();
-    }
+    toggleTheme();
   };
 
   if (!isOpen) return null;

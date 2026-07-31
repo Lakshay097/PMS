@@ -57,7 +57,6 @@ export function useLoginForm({ onSubmit }: UseLoginFormProps) {
       await onSubmit(fields.email.trim().toLowerCase(), fields.password);
       return true;
     } catch (error: any) {
-      console.error('Error submitting login:', error);
       setErrors({ submit: error.message || 'Login failed. Please try again.' });
       return false;
     } finally {

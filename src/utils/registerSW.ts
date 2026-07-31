@@ -21,7 +21,6 @@ export function registerSW() {
           });
         });
       } catch (err) {
-        console.error('[App] SW registration failed:', err);
       }
     });
   }

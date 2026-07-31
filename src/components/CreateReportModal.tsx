@@ -203,7 +203,6 @@ export default function CreateReportModal({ task, isOpen, onClose, onSubmit, cur
       });
       onClose();
     } catch (err) {
-      console.error('Error submitting report:', err);
       setError('Something went wrong publishing the report. Try again.');
     } finally {
       setIsSubmitting(false);

@@ -183,7 +183,7 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
                   className="text-2xl sm:text-3xl font-semibold"
                   style={{ 
                     color: '#e6cd94',
-                    fontFamily: 'Cormorant Garamond, serif'
+                    fontFamily: 'Inter, sans-serif'
                   }}
                 >
                   PW
@@ -214,7 +214,7 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
                 className="text-4xl sm:text-5xl font-semibold tracking-tight"
                 style={{ 
                   color: '#efece5',
-                  fontFamily: 'Cormorant Garamond, serif'
+                  fontFamily: 'Inter, sans-serif'
                 }}
               >
                 PMS
@@ -256,7 +256,7 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
                   className="text-2xl font-medium"
                   style={{ 
                     color: '#efece5',
-                    fontFamily: 'Cormorant Garamond, serif'
+                    fontFamily: 'Inter, sans-serif'
                   }}
                 >
                   Request Submitted
@@ -357,7 +357,7 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
                 className="text-2xl sm:text-3xl font-semibold"
                 style={{ 
                   color: '#e6cd94',
-                  fontFamily: 'Cormorant Garamond, serif'
+                  fontFamily: 'Inter, sans-serif'
                 }}
               >
                 PW
@@ -388,7 +388,7 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
               className="text-4xl sm:text-5xl font-semibold tracking-tight"
               style={{ 
                 color: '#efece5',
-                fontFamily: 'Cormorant Garamond, serif'
+                fontFamily: 'Inter, sans-serif'
               }}
             >
               PMS
@@ -427,7 +427,7 @@ export default function AccountRequest({ onBackToLogin, onRequestSubmitted }: Ac
               className="text-2xl font-medium"
               style={{ 
                 color: '#efece5',
-                fontFamily: 'Cormorant Garamond, serif'
+                fontFamily: 'Inter, sans-serif'
               }}
             >
               Request Account

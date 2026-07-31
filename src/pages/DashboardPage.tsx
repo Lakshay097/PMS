@@ -21,8 +21,6 @@ interface DashboardPageProps {
   onChangePassword?: () => void;
   onConfigureNotifications?: () => void;
   onToggleUserActive?: (userId: string, active: boolean) => void;
-  isDarkMode?: boolean;
-  onToggleTheme?: () => void;
   onSyncDatabase?: () => void;
   isSyncing?: boolean;
   lastSyncTime?: string;

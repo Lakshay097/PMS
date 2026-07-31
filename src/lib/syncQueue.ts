@@ -82,7 +82,6 @@ class SyncQueue {
       } else {
         // Max retries reached - mark as failed
         write.status = 'failed';
-        console.error(`Write failed for ${id} after ${this.maxRetries} attempts`);
         
         if (write.onFail) {
           write.onFail();

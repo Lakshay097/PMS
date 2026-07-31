@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { User as UserType, TaskTemplate, AppSetting, Team, SubTeam, EmailTemplate } from '../types';
+import { useTheme } from '../contexts/ThemeContext';
 import { parseAndValidateUsersCsv, downloadCsvTemplate, CsvRowError, CsvUserRow } from '../utils/csv';
 import { generateUniqueId } from '../utils/id';
 import { useDebounce } from '../hooks';
@@ -71,7 +72,6 @@ interface AdminPanelProps {
   onSyncDatabase?: () => void;
   onRefreshUsers?: () => Promise<void>;
   onRefreshEmailTemplates?: () => Promise<void>;
-  isDarkMode?: boolean;
 }
 
 export default function AdminPanel({
@@ -103,8 +103,8 @@ export default function AdminPanel({
   onRefreshUsers,
   onRefreshEmailTemplates,
   subTeams = [],
-  isDarkMode = false,
 }: AdminPanelProps) {
+  const { isDarkMode } = useTheme();
   // Master administrative tabs
   const [activeAdminSubTab, setActiveAdminSubTab] = useState<'users' | 'teams' | 'templates' | 'email_templates' | 'report_requirements' | 'report_config' | 'missing_reports'>('users');
 
@@ -140,7 +140,6 @@ export default function AdminPanel({
       setJobRuns(jobRunsResponse.jobRuns);
       setGmailReauthRequired(reauthResponse.reauthRequired);
     } catch (error) {
-      console.error('Failed to load missing reports data:', error);
     } finally {
       setIsLoadingUnsubmitted(false);
       setIsLoadingFailures(false);
@@ -246,7 +245,6 @@ export default function AdminPanel({
         setCurrentTeamLeaders(updatedLeaders);
       }
     } catch (error) {
-      console.error('[handleAssignTeamLeader] Error:', error);
       alert('Failed to assign team leader. Please try again.');
     }
   };
@@ -259,7 +257,6 @@ export default function AdminPanel({
       setCurrentTeamLeaders(newLeaders);
       setSelectedTeamLeaders(new Set());
     } catch (error) {
-      console.error('[handleAssignMultipleTeamLeaders] Error assigning leaders:', error);
       alert('Failed to assign team leaders. Please try again.');
     }
   };
@@ -271,7 +268,6 @@ export default function AdminPanel({
       await onUpdateSetting(`team_${teamId}_leaders`, updatedLeaders.join(','));
       setCurrentTeamLeaders(updatedLeaders);
     } catch (error) {
-      console.error('[handleRemoveTeamLeader] Error:', error);
       alert('Failed to remove team leader. Please try again.');
     }
   };
@@ -285,7 +281,6 @@ export default function AdminPanel({
         setCurrentTeamStakeholders(updatedStakeholders);
       }
     } catch (error) {
-      console.error('[handleAssignTeamStakeholder] Error:', error);
       alert('Failed to assign team stakeholder. Please try again.');
     }
   };
@@ -297,7 +292,6 @@ export default function AdminPanel({
       await onUpdateSetting(`team_${teamId}_stakeholders`, updatedStakeholders.join(','));
       setCurrentTeamStakeholders(updatedStakeholders);
     } catch (error) {
-      console.error('[handleRemoveTeamStakeholder] Error:', error);
       alert('Failed to remove team stakeholder. Please try again.');
     }
   };
@@ -310,7 +304,6 @@ export default function AdminPanel({
       setCurrentTeamStakeholders(newStakeholders);
       setSelectedTeamStakeholders(new Set());
     } catch (error) {
-      console.error('[handleAssignMultipleTeamStakeholders] Error:', error);
       alert('Failed to assign team stakeholders. Please try again.');
     }
   };
@@ -331,7 +324,6 @@ export default function AdminPanel({
       setTeamSuccessMessage(`Team renamed successfully`);
       setTimeout(() => setTeamSuccessMessage(null), 3000);
     } catch (error) {
-      console.error('[handleRenameTeam] Error:', error);
       alert('Failed to rename team. Please try again.');
     }
   };
@@ -423,7 +415,6 @@ export default function AdminPanel({
         const parsed = JSON.parse(requirementsSetting.Value);
         setReportRequirements(parsed);
       } catch (e) {
-        console.error('Failed to parse weekly_report_requirements:', e);
       }
     }
   }, [settings]);
@@ -449,7 +440,6 @@ export default function AdminPanel({
         setTeamReportConfigs(configsMap);
       }
     } catch (error) {
-      console.error('Failed to load team report configs:', error);
     }
   };
 
@@ -619,7 +609,6 @@ export default function AdminPanel({
         setCsvUploadResult({ success: 0, failed: csvPreview.length });
       }
     } catch (error: any) {
-      console.error('CSV upload error:', error);
       setCsvUploadResult({ success: 0, failed: csvPreview.length });
       setCsvErrors((prev) => [
         ...prev,
@@ -752,7 +741,6 @@ export default function AdminPanel({
       setReportRequirementsSaveSuccess(true);
       setTimeout(() => setReportRequirementsSaveSuccess(false), 2500);
     } catch (err) {
-      console.error('Error saving report requirements:', err);
       alert('Failed to save report requirements. Please try again.');
     }
   };
@@ -770,7 +758,6 @@ export default function AdminPanel({
         alert('Failed to save team report configuration. Please try again.');
       }
     } catch (error) {
-      console.error('Error saving team report config:', error);
       alert('Failed to save team report configuration. Please try again.');
     }
   };

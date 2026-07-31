@@ -98,7 +98,6 @@ async function writeWithBackoff(fn: () => Promise<any>, retries = 3): Promise<an
     } catch (err: any) {
       if (err?.status === 429 && i < retries - 1) {
         const delay = Math.pow(2, i) * 1000;
-        console.log(`Rate limited (429), retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       } else {
         throw err;
@@ -115,7 +114,6 @@ async function enqueueSheetsWrite(collection: string, operation: 'save' | 'delet
     await api.post('/sheets/enqueue-write', { collection, operation, data });
     setSyncStatus('syncing');
   } catch (error) {
-    console.error('Failed to enqueue Sheets write to server:', error);
     // Optionally implement local fallback or retry logic here
   }
 }
@@ -236,7 +234,6 @@ export async function initializeDatabase(): Promise<void> {
       logger.log('Spreadsheet not found (404). Resetting initialization flag.');
       localStorage.removeItem('db_initialized');
     }
-    console.error("Failed to initialize database:", error);
     throw new Error(`Failed to initialize Google Sheets database: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
@@ -405,7 +402,6 @@ export const dbService = {
         // await enqueueSheetsWrite('users', 'save', finalUser);
         notifyChange('users', 'updated', user.UserID).catch(() => {});
       } catch (err) {
-        console.error('API write failed — saveUser, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         // Enqueue to syncQueue for retry with user notification
         syncQueue.enqueue(
@@ -414,11 +410,9 @@ export const dbService = {
           persist,
           () => {
             // onRetry: show toast notification
-            console.log(`Retrying saveUser for ${user.UserID}`);
           },
           () => {
             // onFail: show error toast and rollback
-            console.error(`Failed to save user ${user.UserID} after retries`);
             // Rollback optimistic update
             const rollback = async () => {
               const raw = await api.get<any[]>('/api/users');
@@ -434,7 +428,7 @@ export const dbService = {
               setCache('users', rollbackData);
               notifyOptimisticUpdate('users', rollbackData);
             };
-            rollback().catch(console.error);
+            rollback().catch(() => {});
           }
         );
       }
@@ -501,21 +495,19 @@ export const dbService = {
         // await enqueueSheetsWrite('teams', 'save', teamToSave);
         notifyChange('teams', 'updated', team.TeamID).catch(() => {});
       } catch (err) {
-        console.error('API write failed — saveTeam, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         syncQueue.enqueue(
           'teams',
           team.TeamID,
           persist,
-          () => console.log(`Retrying saveTeam for ${team.TeamID}`),
+          () => {},
           async () => {
-            console.error(`Failed to save team ${team.TeamID} after retries`);
             const rollback = async () => {
               const raw = await api.get<Team[]>('/api/teams');
               setCache('teams', raw);
               notifyOptimisticUpdate('teams', raw);
             };
-            rollback().catch(console.error);
+            rollback().catch(() => {});
           }
         );
       }
@@ -544,21 +536,19 @@ export const dbService = {
         // await enqueueSheetsWrite('teams', 'save', team);
         notifyChange('teams', 'updated', teamId).catch(() => {});
       } catch (err) {
-        console.error('API write failed — toggleTeamStatus, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         syncQueue.enqueue(
           'teams',
           teamId,
           persist,
-          () => console.log(`Retrying toggleTeamStatus for ${teamId}`),
+          () => {},
           async () => {
-            console.error(`Failed to toggle team status ${teamId} after retries`);
             const rollback = async () => {
               const raw = await api.get<Team[]>('/api/teams');
               setCache('teams', raw);
               notifyOptimisticUpdate('teams', raw);
             };
-            rollback().catch(console.error);
+            rollback().catch(() => {});
           }
         );
       }
@@ -583,20 +573,18 @@ export const dbService = {
         // await enqueueSheetsWrite('teams', 'delete', teamId);
         notifyChange('teams', 'deleted', teamId).catch(() => {});
       } catch (err) {
-        console.error('API write failed — deleteTeam, enqueuing for retry:', err);
         syncQueue.enqueue(
           'teams',
           teamId,
           persist,
-          () => console.log(`Retrying deleteTeam for ${teamId}`),
+          () => {},
           async () => {
-            console.error(`Failed to delete team ${teamId} after retries`);
             const rollback = async () => {
               const raw = await api.get<Team[]>('/api/teams');
               setCache('teams', raw);
               notifyOptimisticUpdate('teams', raw);
             };
-            rollback().catch(console.error);
+            rollback().catch(() => {});
           }
         );
       }
@@ -644,21 +632,19 @@ export const dbService = {
         // await enqueueSheetsWrite('templates', 'save', templateToSave);
         notifyChange('templates', 'updated', template.TemplateID).catch(() => {});
       } catch (err) {
-        console.error('API write failed — saveTemplate, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         syncQueue.enqueue(
           'templates',
           template.TemplateID,
           persist,
-          () => console.log(`Retrying saveTemplate for ${template.TemplateID}`),
+          () => {},
           async () => {
-            console.error(`Failed to save template ${template.TemplateID} after retries`);
             const rollback = async () => {
               const raw = await api.get<TaskTemplate[]>('/api/templates');
               setCache('templates', raw);
               notifyOptimisticUpdate('templates', raw);
             };
-            rollback().catch(console.error);
+            rollback().catch(() => {});
           }
         );
       }
@@ -682,20 +668,18 @@ export const dbService = {
         // await enqueueSheetsWrite('templates', 'delete', templateId);
         notifyChange('templates', 'deleted', templateId).catch(() => {});
       } catch (err) {
-        console.error('API write failed — deleteTemplate, enqueuing for retry:', err);
         syncQueue.enqueue(
           'templates',
           templateId,
           persist,
-          () => console.log(`Retrying deleteTemplate for ${templateId}`),
+          () => {},
           async () => {
-            console.error(`Failed to delete template ${templateId} after retries`);
             const rollback = async () => {
               const raw = await api.get<TaskTemplate[]>('/api/templates');
               setCache('templates', raw);
               notifyOptimisticUpdate('templates', raw);
             };
-            rollback().catch(console.error);
+            rollback().catch(() => {});
           }
         );
       }
@@ -758,15 +742,13 @@ export const dbService = {
         // await enqueueSheetsWrite('tasks', 'save', finalTask);
         notifyChange('tasks', 'updated', task.TaskID).catch(() => {});
       } catch (err) {
-        console.error('API write failed — saveTask, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         syncQueue.enqueue(
           'tasks',
           task.TaskID,
           persist,
-          () => console.log(`Retrying saveTask for ${task.TaskID}`),
+          () => {},
           async () => {
-            console.error(`Failed to save task ${task.TaskID} after retries`);
             const rollback = async () => {
               const raw = await api.get<any[]>('/api/tasks');
               const rollbackData: Task[] = raw.map(t => {
@@ -775,7 +757,7 @@ export const dbService = {
               setCache('tasks', rollbackData);
               notifyOptimisticUpdate('tasks', rollbackData);
             };
-            rollback().catch(console.error);
+            rollback().catch(() => {});
           }
         );
       }
@@ -799,14 +781,12 @@ export const dbService = {
         // await enqueueSheetsWrite('tasks', 'delete', taskId);
         notifyChange('tasks', 'deleted', taskId).catch(() => {});
       } catch (err) {
-        console.error('API write failed — deleteTask, enqueuing for retry:', err);
         syncQueue.enqueue(
           'tasks',
           taskId,
           persist,
-          () => console.log(`Retrying deleteTask for ${taskId}`),
+          () => {},
           async () => {
-            console.error(`Failed to delete task ${taskId} after retries`);
             const rollback = async () => {
               const raw = await api.get<any[]>('/api/tasks');
               const rollbackData: Task[] = raw.map(t => {
@@ -815,7 +795,7 @@ export const dbService = {
               setCache('tasks', rollbackData);
               notifyOptimisticUpdate('tasks', rollbackData);
             };
-            rollback().catch(console.error);
+            rollback().catch(() => {});
           }
         );
       }
@@ -853,20 +833,18 @@ export const dbService = {
         // await enqueueSheetsWrite('reports', 'save', report);
         notifyChange('reports', 'created', report.ReportID).catch(() => {});
       } catch (err) {
-        console.error('API write failed — saveReport, enqueuing for retry:', err);
         syncQueue.enqueue(
           'reports',
           report.ReportID,
           persist,
-          () => console.log(`Retrying saveReport for ${report.ReportID}`),
+          () => {},
           async () => {
-            console.error(`Failed to save report ${report.ReportID} after retries`);
             const rollback = async () => {
               const raw = await api.get<TaskReport[]>('/api/reports');
               setCache('reports', raw);
               notifyOptimisticUpdate('reports', raw);
             };
-            rollback().catch(console.error);
+            rollback().catch(() => {});
           }
         );
       }
@@ -904,20 +882,18 @@ export const dbService = {
         // await enqueueSheetsWrite('followups', 'save', follow);
         notifyChange('followups', 'created', follow.FollowUpID).catch(() => {});
       } catch (err) {
-        console.error('API write failed — saveFollowup, enqueuing for retry:', err);
         syncQueue.enqueue(
           'followups',
           follow.FollowUpID,
           persist,
-          () => console.log(`Retrying saveFollowup for ${follow.FollowUpID}`),
+          () => {},
           async () => {
-            console.error(`Failed to save followup ${follow.FollowUpID} after retries`);
             const rollback = async () => {
               const raw = await api.get<FollowUp[]>('/api/followups');
               setCache('followups', raw);
               notifyOptimisticUpdate('followups', raw);
             };
-            rollback().catch(console.error);
+            rollback().catch(() => {});
           }
         );
       }
@@ -959,21 +935,19 @@ export const dbService = {
         // await enqueueSheetsWrite('settings', 'save', settingsList);
         notifyChange('settings', 'updated', 'settings').catch(() => {});
       } catch (err) {
-        console.error('API write failed — saveSettings, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         syncQueue.enqueue(
           'settings',
           'settings',
           persist,
-          () => console.log('Retrying saveSettings'),
+          () => {},
           async () => {
-            console.error('Failed to save settings after retries');
             const rollback = async () => {
               const raw = await api.get<AppSetting[]>('/api/settings');
               setCache('settings', raw);
               notifyOptimisticUpdate('settings', raw);
             };
-            rollback().catch(console.error);
+            rollback().catch(() => {});
           }
         );
       }
@@ -1047,14 +1021,13 @@ export const dbService = {
         // });
         notifyChange('email_templates', 'updated', template.templateName).catch(() => {});
       } catch (err) {
-        console.error('API write failed — saveEmailTemplate:', err);
         // Rollback optimistic update
         const rollback = async () => {
           const raw = await api.get<EmailTemplate[]>('/api/email-templates');
           setCache('email_templates', raw);
           notifyOptimisticUpdate('email_templates', raw);
         };
-        rollback().catch(console.error);
+        rollback().catch(() => {});
         throw new Error(`Failed to save email template: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
     })();
@@ -1076,13 +1049,12 @@ export const dbService = {
         await persist();
         notifyChange('email_templates', 'deleted', templateName).catch(() => {});
       } catch (err) {
-        console.error('API write failed — deleteEmailTemplate:', err);
         const rollback = async () => {
           const raw = await api.get<EmailTemplate[]>('/api/email-templates');
           setCache('email_templates', raw);
           notifyOptimisticUpdate('email_templates', raw);
         };
-        rollback().catch(console.error);
+        rollback().catch(() => {});
         throw new Error(`Failed to delete email template: ${err instanceof Error ? err.message : 'Unknown error'}`);
       }
     })();
@@ -1130,20 +1102,18 @@ export const dbService = {
         // await enqueueSheetsWrite('subtasks', 'save', subtaskToSave);
         notifyChange('subtasks', 'updated', subtask.SubtaskID).catch(() => {});
       } catch (err) {
-        console.error('API write failed — saveSubtask, enqueuing for retry:', err);
         syncQueue.enqueue(
           'subtasks',
           subtask.SubtaskID,
           persist,
-          () => console.log(`Retrying saveSubtask for ${subtask.SubtaskID}`),
+          () => {},
           async () => {
-            console.error(`Failed to save subtask ${subtask.SubtaskID} after retries`);
             const rollback = async () => {
               const raw = await api.get<Subtask[]>('/api/subtasks');
               setCache('subtasks', raw);
               notifyOptimisticUpdate('subtasks', raw);
             };
-            rollback().catch(console.error);
+            rollback().catch(() => {});
           }
         );
       }
@@ -1177,21 +1147,19 @@ export const dbService = {
         // await enqueueSheetsWrite('subtasks', 'save', updated);
         notifyChange('subtasks', 'updated', taskId).catch(() => {});
       } catch (err) {
-        console.error('API write failed — saveSubtasksBatch, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         syncQueue.enqueue(
           'subtasks',
           taskId,
           persist,
-          () => console.log(`Retrying saveSubtasksBatch for ${taskId}`),
+          () => {},
           async () => {
-            console.error(`Failed to save subtasks batch for ${taskId} after retries`);
             const rollback = async () => {
               const raw = await api.get<Subtask[]>('/api/subtasks');
               setCache('subtasks', raw);
               notifyOptimisticUpdate('subtasks', raw);
             };
-            rollback().catch(console.error);
+            rollback().catch(() => {});
           }
         );
       }
@@ -1230,20 +1198,18 @@ export const dbService = {
         // await enqueueSheetsWrite('comments', 'save', comment);
         notifyChange('comments', 'created', comment.CommentID).catch(() => {});
       } catch (err) {
-        console.error('API write failed — saveComment, enqueuing for retry:', err);
         syncQueue.enqueue(
           'comments',
           comment.CommentID,
           persist,
-          () => console.log(`Retrying saveComment for ${comment.CommentID}`),
+          () => {},
           async () => {
-            console.error(`Failed to save comment ${comment.CommentID} after retries`);
             const rollback = async () => {
               const raw = await api.get<Comment[]>('/api/comments');
               setCache('comments', raw);
               notifyOptimisticUpdate('comments', raw);
             };
-            rollback().catch(console.error);
+            rollback().catch(() => {});
           }
         );
       }
@@ -1279,21 +1245,19 @@ export const dbService = {
         // await enqueueSheetsWrite('team_submissions', 'save', submission);
         notifyChange('team_submissions', 'created', submission.SubmissionID).catch(() => {});
       } catch (err) {
-        console.error('API write failed — saveTeamSubmission, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         syncQueue.enqueue(
           'team_submissions',
           submission.SubmissionID,
           persist,
-          () => console.log(`Retrying saveTeamSubmission for ${submission.SubmissionID}`),
+          () => {},
           async () => {
-            console.error(`Failed to save team submission ${submission.SubmissionID} after retries`);
             const rollback = async () => {
               const raw = await api.get<TeamSubmission[]>('/api/team-submissions');
               setCache('teamSubmissions', raw);
               notifyOptimisticUpdate('teamSubmissions', raw);
             };
-            rollback().catch(console.error);
+            rollback().catch(() => {});
           }
         );
       }
@@ -1346,14 +1310,12 @@ export const dbService = {
         // await enqueueSheetsWrite('sub_teams', 'save', subTeamToSave);
         notifyChange('sub_teams', 'updated', subTeam.SubTeamID).catch(() => {});
       } catch (err) {
-        console.error('API write failed — saveSubTeam, enqueuing for retry:', err);
         syncQueue.enqueue(
           'sub_teams',
           subTeam.SubTeamID,
           persist,
-          () => console.log(`Retrying saveSubTeam for ${subTeam.SubTeamID}`),
+          () => {},
           async () => {
-            console.error(`Failed to save sub-team ${subTeam.SubTeamID} after retries`);
             clearCache('sub_teams');
             const rollback = await this.getSubTeams();
             notifyOptimisticUpdate('sub_teams', rollback);
@@ -1381,15 +1343,13 @@ export const dbService = {
         // await enqueueSheetsWrite('sub_teams', 'delete', subTeamId);
         notifyChange('sub_teams', 'deleted', subTeamId).catch(() => {});
       } catch (err) {
-        console.error('API write failed — deleteSubTeam, enqueuing for retry:', err);
         notifyOfflineSave('Saved offline — will sync when connection returns');
         syncQueue.enqueue(
           'sub_teams',
           subTeamId,
           persist,
-          () => console.log(`Retrying deleteSubTeam for ${subTeamId}`),
+          () => {},
           async () => {
-            console.error(`Failed to delete sub-team ${subTeamId} after retries`);
             clearCache('sub_teams');
             const rollback = await this.getSubTeams();
             notifyOptimisticUpdate('sub_teams', rollback);
@@ -1566,7 +1526,6 @@ export const dbService = {
               result = await this.getAudits();
               break;
             default:
-              console.warn(`Unknown collection: ${collection}`);
               result = null;
           }
           results.push({ status: 'fulfilled', value: result });
@@ -1574,7 +1533,6 @@ export const dbService = {
           // Add a small delay between collections to avoid rate limiting
           await new Promise(resolve => setTimeout(resolve, 200));
         } catch (error) {
-          console.error(`Failed to sync ${collection}:`, error);
           results.push({ status: 'rejected', reason: error });
         }
       }
@@ -1612,10 +1570,8 @@ export const dbService = {
       try {
         await api.post('/api/auditlogs', logRecord);
       } catch (err) {
-        console.error('API write failed — logAction:', err);
       }
     } catch (error) {
-      console.error('Failed to write audit log:', error);
     }
   }
 };

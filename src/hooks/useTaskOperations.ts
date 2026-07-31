@@ -146,7 +146,6 @@ export function useTaskOperations({
 
         // Trigger email notification
         try {
-          console.log('[FRONTEND EMAIL DEBUG] Attempting to trigger task assignment email');
           const result = await triggerTaskAssignmentEmail({
             assignerEmail: currentUser.Email,
             assignedToEmail: newTask.AssignedToEmail,
@@ -159,7 +158,6 @@ export function useTaskOperations({
               AttachmentLink: newTask.AttachmentLink,
             },
           });
-          console.log('[FRONTEND EMAIL DEBUG] Email trigger result:', result);
 
           if (!result.success) {
             const errorMessage = result.error || result.message || 'Failed to send assignment email';
@@ -172,7 +170,6 @@ export function useTaskOperations({
           // notification on task creation. Firing both sent two emails with different
           // templates to the same recipient on the same action.
         } catch (emailError) {
-          console.error('[FRONTEND EMAIL ERROR] Failed to trigger task assignment email:', emailError);
         }
 
         const alertMsg = formatEmailTemplate('template_assigned_email', newTask);
@@ -247,7 +244,6 @@ export function useTaskOperations({
           closeRemark: remark,
         });
       } catch (err) {
-        console.error('Failed to trigger closure email:', err);
       }
     }
 

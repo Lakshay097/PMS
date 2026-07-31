@@ -71,7 +71,6 @@ export class SSEClient {
             }
           }
         } catch (err) {
-          console.error('Error parsing connected event:', err);
         }
       });
 
@@ -84,7 +83,6 @@ export class SSEClient {
             this.handlers.onChange(data.changed, data.lastModified);
           }
         } catch (err) {
-          console.error('Error parsing change event:', err);
         }
       };
 
@@ -94,7 +92,6 @@ export class SSEClient {
         this.scheduleReconnect();
       };
     } catch (err) {
-      console.error('Error creating EventSource:', err);
       this.setStatus('error');
       this.scheduleReconnect();
     }
@@ -102,7 +99,6 @@ export class SSEClient {
 
   private scheduleReconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('Max reconnection attempts reached');
       this.setStatus('error');
       return;
     }

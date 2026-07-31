@@ -56,7 +56,6 @@ export function useDatabase(isAuthInitialized: boolean = false) {
       setTeamSubmissions(data.teamSubmissions || []);
       setLastSyncTime(new Date().toISOString());
     } catch (error) {
-      console.error('Error loading database:', error);
       setDbConnectionStatus('error');
       // Show user-facing error message
       setDatabaseSwitchMessage('Unable to connect. Please check your connection and refresh.');
@@ -94,7 +93,6 @@ export function useDatabase(isAuthInitialized: boolean = false) {
       setTeamSubmissions(data.teamSubmissions || []);
       setLastSyncTime(new Date().toISOString());
     } catch (error) {
-      console.error('Error during silent sync:', error);
       setDbConnectionStatus('error');
     } finally {
       setIsSyncing(false);

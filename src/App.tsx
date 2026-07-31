@@ -678,8 +678,6 @@ export default function App() {
     const propId = `RP-${Math.floor(1000 + Math.random() * 8999)}`;
     const nowStr = new Date().toISOString();
 
-    console.log('App.handleSubmitProgressReport: Received data:', data);
-    console.log('App: Final attachment links:', data.AttachmentLink);
 
     const newReport: TaskReport = {
       ReportID: propId,
@@ -696,7 +694,6 @@ export default function App() {
       CreatedAt: nowStr
     };
 
-    console.log('App: Saving report:', newReport);
 
     const targetTask = tasks.find(t => t.TaskID === data.TaskID);
     if (targetTask) {
@@ -713,7 +710,6 @@ export default function App() {
 
       await dbService.saveReport(newReport);
       await dbService.saveTask(updatedTask);
-      console.log('App: Report saved successfully');
 
       triggerNotification(
         'Progress Update',
@@ -753,7 +749,6 @@ export default function App() {
           }
         }
       } catch (err) {
-        console.error('Email trigger FAILED:', err);
         logger.error('Failed to trigger report email:', err);
       }
 
@@ -1128,14 +1123,12 @@ export default function App() {
         }}
         onUpdateSetting={async (key, value) => {
           try {
-            console.log('[onUpdateSetting] Saving setting:', key, 'value:', value);
             const settingExists = settings.some(s => s.Key === key);
             const updatedSettings = settingExists
               ? settings.map(s => (s.Key === key ? { ...s, Value: value } : s))
               : [...settings, { Key: key, Value: value }];
             setSettings(updatedSettings);
             await dbService.saveSettings(updatedSettings);
-            console.log('[onUpdateSetting] Setting saved successfully to Firestore');
 
             // If this is a team leader or stakeholder setting, update teams locally without full reload
             if (key.startsWith('team_') && (key.endsWith('_leaders') || key.endsWith('_stakeholders'))) {
@@ -1145,7 +1138,6 @@ export default function App() {
               } else if (teamId.endsWith('_stakeholders')) {
                 teamId = teamId.slice(0, -'_stakeholders'.length);
               }
-              console.log('[onUpdateSetting] Updating team local state for:', teamId);
               const leaderEmails = key.endsWith('_leaders')
                 ? (value ? value.split(',').map(e => e.trim()).filter(Boolean) : [])
                 : teams.find(t => t.TeamID === teamId)?.TeamLeaderEmails || [];
@@ -1158,7 +1150,6 @@ export default function App() {
                   ? { ...team, TeamLeaderEmails: leaderEmails, StakeholderEmails: stakeholderEmails }
                   : team
               ));
-              console.log('[onUpdateSetting] Team local state updated:', { teamId, leaderEmails, stakeholderEmails });
             }
 
             // If this is an email template setting, also update the email_templates sheet
@@ -1185,13 +1176,11 @@ export default function App() {
                   });
                 }
               } catch (emailError) {
-                console.error('Failed to sync email template to sheet:', emailError);
               }
             }
 
             // SSE will handle syncing to other clients - no need for manual sync
           } catch (error) {
-            console.error('[onUpdateSetting] Error saving setting:', error);
             throw error;
           }
         }}
@@ -1647,10 +1636,7 @@ export default function App() {
                   onEditProfile={() => setIsEditProfileModalOpen(true)}
                   onChangePassword={() => setIsChangePasswordModalOpen(true)}
                   onConfigureNotifications={() => setIsConfigureNotificationsModalOpen(true)}
-                  isDarkMode={isDarkMode}
-                  onToggleTheme={() => {
-                    // Theme toggle is handled by ThemeContext
-                  }}
+                  showGmailSection={false}
                 />
                 </Suspense>
               </MainLayout>
@@ -1789,7 +1775,6 @@ export default function App() {
             onClose={() => setIsConfigureNotificationsModalOpen(false)}
             onSave={(settings) => {
               // In a real implementation, this would save the notification settings
-              console.log('Notification settings:', settings);
             }}
           />
         )}

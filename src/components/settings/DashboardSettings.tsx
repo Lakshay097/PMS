@@ -1,32 +1,31 @@
 import React from 'react';
 import { Loader2, Link, Unlink } from 'lucide-react';
-import { useTheme } from '../../../contexts/ThemeContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
-interface SettingsProps {
-  onEditProfile: () => void;
-  onChangePassword: () => void;
-  onConfigureNotifications: () => void;
-  gmailConnected: boolean;
-  gmailLoading: boolean;
-  connectionMessage: { type: 'success' | 'error'; text: string } | null;
-  handleConnectGmail: () => void;
-  handleDisconnectGmail: () => void;
-  onLogout: () => void;
+interface DashboardSettingsProps {
+  onEditProfile?: () => void;
+  onChangePassword?: () => void;
+  onConfigureNotifications?: () => void;
+  onLogout?: () => void;
+  gmailConnected?: boolean;
+  gmailLoading?: boolean;
+  connectionMessage?: { type: 'success' | 'error'; text: string } | null;
+  onConnectGmail?: () => void;
+  onDisconnectGmail?: () => void;
 }
 
-export default function Settings({
+export default function DashboardSettings({
   onEditProfile,
   onChangePassword,
   onConfigureNotifications,
-  gmailConnected,
-  gmailLoading,
-  connectionMessage,
-  handleConnectGmail,
-  handleDisconnectGmail,
   onLogout,
-}: SettingsProps) {
+  gmailConnected = false,
+  gmailLoading = false,
+  connectionMessage = null,
+  onConnectGmail,
+  onDisconnectGmail,
+}: DashboardSettingsProps) {
   const { isDarkMode, toggleTheme } = useTheme();
-
   return (
     <div className="space-y-6">
       <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-token' : 'bg-surface border-token'}`}>
@@ -94,7 +93,7 @@ export default function Settings({
                   <span className="text-secondary text-sm font-medium">Not Connected</span>
                 )}
                 <button
-                  onClick={gmailConnected ? handleDisconnectGmail : handleConnectGmail}
+                  onClick={gmailConnected ? onDisconnectGmail : onConnectGmail}
                   disabled={gmailLoading}
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-slate-200 hover:bg-slate-300 text-slate-900'} disabled:opacity-50 disabled:cursor-not-allowed`}
                 >

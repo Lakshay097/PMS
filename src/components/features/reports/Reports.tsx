@@ -184,7 +184,6 @@ export default function Reports({
       const taskReports = reports?.filter(r => r.TaskID === taskId);
 
       if (!task || !taskReports || taskReports.length === 0) {
-        console.error('Task or reports not found');
         setIsGeneratingPdf(false);
         return;
       }
@@ -242,7 +241,6 @@ export default function Reports({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error generating PDF:', error);
     } finally {
       setIsGeneratingPdf(false);
     }

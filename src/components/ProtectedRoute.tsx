@@ -27,7 +27,6 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
       const user = JSON.parse(userStr);
       userRole = user.Role || user.role;
     } catch (e) {
-      console.error('Failed to parse user from localStorage:', e);
     }
   }
 

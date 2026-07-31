@@ -5,6 +5,7 @@ import { User, TaskTemplate, Task, TaskStatus, Team, SubTeam } from '../types';
 import { ROLE, isAdminLevel } from '../constants/status';
 import { canAssignWithinTeam } from '../utils/subTeamUtils';
 import { uploadFile } from '../api/upload';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface CreateTaskModalProps {
   currentUser: User;
@@ -30,6 +31,7 @@ interface CreateTaskModalProps {
 }
 
 export default function CreateTaskModal({ currentUser, usersList, teamsList = [], subTeamsList = [], isOpen, onClose, onSubmit, preSelectedAssignee, preSelectedTeamIDs }: CreateTaskModalProps) {
+  const { isDarkMode } = useTheme();
   const [taskType, setTaskType] = useState<'One-time' | 'Recurring'>('One-time');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -194,7 +196,6 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
           data
         });
       } catch (error) {
-        console.error('Error reading file:', error);
       }
     }
 
@@ -241,7 +242,6 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
           });
           uploadedUrls.push(uploadResult.webViewLink);
         } catch (error: any) {
-          console.error('Error uploading file:', error);
           const errorMessage = error?.response?.data?.error || error?.message || `Failed to upload ${file.name}`;
           setValidationError(`Document upload failed: ${errorMessage}. Please remove the file and try again.`);
           setIsUploading(false);
@@ -393,10 +393,16 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                   }}
                   onFocus={() => setShowDropdown(true)}
                   placeholder="Search stakeholders by name or email..."
-                  className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                  className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#2563EB] ${
+                    isDarkMode
+                      ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500'
+                      : 'bg-surface border-[#E2E8F0] text-slate-800 placeholder-slate-400'
+                  }`}
                 />
                 {showDropdown && searchQuery && (
-                  <div className="absolute z-30 w-full mt-1 bg-surface border border-[#E2E8F0] rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  <div className={`absolute z-30 w-full mt-1 border rounded-lg shadow-lg max-h-48 overflow-y-auto ${
+                    isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-surface border-[#E2E8F0]'
+                  }`}>
                     {filteredStakeholders.length === 0 ? (
                       <div className="p-3 text-secondary text-xs italic">No stakeholders found.</div>
                     ) : (
@@ -468,10 +474,16 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                     }}
                     onFocus={() => setShowTeamDropdown(true)}
                     placeholder="Search teams by name..."
-                    className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#2563EB] ${
+                      isDarkMode
+                        ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500'
+                        : 'bg-surface border-[#E2E8F0] text-slate-800 placeholder-slate-400'
+                    }`}
                   />
                   {showTeamDropdown && teamSearchQuery && (
-                    <div className="absolute z-30 w-full mt-1 bg-surface border border-[#E2E8F0] rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    <div className={`absolute z-30 w-full mt-1 border rounded-lg shadow-lg max-h-48 overflow-y-auto ${
+                      isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-surface border-[#E2E8F0]'
+                    }`}>
                       {visibleTeams.filter(t => t.TeamName.toLowerCase().includes(teamSearchQuery.toLowerCase())).length === 0 ? (
                         <div className="p-3 text-secondary text-xs italic">No teams found.</div>
                       ) : (

@@ -4,6 +4,7 @@ import { isAdminLevel } from '../../../constants/status';
 import { uploadFile } from '../../../api/upload';
 import { sendProofEmail } from '../../../api/teamReminder';
 import { Task, User as UserType, Team, SubTeam, TeamSubmission, AppSetting } from '../../../types';
+import { useTheme } from '../../../contexts/ThemeContext';
 import {
   Users,
   User,
@@ -26,7 +27,6 @@ interface ScheduledReportsProps {
   teamSubmissions?: TeamSubmission[];
   settings?: AppSetting[];
   onAddTeamSubmission?: (submission: TeamSubmission) => void;
-  isDarkMode?: boolean;
 }
 
 export default function ScheduledReports({
@@ -38,8 +38,8 @@ export default function ScheduledReports({
   teamSubmissions = [],
   settings = [],
   onAddTeamSubmission,
-  isDarkMode = false,
 }: ScheduledReportsProps) {
+  const { isDarkMode } = useTheme();
   // Scheduled Tasks submission state
   const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
   const [submissionTeamId, setSubmissionTeamId] = useState<string | null>(null);
@@ -95,7 +95,6 @@ export default function ScheduledReports({
           data
         });
       } catch (error) {
-        console.error('Error reading file:', error);
       }
     }
 
@@ -151,7 +150,6 @@ export default function ScheduledReports({
             });
             uploadedUrls.push(uploadResult.webViewLink);
           } catch (error: any) {
-            console.error('Error uploading file:', error);
             const errorMessage = error?.response?.data?.error || error?.message || `Failed to upload ${file.name}`;
             setSubmissionError(errorMessage);
             setIsSubmitting(false);
@@ -211,10 +209,8 @@ export default function ScheduledReports({
             note: submissionNote.trim() || undefined,
             submittedBy: currentUser.Email
           });
-          console.log('Proof email sent successfully');
         }
       } catch (emailError) {
-        console.error('Failed to send proof email:', emailError);
       }
 
       // Reset state
@@ -227,7 +223,6 @@ export default function ScheduledReports({
       setSubmissionSubTeamId(null);
 
     } catch (error) {
-      console.error('Error submitting report:', error);
       setSubmissionError('Failed to submit report. Please try again.');
       setTimeout(() => setSubmissionError(null), 3000);
     } finally {

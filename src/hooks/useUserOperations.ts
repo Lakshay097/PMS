@@ -59,10 +59,8 @@ export function useUserOperations({
 const handleApproveUser = useCallback(async (email: string) => {
   try {
     const result = await approveUser({ email });
-    console.log('[handleApproveUser] Success:', result);
     await silentSync(); // refresh local state so the banner clears immediately
   } catch (error: any) {
-    console.error('[handleApproveUser] Failed:', error);
     alert(`Failed to approve user: ${error?.message || 'Unknown error'}`);
   }
 }, [silentSync]);

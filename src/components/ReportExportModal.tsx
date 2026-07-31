@@ -67,7 +67,6 @@ export default function ReportExportModal({
       URL.revokeObjectURL(url);
       onClose();
     } catch (error) {
-      console.error('Error generating stakeholder report:', error);
     } finally {
       setIsGenerating(false);
     }
