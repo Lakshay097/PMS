@@ -89,7 +89,9 @@ export default function TaskFilters({
   // Get filtered users based on role and search
   const getFilteredUsers = () => {
     let filteredUsers;
-    if (isAdminLevel(currentUser.Role)) {
+    if (!currentUser) {
+      filteredUsers = users.filter(u => u.Active);
+    } else if (isAdminLevel(currentUser.Role)) {
       filteredUsers = users.filter(u => u.Active);
     } else if (currentUser.Role === ROLE.STAKEHOLDER) {
       const subStakeholderEmails = getAllSubordinates(currentUser.Email, users);
@@ -167,17 +169,13 @@ export default function TaskFilters({
       </div>
       {/* Search Input */}
       <div className="relative">
-        <Search size={14} className={`absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} sm:size-4`} />
+        <Search size={14} className={`absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 text-muted sm:size-4`} />
         <input
           type="text"
           placeholder="Search tasks..."
           value={searchQuery}
           onChange={(e) => onSearchQueryChange(e.target.value)}
-          className={`pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            isDarkMode 
-              ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' 
-              : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
-          }`}
+          className="pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border border-token bg-surface text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-muted"
         />
       </div>
       <div className="relative" ref={statusDropdownRef}>

@@ -5,6 +5,7 @@ import { getEmailTemplate } from './emailTemplateStorage';
 import { getTeamReportConfigs, TeamReportConfig } from './teamReportConfigService';
 import { hasReceivedFirstReportEmail, markFirstReportEmailSent } from './userOnboardingService';
 import { getOrCreateTeamEmailThread, updateTeamEmailThreadId } from './emailLogService';
+import { ttlCache } from '../utils/ttlCache';
 import crypto from 'crypto';
 
 /**
@@ -55,6 +56,23 @@ export async function updateReportReminderThreadId(
 
 import { config } from '../config';
 import { generateGoogleSheetsToken, fetchSheetValues } from './googleSheetsService';
+
+const TEAMS_CACHE_KEY = 'teams:all';
+const SUBTEAMS_CACHE_KEY = 'subTeams:all';
+const TEAMS_CACHE_TTL = 5 * 60 * 1000; // 5 min
+const SUBTEAMS_CACHE_TTL = 5 * 60 * 1000; // 5 min
+
+async function getAllTeamsCached() {
+  return ttlCache.getOrFetch(TEAMS_CACHE_KEY, TEAMS_CACHE_TTL, () =>
+    firestoreAdmin.collection('teams').get()
+  );
+}
+
+async function getAllSubTeamsCached() {
+  return ttlCache.getOrFetch(SUBTEAMS_CACHE_KEY, SUBTEAMS_CACHE_TTL, () =>
+    firestoreAdmin.collection('sub_teams').get()
+  );
+}
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 type DayOfWeek = typeof DAYS_OF_WEEK[number];
@@ -574,8 +592,8 @@ export async function checkAndSendReportReminders(triggeredBy: 'scheduler' | 'ma
     const configs = await getTeamReportConfigs();
     logger.info(`Found ${configs.length} team report configurations`);
 
-    // Get all teams from Firestore for name lookup
-    const teamsSnapshot = await firestoreAdmin.collection('teams').get();
+    // Get all teams from Firestore for name lookup (cached)
+    const teamsSnapshot = await getAllTeamsCached();
     const teamMap = new Map<string, string>();
     teamsSnapshot.forEach(doc => {
       const team = doc.data();
@@ -584,8 +602,8 @@ export async function checkAndSendReportReminders(triggeredBy: 'scheduler' | 'ma
       }
     });
 
-    // Get all sub-teams from Firestore for name lookup
-    const subTeamsSnapshot = await firestoreAdmin.collection('sub_teams').get();
+    // Get all sub-teams from Firestore for name lookup (cached)
+    const subTeamsSnapshot = await getAllSubTeamsCached();
     const subTeamMap = new Map<string, { name: string; parentTeamId: string }>();
     subTeamsSnapshot.forEach(doc => {
       const subTeam = doc.data();

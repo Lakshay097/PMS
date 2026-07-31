@@ -347,7 +347,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
 
           <div>
             <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
-              Aesthetic title <span className="text-red-500">*</span>
+              Title <span className="text-red-500">*</span>
               <span className="text-blue-500 ml-1">(Auto-generated from description & date)</span>
             </label>
             <input

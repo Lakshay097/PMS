@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAppModals } from './hooks/useAppModals';
-import { useAppEvents } from './hooks/useAppEvents';
 import { useDatabase } from './hooks/useDatabase';
 import { useTaskOperations } from './hooks/useTaskOperations';
 import { useUserOperations } from './hooks/useUserOperations';
@@ -73,6 +73,9 @@ import {
 import Spinner from './components/ui/Spinner';
 import ErrorBoundary from './components/ErrorBoundary';
 import DashboardSkeleton from './components/DashboardSkeleton';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { ROUTES } from './constants/routes';
+import MainLayout from './components/layout/MainLayout';
 
 // TECH-DEBT: Main bundle still 407kb (gzip 127kb). Run
 // npx vite-bundle-visualizer and inspect index chunk for
@@ -82,6 +85,11 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const TasksPage = lazy(() => import('./pages/TasksPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
+const TeamPage = lazy(() => import('./pages/TeamPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const ScheduledReportsPage = lazy(() => import('./pages/ScheduledReportsPage'));
+const SchedulesPage = lazy(() => import('./pages/SchedulesPage'));
 
 // Lazy load modal components
 const CreateTaskModal = lazy(() => import('./components/CreateTaskModal'));
@@ -94,7 +102,6 @@ const ConfigureNotificationsModal = lazy(() => import('./components/ConfigureNot
 const AddUserModal = lazy(() => import('./components/features/admin/AddUserModal'));
 const AddTeamModal = lazy(() => import('./components/features/tasks/AddTeamModal'));
 
-type ActiveView = 'dashboard' | 'tasks' | 'templates' | 'admin';
 
 export default function App() {
   const { isDarkMode } = useTheme();
@@ -139,7 +146,7 @@ export default function App() {
   } = useDatabase(false); // Will be reloaded when auth initializes
 
   // Real-time sync â€” invalidates React Query cache on SSE events
-  const { token } = useAuth();
+  const { token, isAuthenticated, isLoading: authIsLoading } = useAuth();
   useRealtimeSync(token);
 
   // Active Simulated Session email state
@@ -152,8 +159,9 @@ export default function App() {
   // Used to gate email sends and show a connect-prompt before any send is attempted.
   const { isConnected: gmailConnected, connectGmail } = useGmailStatus(activeUser?.Email);
 
-  // Active Route/View
-  const [activeView, setActiveView] = useState<ActiveView>('dashboard');
+  // React Router hooks for navigation
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Automated notification center state
   const [notifications, setNotifications] = useState<SystemAlert[]>([]);
@@ -314,23 +322,22 @@ export default function App() {
   };
 
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
-  const [isAuthInitialized, setIsAuthInitialized] = useState<boolean>(false);
 
   // Google Sheets database state triggers
   const [isSheetsConnected, setIsSheetsConnected] = useState(false);
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
   const [sheetsSpreadsheetId, setSheetsSpreadsheetId] = useState<string | null>(null);
 
-  // Initialize Google Sheets authentication on mount
+  // Initialize Google Sheets authentication on mount (for Sheets API access only)
   useEffect(() => {
     const cleanup = initAuth(
       (token) => {
         logger.log('Google Sheets authentication successful');
-        setIsAuthInitialized(true);
+        setIsSheetsConnected(true);
       },
       (error) => {
         logger.error('Google Sheets authentication failed:', error);
-        setIsAuthInitialized(false);
+        setIsSheetsConnected(false);
       }
     );
     return cleanup;
@@ -356,12 +363,12 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Reload database when auth initializes
+  // Reload database when Firebase auth initializes
   useEffect(() => {
-    if (isAuthInitialized) {
+    if (!authIsLoading && isAuthenticated) {
       loadDatabase();
     }
-  }, [isAuthInitialized]);
+  }, [authIsLoading, isAuthenticated]);
 
   // Wire up offline save notification callback
   useEffect(() => {
@@ -404,9 +411,6 @@ export default function App() {
     await silentSync();
   };
 
-  // Handle mobile back button and keyboard shortcuts
-  useAppEvents(activeView, setActiveView);
-
   // 2. Track Active User Session adaptation
   useEffect(() => {
     if (users.length > 0) {
@@ -431,8 +435,8 @@ export default function App() {
 
         setActiveUser(resolvedUser);
         // Force redirect to Dashboard when switching credentials to prevent scoping bugs
-        if (resolvedUser.Role === ROLE.SUB_STAKEHOLDER && activeView === 'admin') {
-          setActiveView('dashboard');
+        if (resolvedUser.Role === ROLE.SUB_STAKEHOLDER && location.pathname === ROUTES.ADMIN) {
+          navigate(ROUTES.DASHBOARD);
         }
       } else if (activeUserEmail) {
         // If user not found in local array but email is set, try to load from localStorage
@@ -459,7 +463,7 @@ export default function App() {
         }
       }
     }
-  }, [activeUserEmail, users, activeView]);
+  }, [activeUserEmail, users, location.pathname, navigate]);
 
   // (Early returns moved to the bottom of the hooks section to satisfy Rules of Hooks)
 
@@ -813,37 +817,6 @@ export default function App() {
     return <DashboardSkeleton />;
   }
 
-  if (!activeUser) {
-    return (
-      <Suspense fallback={<Spinner size="lg" />}>
-        <LoginPage
-          usersList={users}
-          onLoginSuccess={(email, user) => {
-            const normalizedUser = {
-              ...user,
-              Email: user.Email || (user as any).email || email,
-              TeamIDs: user.TeamIDs ? (Array.isArray(user.TeamIDs) ? user.TeamIDs : [user.TeamIDs]) : (user.TeamID ? [user.TeamID] : []),
-              TeamNames: user.TeamNames ? (Array.isArray(user.TeamNames) ? user.TeamNames : [user.TeamNames]) : (user.TeamName ? [user.TeamName] : []),
-              TeamID: user.TeamID || (user.TeamIDs && user.TeamIDs.length > 0 ? (Array.isArray(user.TeamIDs) ? user.TeamIDs[0] : user.TeamIDs) : ''),
-              TeamName: user.TeamName || (user.TeamNames && user.TeamNames.length > 0 ? (Array.isArray(user.TeamNames) ? user.TeamNames[0] : user.TeamNames) : '')
-            };
-            localStorage.setItem('PMS_active_user_email', email);
-            localStorage.setItem('PMS_user', JSON.stringify(normalizedUser));
-            setActiveUserEmail(email);
-            setActiveUser(normalizedUser);
-            // Add user to local users array if not present
-            setUsers(prev => {
-              if (!prev.find(u => u.Email === email)) {
-                return [...prev, normalizedUser];
-              }
-              return prev;
-            });
-          }}
-        />
-      </Suspense>
-    );
-  }
-
   return (
     <div className="min-h-screen flex flex-col font-sans antialiased bg-app text-primary">
       
@@ -912,21 +885,84 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* NEW UI - Dashboard handles all views */}
-      <ErrorBoundary
-        fallback={
-          <div className="flex items-center justify-center h-64 
-                          text-gray-500 dark:text-gray-400">
-            This section failed to load. 
-            <button onClick={() => window.location.reload()} 
-                    className="ml-2 text-blue-600 underline">
-              Reload
-            </button>
-          </div>
-        }
-      >
-        <Suspense fallback={<Spinner size="lg" />}>
-          <DashboardPage
+      <Routes>
+        {/* Public route - Login */}
+        <Route
+          path={ROUTES.LOGIN}
+          element={
+            <Suspense fallback={<Spinner size="lg" />}>
+              <LoginPage
+                usersList={users}
+                onLoginSuccess={(email, user) => {
+                  const normalizedUser = {
+                    ...user,
+                    Email: user.Email || (user as any).email || email,
+                    TeamIDs: user.TeamIDs ? (Array.isArray(user.TeamIDs) ? user.TeamIDs : [user.TeamIDs]) : (user.TeamID ? [user.TeamID] : []),
+                    TeamNames: user.TeamNames ? (Array.isArray(user.TeamNames) ? user.TeamNames : [user.TeamNames]) : (user.TeamName ? [user.TeamName] : []),
+                    TeamID: user.TeamID || (user.TeamIDs && user.TeamIDs.length > 0 ? (Array.isArray(user.TeamIDs) ? user.TeamIDs[0] : user.TeamIDs) : ''),
+                    TeamName: user.TeamName || (user.TeamNames && user.TeamNames.length > 0 ? (Array.isArray(user.TeamNames) ? user.TeamNames[0] : user.TeamNames) : '')
+                  };
+                  localStorage.setItem('PMS_active_user_email', email);
+                  localStorage.setItem('PMS_user', JSON.stringify(normalizedUser));
+                  setActiveUserEmail(email);
+                  setActiveUser(normalizedUser);
+                  // Add user to local users array if not present
+                  setUsers(prev => {
+                    if (!prev.find(u => u.Email === email)) {
+                      return [...prev, normalizedUser];
+                    }
+                    return prev;
+                  });
+                  // Navigate to dashboard after successful login
+                  navigate(ROUTES.DASHBOARD);
+                }}
+              />
+            </Suspense>
+          }
+        />
+
+        {/* Root redirect - if authenticated go to dashboard, else login */}
+        <Route
+          path={ROUTES.ROOT}
+          element={
+            activeUser ? (
+              <Navigate to={ROUTES.DASHBOARD} replace />
+            ) : (
+              <Navigate to={ROUTES.LOGIN} replace />
+            )
+          }
+        />
+
+        {/* Protected routes */}
+        <Route
+          path={ROUTES.DASHBOARD}
+          element={
+            <ProtectedRoute>
+              <MainLayout
+                currentUser={activeUser}
+                onLogout={() => {
+                  localStorage.removeItem('PMS_active_user_email');
+                  localStorage.removeItem('PMS_auth_token');
+                  localStorage.removeItem('PMS_user');
+                  setActiveUserEmail('');
+                  setActiveUser(null);
+                  navigate(ROUTES.LOGIN);
+                }}
+              >
+                <ErrorBoundary
+                  fallback={
+                    <div className="flex items-center justify-center h-64 
+                                    text-gray-500 dark:text-gray-400">
+                      This section failed to load. 
+                      <button onClick={() => window.location.reload()} 
+                              className="ml-2 text-blue-600 underline">
+                        Reload
+                      </button>
+                    </div>
+                  }
+                >
+                  <Suspense fallback={<Spinner size="lg" />}>
+                    <DashboardPage
         tasks={getVisibleTasks()}
         currentUser={activeUser}
         onNewTask={(assigneeEmail, teamIds) => {
@@ -940,8 +976,11 @@ export default function App() {
         }}
         onLogout={() => {
           localStorage.removeItem('PMS_active_user_email');
+          localStorage.removeItem('PMS_auth_token');
+          localStorage.removeItem('PMS_user');
           setActiveUserEmail('');
           setActiveUser(null);
+          navigate(ROUTES.LOGIN);
         }}
         templates={templates}
         users={users}
@@ -1119,7 +1158,12 @@ export default function App() {
 
             // If this is a team leader or stakeholder setting, update teams locally without full reload
             if (key.startsWith('team_') && (key.endsWith('_leaders') || key.endsWith('_stakeholders'))) {
-              const teamId = key.replace('team_', '').replace('_leaders', '').replace('_stakeholders', '');
+              let teamId = key.replace('team_', '');
+              if (teamId.endsWith('_leaders')) {
+                teamId = teamId.slice(0, -'_leaders'.length);
+              } else if (teamId.endsWith('_stakeholders')) {
+                teamId = teamId.slice(0, -'_stakeholders'.length);
+              }
               console.log('[onUpdateSetting] Updating team local state for:', teamId);
               const leaderEmails = key.endsWith('_leaders')
                 ? (value ? value.split(',').map(e => e.trim()).filter(Boolean) : [])
@@ -1133,7 +1177,7 @@ export default function App() {
                   ? { ...team, TeamLeaderEmails: leaderEmails, StakeholderEmails: stakeholderEmails }
                   : team
               ));
-              console.log('[onUpdateSetting] Team local state updated:', { leaderEmails, stakeholderEmails });
+              console.log('[onUpdateSetting] Team local state updated:', { teamId, leaderEmails, stakeholderEmails });
             }
 
             // If this is an email template setting, also update the email_templates sheet
@@ -1200,9 +1244,441 @@ export default function App() {
         dbConnectionStatus={dbConnectionStatus}
         onRefreshUsers={silentSync}
       />
-        </Suspense>
-      </ErrorBoundary>
+                  </Suspense>
+                </ErrorBoundary>
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
 
+        {/* Tasks route - with all required props */}
+        <Route
+          path={ROUTES.TASKS}
+          element={
+            <ProtectedRoute>
+              <MainLayout
+                currentUser={activeUser}
+                onLogout={() => {
+                  localStorage.removeItem('PMS_active_user_email');
+                  localStorage.removeItem('PMS_auth_token');
+                  localStorage.removeItem('PMS_user');
+                  setActiveUserEmail('');
+                  setActiveUser(null);
+                  navigate(ROUTES.LOGIN);
+                }}
+              >
+                <Suspense fallback={<Spinner size="lg" />}>
+                  <TasksPage
+                  tasks={getVisibleTasks()}
+                  filters={{
+                    status: filterStatus === 'All' ? [] : [filterStatus],
+                    priority: filterPriority,
+                    assignee: filterAssigneeNames.join(','),
+                    searchQuery: debouncedSearchQuery
+                  }}
+                  currentUser={activeUser}
+                  users={users}
+                  teams={teams}
+                  subTeams={subTeams}
+                  settings={settings}
+                  isDarkMode={isDarkMode}
+                  onFilterChange={(filterType, value) => {
+                    if (filterType === 'status') setFilterStatus(Array.isArray(value) ? value.join(',') : value as string);
+                    if (filterType === 'priority') setFilterPriority(value as string);
+                    if (filterType === 'assignee') setFilterAssigneeNames(Array.isArray(value) ? value : [value as string]);
+                    if (filterType === 'searchQuery') setSearchQuery(value as string);
+                  }}
+                  onTaskClick={(task) => {
+                    setSelectedTask(task);
+                    setIsDrawerOpen(true);
+                  }}
+                  onNewTask={() => {
+                    setIsTaskModalOpen(true);
+                  }}
+                  getPriorityColor={(priority) => {
+                    switch(priority) {
+                      case 'High': return 'text-red-600 bg-red-50';
+                      case 'Medium': return 'text-yellow-600 bg-yellow-50';
+                      case 'Low': return 'text-green-600 bg-green-50';
+                      default: return 'text-gray-600 bg-gray-50';
+                    }
+                  }}
+                  getStatusColor={getStatusBadgeStyle}
+                />
+                </Suspense>
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Task detail route - opens drawer for specific task */}
+        <Route
+          path={ROUTES.TASK_DETAIL}
+          element={
+            <ProtectedRoute>
+              <MainLayout
+                currentUser={activeUser}
+                onLogout={() => {
+                  localStorage.removeItem('PMS_active_user_email');
+                  localStorage.removeItem('PMS_auth_token');
+                  localStorage.removeItem('PMS_user');
+                  setActiveUserEmail('');
+                  setActiveUser(null);
+                  navigate(ROUTES.LOGIN);
+                }}
+              >
+                <Suspense fallback={<Spinner size="lg" />}>
+                  <TasksPage
+                  tasks={getVisibleTasks()}
+                  filters={{
+                    status: filterStatus === 'All' ? [] : [filterStatus],
+                    priority: filterPriority,
+                    assignee: filterAssigneeNames.join(','),
+                    searchQuery: debouncedSearchQuery
+                  }}
+                  currentUser={activeUser}
+                  users={users}
+                  teams={teams}
+                  subTeams={subTeams}
+                  settings={settings}
+                  isDarkMode={isDarkMode}
+                  onFilterChange={(filterType, value) => {
+                    if (filterType === 'status') setFilterStatus(Array.isArray(value) ? value.join(',') : value as string);
+                    if (filterType === 'priority') setFilterPriority(value as string);
+                    if (filterType === 'assignee') setFilterAssigneeNames(Array.isArray(value) ? value : [value as string]);
+                    if (filterType === 'searchQuery') setSearchQuery(value as string);
+                  }}
+                  onTaskClick={(task) => {
+                    setSelectedTask(task);
+                    setIsDrawerOpen(true);
+                  }}
+                  onNewTask={() => {
+                    setIsTaskModalOpen(true);
+                  }}
+                  getPriorityColor={(priority) => {
+                    switch(priority) {
+                      case 'High': return 'text-red-600 bg-red-50';
+                      case 'Medium': return 'text-yellow-600 bg-yellow-50';
+                      case 'Low': return 'text-green-600 bg-green-50';
+                      default: return 'text-gray-600 bg-gray-50';
+                    }
+                  }}
+                  getStatusColor={getStatusBadgeStyle}
+                />
+                </Suspense>
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Admin route - Admin only with all required props */}
+        <Route
+          path={ROUTES.ADMIN}
+          element={
+            <ProtectedRoute allowedRoles={[ROLE.ADMIN]}>
+              <MainLayout
+                currentUser={activeUser}
+                onLogout={() => {
+                  localStorage.removeItem('PMS_active_user_email');
+                  localStorage.removeItem('PMS_auth_token');
+                  localStorage.removeItem('PMS_user');
+                  setActiveUserEmail('');
+                  setActiveUser(null);
+                  navigate(ROUTES.LOGIN);
+                }}
+              >
+                <Suspense fallback={<Spinner size="lg" />}>
+                  <AdminPage
+                  users={users}
+                  templates={templates}
+                  audits={audits}
+                  settings={settings}
+                  teams={teams}
+                  onAddUser={handleAddUser}
+                  onToggleUserStatus={handleToggleUserStatus}
+                  onAddTemplate={handleAddTemplate}
+                  onToggleTemplateStatus={handleToggleTemplateStatus}
+                  onUpdateSetting={handleUpdateSetting}
+                  onUpdateUserRole={handleUpdateUserRole}
+                  onApproveUser={handleApproveUser}
+                  onAddTeam={async (team) => {
+                    await dbService.saveTeam(team);
+                    handleManualSync();
+                  }}
+                  onToggleTeamStatus={async (teamId) => {
+                    await dbService.toggleTeamStatus(teamId);
+                    handleManualSync();
+                  }}
+                  onUpdateUserTeams={handleUpdateUserTeams}
+                  onDeleteTeam={handleDeleteTeam}
+                  onSyncDatabase={handleManualSync}
+                  isSyncing={dbIsSyncing}
+                  lastSyncTime={lastSyncTime}
+                  dbConnectionStatus={dbConnectionStatus}
+                />
+                </Suspense>
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Team route */}
+        <Route
+          path={ROUTES.TEAM}
+          element={
+            <ProtectedRoute>
+              <MainLayout
+                currentUser={activeUser}
+                onLogout={() => {
+                  localStorage.removeItem('PMS_active_user_email');
+                  localStorage.removeItem('PMS_auth_token');
+                  localStorage.removeItem('PMS_user');
+                  setActiveUserEmail('');
+                  setActiveUser(null);
+                  navigate(ROUTES.LOGIN);
+                }}
+              >
+                <Suspense fallback={<Spinner size="lg" />}>
+                  <TeamPage
+                  tasks={getVisibleTasks()}
+                  currentUser={activeUser}
+                  users={users}
+                  teams={teams}
+                  subTeams={subTeams}
+                  onAddTeam={async (team) => {
+                    await dbService.saveTeam(team);
+                    handleManualSync();
+                  }}
+                  onToggleTeamStatus={async (teamId) => {
+                    await dbService.toggleTeamStatus(teamId);
+                    handleManualSync();
+                  }}
+                  onUpdateUserTeams={handleUpdateUserTeams}
+                  onDeleteTeam={handleDeleteTeam}
+                  onRenameTeam={handleRenameTeam}
+                  onSaveSubTeam={async (subTeam) => {
+                    await dbService.saveSubTeam(subTeam);
+                  }}
+                  onDeleteSubTeam={async (subTeamId) => {
+                    await dbService.deleteSubTeam(subTeamId);
+                    const affected = users.filter(u => u.SubTeamIDs?.includes(subTeamId));
+                    for (const u of affected) {
+                      const newSubTeamIDs = (u.SubTeamIDs || []).filter(id => id !== subTeamId);
+                      const newSubTeamNames = (u.SubTeamNames || []).filter((_, idx) => u.SubTeamIDs?.[idx] !== subTeamId);
+                      await dbService.saveUser({ 
+                        ...u, 
+                        SubTeamIDs: newSubTeamIDs, 
+                        SubTeamNames: newSubTeamNames 
+                      } as User);
+                    }
+                  }}
+                  onUpdateSubTeamLeaders={async (teamId, subTeamId, leaderEmails) => {
+                    const key = `team_${teamId}_subteam_${subTeamId}_leaders`;
+                    const settingExists = settings.some(s => s.Key === key);
+                    const updatedSettings = settingExists
+                      ? settings.map(s => (s.Key === key ? { ...s, Value: leaderEmails.join(',') } : s))
+                      : [...settings, { Key: key, Value: leaderEmails.join(',') }];
+                    setSettings(updatedSettings);
+                    await dbService.saveSettings(updatedSettings);
+                    setSubTeams(prev => prev.map(st =>
+                      st.SubTeamID === subTeamId ? { ...st, SubTeamLeaderEmails: leaderEmails } : st
+                    ));
+                  }}
+                  onAssignUserToSubTeam={async (userEmail, subTeamId, subTeamName) => {
+                    const user = users.find(u => u.Email === userEmail);
+                    if (user) {
+                      const currentSubTeamIDs = user.SubTeamIDs || [];
+                      const currentSubTeamNames = user.SubTeamNames || [];
+                      if (subTeamId && subTeamName) {
+                        if (!currentSubTeamIDs.includes(subTeamId)) {
+                          await dbService.saveUser({
+                            ...user,
+                            SubTeamIDs: [...currentSubTeamIDs, subTeamId],
+                            SubTeamNames: [...currentSubTeamNames, subTeamName],
+                          } as User);
+                        }
+                      }
+                    }
+                  }}
+                  onRemoveUserFromSubTeam={async (userEmail, subTeamId) => {
+                    const user = users.find(u => u.Email === userEmail);
+                    if (user) {
+                      const currentSubTeamIDs = user.SubTeamIDs || [];
+                      const currentSubTeamNames = user.SubTeamNames || [];
+                      const subTeamIndex = currentSubTeamIDs.indexOf(subTeamId);
+                      if (subTeamIndex !== -1) {
+                        const newSubTeamIDs = currentSubTeamIDs.filter(id => id !== subTeamId);
+                        const newSubTeamNames = currentSubTeamNames.filter((_, i) => i !== subTeamIndex);
+                        await dbService.saveUser({
+                          ...user,
+                          SubTeamIDs: newSubTeamIDs,
+                          SubTeamNames: newSubTeamNames,
+                        } as User);
+                      }
+                    }
+                  }}
+                  onNewTask={handleCreateTaskOrTemplate}
+                  isDarkMode={isDarkMode}
+                />
+                </Suspense>
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Reports route */}
+        <Route
+          path={ROUTES.REPORTS}
+          element={
+            <ProtectedRoute>
+              <MainLayout
+                currentUser={activeUser}
+                onLogout={() => {
+                  localStorage.removeItem('PMS_active_user_email');
+                  localStorage.removeItem('PMS_auth_token');
+                  localStorage.removeItem('PMS_user');
+                  setActiveUserEmail('');
+                  setActiveUser(null);
+                  navigate(ROUTES.LOGIN);
+                }}
+              >
+                <Suspense fallback={<Spinner size="lg" />}>
+                  <ReportsPage
+                  tasks={getVisibleTasks()}
+                  currentUser={activeUser}
+                  users={users}
+                  teams={teams}
+                  subTeams={subTeams}
+                  reports={reports}
+                  settings={settings}
+                  onTaskClick={(task) => {
+                    setSelectedTask(task);
+                    setIsDrawerOpen(true);
+                  }}
+                  isDarkMode={isDarkMode}
+                />
+                </Suspense>
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Weekly Reports route */}
+        <Route
+          path={ROUTES.WEEKLY_REPORTS}
+          element={
+            <ProtectedRoute>
+              <MainLayout
+                currentUser={activeUser}
+                onLogout={() => {
+                  localStorage.removeItem('PMS_active_user_email');
+                  localStorage.removeItem('PMS_auth_token');
+                  localStorage.removeItem('PMS_user');
+                  setActiveUserEmail('');
+                  setActiveUser(null);
+                  navigate(ROUTES.LOGIN);
+                }}
+              >
+                <Suspense fallback={<Spinner size="lg" />}>
+                  <ScheduledReportsPage
+                  tasks={getVisibleTasks()}
+                  currentUser={activeUser}
+                  users={users}
+                  teams={teams}
+                  subTeams={subTeams}
+                  teamSubmissions={teamSubmissions}
+                  settings={settings}
+                  onAddTeamSubmission={async (submission) => {
+                    await dbService.saveTeamSubmission(submission);
+                    handleManualSync();
+                  }}
+                  isDarkMode={isDarkMode}
+                />
+                </Suspense>
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Schedules route */}
+        <Route
+          path={ROUTES.SCHEDULES}
+          element={
+            <ProtectedRoute>
+              <MainLayout
+                currentUser={activeUser}
+                onLogout={() => {
+                  localStorage.removeItem('PMS_active_user_email');
+                  localStorage.removeItem('PMS_auth_token');
+                  localStorage.removeItem('PMS_user');
+                  setActiveUserEmail('');
+                  setActiveUser(null);
+                  navigate(ROUTES.LOGIN);
+                }}
+              >
+                <Suspense fallback={<Spinner size="lg" />}>
+                  <SchedulesPage
+                  tasks={getVisibleTasks()}
+                  currentUser={activeUser}
+                  users={users}
+                  templates={templates}
+                  onAddTemplate={async (template) => {
+                    await dbService.saveTemplate(template);
+                    handleManualSync();
+                  }}
+                  onToggleTemplateStatus={async (templateId) => {
+                    const template = templates.find(t => t.TemplateID === templateId);
+                    if (template) {
+                      await dbService.saveTemplate({ ...template, Active: !template.Active });
+                      handleManualSync();
+                    }
+                  }}
+                  isDarkMode={isDarkMode}
+                />
+                </Suspense>
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Settings route */}
+        <Route
+          path={ROUTES.SETTINGS}
+          element={
+            <ProtectedRoute>
+              <MainLayout
+                currentUser={activeUser}
+                onLogout={() => {
+                  localStorage.removeItem('PMS_active_user_email');
+                  localStorage.removeItem('PMS_auth_token');
+                  localStorage.removeItem('PMS_user');
+                  setActiveUserEmail('');
+                  setActiveUser(null);
+                  navigate(ROUTES.LOGIN);
+                }}
+              >
+                <Suspense fallback={<Spinner size="lg" />}>
+                  <SettingsPage
+                  currentUser={activeUser}
+                  settings={settings}
+                  emailTemplates={emailTemplates}
+                  onUpdateSetting={handleUpdateSetting}
+                  onEditProfile={() => setIsEditProfileModalOpen(true)}
+                  onChangePassword={() => setIsChangePasswordModalOpen(true)}
+                  onConfigureNotifications={() => setIsConfigureNotificationsModalOpen(true)}
+                  isDarkMode={isDarkMode}
+                  onToggleTheme={() => {
+                    // Theme toggle is handled by ThemeContext
+                  }}
+                />
+                </Suspense>
+              </MainLayout>
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+
+      {/* Global modals - outside Routes so they work on any page */}
       <Suspense fallback={<Spinner size="lg" />}>
         <AnimatePresence>
           

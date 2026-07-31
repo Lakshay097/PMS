@@ -184,6 +184,9 @@ export function useDatabase(isAuthInitialized: boolean = false) {
     if (isAuthInitialized) {
       loadDatabase();
       // Server-side Sheets sync is now handled by the server
+    } else {
+      // If auth is not initialized, don't keep loading state true
+      setIsLoading(false);
     }
   }, [isAuthInitialized]);
 

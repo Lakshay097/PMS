@@ -3,20 +3,21 @@ import { sanitizeForFirestore } from '../utils/firestoreSanitize';
 import { db } from '../firebase';
 import { authenticateToken } from '../middleware/auth';
 import { requireRole } from '../middleware/authz';
+import { getAllUsersCached } from './firestore';
 
 const router = Router();
 
-router.get('/api/users', authenticateToken, requireRole('admin', 'lead'), async (_req, res) => {
+router.get('/api/users', authenticateToken, requireRole('Admin', 'lead'), async (_req, res) => {
   try {
-    const snapshot = await db.collection('users').get();
-    res.json(snapshot.docs.map(d => d.data()));
+    const users = await getAllUsersCached();
+    res.json(users);
   } catch (err) {
     console.error('getUsers failed:', err);
     res.status(500).json({ error: 'Failed to load users' });
   }
 });
 
-router.get('/api/auditlogs', authenticateToken, requireRole('admin'), async (_req, res) => {
+router.get('/api/auditlogs', authenticateToken, requireRole('Admin'), async (_req, res) => {
   try {
     const snapshot = await db.collection('auditlogs')
       .orderBy('ActionDateTime', 'desc')
@@ -37,7 +38,7 @@ router.put('/api/users/:email', authenticateToken, async (req: any, res) => {
 
     // AUTHZ: only self-edit or admin
     const isSelf = req.user.Email === targetEmail;
-    const isAdmin = req.user.role === 'admin';
+    const isAdmin = req.user.role === 'Admin';
     if (!isSelf && !isAdmin) {
       return res.status(403).json({ error: 'Forbidden' });
     }

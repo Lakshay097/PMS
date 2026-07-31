@@ -74,6 +74,8 @@ function clearAuthTokens(): void {
 
 // Track in-flight refresh to prevent race conditions
 let refreshPromise: Promise<boolean> | null = null;
+// Track consecutive failed refresh attempts to force logout
+let failedRefreshAttempts = 0;
 
 /**
  * Refresh access token using refresh token
@@ -105,16 +107,31 @@ async function refreshAccessToken(): Promise<boolean> {
 
       if (!response.ok) {
         logger.warn('Failed to refresh access token');
+        failedRefreshAttempts++;
+        // Force logout after 2 consecutive failed refresh attempts
+        if (failedRefreshAttempts >= 2) {
+          logger.warn('Multiple refresh failures, forcing logout');
+          clearAuthTokens();
+          window.location.href = '/login';
+        }
         return false;
       }
 
       const data = await response.json();
       setAuthToken(data.token);
       setRefreshToken(data.refreshToken);
+      failedRefreshAttempts = 0; // Reset counter on success
       logger.log('Access token refreshed successfully');
       return true;
     } catch (error) {
       logger.error('Error refreshing access token:', error);
+      failedRefreshAttempts++;
+      // Force logout after 2 consecutive failed refresh attempts
+      if (failedRefreshAttempts >= 2) {
+        logger.warn('Multiple refresh failures, forcing logout');
+        clearAuthTokens();
+        window.location.href = '/login';
+      }
       return false;
     } finally {
       // Clear the promise after completion (success or failure)

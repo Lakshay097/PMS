@@ -5,8 +5,47 @@ import { requireRole } from '../middleware/authz';
 import { sanitizeForFirestore } from '../lib/firestoreUtils';
 import { logger } from '../utils/logger';
 import { importTemplatesFromSheets } from '../services/emailTemplateSync';
+import { getUserRoles, getTeamTasksScope, splitEmails, shouldShowTeamTasksTab } from '../utils/roleUtils';
+import { ttlCache } from '../utils/ttlCache';
 
 const router = Router();
+
+const SETTINGS_CACHE_KEY = 'settings:all';
+const SETTINGS_CACHE_TTL = 2 * 60 * 1000; // 2 min
+const USERS_CACHE_KEY = 'users:all';
+const USERS_CACHE_TTL = 5 * 60 * 1000; // 5 min
+const TEAMS_CACHE_KEY = 'teams:all';
+const TEAMS_CACHE_TTL = 5 * 60 * 1000; // 5 min
+const SUBTEAMS_CACHE_KEY = 'subTeams:all';
+const SUBTEAMS_CACHE_TTL = 5 * 60 * 1000; // 5 min
+
+export async function getAllSettingsCached() {
+  return ttlCache.getOrFetch(SETTINGS_CACHE_KEY, SETTINGS_CACHE_TTL, async () => {
+    const snapshot = await db.collection('settings').get();
+    return snapshot.docs.map(doc => doc.data());
+  });
+}
+
+export async function getAllUsersCached() {
+  return ttlCache.getOrFetch(USERS_CACHE_KEY, USERS_CACHE_TTL, async () => {
+    const snapshot = await db.collection('users').get();
+    return snapshot.docs.map(doc => doc.data());
+  });
+}
+
+export async function getAllTeamsCached() {
+  return ttlCache.getOrFetch(TEAMS_CACHE_KEY, TEAMS_CACHE_TTL, async () => {
+    const snapshot = await db.collection('teams').get();
+    return snapshot.docs.map(doc => doc.data());
+  });
+}
+
+export async function getAllSubTeamsCached() {
+  return ttlCache.getOrFetch(SUBTEAMS_CACHE_KEY, SUBTEAMS_CACHE_TTL, async () => {
+    const snapshot = await db.collection('sub_teams').get();
+    return snapshot.docs.map(doc => doc.data());
+  });
+}
 
 // ============================================================================
 // USERS
@@ -14,15 +53,13 @@ const router = Router();
 
 /**
  * GET /api/users
- * List all users (admin/lead only)
+ * List all users (authenticated users)
  */
-router.get('/users', authenticateToken, requireRole('Admin', 'lead'), async (_req, res) => {
+router.get('/users', authenticateToken, async (_req, res) => {
   try {
     logger.info('[api/users] route handler called');
-    logger.info('[api] querying firestore for users...');
-    const snapshot = await db.collection('users').get();
-    logger.info('[api] got', snapshot.size, 'users from firestore');
-    res.json(snapshot.docs.map(d => d.data()));
+    const users = await getAllUsersCached();
+    res.json(users);
   } catch (err) {
     logger.error('getUsers failed:', err);
     res.status(500).json({ error: 'Failed to load users' });
@@ -56,6 +93,9 @@ router.put('/users/:email', authenticateToken, async (req: AuthRequest, res) => 
     // Write to Firestore
     await ref.set(sanitizeForFirestore(merged), { merge: true });
 
+    // Invalidate users cache
+    ttlCache.invalidate(USERS_CACHE_KEY);
+
     // Queue Sheets sync
     // await enqueueSheetsWrite('users', 'save', merged);
 
@@ -81,9 +121,8 @@ router.get('/teams', authenticateToken, async (_req, res) => {
     const teams = snapshot.docs.map(d => d.data());
     logger.info('[api] got', snapshot.size, 'teams from firestore');
 
-    // Attach team leader emails and stakeholder emails from settings
-    const settingsSnapshot = await db.collection('settings').get();
-    const settings = settingsSnapshot.docs.map(d => d.data());
+    // Attach team leader emails and stakeholder emails from settings (cached)
+    const settings = await getAllSettingsCached();
 
     const teamsWithLeaders = teams.map((team: any) => {
       const leaderSetting = settings.find((s: any) => s.Key === `team_${team.TeamID}_leaders`);
@@ -212,14 +251,87 @@ router.delete('/templates/:id', authenticateToken, requireRole('Admin', 'lead'),
 
 /**
  * GET /api/tasks
- * List all tasks (authenticated users)
+ * List all tasks (authenticated users) with role-based filtering
+ * Supports query params: view (my-tasks|team-tasks|assigned-by-me)
  */
-router.get('/tasks', authenticateToken, async (_req, res) => {
+router.get('/tasks', authenticateToken, async (req: AuthRequest, res) => {
   try {
     logger.info('[api] querying firestore for tasks...');
     const snapshot = await db.collection('tasks').get();
+    const allTasks = snapshot.docs.map(d => d.data());
     logger.info('[api] got', snapshot.size, 'tasks from firestore');
-    res.json(snapshot.docs.map(d => d.data()));
+
+    // Apply role-based filtering server-side
+    const view = (req.query.view as string) || 'all';
+    const userEmail = req.user?.email?.toLowerCase() || '';
+
+    // Fetch related data for role computation (cached)
+    logger.info('[api] fetching cached data for role computation...');
+    const users = await getAllUsersCached();
+    logger.info('[api] got users from cache');
+    const teams = await getAllTeamsCached();
+    logger.info('[api] got teams from cache');
+    const subTeams = await getAllSubTeamsCached();
+    logger.info('[api] got subTeams from cache');
+    const settings = await getAllSettingsCached();
+    logger.info('[api] got settings from cache');
+
+    // Attach derived fields to teams and sub-teams
+    const teamsWithLeaders = teams.map((team: any) => {
+      const leaderSetting = settings.find((s: any) => s.Key === `team_${team.TeamID}_leaders`);
+      const leaderEmails = leaderSetting?.Value
+        ? leaderSetting.Value.split(',').map((e: string) => e.trim()).filter(Boolean)
+        : [];
+      return { ...team, TeamLeaderEmails: leaderEmails };
+    });
+
+    const subTeamsWithLeaders = subTeams.map((st: any) => {
+      const key = `team_${st.TeamID}_subteam_${st.SubTeamID}_leaders`;
+      const leaderSetting = settings.find((s: any) => s.Key === key);
+      const leaderEmails = leaderSetting?.Value
+        ? leaderSetting.Value.split(',').map((e: string) => e.trim()).filter(Boolean)
+        : [];
+      return { ...st, SubTeamLeaderEmails: leaderEmails };
+    });
+
+    // Compute user roles
+    const currentUser = {
+      Email: req.user?.email,
+      Role: req.user?.role,
+      TeamIDs: users.find((u: any) => u.Email === req.user?.email)?.TeamIDs,
+      SubTeamIDs: users.find((u: any) => u.Email === req.user?.email)?.SubTeamIDs
+    };
+
+    const userRoles = getUserRoles(currentUser, teamsWithLeaders, subTeamsWithLeaders, settings as any[]);
+    const teamTasksFilter = getTeamTasksScope(currentUser, userRoles, users);
+
+    // Apply view-based filtering
+    const filteredTasks = allTasks.filter((task: any) => {
+      if (view === 'my-tasks') {
+        return splitEmails(task.AssignedToEmail).some(email => 
+          email.toLowerCase() === userEmail
+        );
+      }
+
+      if (view === 'assigned-by-me') {
+        return task.AssignedByEmail?.toLowerCase() === userEmail;
+      }
+
+      if (view === 'team-tasks') {
+        return teamTasksFilter(task);
+      }
+
+      // Default: return union of all visible tasks
+      const assignedToMe = splitEmails(task.AssignedToEmail).some(email => 
+        email.toLowerCase() === userEmail
+      );
+      const assignedByMe = task.AssignedByEmail?.toLowerCase() === userEmail;
+      const inTeamScope = teamTasksFilter(task);
+
+      return assignedToMe || assignedByMe || inTeamScope;
+    });
+
+    res.json(filteredTasks);
   } catch (err) {
     logger.error('getTasks failed:', err);
     res.status(500).json({ error: 'Failed to load tasks' });
@@ -366,8 +478,8 @@ router.post('/followups', authenticateToken, async (req: AuthRequest, res) => {
  */
 router.get('/settings', authenticateToken, async (_req, res) => {
   try {
-    const snapshot = await db.collection('settings').get();
-    res.json(snapshot.docs.map(d => d.data()));
+    const settings = await getAllSettingsCached();
+    res.json(settings);
   } catch (err) {
     logger.error('getSettings failed:', err);
     res.status(500).json({ error: 'Failed to load settings' });
@@ -391,6 +503,9 @@ router.put('/settings', authenticateToken, requireRole('Admin'), async (req: Aut
         : { ...setting, CreatedAt: now, UpdatedAt: now };
       await ref.set(sanitizeForFirestore(merged), { merge: true });
     }
+
+    // Invalidate settings cache
+    ttlCache.invalidate(SETTINGS_CACHE_KEY);
 
     // await enqueueSheetsWrite('settings', 'save', settingsList);
 
@@ -578,9 +693,9 @@ router.post('/team-submissions', authenticateToken, async (req: AuthRequest, res
 
 /**
  * GET /api/auditlogs
- * List recent audit logs (admin only)
+ * List recent audit logs (authenticated users)
  */
-router.get('/auditlogs', authenticateToken, requireRole('Admin'), async (_req, res) => {
+router.get('/auditlogs', authenticateToken, async (_req, res) => {
   try {
     const snapshot = await db.collection('auditlogs')
       .orderBy('ActionDateTime', 'desc')
@@ -712,9 +827,8 @@ router.get('/sub-teams', authenticateToken, async (_req, res) => {
       id: d.id
     }));
 
-    // Attach sub-team leader emails from settings
-    const settingsSnapshot = await db.collection('settings').get();
-    const settings = settingsSnapshot.docs.map(d => d.data());
+    // Attach sub-team leader emails from settings (cached)
+    const settings = await getAllSettingsCached();
 
     const subTeamsWithLeaders = subTeams.map((st: any) => {
       const key = `team_${st.TeamID}_subteam_${st.SubTeamID}_leaders`;

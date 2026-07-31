@@ -5,7 +5,7 @@ import { BadRequestError, NotFoundError, InternalServerError, UnauthorizedError 
 import { AuthRequest } from '../middleware/auth';
 import bcrypt from 'bcrypt';
 import { firestoreAdmin } from '../services/firebaseAdmin';
-import * as cookie from 'cookie';
+import { stringifySetCookie } from 'cookie';
 
 /**
  * Login request body
@@ -442,20 +442,8 @@ export async function refreshTokenHandler(req: Request, res: Response): Promise<
 
   // Set tokens in httpOnly cookies for security
   res.setHeader('Set-Cookie', [
-    cookie.serialize('auth_token', newTokens.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 3600, // 1 hour
-      path: '/',
-    }),
-    cookie.serialize('refresh_token', newTokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 30 * 24 * 60 * 60, // 30 days
-      path: '/',
-    }),
+    stringifySetCookie({ name: 'auth_token', value: newTokens.token, httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 3600, path: '/' }),
+    stringifySetCookie({ name: 'refresh_token', value: newTokens.refreshToken, httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 30 * 24 * 60 * 60, path: '/' }),
   ]);
 
   res.json({

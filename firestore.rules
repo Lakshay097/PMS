@@ -1,0 +1,197 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+             request.auth.token.email in get(/databases/$(database)/documents/users).data &&
+             get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role == 'Admin';
+    }
+    
+    function getUserTeamIds() {
+      return get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.teamId;
+    }
+    
+    function isTeamMember(teamId) {
+      return getUserTeamIds() == teamId || isAdmin();
+    }
+    
+    // ============================================================================
+    // USERS COLLECTION
+    // ============================================================================
+    match /users/{userId} {
+      // Read: Admin can read all users, users can read their own profile
+      allow read: if isAdmin() || request.auth.token.email == userId;
+      
+      // Write: Admin can write all, users can only write their own profile
+      allow write: if isAdmin() || request.auth.token.email == userId;
+    }
+    
+    // ============================================================================
+    // TEAMS COLLECTION
+    // ============================================================================
+    match /teams/{teamId} {
+      // Read: Authenticated users can read all teams (needed for team selection)
+      allow read: if isAuthenticated();
+      
+      // Write: Admin only
+      allow write: if isAdmin();
+    }
+    
+    // ============================================================================
+    // SUB_TEAMS COLLECTION
+    // ============================================================================
+    match /sub_teams/{subTeamId} {
+      // Read: Authenticated users can read all sub-teams
+      allow read: if isAuthenticated();
+      
+      // Write: Admin only
+      allow write: if isAdmin();
+    }
+    
+    // ============================================================================
+    // TEMPLATES COLLECTION
+    // ============================================================================
+    match /templates/{templateId} {
+      // Read: Authenticated users can read templates
+      allow read: if isAuthenticated();
+      
+      // Write: Admin and leads only
+      allow write: if isAdmin() || 
+                   get(/databases/$(database)/documents/users/$(request.auth.token.email)).data.role in ['Stakeholder'];
+    }
+    
+    // ============================================================================
+    // TASKS COLLECTION
+    // ============================================================================
+    match /tasks/{taskId} {
+      // Read: Users can read tasks assigned to them or in their team
+      allow read: if isAuthenticated() && 
+                  (resource.data.assignedTo == request.auth.token.email ||
+                   resource.data.assignedBy == request.auth.token.email ||
+                   isTeamMember(resource.data.teamId) ||
+                   isAdmin());
+      
+      // Write: Users can update tasks assigned to them, admins can update all
+      allow write: if isAuthenticated() &&
+                   (resource.data.assignedTo == request.auth.token.email ||
+                    resource.data.assignedBy == request.auth.token.email ||
+                    isAdmin());
+      
+      // Create: Authenticated users can create tasks
+      allow create: if isAuthenticated();
+    }
+    
+    // ============================================================================
+    // TASK_REPORTS COLLECTION
+    // ============================================================================
+    match /taskReports/{reportId} {
+      // Read: Users can read reports for tasks they're assigned to or submitted
+      allow read: if isAuthenticated() &&
+                  (resource.data.submittedBy == request.auth.token.email ||
+                   get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.assignedTo == request.auth.token.email ||
+                   isAdmin());
+      
+      // Write: Users can submit reports for tasks assigned to them
+      allow write: if isAuthenticated() &&
+                   (resource.data.submittedBy == request.auth.token.email ||
+                    isAdmin());
+    }
+    
+    // ============================================================================
+    // FOLLOWUPS COLLECTION
+    // ============================================================================
+    match /followUps/{followUpId} {
+      // Read: Users can read followups for tasks they're involved in
+      allow read: if isAuthenticated() &&
+                  (resource.data.createdBy == request.auth.token.email ||
+                   get(/databases/$(database)/documents/tasks/$(resource.data.parentTaskId)).data.assignedTo == request.auth.token.email ||
+                   isAdmin());
+      
+      // Write: Users can create followups for tasks they're assigned to
+      allow write: if isAuthenticated() &&
+                   (resource.data.createdBy == request.auth.token.email ||
+                    isAdmin());
+    }
+    
+    // ============================================================================
+    // SETTINGS COLLECTION
+    // ============================================================================
+    match /settings/{key} {
+      // Read: Authenticated users can read settings
+      allow read: if isAuthenticated();
+      
+      // Write: Admin only
+      allow write: if isAdmin();
+    }
+    
+    // ============================================================================
+    // SUBTASKS COLLECTION
+    // ============================================================================
+    match /subtasks/{subtaskId} {
+      // Read: Authenticated users can read subtasks
+      allow read: if isAuthenticated();
+      
+      // Write: Admin only
+      allow write: if isAdmin();
+    }
+    
+    // ============================================================================
+    // COMMENTS COLLECTION
+    // ============================================================================
+    match /comments/{commentId} {
+      // Read: Authenticated users can read comments
+      allow read: if isAuthenticated();
+      
+      // Write: Users can update their own comments, admins can update all
+      allow write: if isAuthenticated() &&
+                   (resource.data.authorEmail == request.auth.token.email ||
+                    isAdmin());
+    }
+    
+    // ============================================================================
+    // TEAM_SUBMISSIONS COLLECTION
+    // ============================================================================
+    match /team_submissions/{submissionId} {
+      // Read: Authenticated users can read submissions
+      allow read: if isAuthenticated();
+      
+      // Write: Authenticated users can create submissions
+      allow create: if isAuthenticated();
+      
+      // Update: Admin only
+      allow update: if isAdmin();
+      
+      // Delete: Admin only
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================================================
+    // AUDITLOGS COLLECTION
+    // ============================================================================
+    match /auditlogs/{logId} {
+      // Read: Admin only
+      allow read: if isAdmin();
+      
+      // Write: Server-side only (via Admin SDK, bypasses rules)
+      // No client-side writes allowed
+      allow write: if false;
+    }
+    
+    // ============================================================================
+    // EMAIL_TEMPLATES COLLECTION
+    // ============================================================================
+    match /email_templates/{templateName} {
+      // Read: Admin only
+      allow read: if isAdmin();
+      
+      // Write: Admin only
+      allow write: if isAdmin();
+    }
+  }
+}

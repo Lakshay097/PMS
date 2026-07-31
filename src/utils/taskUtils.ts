@@ -1,7 +1,8 @@
-import { Task, TaskReport, FollowUp } from '../types';
+import { Task, TaskReport, FollowUp, User, Team, SubTeam, AppSetting } from '../types';
 import { ROLE, isAdminLevel } from '../constants/status';
 import { getAllSubordinates } from './userUtils';
 import { normalizeStatus } from './taskStatus';
+import { getUserRoles, getTeamTasksScope, splitEmails } from './roleUtils';
 
 export function parseSafely(value: string): any {
   try {
@@ -199,13 +200,44 @@ export function getOverdueAndSoonTasks(tasks: Task[], activeUser: any, users: an
   return { overdue, soon };
 }
 
-export function getVisibleReports(reports: TaskReport[], activeUser: any) {
+export function getVisibleReports(
+  reports: TaskReport[], 
+  activeUser: User,
+  tasks: Task[] = [],
+  users: User[] = [],
+  teams: Team[] = [],
+  subTeams: SubTeam[] = [],
+  settings: AppSetting[] = []
+) {
   if (!reports) return [];
   
-  if (isAdminLevel(activeUser.Role)) return reports;
+  const userEmail = activeUser.Email?.toLowerCase() || '';
   
+  // Compute user roles using the new role-based approach
+  const userRoles = getUserRoles(activeUser, teams, subTeams, settings);
+  
+  // Get the Team Tasks scope filter function based on user roles
+  const teamTasksFilter = getTeamTasksScope(activeUser, userRoles, users);
+
   return reports.filter(report => {
-    return report.SubmittedByEmail === activeUser.Email;
+    // Admin sees all reports
+    if (userRoles.some(r => r.type === 'Admin')) return true;
+    
+    // User sees reports they submitted
+    if (report.SubmittedByEmail?.toLowerCase() === userEmail) return true;
+    
+    // User sees reports for tasks they can access
+    const task = tasks.find(t => t.TaskID === report.TaskID);
+    if (!task) return false;
+    
+    // Check if user can access this task using the same logic as task visibility
+    const assignedToMe = splitEmails(task.AssignedToEmail).some(email => 
+      email.toLowerCase() === userEmail
+    );
+    const assignedByMe = task.AssignedByEmail?.toLowerCase() === userEmail;
+    const inTeamScope = teamTasksFilter(task);
+    
+    return assignedToMe || assignedByMe || inTeamScope;
   });
 }
 

@@ -31,15 +31,11 @@ export default function TaskList({
       <div className="divide-y divide-[var(--color-border)]">
         {/* PERF-CHECK: if list exceeds 50 items, add @tanstack/react-virtual */}
         {tasks.map((task) => {
-          const taskIsSubStakeholder = currentUser && currentUser.Role === 'Stakeholder' && taskSubView === 'team-tasks' && 
-            !task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase()) &&
-            !task.AssignedByEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
-          
           return (
             <div
               key={task.TaskID}
-              onClick={(e) => { e.preventDefault(); !taskIsSubStakeholder && onTaskClick(task); }}
-              className={`p-4 sm:p-6 transition-colors ${!taskIsSubStakeholder ? 'cursor-pointer' : 'cursor-default'} 'hover:bg-[#1E293B]/30' : 'hover-surface'}`}
+              onClick={(e) => { e.preventDefault(); onTaskClick(task); }}
+              className="p-4 sm:p-6 transition-colors cursor-pointer hover-surface"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
@@ -50,30 +46,12 @@ export default function TaskList({
                     <span className={`text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border ${getStatusColor(task.Status)}`}>
                       {task.Status}
                     </span>
-                    {taskIsSubStakeholder && (
-                      <span className="text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20">
-                        Sub-stakeholder Task
-                      </span>
-                    )}
                   </div>
-                  {!taskIsSubStakeholder ? (
-                    <>
-                      <h4 className={`font-medium text-sm sm:text-base mb-2 line-clamp-2 'text-white' : 'text-primary'}`}>{task.Title}</h4>
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-[10px] sm:text-xs text-secondary">
-                        <span>Due: {task.DueDate}</span>
-                        <span>Assigned to: {task.AssignedToEmail.split('@')[0]}</span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <h4 className={`font-medium text-sm sm:text-base mb-2 line-clamp-2 'text-secondary' : 'text-secondary'}`}>{task.Title}</h4>
-                      <div className={`flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-[10px] sm:text-xs 'text-slate-500' : 'text-secondary'}`}>
-                        <span>Due: {task.DueDate}</span>
-                        <span>Assigned to: {task.AssignedToEmail.split('@')[0]}</span>
-                        <span className="text-[10px] italic">(Status only view)</span>
-                      </div>
-                    </>
-                  )}
+                  <h4 className={`font-medium text-sm sm:text-base mb-2 line-clamp-2 ${isDarkMode ? 'text-white' : 'text-primary'}`}>{task.Title}</h4>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-[10px] sm:text-xs text-secondary">
+                    <span>Due: {task.DueDate}</span>
+                    <span>Assigned to: {task.AssignedToEmail.split(',').map(email => email.trim().split('@')[0]).join(', ')}</span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                   {isAdminLevel(currentUser?.Role) && onDeleteTask && (
@@ -91,7 +69,7 @@ export default function TaskList({
                     </button>
                   )}
                   <div className="text-right">
-                    <p className={`text-[10px] sm:text-xs font-mono 'text-secondary' : 'text-secondary'}`}>{task.TaskID}</p>
+                    <p className={`text-[10px] sm:text-xs font-mono text-secondary`}>{task.TaskID}</p>
                   </div>
                 </div>
               </div>
@@ -99,7 +77,7 @@ export default function TaskList({
           );
         })}
         {tasks.length === 0 && (
-          <div className={`p-8 sm:p-12 text-center 'text-secondary' : 'text-secondary'}`}>
+          <div className={`p-8 sm:p-12 text-center text-secondary`}>
             {emptyMessage}
           </div>
         )}

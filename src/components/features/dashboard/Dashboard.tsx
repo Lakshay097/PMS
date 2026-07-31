@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAllSubordinates } from '../../../utils/userUtils';
 import { getVisibleSubTeamIds, isSubTeamLeader, isTeamLeader } from '../../../utils/subTeamUtils';
 import { generateReportWithAttachments, AttachmentInfo } from '../../../utils/pdfGenerator';
+import { getUserRoles, getTeamTasksScope, splitEmails, shouldShowTeamTasksTab, shouldShowAssignedByMeTab } from '../../../utils/roleUtils';
+import { ROUTES } from '../../../constants/routes';
 import {
   LayoutDashboard,
   ClipboardList,
@@ -36,7 +39,8 @@ import {
   Loader2,
   Download,
   Upload,
-  File
+  File,
+  Inbox
 } from 'lucide-react';
 import { Task, User as UserType, TaskTemplate, AppSetting, Team, SubTeam, TaskReport, AuditLog, EmailTemplate, TeamSubmission } from '../../../types';
 import { ROLE, isAdminLevel } from '../../../constants/status';
@@ -50,6 +54,7 @@ import { uploadFile } from '../../../api/upload';
 import { sendProofEmail } from '../../../api/teamReminder';
 import ReportExportModal from '../../ReportExportModal';
 import { getVisibleReports } from '../../../utils/taskUtils';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 interface DashboardProps {
   tasks: Task[];
@@ -168,18 +173,14 @@ export default function Dashboard({
   triggerNotification = () => { },
   onRefreshUsers,
 }: DashboardProps) {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeView, setActiveView] = useState<'overview' | 'tasks' | 'team' | 'reports' | 'admin' | 'settings' | 'scheduled-tasks'>('overview');
   const [filterStatus, setFilterStatus] = useState<string[]>(['All']);
   const [filterPriority, setFilterPriority] = useState('All');
   const [filterAssignee, setFilterAssignee] = useState<string[]>([]);
   const [filterTeamIDs, setFilterTeamIDs] = useState<string[]>([]);
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
-  const [isSidebarVisible, setIsSidebarVisible] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
-    return localStorage.getItem('sidebarCollapsed') === 'true';
-  });
   const [showExportModal, setShowExportModal] = useState(false);
   const [taskSubView, setTaskSubView] = useState<'my-tasks' | 'team-tasks' | 'assigned-by-me'>('my-tasks');
   const [taskContentType, setTaskContentType] = useState<'tasks' | 'schedules'>('tasks');
@@ -192,7 +193,6 @@ export default function Dashboard({
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailLoading, setGmailLoading] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [collapsedTeamIds, setCollapsedTeamIds] = useState<Set<string>>(new Set((teams || []).filter(t => t.Active).map(t => t.TeamID)));
 
   // Scheduled Tasks submission state
   const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
@@ -207,6 +207,11 @@ export default function Dashboard({
   // Row selection for reports - MUST be at top level, not inside renderReports
   const [dateFilteredReports, setDateFilteredReports] = useState<TaskReport[]>([]);
 
+  // Compute user roles once per render - used for both tab visibility and data queries
+  const userRoles = useMemo(() => {
+    return getUserRoles(currentUser, teams || [], subTeams || [], settings || []);
+  }, [currentUser, teams, subTeams, settings]);
+
   // Compute filtered reports when dependencies change - NOT during render
   useEffect(() => {
     if (!reports || reports.length === 0) {
@@ -214,7 +219,17 @@ export default function Dashboard({
       return;
     }
 
-    const taskReports = reports.filter(r => {
+    // Guard against null currentUser
+    if (!currentUser) {
+      setDateFilteredReports([]);
+      return;
+    }
+
+    // First apply role-based visibility filter
+    const roleFilteredReports = getVisibleReports(reports, currentUser, tasks || [], users || [], teams || [], subTeams || [], settings || []);
+
+    // Filter for tasks with appropriate status
+    const taskReports = roleFilteredReports.filter(r => {
       const task = tasks?.find(t => t.TaskID === r.TaskID);
       return task && (task.Status === 'Submitted' || task.Status === 'In Progress');
     });
@@ -322,7 +337,10 @@ export default function Dashboard({
     // Permission check: sub-team leaders can only submit for their own sub-team
     if (submissionSubTeamId) {
       const subTeam = subTeams.find(st => st.SubTeamID === submissionSubTeamId);
-      if (!isSubTeamLeader(currentUser.Email, subTeam) && !isTeamLeader(currentUser.Email, teams.find(t => t.TeamID === submissionTeamId)) && !isAdminLevel(currentUser.Role)) {
+      const isSubTeamLeader = subTeam?.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase());
+      const team = teams.find(t => t.TeamID === submissionTeamId);
+      const isTeamLeader = team?.TeamLeaderEmails?.includes(currentUser.Email);
+      if (!isSubTeamLeader && !isTeamLeader && !isAdminLevel(currentUser.Role)) {
         setSubmissionError('You can only submit reports for your own sub-team');
         setTimeout(() => setSubmissionError(null), 3000);
         return;
@@ -447,6 +465,7 @@ export default function Dashboard({
 
   // Check if current user is a team leader for any team
   const isUserTeamLeader = () => {
+    if (!currentUser) return false;
     if (isAdminLevel(currentUser.Role)) return true;
     const isTeamLeader = teams.some(team => team.TeamLeaderEmails?.includes(currentUser.Email));
     // Also check if user is a sub-team leader for any sub-team
@@ -455,11 +474,6 @@ export default function Dashboard({
     );
     return isTeamLeader || isSubTeamLeader;
   };
-
-  // Persist sidebar collapse state
-  useEffect(() => {
-    localStorage.setItem('sidebarCollapsed', isSidebarCollapsed ? 'true' : 'false');
-  }, [isSidebarCollapsed]);
 
   // Sync filters with URL query params
   useEffect(() => {
@@ -635,52 +649,31 @@ export default function Dashboard({
   }, [onSyncDatabase, isSyncing, lastActionTime]);
 
   const visibleTasksForOverview = useMemo(() => {
-    const subStakeholderEmails = currentUser.Role === ROLE.STAKEHOLDER
-      ? getAllSubordinates(currentUser.Email, users || [])
-      : [];
+    // Return empty array if currentUser is null
+    if (!currentUser) {
+      return [];
+    }
 
-    const myTeamMembers = currentUser.TeamIDs && currentUser.TeamIDs.length > 0
-      ? (users || []).filter(u => u.TeamIDs.some(teamId => currentUser.TeamIDs.includes(teamId)))
-      : [];
-    const teamMemberEmails = myTeamMembers.map(u => u.Email.toLowerCase());
+    // Use the new role-based approach with union logic
+    const userEmail = currentUser.Email?.toLowerCase() || '';
 
-    const visibleSubTeamIds = getVisibleSubTeamIds(currentUser, subTeams || []);
+    // Get the Team Tasks scope filter function based on user roles
+    const teamTasksFilter = getTeamTasksScope(currentUser, userRoles, users || []);
 
     return (tasks || []).filter(task => {
-      if (isAdminLevel(currentUser.Role)) {
-        return true;
-      }
+      // Admin sees all tasks
+      if (userRoles.some(r => r.type === 'Admin')) return true;
 
-      if (currentUser.Role === ROLE.STAKEHOLDER) {
-        const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
-        const assignedByMe = task.AssignedByEmail?.toLowerCase() === currentUser.Email.toLowerCase();
-        const assignedToSubStakeholder = task.AssignedToEmail?.toLowerCase().split(',').some(email =>
-          subStakeholderEmails.includes(email.trim().toLowerCase())
-        );
-        const assignedToTeamMember = task.AssignedToEmail?.toLowerCase().split(',').some(email =>
-          teamMemberEmails.includes(email.trim().toLowerCase())
-        );
-        return assignedToMe || assignedByMe || assignedToSubStakeholder || assignedToTeamMember;
-      }
+      // Apply union-based visibility
+      const assignedToMe = splitEmails(task.AssignedToEmail).some(email =>
+        email.toLowerCase() === userEmail
+      );
+      const assignedByMe = task.AssignedByEmail?.toLowerCase() === userEmail;
+      const inTeamScope = teamTasksFilter(task);
 
-      if (currentUser.Role === ROLE.SUB_STAKEHOLDER) {
-        const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
-
-        if (visibleSubTeamIds.length > 0) {
-          const assignees = (task.AssignedToEmail || '').split(',').map(e => e.trim().toLowerCase());
-          const assigneeUser = users?.find(u => assignees.includes(u.Email?.toLowerCase() || ''));
-          if (assigneeUser && assigneeUser.SubTeamIDs) {
-            const hasVisibleSubTeam = assigneeUser.SubTeamIDs.some(stId => visibleSubTeamIds.includes(stId));
-            if (hasVisibleSubTeam) return true;
-          }
-        }
-
-        return assignedToMe;
-      }
-
-      return false;
+      return assignedToMe || assignedByMe || inTeamScope;
     });
-  }, [tasks, currentUser, users, subTeams]);
+  }, [tasks, currentUser, userRoles, users]);
 
   // Calculate metrics — scoped to what this user can see
   const allTasks = visibleTasksForOverview.length;
@@ -705,17 +698,7 @@ export default function Dashboard({
   }).length;
 
   // Get tasks needing attention (overdue or high priority), scoped to this user
-  const needsAttention = visibleTasksForOverview
-    .filter(t => {
-      if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
-      const isOverdue = t.DueDate < today;
-      const isHighPriority = t.Priority === 'High' || t.Priority === 'Critical';
-      return isOverdue || isHighPriority;
-    })
-    .slice(0, 3);
-
-  // Get alerts based on this user's visible task data
-  const alerts = visibleTasksForOverview
+  const priorityTasks = visibleTasksForOverview
     .filter(t => {
       if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
       const isOverdue = t.DueDate < today;
@@ -723,6 +706,81 @@ export default function Dashboard({
       return isOverdue || isHighPriority;
     })
     .slice(0, 5);
+
+  // Chart data for Task Insights
+  const completionStatusData = useMemo(() => {
+    const completed = visibleTasksForOverview.filter(t => t.Status === 'Closed' || t.Status === 'Reviewed').length;
+    const inProgress = visibleTasksForOverview.filter(t => t.Status === 'In Progress' || t.Status === 'Submitted').length;
+    const overdue = visibleTasksForOverview.filter(t => {
+      if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
+      return t.DueDate < today;
+    }).length;
+    
+    return [
+      { name: 'Completed', value: completed, color: '#22c55e' },
+      { name: 'In progress', value: inProgress, color: '#3b82f6' },
+      { name: 'Overdue', value: overdue, color: '#ef4444' },
+    ].filter(d => d.value > 0);
+  }, [visibleTasksForOverview, today]);
+
+  const userActivityData = useMemo(() => {
+    // Return empty array if currentUser is null
+    if (!currentUser) {
+      return [];
+    }
+
+    // Only show for roles that see more than one person's tasks
+    const canSeeMultipleUsers = isAdminLevel(currentUser.Role) ||
+      teams?.some(t => isTeamLeader(currentUser.Email, t)) ||
+      subTeams?.some(st => isSubTeamLeader(currentUser.Email, st)) ||
+      userRoles.some(r => r.type === 'Stakeholder');
+
+    if (!canSeeMultipleUsers) {
+      // For sub-stakeholders, show only their own data
+      const userEmail = currentUser.Email.toLowerCase();
+      const assigned = visibleTasksForOverview.filter(t =>
+        splitEmails(t.AssignedToEmail).some(e => e.toLowerCase() === userEmail)
+      ).length;
+      const completed = visibleTasksForOverview.filter(t =>
+        splitEmails(t.AssignedToEmail).some(e => e.toLowerCase() === userEmail) &&
+        (t.Status === 'Closed' || t.Status === 'Reviewed')
+      ).length;
+      return [{
+        name: currentUser.Email.split('@')[0],
+        assigned,
+        completed,
+      }].filter(d => d.assigned > 0 || d.completed > 0);
+    }
+
+    // For other roles, aggregate by user
+    const userMap = new Map<string, { assigned: number; completed: number }>();
+
+    visibleTasksForOverview.forEach(task => {
+      const assignees = splitEmails(task.AssignedToEmail);
+      assignees.forEach(email => {
+        const key = email.toLowerCase();
+        if (!userMap.has(key)) {
+          userMap.set(key, { assigned: 0, completed: 0 });
+        }
+        const data = userMap.get(key)!;
+        data.assigned++;
+        if (task.Status === 'Closed' || task.Status === 'Reviewed') {
+          data.completed++;
+        }
+      });
+    });
+
+    const data = Array.from(userMap.entries())
+      .map(([email, counts]) => ({
+        name: email.split('@')[0],
+        assigned: counts.assigned,
+        completed: counts.completed,
+      }))
+      .filter(d => d.assigned > 0 || d.completed > 0)
+      .sort((a, b) => (b.assigned + b.completed) - (a.assigned + a.completed));
+
+    return data.slice(0, 10); // Limit to top 10 users
+  }, [visibleTasksForOverview, currentUser, teams, subTeams, userRoles]);
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -752,88 +810,6 @@ export default function Dashboard({
     return diffDays;
   };
 
-  const handleViewChange = (
-    view: 'overview' | 'tasks' | 'team' | 'reports' | 'admin' | 'settings' | 'scheduled-tasks',
-    filterStatusParam?: string,
-    filterType?: 'status' | 'dueDate' | 'completedThisWeek'
-  ) => {
-    if (activeView !== view) {
-      // Push to browser history
-      window.history.pushState({ view: activeView }, '', `#${view}`);
-    }
-    setActiveView(view);
-    setIsSidebarVisible(false);
-
-    // Reset filters first
-    setFilterStatus(['All']);
-    setFilterPriority('All');
-    setFilterAssignee([]);
-    setFilterTeamIDs([]);
-    setFilterDateFrom('');
-    setFilterDateTo('');
-
-    if (filterStatusParam && filterType === 'status') {
-      // Set single status value to match dropdown options
-      // For Active Tasks card, select all statuses except Closed and Reviewed
-      if (filterStatusParam === 'In Progress,Submitted') {
-        setFilterStatus(['In Progress', 'Submitted', 'Not Started', 'On Hold', 'Dropped']);
-      } else {
-        setFilterStatus([filterStatusParam]);
-      }
-    } else if (filterStatusParam && filterType === 'dueDate') {
-      const today = new Date().toISOString().split('T')[0];
-      if (filterStatusParam === 'today') {
-        setFilterDateFrom(today);
-        setFilterDateTo(today);
-      }
-    } else if (filterStatusParam && filterType === 'completedThisWeek') {
-      // Set status to Closed and date range to last 7 days
-      setFilterStatus(['Closed']);
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      const today = new Date().toISOString().split('T')[0];
-      setFilterDateFrom(oneWeekAgo.toISOString().split('T')[0]);
-      setFilterDateTo(today);
-    }
-
-    if (onViewChange) {
-      onViewChange(view);
-    }
-  };
-
-  // Initialize browser history with initial view
-  useEffect(() => {
-    window.history.replaceState({ view: activeView }, '', `#${activeView}`);
-  }, []);
-
-  // Listen for browser back/forward navigation
-  useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
-      if (event.state && event.state.view) {
-        setActiveView(event.state.view);
-        if (onViewChange) {
-          onViewChange(event.state.view);
-        }
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [onViewChange]);
-
-  // Update document title based on active view
-  useEffect(() => {
-    const titles: Record<string, string> = {
-      'overview': 'PMS TaskFlow - Dashboard',
-      'tasks': 'PMS TaskFlow - Tasks',
-      'team': 'PMS TaskFlow - Team',
-      'reports': 'PMS TaskFlow - Reports',
-      'admin': 'PMS TaskFlow - Admin',
-      'settings': 'PMS TaskFlow - Settings',
-      'scheduled-tasks': 'PMS TaskFlow - Scheduled Reports (Review Document)',
-    };
-    document.title = titles[activeView] || 'PMS TaskFlow';
-  }, [activeView]);
 
   // Helper function to extract filename from URL
   const getFileNameFromUrl = (url: string): string => {
@@ -868,6 +844,7 @@ export default function Dashboard({
 
   // Get team members based on user role with hierarchical visibility
   const getTeamMembers = () => {
+    if (!currentUser) return [];
     if (isAdminLevel(currentUser.Role)) {
       return users || [];
     } else if (currentUser.Role === ROLE.STAKEHOLDER) {
@@ -884,74 +861,41 @@ export default function Dashboard({
   };
 
   const filteredTasks = useMemo(() => {
-    // First apply role-based filtering using taskSubView
-    const subView = currentUser.Role === ROLE.SUB_STAKEHOLDER ? 'my-tasks' : taskSubView;
+    // Return empty array if currentUser is null
+    if (!currentUser) {
+      return [];
+    }
 
-    // Get hierarchical subordinates for the current user (if they are a stakeholder)
-    const subStakeholderEmails = currentUser.Role === ROLE.STAKEHOLDER
-      ? getAllSubordinates(currentUser.Email, users || [])
-      : [];
+    // Use the new role-based approach with union logic
+    const userEmail = currentUser.Email?.toLowerCase() || '';
 
-    // Get team members for the current user
-    const myTeamMembers = currentUser.TeamIDs && currentUser.TeamIDs.length > 0
-      ? (users || []).filter(u => u.TeamIDs.some(teamId => currentUser.TeamIDs.includes(teamId)))
-      : [];
-
-    const teamMemberEmails = myTeamMembers.map(u => u.Email.toLowerCase());
-
-    // Get visible sub-team IDs for Sub-Team Leader visibility
-    const visibleSubTeamIds = getVisibleSubTeamIds(currentUser, subTeams || []);
+    // Get the Team Tasks scope filter function based on user roles
+    const teamTasksFilter = getTeamTasksScope(currentUser, userRoles, users || []);
 
     const roleFiltered = (tasks || []).filter(task => {
-      // Admin: My Tasks = assigned to me, Team Tasks = all tasks, Assigned by Me = tasks I assigned
-      if (isAdminLevel(currentUser.Role)) {
-        if (subView === 'my-tasks') {
-          return task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
-        }
-        if (subView === 'assigned-by-me') {
-          return task.AssignedByEmail?.toLowerCase() === currentUser.Email.toLowerCase();
-        }
-        // team-tasks - show all tasks
-        return true;
-      }
-
-      // Stakeholder: My Tasks = assigned to me, Team Tasks = hierarchical sub-stakeholder tasks
-      if (currentUser.Role === ROLE.STAKEHOLDER) {
-        const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
-        const assignedByMe = task.AssignedByEmail?.toLowerCase() === currentUser.Email.toLowerCase();
-        const assignedToSubStakeholder = task.AssignedToEmail?.toLowerCase().split(',').some(email =>
-          subStakeholderEmails.includes(email.trim().toLowerCase())
+      // Apply view-based filtering using the new role-based approach
+      if (taskSubView === 'my-tasks') {
+        return splitEmails(task.AssignedToEmail).some(email =>
+          email.toLowerCase() === userEmail
         );
-        const assignedToTeamMember = task.AssignedToEmail?.toLowerCase().split(',').some(email =>
-          teamMemberEmails.includes(email.trim().toLowerCase())
-        );
-
-        if (subView === 'my-tasks') {
-          return assignedToMe;
-        }
-        // team-tasks / assigned-by-me - show hierarchical sub-stakeholder tasks
-        return assignedToSubStakeholder || assignedToTeamMember;
       }
 
-      // Sub-stakeholder: My Tasks = assigned to me only
-      // Additionally, if they are a Sub-Team Leader, they see tasks for their sub-team members
-      if (currentUser.Role === ROLE.SUB_STAKEHOLDER) {
-        const assignedToMe = task.AssignedToEmail?.toLowerCase().includes(currentUser.Email.toLowerCase());
-
-        // Check if task assignee is in any of the visible sub-teams
-        if (visibleSubTeamIds.length > 0) {
-          const assignees = (task.AssignedToEmail || '').split(',').map(e => e.trim().toLowerCase());
-          const assigneeUser = users?.find(u => assignees.includes(u.Email?.toLowerCase() || ''));
-          if (assigneeUser && assigneeUser.SubTeamIDs) {
-            const hasVisibleSubTeam = assigneeUser.SubTeamIDs.some(stId => visibleSubTeamIds.includes(stId));
-            if (hasVisibleSubTeam) return true;
-          }
-        }
-
-        return assignedToMe;
+      if (taskSubView === 'assigned-by-me') {
+        return task.AssignedByEmail?.toLowerCase() === userEmail;
       }
 
-      return false;
+      if (taskSubView === 'team-tasks') {
+        return teamTasksFilter(task);
+      }
+
+      // Default: return union of all visible tasks
+      const assignedToMe = splitEmails(task.AssignedToEmail).some(email =>
+        email.toLowerCase() === userEmail
+      );
+      const assignedByMe = task.AssignedByEmail?.toLowerCase() === userEmail;
+      const inTeamScope = teamTasksFilter(task);
+
+      return assignedToMe || assignedByMe || inTeamScope;
     });
 
     let filtered = roleFiltered;
@@ -1064,6 +1008,11 @@ export default function Dashboard({
   // can scope those to tasks the user can see. Everything else is scoped to
   // activity the user personally performed.
   const recentActivity = useMemo(() => {
+    // Return empty array if currentUser is null
+    if (!currentUser) {
+      return [];
+    }
+
     return (audits || [])
       .filter(a => {
         if (isAdminLevel(currentUser.Role)) return true;
@@ -1097,7 +1046,7 @@ export default function Dashboard({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          onClick={() => handleViewChange('tasks')}
+          onClick={() => navigate(ROUTES.TASKS)}
           className="border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all bg-surface border-token hover:border-purple-500/50"
         >
           <div className="flex items-center justify-between mb-2">
@@ -1114,7 +1063,7 @@ export default function Dashboard({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          onClick={() => handleViewChange('tasks', 'In Progress,Submitted', 'status')}
+          onClick={() => navigate(ROUTES.TASKS)}
           className="border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all bg-surface border-token hover:border-blue-500/50"
         >
           <div className="flex items-center justify-between mb-2">
@@ -1131,7 +1080,7 @@ export default function Dashboard({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          onClick={() => handleViewChange('tasks', 'Overdue', 'status')}
+          onClick={() => navigate(ROUTES.TASKS)}
           className="border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all bg-surface border-token hover:border-red-500/50"
         >
           <div className="flex items-center justify-between mb-2">
@@ -1148,7 +1097,7 @@ export default function Dashboard({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          onClick={() => handleViewChange('tasks', 'today', 'dueDate')}
+          onClick={() => navigate(ROUTES.TASKS)}
           className="border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all bg-surface border-token hover:border-yellow-500/50"
         >
           <div className="flex items-center justify-between mb-2">
@@ -1165,7 +1114,7 @@ export default function Dashboard({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          onClick={() => handleViewChange('tasks', 'Closed', 'completedThisWeek')}
+          onClick={() => navigate(ROUTES.TASKS)}
           className="border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all bg-surface border-token hover:border-green-500/50"
         >
           <div className="flex items-center justify-between mb-2">
@@ -1179,7 +1128,7 @@ export default function Dashboard({
         </motion.div>
       </div>
 
-      {/* Needs Attention Section */}
+      {/* Priority Tasks Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1189,169 +1138,207 @@ export default function Dashboard({
         <div className="p-4 sm:p-6 border-b flex items-center justify-between border-token">
           <div className="flex items-center space-x-2 sm:space-x-3">
             <Bell className="text-orange-400" size={18} />
-            <h3 className="font-semibold text-sm sm:text-lg text-primary">Needs attention</h3>
-            <span className="bg-orange-500/10 text-orange-400 text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full border border-orange-500/20">
-              {needsAttention.length} items
+            <h3 className="font-medium text-sm sm:text-lg text-primary">Priority tasks</h3>
+            <span className="bg-orange-500/10 text-orange-400 text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full border border-orange-500/20">
+              {priorityTasks.length} items
             </span>
           </div>
-          <button onClick={() => handleViewChange('tasks')} className="text-blue-400 text-[10px] sm:text-sm font-medium hover:text-blue-300 flex items-center space-x-1">
-            <span className="hidden sm:inline">View all active</span>
+          <button onClick={() => navigate(ROUTES.TASKS)} className="text-blue-400 text-[10px] sm:text-sm font-medium hover:text-blue-300 flex items-center space-x-1">
+            <span className="hidden sm:inline">View all</span>
             <span className="sm:hidden">View all</span>
             <ChevronRight size={16} />
           </button>
         </div>
         <div className="divide-y divide-[var(--color-border)]">
-          {needsAttention.map((task, index) => {
-            const daysUntil = getDaysUntilDue(task.DueDate);
-            const dueText = daysUntil < 0 ? 'Overdue' : daysUntil === 0 ? 'Today' : `${daysUntil} days`;
+          {priorityTasks.length > 0 ? (
+            priorityTasks.map((task, index) => {
+              const daysUntil = getDaysUntilDue(task.DueDate);
+              const dueText = daysUntil < 0 ? 'Overdue' : daysUntil === 0 ? 'Today' : `${daysUntil} days`;
+              const isOverdue = task.DueDate < today;
+              const accentColor = isOverdue ? 'border-l-red-500' : 'border-l-amber-500';
+              const bgColor = isOverdue ? 'bg-red-500/5' : 'bg-amber-500/5';
 
-            return (
-              <motion.div
-                key={task.TaskID}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.6 + index * 0.1 }}
-                onClick={(e) => { e.preventDefault(); onTaskClick(task); }}
-                className="p-4 sm:p-6 transition-colors cursor-pointer hover-surface"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2">
-                      <span className={`text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border ${getPriorityColor(task.Priority)}`}>
-                        {task.Priority}
-                      </span>
-                      <span className={`text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border ${getStatusColor(task.Status)}`}>
-                        {task.Status}
-                      </span>
+              return (
+                <motion.div
+                  key={task.TaskID}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.6 + index * 0.1 }}
+                  onClick={(e) => { e.preventDefault(); onTaskClick(task); }}
+                  className={`${bgColor} ${accentColor} border-l-3 p-4 sm:p-6 transition-colors cursor-pointer hover-surface rounded-r-lg`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2">
+                        <span className={`text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border ${getPriorityColor(task.Priority)}`}>
+                          {task.Priority}
+                        </span>
+                        <span className={`text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border ${getStatusColor(task.Status)}`}>
+                          {task.Status}
+                        </span>
+                        {isOverdue && (
+                          <span className="bg-red-500/10 text-red-400 text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border border-red-500/20">
+                            Overdue
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="font-medium text-sm sm:text-base mb-2 truncate text-primary">
+                        {task.Title}
+                      </h4>
+                      <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-muted">
+                        <span>Due: {task.DueDate} {daysUntil > 0 && `(${dueText})`}</span>
+                        <span>·</span>
+                        <span>Assigned to: {task.AssignedToEmail.split('@')[0]}</span>
+                      </div>
                     </div>
-                    <h4 className="font-medium text-sm sm:text-base mb-2 line-clamp-2 text-primary">
-                      {task.Title.length > 30 ? task.Title.substring(0, 30) + '...' : task.Title}
-                    </h4>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-[10px] sm:text-xs text-muted">
-                      <span>Due: {task.DueDate} {daysUntil > 0 && `(${dueText})`}</span>
-                      <span>Assigned to: {task.AssignedToEmail.split('@')[0]}</span>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-[10px] sm:text-xs font-mono text-muted">{task.TaskID}</p>
                     </div>
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-[10px] sm:text-xs font-mono text-muted">{task.TaskID}</p>
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
+                </motion.div>
+              );
+            })
+          ) : (
+            <div className="text-center py-6 sm:py-8 text-muted">
+              <CheckCircle className="mx-auto mb-2 text-green-400" size={24} />
+              <p className="text-xs sm:text-sm">No priority tasks at this time</p>
+              <p className="text-[10px] sm:text-xs mt-1">All tasks are on track</p>
+            </div>
+          )}
         </div>
       </motion.div>
 
-      {/* Alerts and Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
-          className="border rounded-xl bg-surface border-token"
-        >
-          <div className="p-4 sm:p-6 border-b border-token">
-            <div className="flex items-center space-x-2 sm:space-x-3">
-              <AlertTriangle className="text-red-400" size={18} />
-              <h3 className="font-semibold text-sm sm:text-lg text-primary">Alerts</h3>
-            </div>
+      {/* Task Insights Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.7 }}
+        className="border rounded-xl bg-surface border-token"
+      >
+        <div className="p-4 sm:p-6 border-b border-token">
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <Activity className="text-blue-400" size={18} />
+            <h3 className="font-medium text-sm sm:text-lg text-primary">Task insights</h3>
           </div>
-          <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
-            {alerts.length > 0 ? (
-              alerts.map((task) => {
-                const isOverdue = task.DueDate < today;
-                return (
-                  <div
-                    key={task.TaskID}
-                    onClick={(e) => { e.preventDefault(); onTaskClick(task); }}
-                    className={`${isOverdue ? 'bg-red-500/10 border-red-500/20 hover:bg-red-500/20' : 'bg-yellow-500/10 border-yellow-500/20 hover:bg-yellow-500/20'} border rounded-lg p-3 sm:p-4 cursor-pointer transition-colors`}
-                  >
-                    <div className="flex items-start space-x-2 sm:space-x-3">
-                      {isOverdue ? (
-                        <AlertTriangle className="text-red-400 mt-0.5" size={16} />
-                      ) : (
-                        <Bell className="text-yellow-400 mt-0.5" size={16} />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-xs sm:text-sm text-primary">
-                          {isOverdue ? 'Overdue task' : 'High priority task'}
-                        </p>
-                        <p className="text-[10px] sm:text-xs mt-1 line-clamp-2 text-muted">
-                          {task.TaskID}: {task.Title.length > 50 ? task.Title.substring(0, 50) + '...' : task.Title}
-                        </p>
-                        <p className="text-[10px] sm:text-xs mt-1 text-muted">
-                          Due: {task.DueDate} &bull; Priority: {task.Priority}
-                        </p>
+        </div>
+        <div className="p-4 sm:p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
+            {/* Completion Status Donut Chart */}
+            <div>
+              <div className="mb-4">
+                <h4 className="font-medium text-sm text-primary mb-2">Completion status</h4>
+                <div className="flex flex-wrap gap-3">
+                  {completionStatusData.map((item) => {
+                    const total = completionStatusData.reduce((sum, d) => sum + d.value, 0);
+                    const percentage = total > 0 ? Math.round((item.value / total) * 100) : 0;
+                    return (
+                      <div key={item.name} className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.color }}></div>
+                        <span className="text-xs text-muted">{item.name} {percentage}%</span>
                       </div>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="text-center py-6 sm:py-8 text-muted">
-                <CheckCircle className="mx-auto mb-2 text-green-400" size={24} />
-                <p className="text-xs sm:text-sm">No alerts at this time</p>
-                <p className="text-[10px] sm:text-xs mt-1">All tasks are on track</p>
+                    );
+                  })}
+                </div>
               </div>
-            )}
-          </div>
-        </motion.div>
+              <div className="h-48">
+                {completionStatusData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={completionStatusData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={70}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {completionStatusData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'var(--color-surface)', 
+                          border: '1px solid var(--color-border)',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          color: 'var(--color-primary)'
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-muted">
+                    <Inbox className="mb-2" size={32} />
+                    <p className="text-xs">No task data yet</p>
+                  </div>
+                )}
+              </div>
+            </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8 }}
-          className="border rounded-xl bg-surface border-token"
-        >
-          <div className="p-6 border-b border-token">
-            <div className="flex items-center space-x-3">
-              <Activity className="text-blue-400" size={20} />
-              <h3 className="font-semibold text-lg text-primary">Recent activity</h3>
+            {/* Per-User Activity Bar Chart */}
+            <div>
+              <div className="mb-4">
+                <h4 className="font-medium text-sm text-primary mb-2">Assigned vs completed by user</h4>
+                <div className="flex flex-wrap gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-sm bg-blue-500"></div>
+                    <span className="text-xs text-muted">Assigned</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-sm bg-green-500"></div>
+                    <span className="text-xs text-muted">Completed</span>
+                  </div>
+                </div>
+              </div>
+              <div className="h-48">
+                {userActivityData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={userActivityData} layout="vertical" margin={{ left: 70, right: 10, top: 10, bottom: 10 }}>
+                      <XAxis 
+                        type="number" 
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 10, fill: 'var(--color-muted)' }}
+                      />
+                      <YAxis 
+                        type="category" 
+                        dataKey="name" 
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 10, fill: 'var(--color-muted)' }}
+                        width={65}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'var(--color-surface)', 
+                          border: '1px solid var(--color-border)',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          color: 'var(--color-primary)'
+                        }}
+                      />
+                      <Bar dataKey="assigned" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={24} />
+                      <Bar dataKey="completed" fill="#22c55e" radius={[0, 4, 4, 0]} barSize={24} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-muted">
+                    <Inbox className="mb-2" size={32} />
+                    <p className="text-xs">
+                      {currentUser && (isAdminLevel(currentUser.Role) || teams?.some(t => isTeamLeader(currentUser.Email, t)) || subTeams?.some(st => isSubTeamLeader(currentUser.Email, st)) || userRoles.some(r => r.type === 'Stakeholder'))
+                        ? 'No task data yet'
+                        : 'Your task activity will show up here'
+                      }
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-          <div className="p-6 space-y-4">
-            {recentActivity.map((activity, index) => (
-              <div
-                key={index}
-                onClick={() => {
-                  if (activity.type === 'task' && activity.entityId) {
-                    const task = tasks?.find(t => t.TaskID === activity.entityId);
-                    if (task) {
-                      onTaskClick(task);
-                      return;
-                    }
-                  }
-                  switch (activity.type) {
-                    case 'report':
-                      handleViewChange('tasks', 'Submitted', 'status');
-                      break;
-                    case 'team':
-                      handleViewChange('team');
-                      break;
-                    case 'settings':
-                      handleViewChange('settings');
-                      break;
-                    case 'user':
-                      handleViewChange('admin');
-                      break;
-                    default:
-                      handleViewChange('tasks');
-                  }
-                }}
-                className="flex items-start space-x-3 cursor-pointer hover-surface dark:hover:bg-[#1E293B]/30 rounded-lg p-2 -mx-2 transition-colors"
-              >
-                <div className="w-8 h-8 bg-blue-500/10 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Activity className="text-blue-400" size={14} />
-                </div>
-                <div>
-                  <p className="text-sm text-primary">{activity.action}</p>
-                  <p className="text-xs mt-1 text-muted">{activity.date}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-      </div>
+        </div>
+      </motion.div>
     </div>
   );
 
@@ -1363,7 +1350,7 @@ export default function Dashboard({
           <h2 className="text-xl font-bold text-primary">Tasks & Schedules</h2>
           <p className="text-sm mt-1 text-muted">
             {taskContentType === 'tasks'
-              ? (isAdminLevel(currentUser.Role) ? 'Manage all tasks' : 'Manage your assigned tasks')
+              ? (currentUser && isAdminLevel(currentUser.Role) ? 'Manage all tasks' : 'Manage your assigned tasks')
               : 'Manage recurring task schedules'
             }
           </p>
@@ -1400,8 +1387,8 @@ export default function Dashboard({
         </div>
       </div>
 
-      {/* Task Sub-tabs for Admin and Stakeholder only - only show for tasks */}
-      {taskContentType === 'tasks' && (isAdminLevel(currentUser.Role) || currentUser.Role === ROLE.STAKEHOLDER) && (
+      {/* Task Sub-tabs - only show for tasks */}
+      {taskContentType === 'tasks' && (
         <div className="border rounded-xl p-4 bg-surface border-token">
           <div className="flex items-center space-x-4">
             <button
@@ -1415,19 +1402,20 @@ export default function Dashboard({
             >
               My Tasks
             </button>
-            <button
-              onClick={() => setTaskSubView('team-tasks')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${taskSubView === 'team-tasks'
-                  ? 'bg-blue-500 text-white'
-                  : isDarkMode
-                    ? 'bg-[#1E293B] text-secondary hover:text-white'
-                    : 'bg-slate-100 text-secondary hover:text-slate-900'
-                }`}
-            >
-              {isAdminLevel(currentUser.Role) ? 'Team Tasks' : 'Assigned by Me'}
-            </button>
-            {/* Admin-only: Assigned by Me filter option */}
-            {isAdminLevel(currentUser.Role) && (
+            {shouldShowTeamTasksTab(userRoles) && (
+              <button
+                onClick={() => setTaskSubView('team-tasks')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${taskSubView === 'team-tasks'
+                    ? 'bg-blue-500 text-white'
+                    : isDarkMode
+                      ? 'bg-[#1E293B] text-secondary hover:text-white'
+                      : 'bg-slate-100 text-secondary hover:text-slate-900'
+                  }`}
+              >
+                Team Tasks
+              </button>
+            )}
+            {shouldShowAssignedByMeTab(userRoles) && (
               <button
                 onClick={() => setTaskSubView('assigned-by-me')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${taskSubView === 'assigned-by-me'
@@ -1523,268 +1511,6 @@ export default function Dashboard({
     </div>
   );
 
-  const renderTeam = () => {
-    // Roster amendment: every team member sees the full roster of all members in
-    // their team(s), grouped by sub-team. Names/email only — no task/report data.
-    // Admins see every team; non-admins see only teams they belong to.
-    const visibleTeams = isAdminLevel(currentUser.Role)
-      ? (teams || []).filter(t => t.Active)
-      : (teams || []).filter(t => t.Active && (currentUser.TeamIDs || []).includes(t.TeamID));
-
-    const searchLower = searchQuery.toLowerCase();
-
-    return (
-      <div className="space-y-6">
-        <div className="border rounded-xl p-6 bg-surface border-token">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="font-semibold text-lg text-primary">
-                Team Members
-              </h3>
-              <p className="text-sm mt-1 text-muted">
-                Full roster — all members across all sub-teams
-              </p>
-            </div>
-            {isAdminLevel(currentUser.Role) && (
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => handleViewChange('admin')}
-                  className="flex items-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                >
-                  <Plus size={16} />
-                  <span>Add Member</span>
-                </button>
-                <button
-                  onClick={() => handleViewChange('admin')}
-                  className="flex items-center space-x-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                >
-                  <Plus size={16} />
-                  <span>Add Team</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {visibleTeams.length === 0 ? (
-            <div className={`p-12 text-center text-muted`}>
-              {isAdminLevel(currentUser.Role) ? 'No active teams.' : 'You are not assigned to any team.'}
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {visibleTeams.map(team => {
-                // All active members of this team
-                const allTeamMembers = (users || []).filter(
-                  u => u.Active && (u.TeamIDs || []).includes(team.TeamID)
-                );
-                const filteredMembers = searchQuery
-                  ? allTeamMembers.filter(u =>
-                    u.FullName.toLowerCase().includes(searchLower) ||
-                    u.Email.toLowerCase().includes(searchLower)
-                  )
-                  : allTeamMembers;
-
-                // Sub-teams for this team
-                const teamSubTeamList = (subTeams || []).filter(
-                  st => st.TeamID === team.TeamID && st.Active
-                );
-
-                // Group members by sub-team; unassigned go to a separate bucket
-                type GroupEntry = { label: string; members: UserType[]; isSubTeam: boolean };
-                const groups: GroupEntry[] = [];
-
-                teamSubTeamList.forEach(st => {
-                  // Multi-membership: include all users who belong to this sub-team
-                  const members = filteredMembers.filter(u => u.SubTeamIDs?.includes(st.SubTeamID));
-                  groups.push({ label: st.SubTeamName, members, isSubTeam: true });
-                });
-
-                // Unassigned: users with no sub-team assignments in this team
-                const unassigned = filteredMembers.filter(u => !u.SubTeamIDs || u.SubTeamIDs.length === 0 || !teamSubTeamList.some(st => u.SubTeamIDs?.includes(st.SubTeamID)));
-                if (unassigned.length > 0 || teamSubTeamList.length === 0) {
-                  groups.push({ label: teamSubTeamList.length > 0 ? 'Unassigned' : 'Members', members: unassigned, isSubTeam: false });
-                }
-
-                const isCollapsed = collapsedTeamIds.has(team.TeamID);
-                const toggleCollapse = () => {
-                  setCollapsedTeamIds(prev => {
-                    const next = new Set(prev);
-                    if (next.has(team.TeamID)) {
-                      next.delete(team.TeamID);
-                    } else {
-                      next.add(team.TeamID);
-                    }
-                    return next;
-                  });
-                };
-
-                return (
-                  <div key={team.TeamID} className="border rounded-xl overflow-hidden border-token">
-                    {/* Team header */}
-                    <div className="flex items-center justify-between px-5 py-3 bg-surface border-token">
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={toggleCollapse}
-                          className="flex items-center justify-center w-6 h-6 rounded hover-surface transition-colors"
-                        >
-                          {isCollapsed ? (
-                            <ChevronRight size={16} className="text-muted" />
-                          ) : (
-                            <ChevronDown size={16} className="text-muted" />
-                          )}
-                        </button>
-                        <h4 className="font-bold text-sm text-primary">{team.TeamName}</h4>
-                        <span className="text-xs font-bold px-2 py-0.5 rounded-full border bg-blue-500/10 border-blue-500/20 text-blue-400">
-                          {allTeamMembers.length} member{allTeamMembers.length !== 1 ? 's' : ''}
-                        </span>
-                        {teamSubTeamList.length > 0 && (
-                          <span className="text-xs font-bold px-2 py-0.5 rounded-full border bg-indigo-500/10 border-indigo-500/20 text-indigo-400">
-                            {teamSubTeamList.length} sub-team{teamSubTeamList.length !== 1 ? 's' : ''}
-                          </span>
-                        )}
-                      </div>
-                      {isAdminLevel(currentUser.Role) && (
-                        <button
-                          onClick={() => onNewTask(allTeamMembers.map(u => u.Email).join(', '), [team.TeamID])}
-                          className="text-xs font-medium px-2 py-1 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 transition-colors"
-                        >
-                          Assign Task to Team
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Member groups */}
-                    <div className="divide-y divide-[var(--color-border)]">
-                      {isCollapsed ? (
-                        // Collapsed view: show only team leaders and sub-teams
-                        <>
-                          {/* Team leaders */}
-                          {allTeamMembers.filter(m => team.TeamLeaderEmails?.includes(m.Email)).map(member => (
-                            <div key={member.Email} className="px-5 py-3 flex items-center justify-between hover:bg-opacity-50 transition-colors hover-surface">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
-                                  <User className="text-white" size={14} />
-                                </div>
-                                <div>
-                                  <div className="font-medium text-sm text-primary">
-                                    {member.FullName}
-                                  </div>
-                                  <div className="text-xs text-muted">{member.Email}</div>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-amber-500/10 border-amber-500/20 text-amber-400">
-                                  Team Leader
-                                </span>
-                                <span className={`text-xs font-bold px-2 py-0.5 rounded border ${member.Role === ROLE.ADMIN
-                                    ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                                    : member.Role === ROLE.STAKEHOLDER
-                                      ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                                      : 'bg-slate-500/10 text-secondary border-slate-500/20'
-                                  }`}>
-                                  {member.Role}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                          {/* Sub-teams (just names, no members) */}
-                          {teamSubTeamList.map(st => (
-                            <div key={st.SubTeamID} className="px-5 py-2 flex items-center gap-2 bg-surface border-token">
-                              <span className="text-[10px] font-bold tracking-widest uppercase text-muted">
-                                {st.SubTeamName}
-                              </span>
-                              <span className="text-[10px] text-muted">
-                                ({allTeamMembers.filter(m => m.SubTeamIDs?.includes(st.SubTeamID)).length} members)
-                              </span>
-                            </div>
-                          ))}
-                        </>
-                      ) : (
-                        // Expanded view: show all members grouped by sub-team
-                        groups.map(group => (
-                          <div key={group.label}>
-                            {/* Sub-team label — only show when there are actual sub-teams */}
-                            {teamSubTeamList.length > 0 && (
-                              <div className="px-5 py-2 flex items-center gap-2 bg-surface border-token">
-                                <span className="text-[10px] font-bold tracking-widest uppercase text-muted">
-                                  {group.label}
-                                </span>
-                                <span className="text-[10px] text-muted">
-                                  ({group.members.length})
-                                </span>
-                              </div>
-                            )}
-                            {group.members.length === 0 ? (
-                              <div className="px-5 py-3 text-xs italic text-muted">
-                                No members in this sub-team
-                              </div>
-                            ) : (
-                              group.members.map(member => {
-                                const isLeader = team.TeamLeaderEmails?.includes(member.Email);
-                                // Multi-membership: check if user is a leader of ANY sub-team they belong to
-                                const subTeamObj = member.SubTeamIDs && member.SubTeamIDs.length > 0
-                                  ? teamSubTeamList.find(st => member.SubTeamIDs?.includes(st.SubTeamID))
-                                  : null;
-                                const isSubLeader = subTeamObj?.SubTeamLeaderEmails?.some(
-                                  e => e.toLowerCase() === member.Email.toLowerCase()
-                                );
-                                return (
-                                  <div key={member.Email} className="px-5 py-3 flex items-center justify-between hover:bg-opacity-50 transition-colors hover-surface">
-                                    <div className="flex items-center gap-3">
-                                      <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
-                                        <User className="text-white" size={14} />
-                                      </div>
-                                      <div>
-                                        <div className={`font-medium text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                                          {member.FullName}
-                                        </div>
-                                        <div className={`text-xs ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`}>{member.Email}</div>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 flex-shrink-0">
-                                      {isLeader && (
-                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${isDarkMode ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
-                                          Team Leader
-                                        </span>
-                                      )}
-                                      {isSubLeader && (
-                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
-                                          Sub-Team Leader
-                                        </span>
-                                      )}
-                                      <span className={`text-xs font-bold px-2 py-0.5 rounded border ${member.Role === ROLE.ADMIN
-                                          ? isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200'
-                                          : member.Role === ROLE.STAKEHOLDER
-                                            ? isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-700 border-blue-200'
-                                            : 'bg-slate-500/10 text-secondary border-slate-500/20'
-                                        }`}>
-                                        {member.Role}
-                                      </span>
-                                      {isAdminLevel(currentUser.Role) && member.Role === ROLE.STAKEHOLDER && (
-                                        <button
-                                          onClick={() => onNewTask(member.Email)}
-                                          className="text-xs font-medium px-2 py-1 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 transition-colors"
-                                        >
-                                          Assign Task
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })
-                            )}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
 
   const toggleTaskExpansion = (taskId: string) => {
     setExpandedTaskIds(prev => {
@@ -2407,477 +2133,6 @@ export default function Dashboard({
     />
   );
 
-  const renderScheduledTasks = () => {
-    // Filter teams based on user role - Admin sees all, Team Leader or Stakeholder see their own
-    // Sub-team leaders can also see their parent teams
-    const visibleTeams = isAdminLevel(currentUser.Role)
-      ? teams.filter(t => t.Active)
-      : teams.filter(t => {
-        if (!t.Active) return false;
-        const isTeamLeader = t.TeamLeaderEmails?.includes(currentUser.Email);
-        const isStakeholder = t.StakeholderEmails?.includes(currentUser.Email);
-        // Check if user is a sub-team leader for any sub-team within this team
-        const teamSubTeams = subTeams?.filter(st => st.TeamID === t.TeamID) || [];
-        const isSubTeamLeader = teamSubTeams.some(st =>
-          st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase())
-        );
-        return isTeamLeader || isStakeholder || isSubTeamLeader;
-      });
-
-    // Get unsubmitted teams from settings (for Admin dashboard visibility on Saturday)
-    const unsubmittedTeamsSetting = settings.find(s => s.Key === 'unsubmitted_teams_this_week');
-    const unsubmittedTeamIds = unsubmittedTeamsSetting?.Value ? unsubmittedTeamsSetting.Value.split(',').filter(Boolean) : [];
-
-    // Filter out teams that have submitted (even late) from the unsubmitted list
-    const submittedTeamIds = new Set(teamSubmissions.map(s => s.TeamID));
-    const unsubmittedTeams = teams.filter(t =>
-      unsubmittedTeamIds.includes(t.TeamID) && !submittedTeamIds.has(t.TeamID)
-    );
-
-    return (
-      <div className="space-y-4 sm:space-y-6">
-        <div className="border rounded-xl p-4 sm:p-6 bg-surface border-token">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
-            <div>
-              <h3 className="font-semibold text-base sm:text-lg text-primary">Scheduled Reports</h3>
-              <p className="text-xs sm:text-sm text-muted">
-                Weekly report submissions by team
-              </p>
-            </div>
-            {submissionSuccess && (
-              <div className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium bg-emerald-500/10 text-emerald-400">
-                Report submitted successfully!
-              </div>
-            )}
-          </div>
-
-          {/* Admin-only: Show unsubmitted teams warning on Saturday */}
-          {isAdminLevel(currentUser.Role) && unsubmittedTeams.length > 0 && (
-            <div className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg border bg-amber-500/10 border-amber-500/30">
-              <div className="flex items-start gap-2 sm:gap-3">
-                <AlertTriangle size={16} className="shrink-0 mt-0.5 text-amber-400" />
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-medium text-xs sm:text-sm text-amber-300">
-                    Unsubmitted Weekly Reports
-                  </h4>
-                  <p className="text-[10px] sm:text-xs mt-1 text-amber-400/80">
-                    The following teams have not submitted their weekly report by Friday EOD:
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1.5 sm:gap-2">
-                    {unsubmittedTeams.map(team => (
-                      <span key={team.TeamID} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium bg-amber-500/20 text-amber-300">
-                        {team.TeamName}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {visibleTeams.length === 0 ? (
-            <div className={`p-8 sm:p-12 text-center text-sm ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`}>
-              {isAdminLevel(currentUser.Role) ? 'No teams available' : 'You are not assigned as a team leader to any team'}
-            </div>
-          ) : (
-            <div className="space-y-3 sm:space-y-4">
-              {visibleTeams.map(team => {
-                const teamMembers = users.filter(u => u.TeamIDs.includes(team.TeamID));
-                const isTeamLeader = team.TeamLeaderEmails?.includes(currentUser.Email);
-                // Check if user is a sub-team leader for any sub-team within this team
-                const teamSubTeams = subTeams?.filter(st => st.TeamID === team.TeamID && st.Active) || [];
-                const isSubTeamLeader = teamSubTeams.some(st =>
-                  st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase())
-                );
-                const canPost = isTeamLeader || isSubTeamLeader || isAdminLevel(currentUser.Role);
-                const filteredSubmissions = teamSubmissions
-                  .filter(s => s.TeamID === team.TeamID && !s.SubTeamID)
-                  .sort((a, b) => new Date(b.SubmittedAt).getTime() - new Date(a.SubmittedAt).getTime());
-
-                return (
-                  <div key={team.TeamID} className={`border rounded-xl p-3 sm:p-4 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}>
-                    <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
-                      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                        <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
-                          <Users size={14} className={`shrink-0 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className={`font-medium text-sm sm:text-base truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{team.TeamName}</h4>
-                          <p className={`text-[10px] sm:text-xs ${isDarkMode ? 'text-secondary' : 'text-secondary'}`}>
-                            {teamMembers.length} member{teamMembers.length !== 1 ? 's' : ''}
-                          </p>
-                        </div>
-                      </div>
-                      {canPost && (
-                        <button
-                          onClick={() => {
-                            setSubmissionTeamId(team.TeamID);
-                            setSubmissionSubTeamId(null);
-                            setSubmissionModalOpen(true);
-                          }}
-                          className="bg-emerald-500 hover:bg-emerald-600 text-white px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs font-medium transition-colors flex items-center gap-1 shrink-0"
-                        >
-                          <Plus size={12} className="shrink-0" />
-                          <span>Submit report</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Thread */}
-                    <div className={`border-t pt-3 sm:pt-4 ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
-                      {filteredSubmissions.length === 0 ? (
-                        <div className={`p-3 sm:p-4 rounded-lg ${isDarkMode ? 'bg-[#0F141F]' : 'bg-surface'}`}>
-                          <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-secondary' : 'text-slate-500'} text-center`}>
-                            No submissions yet for this team
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2 sm:space-y-3">
-                          {filteredSubmissions.map(submission => {
-                            const submitter = users.find(u => u.Email === submission.SubmittedBy);
-                            return (
-                              <div key={submission.SubmissionID} className={`p-3 sm:p-4 rounded-lg ${isDarkMode ? 'bg-[#0F141F]' : 'bg-surface'}`}>
-                                <div className="flex items-start justify-between gap-2 mb-2">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
-                                      <User size={12} className={`shrink-0 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
-                                    </div>
-                                    <div className="min-w-0">
-                                      <p className={`text-xs sm:text-sm font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                                        {submitter?.FullName || submission.SubmittedBy}
-                                      </p>
-                                      <p className={`text-[10px] sm:text-xs ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`}>
-                                        {new Date(submission.SubmittedAt).toLocaleString()}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <button
-                                    onClick={() => handleDownloadTeamSubmission(submission, team.TeamName)}
-                                    disabled={isGeneratingPdf}
-                                    title="Download report"
-                                    className={`p-1.5 rounded-lg transition-colors shrink-0 ${isDarkMode ? 'hover:bg-[#1E293B] text-secondary hover:text-blue-400' : 'hover:bg-slate-100 text-slate-500 hover:text-blue-600'} disabled:opacity-50`}
-                                  >
-                                    {isGeneratingPdf ? (
-                                      <Loader2 size={14} className="animate-spin shrink-0" />
-                                    ) : (
-                                      <Download size={14} className="shrink-0" />
-                                    )}
-                                  </button>
-                                </div>
-                                {submission.Note && (
-                                  <p className={`text-xs sm:text-sm mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                                    {submission.Note}
-                                  </p>
-                                )}
-                                {submission.AttachmentLinks && (
-                                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                                    {submission.AttachmentLinks.split(',').map((link, idx) => (
-                                      <a
-                                        key={idx}
-                                        href={link.trim()}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className={`inline-link-pill text-[10px] sm:text-xs px-2 py-0.5 sm:py-1 rounded border flex items-center gap-1 ${isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'}`}
-                                      >
-                                        <Link size={10} className="shrink-0" />
-                                        <span>{getFileNameFromUrl(link.trim())}</span>
-                                      </a>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Sub-teams */}
-                    {teamSubTeams.length > 0 && (
-                      <div className={`mt-3 sm:mt-4 pt-3 sm:pt-4 border-t ${isDarkMode ? 'border-[#334155]' : 'border-slate-200'}`}>
-                        <p className={`text-xs font-medium mb-2 sm:mb-3 ${isDarkMode ? 'text-secondary' : 'text-secondary'}`}>
-                          Sub-teams
-                        </p>
-                        <div className="space-y-2 sm:space-y-3">
-                          {teamSubTeams.map(subTeam => {
-                            const subTeamMembers = users.filter(u => u.SubTeamIDs?.includes(subTeam.SubTeamID));
-                            const isSubTeamLeader = subTeam.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase());
-                            const canPostSubTeam = isSubTeamLeader || isTeamLeader || isAdminLevel(currentUser.Role);
-                            const subTeamSubmissions = teamSubmissions
-                              .filter(s => s.TeamID === team.TeamID && s.SubTeamID === subTeam.SubTeamID)
-                              .sort((a, b) => new Date(b.SubmittedAt).getTime() - new Date(a.SubmittedAt).getTime());
-
-                            return (
-                              <div key={subTeam.SubTeamID} className={`border rounded-lg p-2 sm:p-3 ${isDarkMode ? 'bg-[#0F141F] border-[#334155]' : 'bg-surface border-slate-200'}`}>
-                                <div className="flex items-center justify-between gap-2 mb-2">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-purple-500/20' : 'bg-purple-100'}`}>
-                                      <Users size={10} className={`shrink-0 ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`} />
-                                    </div>
-                                    <div className="min-w-0">
-                                      <h5 className={`text-xs sm:text-sm font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                                        {subTeam.SubTeamName}
-                                      </h5>
-                                      <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-secondary'}`}>
-                                        {subTeamMembers.length} member{subTeamMembers.length !== 1 ? 's' : ''}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  {canPostSubTeam && (
-                                    <button
-                                      onClick={() => {
-                                        setSubmissionTeamId(team.TeamID);
-                                        setSubmissionSubTeamId(subTeam.SubTeamID);
-                                        setSubmissionModalOpen(true);
-                                      }}
-                                      className="bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-0.5 sm:py-1 rounded text-[10px] font-medium transition-colors flex items-center gap-1 shrink-0"
-                                    >
-                                      <Plus size={10} className="shrink-0" />
-                                      <span>Submit</span>
-                                    </button>
-                                  )}
-                                </div>
-                                {subTeamSubmissions.length > 0 && (
-                                  <div className={`mt-2 pt-2 border-t ${isDarkMode ? 'border-token' : 'border-slate-100'}`}>
-                                    {subTeamSubmissions.slice(0, 2).map(submission => {
-                                      const submitter = users.find(u => u.Email === submission.SubmittedBy);
-                                      return (
-                                        <div key={submission.SubmissionID} className={`p-2 rounded mb-1 last:mb-0 ${isDarkMode ? 'bg-[#1E293B]' : 'bg-slate-50'}`}>
-                                          <div className="flex items-center gap-2">
-                                            <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100'}`}>
-                                              <User size={10} className={`shrink-0 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                              <p className={`text-[10px] sm:text-xs font-medium truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                                                {submitter?.FullName || submission.SubmittedBy}
-                                              </p>
-                                              <p className={`text-[9px] sm:text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-secondary'}`}>
-                                                {new Date(submission.SubmittedAt).toLocaleDateString()}
-                                              </p>
-                                            </div>
-                                          </div>
-                                          {submission.Note && (
-                                            <p className={`text-[10px] sm:text-xs mt-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                                              {submission.Note}
-                                            </p>
-                                          )}
-                                          {submission.AttachmentLinks && (
-                                            <div className="flex flex-wrap gap-1 mt-1.5">
-                                              {submission.AttachmentLinks.split(',').map((link, idx) => (
-                                                <a
-                                                  key={idx}
-                                                  href={link.trim()}
-                                                  target="_blank"
-                                                  rel="noopener noreferrer"
-                                                  className={`inline-link-pill text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded border flex items-center gap-1 ${isDarkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'}`}
-                                                >
-                                                  <Link size={9} className="shrink-0" />
-                                                  <span>{getFileNameFromUrl(link.trim())}</span>
-                                                </a>
-                                              ))}
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                    {subTeamSubmissions.length > 2 && (
-                                      <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-secondary'}`}>
-                                        +{subTeamSubmissions.length - 2} more submission{subTeamSubmissions.length - 2 !== 1 ? 's' : ''}
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Submission Modal */}
-        {submissionModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-2 sm:p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              transition={{ duration: 0.2 }}
-              className={`w-full max-w-lg rounded-xl p-4 sm:p-6 shadow-2xl border max-h-[90vh] overflow-y-auto ${isDarkMode ? 'bg-[#0F141F] border-token' : 'bg-surface border-token'}`}
-            >
-              <div className="flex items-center justify-between mb-4 sm:mb-6">
-                <h3 className={`font-semibold text-base sm:text-lg ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                  Submit Weekly Report
-                </h3>
-                <button
-                  onClick={() => {
-                    setSubmissionModalOpen(false);
-                    setSubmissionNote('');
-                    setSubmissionFiles([]);
-                    setSubmissionTeamId(null);
-                    setSubmissionSubTeamId(null);
-                    setSubmissionError(null);
-                  }}
-                  className={`p-1 rounded-lg transition-colors shrink-0 ${isDarkMode ? 'hover:bg-[#1E293B] text-secondary' : 'hover:bg-slate-100 text-slate-500'}`}
-                >
-                  <X size={16} className="shrink-0" />
-                </button>
-              </div>
-
-              <form onSubmit={handleTeamSubmission} className="space-y-4">
-                {submissionError && (
-                  <div className={`p-3 rounded-lg text-xs sm:text-sm ${isDarkMode ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-700'}`}>
-                    {submissionError}
-                  </div>
-                )}
-
-                {/* Sub-team selection if applicable */}
-                {submissionTeamId && (() => {
-                  const team = teams.find(t => t.TeamID === submissionTeamId);
-                  const teamSubTeams = subTeams.filter(st => st.TeamID === submissionTeamId && st.Active);
-                  const reportRequirement = settings.find(s => s.Key === 'weekly_report_requirements')?.Value;
-                  let requirements: Record<string, { level: 'team' | 'subteam'; subTeamIds: string[] }> = {};
-                  try {
-                    if (reportRequirement) requirements = JSON.parse(reportRequirement);
-                  } catch (e) { }
-
-                  const teamConfig = requirements[submissionTeamId];
-
-                  // Show sub-team selection if:
-                  // 1. Team is configured for sub-team reports AND
-                  // 2. User is a sub-team leader OR team leader OR admin
-                  if (teamConfig?.level === 'subteam' && teamSubTeams.length > 0) {
-                    const userIsTeamLeader = isTeamLeader(currentUser.Email, team);
-                    const userIsSubTeamLeader = teamSubTeams.some(st => isSubTeamLeader(currentUser.Email, st));
-                    const userIsAdmin = isAdminLevel(currentUser.Role);
-
-                    if (userIsTeamLeader || userIsSubTeamLeader || userIsAdmin) {
-                      return (
-                        <div>
-                          <label className={`block text-xs sm:text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                            Select Sub-Team
-                          </label>
-                          <select
-                            value={submissionSubTeamId || ''}
-                            onChange={(e) => setSubmissionSubTeamId(e.target.value || null)}
-                            className={`w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
-                          >
-                            <option value="">Select a sub-team...</option>
-                            {teamSubTeams.map(st => (
-                              <option key={st.SubTeamID} value={st.SubTeamID}>
-                                {st.SubTeamName}
-                              </option>
-                            ))}
-                          </select>
-                          <p className={`text-[10px] mt-1 ${isDarkMode ? 'text-slate-500' : 'text-secondary'}`}>
-                            {userIsSubTeamLeader && !userIsTeamLeader && !userIsAdmin ? 'You can only submit for your own sub-team' : 'Team leaders can submit for any sub-team'}
-                          </p>
-                        </div>
-                      );
-                    }
-                  }
-                  return null;
-                })()}
-
-                <div>
-                  <label className={`block text-xs sm:text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                    Note (optional)
-                  </label>
-                  <textarea
-                    value={submissionNote}
-                    onChange={(e) => setSubmissionNote(e.target.value)}
-                    placeholder="Add any notes about your weekly report..."
-                    rows={3}
-                    className={`w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500' : 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400'}`}
-                  />
-                </div>
-
-                <div>
-                  <label className={`block text-xs sm:text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                    Attachments (optional)
-                  </label>
-                  <div className="border-2 border-dashed rounded-lg p-3 sm:p-4 hover:border-blue-500 transition-colors">
-                    <input
-                      type="file"
-                      multiple
-                      onChange={handleSubmissionFileUpload}
-                      accept="*/*"
-                      className="hidden"
-                      id="submission-file-upload"
-                    />
-                    <label
-                      htmlFor="submission-file-upload"
-                      className="flex flex-col items-center justify-center cursor-pointer"
-                    >
-                      <Upload size={18} className={`shrink-0 ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`} />
-                      <p className={`text-xs sm:text-sm font-medium mt-2 ${isDarkMode ? 'text-slate-300' : 'text-secondary'}`}>
-                        Click to upload files
-                      </p>
-                      <p className={`text-[10px] sm:text-xs ${isDarkMode ? 'text-slate-500' : 'text-secondary'} text-center mt-1`}>
-                        PPT, Doc, PDF, or any file type
-                      </p>
-                    </label>
-                  </div>
-
-                  {submissionFiles.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      {submissionFiles.map((file, index) => (
-                        <div
-                          key={index}
-                          className={`flex items-center justify-between p-2 rounded-lg ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <File size={12} className={`shrink-0 ${isDarkMode ? 'text-secondary' : 'text-slate-500'}`} />
-                            <span className={`text-xs sm:text-sm truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{file.name}</span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeSubmissionFile(index)}
-                            className="text-red-500 hover:text-red-600 transition-colors shrink-0 p-0.5"
-                          >
-                            <X size={12} className="shrink-0" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-end gap-2 sm:gap-3 pt-2 sm:pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSubmissionModalOpen(false);
-                      setSubmissionNote('');
-                      setSubmissionFiles([]);
-                      setSubmissionTeamId(null);
-                      setSubmissionError(null);
-                    }}
-                    className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${isDarkMode ? 'bg-[#1E293B] text-slate-300 hover:bg-[#334155]' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting || (!submissionNote.trim() && submissionFiles.length === 0)}
-                    className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${isSubmitting || (!submissionNote.trim() && submissionFiles.length === 0) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'} bg-blue-500 text-white`}
-                  >
-                    {isSubmitting ? 'Submitting...' : 'Submit report'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const renderSettings = () => (
     <div className="space-y-6">
       <div className={`border rounded-xl p-6 ${isDarkMode ? 'bg-[#0F141F] border-token' : 'bg-surface border-token'}`}>
@@ -2999,15 +2254,7 @@ export default function Dashboard({
   );
 
   return (
-    <div className={`flex min-h-screen font-sans ${isDarkMode ? 'bg-[#0A0E1A]' : 'bg-slate-50'}`}>
-      {/* Mobile Sidebar Overlay */}
-      {isSidebarVisible && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setIsSidebarVisible(false)}
-        />
-      )}
-
+    <>
       {/* Mobile Search Modal */}
       {isMobileSearchOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 md:hidden flex items-start justify-center pt-20 px-4">
@@ -3038,180 +2285,25 @@ export default function Dashboard({
         </div>
       )}
 
-      {/* Modal Backdrop Overlay - Covers entire screen including sidebar */}
+      {/* Modal Backdrop Overlay */}
       {isAnyModalOpen && (
         <div className="fixed inset-0 z-40 bg-slate-900/50 pointer-events-none" />
       )}
 
-      {/* Sidebar */}
-      <aside className={`${isSidebarVisible ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed md:fixed top-0 left-0 h-screen z-50 border-r flex flex-col transition-all duration-300 ease-in-out ${isAnyModalOpen ? 'opacity-40 pointer-events-none' : ''} ${isSidebarCollapsed ? 'md:w-16' : 'md:w-64'} ${isDarkMode ? 'bg-[#0F141F] border-token' : 'bg-surface border-token'}`}>
-        {/* Logo */}
-        <div className={`p-4 border-b flex items-center justify-center ${isDarkMode ? 'border-token' : 'border-slate-200'} ${isSidebarCollapsed ? 'md:px-2' : 'md:px-6'} flex-shrink-0`}>
-          <img src="/pw-logo.jpg" alt="PW Logo" className={`object-contain ${isSidebarCollapsed ? 'w-8 h-8' : 'w-10 h-10'}`} />
-          {!isSidebarCollapsed && <span className="ml-3 font-bold text-lg hidden md:block">PMS</span>}
-        </div>
-
-        {/* Collapse Toggle Button */}
-        <div className={`p-2 border-b flex justify-center ${isDarkMode ? 'border-token' : 'border-slate-200'} flex-shrink-0`}>
-          <button
-            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-secondary hover:text-white' : 'hover:bg-slate-100 text-secondary hover:text-slate-900'}`}
-            title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-          </button>
-        </div>
-
-        {/* User Info - Hidden when collapsed */}
-        {!isSidebarCollapsed && (
-          <div className={`p-4 border-b ${isDarkMode ? 'border-token' : 'border-slate-200'} flex-shrink-0`}>
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full flex items-center justify-center">
-                <User className="text-white" size={18} />
-              </div>
-              <div>
-                <p className={`font-semibold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{currentUser.FullName}</p>
-                <p className={`text-xs ${isDarkMode ? 'text-secondary' : 'text-secondary'}`}>{currentUser.Role}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Navigation */}
-        <nav className={`flex-1 overflow-y-auto overflow-x-hidden ${isSidebarCollapsed ? 'px-2 py-4' : 'p-4 space-y-6'}`}>
-          {/* Workspace Section */}
-          <div>
-            {!isSidebarCollapsed && <p className={`text-xs font-bold tracking-wider mb-3 ${isDarkMode ? 'text-slate-500' : 'text-secondary'}`}>Workspace</p>}
-            <ul className="space-y-1">
-              <li>
-                <button
-                  onClick={() => handleViewChange('overview')}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'overview' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-secondary hover:bg-slate-800/50 hover:text-white' : 'text-secondary hover:bg-slate-100 hover:text-slate-900'
-                    }`}
-                  title={isSidebarCollapsed ? 'Overview' : ''}
-                >
-                  <LayoutDashboard size={18} />
-                  {!isSidebarCollapsed && <span className="font-medium text-sm">Overview</span>}
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleViewChange('tasks')}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'tasks' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-secondary hover:bg-slate-800/50 hover:text-white' : 'text-secondary hover:bg-slate-100 hover:text-slate-900'
-                    }`}
-                  title={isSidebarCollapsed ? 'Tasks' : ''}
-                >
-                  <div className={`flex items-center ${isSidebarCollapsed ? '' : 'space-x-3'}`}>
-                    <ClipboardList size={18} />
-                    {!isSidebarCollapsed && <span className="font-medium text-sm">Tasks</span>}
-                  </div>
-                  {!isSidebarCollapsed && <span className="bg-blue-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{tasks.length}</span>}
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleViewChange('team')}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'team' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-secondary hover:bg-slate-800/50 hover:text-white' : 'text-secondary hover:bg-slate-100 hover:text-slate-900'
-                    }`}
-                  title={isSidebarCollapsed ? 'Team' : ''}
-                >
-                  <Users size={18} />
-                  {!isSidebarCollapsed && <span className="font-medium text-sm">Team</span>}
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleViewChange('reports')}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'reports' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-secondary hover:bg-slate-800/50 hover:text-white' : 'text-secondary hover:bg-slate-100 hover:text-slate-900'
-                    }`}
-                  title={isSidebarCollapsed ? 'Reports' : ''}
-                >
-                  <FileText size={18} />
-                  {!isSidebarCollapsed && <span className="font-medium text-sm">Reports</span>}
-                </button>
-              </li>
-              {(isAdminLevel(currentUser.Role) || isUserTeamLeader()) && (
-                <li>
-                  <button
-                    onClick={() => handleViewChange('scheduled-tasks')}
-                    className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'scheduled-tasks' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-secondary hover:bg-slate-800/50 hover:text-white' : 'text-secondary hover:bg-slate-100 hover:text-slate-900'
-                      }`}
-                    title={isSidebarCollapsed ? 'Scheduled Reports' : ''}
-                  >
-                    <Calendar size={18} />
-                    {!isSidebarCollapsed && <span className="font-medium text-sm">Scheduled Reports</span>}
-                  </button>
-                </li>
-              )}
-              {isAdminLevel(currentUser.Role) && (
-                <li>
-                  <button
-                    onClick={() => handleViewChange('admin')}
-                    className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'admin' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-secondary hover:bg-slate-800/50 hover:text-white' : 'text-secondary hover:bg-slate-100 hover:text-slate-900'
-                      }`}
-                    title={isSidebarCollapsed ? 'Admin Panel' : ''}
-                  >
-                    <Shield size={18} />
-                    {!isSidebarCollapsed && <span className="font-medium text-sm">Admin Panel</span>}
-                  </button>
-                </li>
-              )}
-            </ul>
-          </div>
-
-          {/* Account Section */}
-          <div>
-            {!isSidebarCollapsed && <p className={`text-xs font-bold tracking-wider mb-3 ${isDarkMode ? 'text-slate-500' : 'text-secondary'}`}>Account</p>}
-            <ul className="space-y-1">
-              <li>
-                <button
-                  onClick={() => handleViewChange('settings')}
-                  className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg transition-colors ${activeView === 'settings' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : isDarkMode ? 'text-secondary hover:bg-slate-800/50 hover:text-white' : 'text-secondary hover:bg-slate-100 hover:text-slate-900'
-                    }`}
-                  title={isSidebarCollapsed ? 'Settings' : ''}
-                >
-                  <Settings size={18} />
-                  {!isSidebarCollapsed && <span className="font-medium text-sm">Settings</span>}
-                </button>
-              </li>
-            </ul>
-          </div>
-        </nav>
-
-        {/* Sign Out */}
-        <div className={`p-4 border-t ${isDarkMode ? 'border-token' : 'border-slate-200'} flex-shrink-0`}>
-          <button
-            onClick={onLogout}
-            className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'space-x-3'} px-3 py-2.5 rounded-lg font-medium text-sm transition-colors ${isDarkMode ? 'bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:text-red-300' : 'bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 hover:text-red-800'}`}
-            title={isSidebarCollapsed ? 'Sign out' : ''}
-          >
-            <LogOut size={18} />
-            {!isSidebarCollapsed && <span>Sign out</span>}
-          </button>
-        </div>
-      </aside>
-
       {/* Main Content */}
-      <main className={`flex-1 overflow-y-auto transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'md:ml-16' : 'md:ml-64'} ${isDarkMode ? 'bg-[#0F141F]' : 'bg-surface'}`}>
+      <div className="space-y-6">
         {/* Header */}
         <header className={`px-4 md:px-8 py-4 md:py-5 sticky top-0 z-30 border-b ${isDarkMode ? 'bg-[#0F141F] border-token' : 'bg-surface border-token'}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 md:space-x-4">
-              {/* Toggle Sidebar Button - Hamburger menu for mobile */}
-              <button
-                onClick={() => setIsSidebarVisible(!isSidebarVisible)}
-                className={`md:hidden p-2 md:p-2.5 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800/50 text-secondary hover:text-white' : 'hover:bg-slate-100 text-secondary hover:text-slate-900'}`}
-              >
-                <Menu size={20} />
-              </button>
               <div className="block sm:hidden">
-                <h2 className={`text-lg font-bold capitalize ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{activeView}</h2>
+                <h2 className={`text-lg font-bold capitalize ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Overview</h2>
               </div>
               <div className="hidden sm:block">
                 <h2 className={`text-xl md:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                  {activeView === 'scheduled-tasks' ? 'Scheduled Reports (Review Document)' : activeView === 'overview' ? 'Overview' : activeView.charAt(0).toUpperCase() + activeView.slice(1)}
+                  Overview
                 </h2>
-                <p className={`text-xs md:text-sm mt-1 ${isDarkMode ? 'text-secondary' : 'text-secondary'}`}>Welcome back, {currentUser.FullName || currentUser.Email}</p>
+                <p className={`text-xs md:text-sm mt-1 ${isDarkMode ? 'text-secondary' : 'text-secondary'}`}>Welcome back, {currentUser?.FullName || currentUser?.Email || 'User'}</p>
               </div>
             </div>
             <div className="flex items-center space-x-2 md:space-x-4">
@@ -3248,25 +2340,9 @@ export default function Dashboard({
 
         {/* Content */}
         <div className="p-4 md:p-8 min-h-screen">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeView}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              {activeView === 'overview' && renderOverview()}
-              {activeView === 'tasks' && renderTasks()}
-              {activeView === 'team' && renderTeam()}
-              {activeView === 'reports' && renderReports()}
-              {activeView === 'scheduled-tasks' && renderScheduledTasks()}
-              {activeView === 'admin' && renderAdmin()}
-              {activeView === 'settings' && renderSettings()}
-            </motion.div>
-          </AnimatePresence>
+          {renderOverview()}
         </div>
-      </main>
-    </div>
+      </div>
+    </>
   );
 }

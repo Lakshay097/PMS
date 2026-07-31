@@ -388,12 +388,9 @@ export async function sendEmailAsUser(
       // After every successful send, persist the real Gmail threadId + messageId
       // so all subsequent emails for this task chain into the same Gmail thread.
       if (taskId && result.gmailThreadId && result.gmailMessageId) {
-        if (emailType === 'report_reminder') {
-          // For report reminders, use the teamId-based thread persistence
-          const { updateReportReminderThreadId } = await import('./reportReminderScheduler');
-          await updateReportReminderThreadId(taskId, toEmail, result.gmailThreadId, result.gmailMessageId);
-        } else {
-          // For task emails, use the Google Sheets-based thread persistence
+        // For task emails, use the Google Sheets-based thread persistence
+        // Report reminders handle their own thread updates in reportReminderScheduler
+        if (emailType !== 'report_reminder') {
           await updateTaskEmailThreadId(taskId, result.gmailThreadId, result.gmailMessageId);
         }
       }
@@ -415,10 +412,9 @@ export async function sendEmailAsUser(
           // Use the generated Message-ID for threading
           const finalMessageId = retry.gmailMessageId;
           if (taskId && retry.gmailThreadId && finalMessageId) {
-            if (emailType === 'report_reminder') {
-              const { updateReportReminderThreadId } = await import('./reportReminderScheduler');
-              await updateReportReminderThreadId(taskId, toEmail, retry.gmailThreadId, finalMessageId);
-            } else {
+            // For task emails, use the Google Sheets-based thread persistence
+            // Report reminders handle their own thread updates in reportReminderScheduler
+            if (emailType !== 'report_reminder') {
               await updateTaskEmailThreadId(taskId, retry.gmailThreadId, finalMessageId);
             }
           }

@@ -93,6 +93,8 @@ export const updateTeamReportConfig = asyncWrapper(async (req, res) => {
       teamName,
       reminderDay,
       meetingDay,
+      timezone: 'Asia/Kolkata',
+      reminderTime: '09:30',
       active: true,
       updatedAt: new Date().toISOString(),
       entityType,

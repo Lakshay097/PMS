@@ -17,9 +17,9 @@ router.get('/gmail/url', oauthRateLimiter, authenticateToken, asyncWrapper(gmail
 /**
  * GET /api/auth/gmail/status
  * Check if the current user has connected their Gmail (protected)
- * Rate limited: 20 failed requests per 15 minutes per IP
+ * No rate limiting - this is called frequently by the client
  */
-router.get('/gmail/status', oauthRateLimiter, authenticateToken, asyncWrapper(gmailAuthController.getGmailStatusHandler));
+router.get('/gmail/status', authenticateToken, asyncWrapper(gmailAuthController.getGmailStatusHandler));
 
 /**
  * POST /api/auth/gmail/disconnect

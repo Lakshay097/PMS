@@ -33,11 +33,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (storedToken && storedUser) {
       try {
+        // Validate token by checking if it's expired
+        const tokenPayload = JSON.parse(atob(storedToken.split('.')[1]));
+        const currentTime = Math.floor(Date.now() / 1000);
+        
+        // Check if token is expired (access tokens expire in 1 hour)
+        if (tokenPayload.exp && tokenPayload.exp < currentTime) {
+          logger.warn('Stored access token is expired, clearing auth data');
+          clearAuthData();
+          setIsLoading(false);
+          return;
+        }
+
         setToken(storedToken);
         setRefreshToken(storedRefreshToken);
         setUser(JSON.parse(storedUser));
       } catch (error) {
-        logger.error('Failed to parse stored user:', error);
+        logger.error('Failed to parse stored user or token:', error);
         clearAuthData();
       }
     }

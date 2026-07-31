@@ -3,6 +3,7 @@ import { logger } from '../utils/logger';
 import { getOrCreateTaskEmailThread } from './emailLogService';
 import { generateGoogleSheetsToken, fetchSheetValues } from './googleSheetsService';
 import { firestoreAdmin } from './firebaseAdmin';
+import { ttlCache } from '../utils/ttlCache';
 
 /**
  * Reads a single email_enabled_{type} flag from the Firestore `settings` collection.
@@ -21,49 +22,54 @@ async function isEmailTypeEnabled(type: string): Promise<boolean> {
   }
 }
 
+const USERS_CACHE_KEY = 'emailTrigger:usersNameMap';
+const USERS_CACHE_TTL = 5 * 60 * 1000; // 5 min — user names change rarely
+
 /**
  * Loads all users from Google Sheets and builds an in-memory map of email → FullName
  * for efficient name resolution in email templates.
  */
 async function loadUsersNameMap(): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
-  
-  try {
-    const tokenData = await generateGoogleSheetsToken();
-    if (!tokenData || !tokenData.spreadsheetId) {
-      logger.warn('loadUsersNameMap: No spreadsheet access, name resolution will fall back to emails');
-      return map;
-    }
+  return ttlCache.getOrFetch(USERS_CACHE_KEY, USERS_CACHE_TTL, async () => {
+    const map = new Map<string, string>();
     
-    const usersData = await fetchSheetValues(
-      tokenData.accessToken,
-      tokenData.spreadsheetId,
-      'users!A:Z'
-    );
-    
-    if (!usersData || usersData.length < 2) {
-      logger.warn('loadUsersNameMap: No users data found');
-      return map;
-    }
-    
-    // Parse users (skip header row at index 0)
-    // Schema: UserID, FullName, Email, Role, ManagerEmail, TeamID, TeamName, Active, ...
-    for (let i = 1; i < usersData.length; i++) {
-      const row = usersData[i];
-      const email = row[2]?.trim().toLowerCase(); // Email column (index 2)
-      const fullName = row[1]?.trim(); // FullName column (index 1)
-      
-      if (email && fullName) {
-        map.set(email, fullName);
+    try {
+      const tokenData = await generateGoogleSheetsToken();
+      if (!tokenData || !tokenData.spreadsheetId) {
+        logger.warn('loadUsersNameMap: No spreadsheet access, name resolution will fall back to emails');
+        return map;
       }
+      
+      const usersData = await fetchSheetValues(
+        tokenData.accessToken,
+        tokenData.spreadsheetId,
+        'users!A:Z'
+      );
+      
+      if (!usersData || usersData.length < 2) {
+        logger.warn('loadUsersNameMap: No users data found');
+        return map;
+      }
+      
+      // Parse users (skip header row at index 0)
+      // Schema: UserID, FullName, Email, Role, ManagerEmail, TeamID, TeamName, Active, ...
+      for (let i = 1; i < usersData.length; i++) {
+        const row = usersData[i];
+        const email = row[2]?.trim().toLowerCase(); // Email column (index 2)
+        const fullName = row[1]?.trim(); // FullName column (index 1)
+        
+        if (email && fullName) {
+          map.set(email, fullName);
+        }
+      }
+      
+      logger.info(`loadUsersNameMap: Loaded ${map.size} user names`);
+    } catch (err) {
+      logger.error('Error loading users name map:', err);
     }
     
-    logger.info(`loadUsersNameMap: Loaded ${map.size} user names`);
-  } catch (err) {
-    logger.error('Error loading users name map:', err);
-  }
-  
-  return map;
+    return map;
+  });
 }
 
 /**
