@@ -129,6 +129,14 @@ export default function TasksPage({
               Assigned by Me
             </button>
           )}
+          </div>
+          <button
+            onClick={onNewTask}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+          >
+            <Plus size={16} />
+            Create Task
+          </button>
         </div>
       </div>
 
