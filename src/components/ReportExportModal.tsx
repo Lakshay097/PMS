@@ -73,16 +73,16 @@ export default function ReportExportModal({
   };
 
   const panel = isDarkMode
-    ? 'bg-[#0F141F] border-[#1E293B] text-slate-200'
-    : 'bg-white border-[#E5E7EB] text-slate-800';
-  const subtle = isDarkMode ? 'text-slate-400' : 'text-slate-500';
+    ? 'bg-[#0F141F] border-[#1E293B] text-primary'
+    : 'bg-white border-[#E5E7EB] text-primary';
+  const subtle = 'text-muted';
   const chip = (active: boolean) =>
     `px-3 py-1.5 rounded-full text-sm border transition-colors ${
       active
         ? 'bg-blue-600 border-blue-600 text-white'
         : isDarkMode
-          ? 'border-[#1E293B] text-slate-300 hover:border-blue-500'
-          : 'border-slate-300 text-slate-600 hover:border-blue-500'
+          ? 'border-[#1E293B] text-secondary hover:border-blue-500'
+          : 'border-slate-300 text-secondary hover:border-blue-500'
     }`;
 
   const sections: { key: keyof ReportExportOptions; label: string; hint: string }[] = [

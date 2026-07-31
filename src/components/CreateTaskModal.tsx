@@ -321,7 +321,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                 className={`py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg border text-[10px] sm:text-xs font-bold tracking-wider transition-all flex items-center justify-center space-x-1.5 sm:space-x-2 cursor-pointer ${
                   taskType === 'One-time'
                     ? 'bg-[#2563EB]/10 border-[#2563EB] text-[#2563EB]'
-                    : 'bg-surface border-token text-slate-700 hover-surface'
+                    : 'bg-surface border-token text-secondary hover-surface'
                 }`}
               >
                 <Calendar size={12} className="sm:size-3.5" />
@@ -335,7 +335,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                 className={`py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg border text-[10px] sm:text-xs font-bold tracking-wider transition-all flex items-center justify-center space-x-1.5 sm:space-x-2 cursor-pointer ${
                   taskType === 'Recurring'
                     ? 'bg-[#2563EB]/10 border-[#2563EB] text-[#2563EB]'
-                    : 'bg-surface border-token text-slate-700 hover-surface'
+                    : 'bg-surface border-token text-secondary hover-surface'
                 }`}
               >
                 <Repeat size={12} className="sm:size-3.5" />
@@ -356,7 +356,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Q3 Financial Ledger Verification"
-              className="w-full text-xs bg-slate-50 border border-token rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+              className="w-full text-xs bg-slate-50 border border-token rounded-lg px-3 py-2 text-primary placeholder-muted focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
               readOnly
             />
           </div>
@@ -371,7 +371,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Provide clean instructions, links to sheets, criteria for closing tasks, compliance expectations, etc."
-              className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg p-3 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+              className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg p-3 text-primary placeholder-muted focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
             ></textarea>
           </div>
 
@@ -396,7 +396,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                   className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#2563EB] ${
                     isDarkMode
                       ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500'
-                      : 'bg-surface border-[#E2E8F0] text-slate-800 placeholder-slate-400'
+                      : 'bg-surface border-[#E2E8F0] text-primary placeholder-muted'
                   }`}
                 />
                 {showDropdown && searchQuery && (
@@ -477,7 +477,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                     className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#2563EB] ${
                       isDarkMode
                         ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500'
-                        : 'bg-surface border-[#E2E8F0] text-slate-800 placeholder-slate-400'
+                        : 'bg-surface border-[#E2E8F0] text-primary placeholder-muted'
                     }`}
                   />
                   {showTeamDropdown && teamSearchQuery && (
@@ -558,7 +558,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as any)}
-                className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg px-3 py-2 text-primary focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
               >
                 <option value="Low">Low Priority</option>
                 <option value="Medium">Medium Priority</option>
@@ -579,7 +579,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                  className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg px-3 py-2 text-primary focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                 />
               </div>
 
@@ -591,7 +591,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                  className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg px-3 py-2 text-primary focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                 />
               </div>
             </div>
@@ -708,7 +708,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                     >
                       <div className="flex items-center gap-2">
                         <File size={14} className="text-[#64748B]" />
-                        <span className="text-xs text-slate-700 truncate max-w-[200px]">{file.name}</span>
+                        <span className="text-xs text-secondary truncate max-w-[200px]">{file.name}</span>
                       </div>
                       <button
                         type="button"
@@ -728,7 +728,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
             <button
               type="button"
               onClick={onClose}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-token text-slate-700 hover-surface transition-all rounded-lg text-[10px] sm:text-xs font-bold tracking-wider cursor-pointer"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-token text-secondary hover-surface transition-all rounded-lg text-[10px] sm:text-xs font-bold tracking-wider cursor-pointer"
             >
               Cancel
             </button>

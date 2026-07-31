@@ -21,7 +21,7 @@ export default function BulkActionBar({ selectedCount, actions, onClear, isDarkM
   return (
     <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-lg shadow-2xl px-4 py-3 flex items-center gap-4 ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
       <div className="flex items-center gap-2">
-        <span className={`text-sm font-medium ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>{selectedCount} selected</span>
+        <span className={`text-sm font-medium text-primary`}>{selectedCount} selected</span>
       </div>
       
       <div className={`h-6 w-px ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`} />
@@ -36,11 +36,11 @@ export default function BulkActionBar({ selectedCount, actions, onClear, isDarkM
                 ? isDarkMode ? 'text-red-400 hover:bg-red-900/30' : 'text-red-600 hover:bg-red-50'
                 : action.variant === 'primary'
                 ? isDarkMode ? 'text-blue-400 hover:bg-blue-900/30' : 'text-blue-600 hover:bg-blue-50'
-                : isDarkMode ? 'text-slate-300 hover:bg-slate-700' : 'text-slate-600 hover:bg-slate-100'
+                : isDarkMode ? 'text-secondary hover:text-primary hover-surface' : 'text-secondary hover:text-primary hover-surface'
             }`}
           >
             {action.icon}
-            <span>{action.label}</span>
+            <span className={`text-${action.variant === 'danger' ? 'red' : action.variant === 'primary' ? 'blue' : 'secondary'}`}>{action.label}</span>
           </button>
         ))}
       </div>
@@ -49,7 +49,7 @@ export default function BulkActionBar({ selectedCount, actions, onClear, isDarkM
       
       <button
         onClick={onClear}
-        className={`p-1.5 rounded-md transition-colors ${isDarkMode ? 'hover:bg-slate-700 text-slate-400 hover:text-slate-200' : 'hover:bg-slate-100 text-slate-400 hover:text-slate-600'}`}
+        className={`p-1.5 rounded-md transition-colors ${isDarkMode ? 'hover-surface text-secondary hover:text-primary' : 'hover-surface text-secondary hover:text-primary'}`}
       >
         <X size={16} />
       </button>

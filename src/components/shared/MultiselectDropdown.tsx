@@ -80,8 +80,8 @@ export default function MultiselectDropdown({
         onClick={() => setIsOpen(!isOpen)}
         className={`flex items-center gap-2 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
           isDarkMode 
-            ? 'bg-[#1E293B] border-[#334155] text-white' 
-            : 'bg-slate-50 border-[#E5E7EB] text-slate-900'
+            ? 'bg-[#1E293B] border-[#334155] text-primary' 
+            : 'bg-slate-50 border-[#E5E7EB] text-primary'
         }`}
       >
         <Filter size={16} />
@@ -109,8 +109,8 @@ export default function MultiselectDropdown({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className={`w-full pl-9 pr-4 py-2 text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                     isDarkMode 
-                      ? 'bg-[#0F141F] border border-[#334155] text-white placeholder-slate-500' 
-                      : 'bg-slate-50 border border-[#E5E7EB] text-slate-900 placeholder-slate-500'
+                      ? 'bg-[#0F141F] border border-[#334155] text-primary placeholder-muted' 
+                      : 'bg-slate-50 border border-[#E5E7EB] text-primary placeholder-muted'
                   }`}
                 />
               </div>
@@ -126,9 +126,7 @@ export default function MultiselectDropdown({
               filteredOptions.map(option => (
                 <label
                   key={option.value}
-                  className={`flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-[#334155]/50 transition-colors ${
-                    isDarkMode ? 'text-white' : 'text-slate-900'
-                  }`}
+                  className={`flex items-center gap-3 p-2 rounded-md cursor-pointer hover-surface transition-colors text-primary`}
                 >
                   <input
                     type="checkbox"
@@ -148,8 +146,8 @@ export default function MultiselectDropdown({
                 onClick={clearAll}
                 className={`w-full flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${
                   isDarkMode 
-                    ? 'text-slate-400 hover:text-white hover:bg-[#334155]/50' 
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    ? 'text-secondary hover:text-primary hover-surface' 
+                    : 'text-secondary hover:text-primary hover-surface'
                 }`}
               >
                 <X size={14} />

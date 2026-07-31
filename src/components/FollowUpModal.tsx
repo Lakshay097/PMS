@@ -53,13 +53,13 @@ export default function FollowUpModal({ task, isOpen, onClose, onSubmit, isDarkM
           </div>
 
           <div className={`${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-[#E2E8F0]'} rounded-lg p-2.5 sm:p-3`}>
-            <span className={`text-[9px] sm:text-[10px] font-mono tracking-wider block font-bold ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>Original parent task</span>
-            <span className={`font-semibold text-xs sm:text-sm block mt-0.5 line-clamp-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{task.Title}</span>
-            <span className={`text-[10px] sm:text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Assigned to: {task.AssignedToEmail}</span>
+            <span className={`text-[9px] sm:text-[10px] font-mono tracking-wider block font-bold text-muted`}>Original parent task</span>
+            <span className={`font-semibold text-xs sm:text-sm block mt-0.5 line-clamp-2 text-primary`}>{task.Title}</span>
+            <span className={`text-[10px] sm:text-xs text-muted`}>Assigned to: {task.AssignedToEmail}</span>
           </div>
 
           <div>
-            <label className={`block text-[10px] font-bold mb-1 ${isDarkMode ? 'text-slate-400' : 'text-[#64748B]'}`}>
+            <label className={`block text-[10px] font-bold mb-1 text-muted`}>
               Follow-up reason / scope <span className="text-red-500">*</span>
             </label>
             <textarea
@@ -68,7 +68,7 @@ export default function FollowUpModal({ task, isOpen, onClose, onSubmit, isDarkM
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Explain why further remediation or audit is required..."
-              className={`w-full text-xs rounded-lg p-3 focus:outline-none focus:ring-1 focus:ring-[#2563EB] ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-200 placeholder-slate-500' : 'bg-white border-[#E2E8F0] text-slate-800 placeholder-slate-400'}`}
+              className={`w-full text-xs rounded-lg p-3 focus:outline-none focus:ring-1 focus:ring-[#2563EB] ${isDarkMode ? 'bg-slate-800 border-slate-700 text-primary placeholder-muted' : 'bg-white border-[#E2E8F0] text-primary placeholder-muted'}`}
             ></textarea>
           </div>
 
@@ -76,7 +76,7 @@ export default function FollowUpModal({ task, isOpen, onClose, onSubmit, isDarkM
             <button
               type="button"
               onClick={onClose}
-              className={`px-3 sm:px-4 py-1.5 sm:py-2 border transition-all rounded-lg text-[10px] sm:text-xs font-bold cursor-pointer ${isDarkMode ? 'border-slate-600 text-slate-300 hover:bg-slate-700' : 'border-[#E2E8F0] text-slate-700 hover:bg-slate-50'}`}
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 border transition-all rounded-lg text-[10px] sm:text-xs font-bold cursor-pointer ${isDarkMode ? 'border-slate-600 text-secondary hover-surface' : 'border-[#E2E8F0] text-secondary hover-surface'}`}
             >
               Cancel
             </button>
