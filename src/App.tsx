@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAppModals } from './hooks/useAppModals';
 import { useDatabase } from './hooks/useDatabase';
@@ -106,6 +106,9 @@ const AddTeamModal = lazy(() => import('./components/features/tasks/AddTeamModal
 export default function App() {
   const { isDarkMode } = useTheme();
 
+  // Auth state must be initialized before useDatabase so we can pass the ready flag
+  const { token, isAuthenticated, isLoading: authIsLoading } = useAuth();
+
   // Database States loaded from LocalStorage - MUST be called before any conditional logic
   const {
     users,
@@ -143,10 +146,9 @@ export default function App() {
     loadDatabase,
     syncDatabase,
     silentSync,
-  } = useDatabase(false); // Will be reloaded when auth initializes
+  } = useDatabase(!authIsLoading && isAuthenticated);
 
   // Real-time sync â€” invalidates React Query cache on SSE events
-  const { token, isAuthenticated, isLoading: authIsLoading } = useAuth();
   useRealtimeSync(token);
 
   // Active Simulated Session email state
@@ -388,13 +390,6 @@ export default function App() {
     return cleanup;
   }, []);
 
-
-  // Reload database when Firebase auth initializes
-  useEffect(() => {
-    if (!authIsLoading && isAuthenticated) {
-      loadDatabase();
-    }
-  }, [authIsLoading, isAuthenticated]);
 
   // Wire up offline save notification callback
   useEffect(() => {
@@ -1532,7 +1527,11 @@ export default function App() {
                       }
                     }
                   }}
-                  onNewTask={handleCreateTaskOrTemplate}
+                  onNewTask={(assigneeEmail, teamIds) => {
+                    setPreSelectedAssignee(assigneeEmail);
+                    setPreSelectedTeamIDs(teamIds);
+                    setIsTaskModalOpen(true);
+                  }}
                   isDarkMode={isDarkMode}
                 />
                 </Suspense>

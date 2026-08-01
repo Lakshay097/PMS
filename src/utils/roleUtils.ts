@@ -37,7 +37,7 @@ export function getUserRoles(
 
   // Team Leader role - check if user is in TeamLeaderEmails for any team
   const leaderTeamIDs = teams
-    .filter(t => t.TeamLeaderEmails?.includes(user.Email || ''))
+    .filter(t => t.TeamLeaderEmails?.some(e => e.toLowerCase() === (user.Email || '').toLowerCase()))
     .map(t => t.TeamID);
   
   if (leaderTeamIDs.length > 0) {

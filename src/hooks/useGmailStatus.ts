@@ -25,6 +25,9 @@ export function useGmailStatus(userEmail: string | undefined): GmailStatusState 
   const [isLoading, setIsLoading] = useState(false);
   // Prevent duplicate in-flight requests for the same email
   const inflightRef = useRef<string | null>(null);
+  // Track the last email we actually fetched so re-renders with the same
+  // email value (different object reference) don't fire an extra network call
+  const fetchedEmailRef = useRef<string | null>(null);
 
   const fetchStatus = useCallback(async (email: string) => {
     if (!email) return;
@@ -60,15 +63,18 @@ export function useGmailStatus(userEmail: string | undefined): GmailStatusState 
   }, []);
 
   useEffect(() => {
-    if (userEmail) {
-      fetchStatus(userEmail);
-    }
+    if (!userEmail) return;
+    // Skip if we've already fetched (or are fetching) for this exact email value
+    if (fetchedEmailRef.current === userEmail) return;
+    fetchedEmailRef.current = userEmail;
+    fetchStatus(userEmail);
   }, [userEmail, fetchStatus]);
 
   const recheckStatus = useCallback(async () => {
     if (!userEmail) return;
-    // Bust the cache so we get a fresh result
+    // Bust the cache and the fetch-guard so we get a fresh result
     cache.delete(userEmail);
+    fetchedEmailRef.current = null;
     await fetchStatus(userEmail);
   }, [userEmail, fetchStatus]);
 

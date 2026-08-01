@@ -239,7 +239,7 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    templateName: 'report_submitted',
+    templateName: 'template_report_submitted',
     subject: 'Progress Report: {task_name} [{task_id}]',
     body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #e3f2fd;">
   <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid #2196f3;">
@@ -284,7 +284,7 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    templateName: 'task_closed',
+    templateName: 'template_task_closed',
     subject: 'Task Closed: {task_name} [{task_id}]',
     body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #d4edda;">
   <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid #28a745;">
@@ -551,6 +551,8 @@ export async function initializeEmailTemplatesSheet(): Promise<boolean> {
 export async function migrateEmailTemplates(): Promise<void> {
   const TEMPLATES_TO_MIGRATE = [
     'template_assigned_email', // unified CSS + fixed AssignedByName (was AssignedByEmail)
+    'template_report_submitted', // renamed from report_submitted
+    'template_task_closed', // renamed from task_closed
     'task_due_soon',
     'task_overdue',
   ];

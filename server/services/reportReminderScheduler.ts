@@ -774,8 +774,16 @@ export async function checkAndSendReportReminders(triggeredBy: 'scheduler' | 'ma
     jobRunLog.successCount = successCount;
     jobRunLog.failureCount = failureCount;
 
-      // Log the job run to Firestore
-      await logJobRun(jobRunLog);
+      // Only log the job run when the scheduler actually did something (sent or failed).
+      // Idle runs (all teams skipped, nothing attempted) produce no useful signal and
+      // would write a job_runs doc every hour for free. If every team was skipped (slot
+      // already claimed, wrong time) we skip the write entirely.
+      const hadActivity = jobRunLog.successCount > 0 || jobRunLog.failureCount > 0;
+      if (hadActivity) {
+        await logJobRun(jobRunLog);
+      } else {
+        logger.info('[JOB RUN] Idle run — no teams processed; skipping job_runs write');
+      }
 
       return jobRunLog;
     } finally {
@@ -835,8 +843,59 @@ export async function initializeReportReminderScheduler(): Promise<void> {
 
 let reportReminderIntervalId: NodeJS.Timeout | null = null;
 
+// ─── job_runs TTL cleanup ──────────────────────────────────────────────────
+
+const JOB_RUNS_RETENTION_DAYS = 30;
+const CLEANUP_BATCH_SIZE = 500; // Firestore WriteBatch hard limit
+
 /**
- * Starts the hourly checks for report reminders
+ * Delete job_runs documents older than JOB_RUNS_RETENTION_DAYS days.
+ * Runs in batches of ≤500 to stay within the Firestore WriteBatch limit.
+ * Safe to call multiple times; does nothing if there are no old documents.
+ */
+export async function cleanupOldJobRuns(): Promise<void> {
+  try {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - JOB_RUNS_RETENTION_DAYS);
+    const cutoffIso = cutoff.toISOString();
+
+    logger.info(`[CLEANUP] Deleting job_runs older than ${cutoffIso} (${JOB_RUNS_RETENTION_DAYS}-day retention)`);
+
+    let totalDeleted = 0;
+
+    // Loop until no more qualifying docs remain (handles collections larger than CLEANUP_BATCH_SIZE)
+    while (true) {
+      const snapshot = await firestoreAdmin
+        .collection('job_runs')
+        .where('timestamp', '<', cutoffIso)
+        .limit(CLEANUP_BATCH_SIZE)
+        .get();
+
+      if (snapshot.empty) break;
+
+      const batch = firestoreAdmin.batch();
+      snapshot.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+
+      totalDeleted += snapshot.docs.length;
+      logger.info(`[CLEANUP] Deleted ${snapshot.docs.length} job_runs docs (${totalDeleted} total so far)`);
+
+      // If we got fewer than the limit, we've cleared all qualifying docs
+      if (snapshot.docs.length < CLEANUP_BATCH_SIZE) break;
+    }
+
+    logger.info(`[CLEANUP] job_runs cleanup complete — ${totalDeleted} docs deleted`);
+  } catch (err) {
+    logger.error('[CLEANUP] Failed to clean up old job_runs:', err);
+    // Non-fatal: cleanup failure should not affect the scheduler's main work
+  }
+}
+
+// ─── scheduler bootstrap ──────────────────────────────────────────────────
+
+/**
+ * Starts the hourly checks for report reminders.
+ * Also schedules a once-daily cleanup of old job_runs documents.
  */
 export function startReportReminderScheduler(): void {
   if (reportReminderIntervalId) {
@@ -856,4 +915,15 @@ export function startReportReminderScheduler(): void {
       logger.error('ReportReminderScheduler: Interval execution failed', err);
     });
   }, 60 * 60 * 1000);
+
+  // Run job_runs cleanup once at startup (catches any backlog), then every 24 hours
+  cleanupOldJobRuns().catch(err => {
+    logger.error('ReportReminderScheduler: Startup job_runs cleanup failed', err);
+  });
+
+  setInterval(() => {
+    cleanupOldJobRuns().catch(err => {
+      logger.error('ReportReminderScheduler: Scheduled job_runs cleanup failed', err);
+    });
+  }, 24 * 60 * 60 * 1000);
 }

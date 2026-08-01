@@ -196,7 +196,7 @@ export default function TeamPage({
                       // Collapsed view: show only team leaders and sub-teams
                       <>
                         {/* Team leaders */}
-                        {allTeamMembers.filter(m => team.TeamLeaderEmails?.includes(m.Email)).map(member => (
+                        {allTeamMembers.filter(m => team.TeamLeaderEmails?.some(e => e.toLowerCase() === m.Email.toLowerCase())).map(member => (
                           <div key={member.Email} className="px-5 py-3 flex items-center justify-between hover:bg-opacity-50 transition-colors hover-surface">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
@@ -257,7 +257,7 @@ export default function TeamPage({
                             </div>
                           ) : (
                             group.members.map(member => {
-                              const isLeader = team.TeamLeaderEmails?.includes(member.Email);
+                              const isLeader = team.TeamLeaderEmails?.some(e => e.toLowerCase() === member.Email.toLowerCase());
                               // Multi-membership: check if user is a leader of ANY sub-team they belong to
                               const subTeamObj = member.SubTeamIDs && member.SubTeamIDs.length > 0
                                 ? teamSubTeamList.find(st => member.SubTeamIDs?.includes(st.SubTeamID))

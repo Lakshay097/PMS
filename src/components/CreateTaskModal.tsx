@@ -291,79 +291,105 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
-        className="bg-surface rounded-xl sm:rounded-xl shadow-xl border border-token w-full max-w-2xl overflow-hidden font-sans flex flex-col max-h-[90vh] sm:max-h-[85vh]"
+        className="bg-[#0E1320] rounded-2xl shadow-2xl border border-[#212A3D] w-full max-w-[560px] overflow-hidden font-sans flex flex-col max-h-[88vh]"
+        style={{
+          background: 'linear-gradient(180deg, #0E1320 0%, #0B0F1A 100%)',
+          boxShadow: '0 30px 80px -20px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.02) inset'
+        }}
       >
-        <div className="px-4 sm:px-6 py-3 sm:py-4.5 flex items-center justify-between border-b border-token bg-surface">
-          <div className="flex items-center space-x-1.5 sm:space-x-2.5">
-            <ClipboardList className="text-[#2563EB]" size={16} />
-            <h3 className="font-bold text-sm sm:text-base tracking-tight font-sans text-primary">Configure New Task Allocation</h3>
+        <div className="px-6 py-5.5 flex items-center justify-between border-b border-[#212A3D]">
+          <div className="flex items-center gap-3">
+            <div className="w-8.5 h-8.5 rounded-lg bg-[rgba(76,110,245,0.12)] border border-[rgba(76,110,245,0.35)] flex items-center justify-center text-[#4C6EF5]">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="18" height="18">
+                <rect x="6" y="4" width="12" height="17" rx="2"/>
+                <path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/>
+                <path d="M9 12h6M9 16h4"/>
+              </svg>
+            </div>
+            <h3 className="font-semibold text-[17px] text-[#EDF0F7] tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>Configure New Task Allocation</h3>
           </div>
-          <button onClick={onClose} className="text-secondary hover:text-secondary transition-colors cursor-pointer">
-            <X size={16} />
+          <button 
+            onClick={onClose} 
+            className="w-7.5 h-7.5 rounded-lg flex items-center justify-center text-[#5C6478] bg-transparent border border-transparent hover:bg-[#131928] hover:text-[#EDF0F7] hover:border-[#29334A] transition-all cursor-pointer"
+            aria-label="Close"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-3 sm:p-6 space-y-3 sm:space-y-4 flex-1 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="px-6 py-5.5 space-y-5 flex-1 overflow-y-auto" style={{
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#29334A transparent'
+        }}>
           {validationError && (
-            <div className="bg-red-50 border border-red-200 text-[10px] sm:text-xs px-3 sm:px-4 py-2 sm:py-3 rounded-lg">
+            <div className="bg-[rgba(240,87,122,0.1)] border border-[rgba(240,87,122,0.3)] text-[12.5px] px-4 py-3 rounded-lg text-[#F0577A]">
               {validationError}
             </div>
           )}
           {/* Task Type Switcher */}
           <div>
-            <label className="block text-[9px] sm:text-[10px] font-bold text-[#64748B] tracking-wider mb-1.5 sm:mb-2">
+            <label className="block text-[12.5px] font-semibold text-[#9AA3B8] tracking-wide mb-2.5 flex items-center gap-1.5">
               Task scheduling type
             </label>
-            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
                 onClick={() => setTaskType('One-time')}
-                className={`py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg border text-[10px] sm:text-xs font-bold tracking-wider transition-all flex items-center justify-center space-x-1.5 sm:space-x-2 cursor-pointer ${
+                className={`py-3 px-3.5 rounded-[10px] border text-[13.5px] font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer ${
                   taskType === 'One-time'
-                    ? 'bg-[#2563EB]/10 border-[#2563EB] text-[#2563EB]'
-                    : 'bg-surface border-token text-secondary hover-surface'
+                    ? 'bg-[rgba(76,110,245,0.12)] border-[#4C6EF5] text-[#9FB4FF] shadow-[0_0_0_3px_rgba(76,110,245,0.28)_inset,0_4px_14px_-6px_rgba(76,110,245,0.28)]'
+                    : 'bg-[#131928] border-[#29334A] text-[#9AA3B8] hover:bg-[#171F32] hover:text-[#EDF0F7]'
                 }`}
               >
-                <Calendar size={12} className="sm:size-3.5" />
-                <span className="hidden sm:inline">One-Time Task Allocation</span>
-                <span className="sm:hidden">One-Time</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="15" height="15">
+                  <rect x="3" y="5" width="18" height="16" rx="2"/>
+                  <path d="M3 10h18M8 3v4M16 3v4"/>
+                </svg>
+                One-Time Task Allocation
               </button>
 
               <button
                 type="button"
                 onClick={() => setTaskType('Recurring')}
-                className={`py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg border text-[10px] sm:text-xs font-bold tracking-wider transition-all flex items-center justify-center space-x-1.5 sm:space-x-2 cursor-pointer ${
+                className={`py-3 px-3.5 rounded-[10px] border text-[13.5px] font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer ${
                   taskType === 'Recurring'
-                    ? 'bg-[#2563EB]/10 border-[#2563EB] text-[#2563EB]'
-                    : 'bg-surface border-token text-secondary hover-surface'
+                    ? 'bg-[rgba(76,110,245,0.12)] border-[#4C6EF5] text-[#9FB4FF] shadow-[0_0_0_3px_rgba(76,110,245,0.28)_inset,0_4px_14px_-6px_rgba(76,110,245,0.28)]'
+                    : 'bg-[#131928] border-[#29334A] text-[#9AA3B8] hover:bg-[#171F32] hover:text-[#EDF0F7]'
                 }`}
               >
-                <Repeat size={12} className="sm:size-3.5" />
-                <span className="hidden sm:inline">Recurring Schedule Blueprint</span>
-                <span className="sm:hidden">Recurring</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="15" height="15">
+                  <path d="M17 2l4 4-4 4"/>
+                  <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+                  <path d="M7 22l-4-4 4-4"/>
+                  <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                </svg>
+                Recurring Schedule Blueprint
               </button>
             </div>
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
-              Title <span className="text-red-500">*</span>
-              <span className="text-blue-500 ml-1">(Auto-generated from description & date)</span>
+            <label className="block text-[12.5px] font-semibold text-[#9AA3B8] tracking-wide mb-2 flex items-center gap-1.5">
+              Title <span className="text-[#F0577A]">*</span>
+              <span className="text-[#4C6EF5] opacity-85 text-[12px] font-medium">(Auto-generated from description & date)</span>
             </label>
             <input
               type="text"
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Q3 Financial Ledger Verification"
-              className="w-full text-xs bg-slate-50 border border-token rounded-lg px-3 py-2 text-primary placeholder-muted focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+              placeholder="[Medium] d - Aug 7"
+              className="w-full text-[14px] bg-[#131928] border border-[#29334A] rounded-[10px] px-3.5 py-3 text-[#EDF0F7] placeholder-[#4B5468] focus:outline-none focus:border-[#E7B84B] focus:shadow-[0_0_0_3px_rgba(231,184,75,0.18)] transition-all"
               readOnly
+              style={{ fontStyle: 'normal' }}
             />
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
-              Detailed scope / instructions <span className="text-red-500">*</span>
+            <label className="block text-[12.5px] font-semibold text-[#9AA3B8] tracking-wide mb-2">
+              Detailed scope / instructions <span className="text-[#F0577A]">*</span>
             </label>
             <textarea
               required
@@ -371,15 +397,20 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Provide clean instructions, links to sheets, criteria for closing tasks, compliance expectations, etc."
-              className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg p-3 text-primary placeholder-muted focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+              className="w-full text-[14px] bg-[#131928] border border-[#29334A] rounded-[10px] p-3.5 text-[#EDF0F7] placeholder-[#4B5468] focus:outline-none focus:border-[#E7B84B] focus:shadow-[0_0_0_3px_rgba(231,184,75,0.18)] transition-all resize-y min-h-[96px] leading-relaxed"
+              style={{ fontFamily: 'Inter, sans-serif' }}
             ></textarea>
           </div>
 
           <div className="grid grid-cols-1 gap-4">
             <div>
-              <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1.5 flex items-center space-x-1">
-                <UserPlus size={12} />
-                <span>Assigned recipients {selectedTeamIDs.length > 0 ? '(Auto-filled from team)' : '(Multiple allowed)'}</span>
+              <label className="block text-[12.5px] font-semibold text-[#9AA3B8] tracking-wide mb-2 flex items-center gap-1.5">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="14" height="14" className="text-[#5C6478]">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                <span>Assigned recipients (Multiple allowed)</span>
               </label>
               {/* Raise this wrapper's stacking context while the results are open so the
                   dropdown paints above the Priority select and date fields below it. */}
@@ -393,18 +424,12 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                   }}
                   onFocus={() => setShowDropdown(true)}
                   placeholder="Search stakeholders by name or email..."
-                  className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#2563EB] ${
-                    isDarkMode
-                      ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500'
-                      : 'bg-surface border-[#E2E8F0] text-primary placeholder-muted'
-                  }`}
+                  className="w-full text-[14px] rounded-[10px] px-3.5 py-3 focus:outline-none focus:border-[#E7B84B] focus:shadow-[0_0_0_3px_rgba(231,184,75,0.18)] bg-[#131928] border-[#29334A] text-[#EDF0F7] placeholder-[#4B5468] hover:bg-[#171F32] transition-all"
                 />
                 {showDropdown && searchQuery && (
-                  <div className={`absolute z-30 w-full mt-1 border rounded-lg shadow-lg max-h-48 overflow-y-auto ${
-                    isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-surface border-[#E2E8F0]'
-                  }`}>
+                  <div className="absolute z-30 w-full mt-1 border rounded-lg shadow-lg max-h-48 overflow-y-auto bg-[#131928] border-[#29334A]">
                     {filteredStakeholders.length === 0 ? (
-                      <div className="p-3 text-secondary text-xs italic">No stakeholders found.</div>
+                      <div className="p-3 text-[#9AA3B8] text-[12.5px] italic">No stakeholders found.</div>
                     ) : (
                       filteredStakeholders.map(user => {
                         const isSelected = selectedEmails.includes(user.Email);
@@ -418,13 +443,13 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                               setSearchQuery('');
                               setShowDropdown(false);
                             }}
-                            className={`p-2.5 cursor-pointer text-xs hover-surface transition-colors ${
-                              isSelected ? 'bg-slate-100 opacity-50' : ''
+                            className={`p-2.5 cursor-pointer text-[12.5px] hover:bg-[#171F32] transition-colors ${
+                              isSelected ? 'bg-[#171F32] opacity-50' : ''
                             }`}
                           >
                             <div className="flex flex-col">
-                              <span className="font-semibold text-primary">{user.FullName}</span>
-                              <span className="text-[10px] text-slate-500 font-mono">
+                              <span className="font-semibold text-[#EDF0F7]">{user.FullName}</span>
+                              <span className="text-[10px] text-[#5C6478] font-mono">
                                 {isAdminLevel(currentUser.Role) ? `${user.Role} • ` : ''}{user.Email}
                               </span>
                             </div>
@@ -436,18 +461,20 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                 )}
               </div>
               {selectedEmails.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {selectedEmails.map(email => {
                     const u = usersList.find(usr => usr.Email === email);
                     return (
-                      <span key={email} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-[10px] font-bold px-2.5 py-1 rounded-full border border-blue-200">
+                      <span key={email} className="inline-flex items-center gap-1.5 bg-[#17223D] border border-[#2C3F6E] text-[#8FB2FF] text-[12.5px] font-semibold px-3 py-1.5 rounded-full">
                         <span>{u ? u.FullName : email}</span>
                         <button
                           type="button"
                           onClick={() => setSelectedEmails(selectedEmails.filter(e => e !== email))}
-                          className="text-blue-500 hover:text-blue-800 p-0.5 hover:bg-transparent inline-flex items-center border-none"
+                          className="w-4 h-4 rounded-full bg-[rgba(143,178,255,0.14)] text-[#8FB2FF] flex items-center justify-center hover:bg-[rgba(143,178,255,0.28)] transition-colors border-none"
                         >
-                          <X size={10} />
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="11" height="11">
+                            <path d="M18 6L6 18M6 6l12 12"/>
+                          </svg>
                         </button>
                       </span>
                     );
@@ -459,8 +486,13 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
             {/* Team Assignment */}
             {teamsList && teamsList.length > 0 && (
               <div>
-                <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1.5 flex items-center space-x-1">
-                  <Users size={12} />
+                <label className="block text-[12.5px] font-semibold text-[#9AA3B8] tracking-wide mb-2 flex items-center gap-1.5">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="14" height="14" className="text-[#5C6478]">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                  </svg>
                   <span>Assign to teams (optional, multiple allowed)</span>
                 </label>
                 {/* Same fix for the team results dropdown. */}
@@ -474,18 +506,12 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                     }}
                     onFocus={() => setShowTeamDropdown(true)}
                     placeholder="Search teams by name..."
-                    className={`w-full text-xs rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#2563EB] ${
-                      isDarkMode
-                        ? 'bg-[#1E293B] border-[#334155] text-white placeholder-slate-500'
-                        : 'bg-surface border-[#E2E8F0] text-primary placeholder-muted'
-                    }`}
+                    className="w-full text-[14px] rounded-[10px] px-3.5 py-3 focus:outline-none focus:border-[#E7B84B] focus:shadow-[0_0_0_3px_rgba(231,184,75,0.18)] bg-[#131928] border-[#29334A] text-[#EDF0F7] placeholder-[#4B5468] hover:bg-[#171F32] transition-all"
                   />
                   {showTeamDropdown && teamSearchQuery && (
-                    <div className={`absolute z-30 w-full mt-1 border rounded-lg shadow-lg max-h-48 overflow-y-auto ${
-                      isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-surface border-[#E2E8F0]'
-                    }`}>
+                    <div className="absolute z-30 w-full mt-1 border rounded-lg shadow-lg max-h-48 overflow-y-auto bg-[#131928] border-[#29334A]">
                       {visibleTeams.filter(t => t.TeamName.toLowerCase().includes(teamSearchQuery.toLowerCase())).length === 0 ? (
-                        <div className="p-3 text-secondary text-xs italic">No teams found.</div>
+                        <div className="p-3 text-[#9AA3B8] text-[12.5px] italic">No teams found.</div>
                       ) : (
                         visibleTeams.filter(t => t.TeamName.toLowerCase().includes(teamSearchQuery.toLowerCase())).map(team => {
                           const isSelected = selectedTeamIDs.includes(team.TeamID);
@@ -502,13 +528,13 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                                 setTeamSearchQuery('');
                                 setShowTeamDropdown(false);
                               }}
-                              className={`p-2.5 cursor-pointer text-xs hover-surface transition-colors ${
-                                isSelected ? 'bg-slate-100 opacity-50' : ''
+                              className={`p-2.5 cursor-pointer text-[12.5px] hover:bg-[#171F32] transition-colors ${
+                                isSelected ? 'bg-[#171F32] opacity-50' : ''
                               }`}
                             >
                               <div className="flex flex-col">
-                                <span className="font-semibold text-primary">{team.TeamName}</span>
-                                <span className="text-[10px] text-slate-500 font-mono">
+                                <span className="font-semibold text-[#EDF0F7]">{team.TeamName}</span>
+                                <span className="text-[10px] text-[#5C6478] font-mono">
                                   {teamUsers.length} members
                                 </span>
                               </div>
@@ -520,11 +546,11 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                   )}
                 </div>
                 {selectedTeamIDs.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
+                  <div className="mt-2 flex flex-wrap gap-2">
                     {selectedTeamIDs.map(teamId => {
                       const team = teamsList.find(t => t.TeamID === teamId);
                       return (
-                        <span key={teamId} className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2.5 py-1 rounded-full border border-emerald-200">
+                        <span key={teamId} className="inline-flex items-center gap-1.5 bg-[#17223D] border border-[#2C3F6E] text-[#8FB2FF] text-[12.5px] font-semibold px-3 py-1.5 rounded-full">
                           <span>{team ? team.TeamName : teamId}</span>
                           <button
                             type="button"
@@ -539,9 +565,11 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                                 setSelectedEmails(selectedEmails.filter(email => !teamMemberEmails.includes(email)));
                               }
                             }}
-                            className="text-emerald-500 hover:text-emerald-800 p-0.5 hover:bg-transparent inline-flex items-center border-none"
+                            className="w-4 h-4 rounded-full bg-[rgba(143,178,255,0.14)] text-[#8FB2FF] flex items-center justify-center hover:bg-[rgba(143,178,255,0.28)] transition-colors border-none"
                           >
-                            <X size={10} />
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="11" height="11">
+                              <path d="M18 6L6 18M6 6l12 12"/>
+                            </svg>
                           </button>
                         </span>
                       );
@@ -552,54 +580,64 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
             )}
 
             <div>
-              <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+              <label className="block text-[12.5px] font-semibold text-[#9AA3B8] tracking-wide mb-2">
                 Priority ranking
               </label>
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as any)}
-                className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg px-3 py-2 text-primary focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
-              >
-                <option value="Low">Low Priority</option>
-                <option value="Medium">Medium Priority</option>
-                <option value="High">High Priority</option>
-                <option value="Critical">Critical Priority</option>
-              </select>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-[#E7B84B] shadow-[0_0_0_3px_rgba(231,184,75,0.18)]"></span>
+                <select
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value as any)}
+                  className="w-full text-[14px] bg-[#131928] border border-[#29334A] rounded-[10px] pl-8 pr-10 py-3 text-[#EDF0F7] focus:outline-none focus:border-[#E7B84B] focus:shadow-[0_0_0_3px_rgba(231,184,75,0.18)] appearance-none cursor-pointer transition-all"
+                  style={{
+                    backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\' viewBox=\'0 0 10 6\'%3E%3Cpath d=\'M1 1l4 4 4-4\' stroke=\'%239AA3B8\' stroke-width=\'1.6\' fill=\'none\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3C/svg%3E")',
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 14px center'
+                  }}
+                >
+                  <option value="Low">Low Priority</option>
+                  <option value="Medium">Medium Priority</option>
+                  <option value="High">High Priority</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              </div>
             </div>
           </div>
 
           {/* Conditional Date Panels */}
           {taskType === 'One-time' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+                <label className="block text-[12.5px] font-semibold text-[#9AA3B8] tracking-wide mb-2">
                   Start date
                 </label>
                 <input
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg px-3 py-2 text-primary focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                  className="w-full text-[14px] bg-[#131928] border border-[#29334A] rounded-[10px] px-3.5 py-3 text-[#EDF0F7] focus:outline-none focus:border-[#E7B84B] focus:shadow-[0_0_0_3px_rgba(231,184,75,0.18)] transition-all"
+                  style={{ fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.01em', colorScheme: 'dark' }}
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+                <label className="block text-[12.5px] font-semibold text-[#9AA3B8] tracking-wide mb-2">
                   Due date
                 </label>
                 <input
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full text-xs bg-surface border border-[#E2E8F0] rounded-lg px-3 py-2 text-primary focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                  className="w-full text-[14px] bg-[#131928] border border-[#29334A] rounded-[10px] px-3.5 py-3 text-[#EDF0F7] focus:outline-none focus:border-[#E7B84B] focus:shadow-[0_0_0_3px_rgba(231,184,75,0.18)] transition-all"
+                  style={{ fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.01em', colorScheme: 'dark' }}
                 />
               </div>
             </div>
           ) : (
-            <div className="bg-slate-50 border border-[#E2E8F0] rounded-lg p-4 space-y-3 shadow-inner">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-[#131928] border border-[#29334A] rounded-[10px] p-4 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+                  <label className="block text-[12.5px] font-semibold text-[#9AA3B8] tracking-wide mb-2">
                     Recurrence schedule frequency
                   </label>
                   <select
@@ -617,7 +655,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                         setManualWeeklyDay('');
                       }
                     }}
-                    className="w-full text-xs bg-surface border border-token rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    className="w-full text-[14px] bg-[#131928] border border-[#29334A] rounded-[10px] px-3.5 py-3 text-[#EDF0F7] focus:outline-none focus:border-[#E7B84B] focus:shadow-[0_0_0_3px_rgba(231,184,75,0.18)] transition-all"
                   >
                     <option value="Daily">Daily Interval</option>
                     <option value="Weekly">Weekly (Every {weeklyDayName})</option>
@@ -629,7 +667,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
 
                 {recurrenceType === 'Weekly' && (
                   <div>
-                    <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+                    <label className="block text-[12.5px] font-semibold text-[#9AA3B8] tracking-wide mb-2">
                       Weekly recurrence day
                     </label>
                     <select
@@ -638,7 +676,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                         setManualWeeklyDay(e.target.value);
                         setUserSelectedDay(true);
                       }}
-                      className="w-full text-xs bg-surface border border-token rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                      className="w-full text-[14px] bg-[#131928] border border-[#29334A] rounded-[10px] px-3.5 py-3 text-[#EDF0F7] focus:outline-none focus:border-[#E7B84B] focus:shadow-[0_0_0_3px_rgba(231,184,75,0.18)] transition-all"
                     >
                       <option value="Sunday">Sunday</option>
                       <option value="Monday">Monday</option>
@@ -652,30 +690,31 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                 )}
 
                 <div>
-                  <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+                  <label className="block text-[12.5px] font-semibold text-[#9AA3B8] tracking-wide mb-2">
                     First generation start date
                   </label>
                   <input
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full text-xs bg-surface border border-token rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    className="w-full text-[14px] bg-[#131928] border border-[#29334A] rounded-[10px] px-3.5 py-3 text-[#EDF0F7] focus:outline-none focus:border-[#E7B84B] focus:shadow-[0_0_0_3px_rgba(231,184,75,0.18)] transition-all"
+                    style={{ fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.01em', colorScheme: 'dark' }}
                   />
                 </div>
               </div>
-              <div className="text-[11px] text-[#64748B] leading-relaxed font-sans">
+              <div className="text-[11px] text-[#9AA3B8] leading-relaxed font-sans">
                 💡 <strong>Heuristic Scheduler Rule:</strong> The automatic cron scheduler checks templates periodically. Real task records are automatically generated on their recurrence schedule, tracking generation pointers dynamically in the system database.
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-[10px] font-bold text-[#64748B] tracking-wider mb-1">
+            <label className="block text-[12.5px] font-semibold text-[#9AA3B8] tracking-wide mb-2">
               Attachments (optional)
             </label>
             <div className="space-y-3">
               {/* File Upload */}
-              <div className="border-2 border-dashed border-token rounded-lg p-4 hover:border-[#2563EB] transition-colors">
+              <div className="border-2 border-dashed border-[#29334A] rounded-[10px] p-4 hover:border-[#4C6EF5] transition-colors">
                 <input
                   type="file"
                   multiple
@@ -688,11 +727,11 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                   htmlFor="task-file-upload"
                   className="flex flex-col items-center justify-center cursor-pointer"
                 >
-                  <Upload size={24} className="text-[#64748B] mb-2" />
-                  <p className="text-xs text-[#64748B] font-medium">
+                  <Upload size={24} className="text-[#5C6478] mb-2" />
+                  <p className="text-[14px] text-[#9AA3B8] font-medium">
                     Click to upload files or drag and drop
                   </p>
-                  <p className="text-[10px] text-[#94A3B8] text-center mt-1">
+                  <p className="text-[10px] text-[#5C6478] text-center mt-1">
                     All file types accepted (Max 10MB each)
                   </p>
                 </label>
@@ -704,16 +743,16 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
                   {uploadedFiles.map((file, index) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between bg-slate-50 border border-token rounded-lg px-3 py-2"
+                      className="flex items-center justify-between bg-[#131928] border border-[#29334A] rounded-[10px] px-3.5 py-2.5"
                     >
                       <div className="flex items-center gap-2">
-                        <File size={14} className="text-[#64748B]" />
-                        <span className="text-xs text-secondary truncate max-w-[200px]">{file.name}</span>
+                        <File size={14} className="text-[#5C6478]" />
+                        <span className="text-[12.5px] text-[#EDF0F7] truncate max-w-[200px]">{file.name}</span>
                       </div>
                       <button
                         type="button"
                         onClick={() => removeUploadedFile(index)}
-                        className="text-red-500 hover:text-red-700 transition-colors"
+                        className="text-[#F0577A] hover:text-[#F0577A] transition-colors"
                       >
                         <X size={14} />
                       </button>
@@ -724,18 +763,18 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
             </div>
           </div>
 
-          <div className="pt-3 sm:pt-4 border-t border-token flex items-center justify-end space-x-2 sm:space-x-3">
+          <div className="pt-4 border-t border-[#212A3D] flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-token text-secondary hover-surface transition-all rounded-lg text-[10px] sm:text-xs font-bold tracking-wider cursor-pointer"
+              className="px-4 py-2.5 border border-[#29334A] text-[#9AA3B8] hover:bg-[#131928] hover:text-[#EDF0F7] transition-all rounded-[10px] text-[12.5px] font-semibold cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isUploading}
-              className="px-4 sm:px-5 py-1.5 sm:py-2.5 bg-[#2563EB] hover:bg-[#1d4ed8] text-white rounded-lg text-[10px] sm:text-xs font-bold tracking-wider transition-all shadow-sm flex items-center space-x-1.5 sm:space-x-2 cursor-pointer border-none disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-5 py-2.5 bg-[#4C6EF5] hover:bg-[#3B5BD9] text-white rounded-[10px] text-[12.5px] font-semibold transition-all shadow-sm flex items-center gap-2 cursor-pointer border-none disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isUploading ? 'Uploading...' : 'Create Task'}
             </button>

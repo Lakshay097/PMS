@@ -2,20 +2,22 @@ import { sendEmailAsUser } from './emailService';
 import { logger } from '../utils/logger';
 import { getOrCreateTaskEmailThread } from './emailLogService';
 import { generateGoogleSheetsToken, fetchSheetValues } from './googleSheetsService';
-import { firestoreAdmin } from './firebaseAdmin';
 import { ttlCache } from '../utils/ttlCache';
+import { getAllSettingsCached } from '../routes/firestore';
 
 /**
- * Reads a single email_enabled_{type} flag from the Firestore `settings` collection.
+ * Reads a single email_enabled_{type} flag from the cached settings collection.
+ * Uses the shared settings TTL cache (2-minute TTL) instead of a live Firestore
+ * read on every invocation. A toggled setting takes effect within the TTL window.
  * Returns true (enabled) if the key is absent or set to anything other than 'false'.
  */
 async function isEmailTypeEnabled(type: string): Promise<boolean> {
   try {
     const key = `email_enabled_${type}`;
-    const doc = await firestoreAdmin.collection('settings').doc(key).get();
-    if (!doc.exists) return true; // default: enabled
-    const value = doc.data()?.Value;
-    return value !== 'false';
+    const settings = await getAllSettingsCached();
+    const setting = (settings as Array<{ Key: string; Value: string }>).find(s => s.Key === key);
+    if (!setting) return true; // default: enabled
+    return setting.Value !== 'false';
   } catch (err) {
     logger.warn(`isEmailTypeEnabled(${type}): error reading setting, defaulting to enabled`, err);
     return true;
@@ -315,7 +317,7 @@ export async function triggerTaskDueSoonEmail(
         recipient,
         emailSubject,
         '',
-        'task_due_soon',
+        'template_delayed_email',
         {
           task_name: task.Title,
           Title: task.Title,
@@ -390,7 +392,7 @@ export async function triggerTaskOverdueEmail(
         recipient,
         emailSubject,
         '',
-        'task_overdue',
+        'template_delayed_email',
         {
           task_name: task.Title,
           Title: task.Title,
@@ -474,7 +476,7 @@ export async function triggerReportSubmissionEmail(
       allocatorEmail,   // to = allocator (Utsav receives the report)
       emailSubject,
       '',
-      'report_submitted',
+      'template_report_submitted',
       {
         task_name: task.Title,
         task_id: task.TaskID,
@@ -565,7 +567,7 @@ export async function triggerTaskClosureEmail(
       toEmail,        // to = allocator (Utsav) — mirrors report pattern
       emailSubject,
       '',
-      'task_closed',
+      'template_task_closed',
       {
         task_name: task.Title,
         task_id: task.TaskID,

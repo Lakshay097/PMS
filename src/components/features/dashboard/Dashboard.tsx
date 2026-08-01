@@ -337,7 +337,7 @@ export default function Dashboard({
       const subTeam = subTeams.find(st => st.SubTeamID === submissionSubTeamId);
       const isSubTeamLeader = subTeam?.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase());
       const team = teams.find(t => t.TeamID === submissionTeamId);
-      const isTeamLeader = team?.TeamLeaderEmails?.includes(currentUser.Email);
+      const isTeamLeader = team?.TeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase());
       if (!isSubTeamLeader && !isTeamLeader && !isAdminLevel(currentUser.Role)) {
         setSubmissionError('You can only submit reports for your own sub-team');
         setTimeout(() => setSubmissionError(null), 3000);
@@ -461,7 +461,7 @@ export default function Dashboard({
   const isUserTeamLeader = () => {
     if (!currentUser) return false;
     if (isAdminLevel(currentUser.Role)) return true;
-    const isTeamLeader = teams.some(team => team.TeamLeaderEmails?.includes(currentUser.Email));
+    const isTeamLeader = teams.some(team => team.TeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase()));
     // Also check if user is a sub-team leader for any sub-team
     const isSubTeamLeader = subTeams?.some(st =>
       st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase())

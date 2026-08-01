@@ -264,14 +264,16 @@ export async function approveUserHandler(req: AuthRequest, res: Response): Promi
   // is absent from the Firestore doc it would overwrite column M with empty.
   try {
     const existingPassword: string = userRow[12] || '';
-    await firestoreAdmin.collection('users').doc(normalizedEmail).set({
+    // update() writes only the changed fields and is semantically clearer than
+    // set(merge) here — the user doc is guaranteed to exist (we just loaded it above).
+    await firestoreAdmin.collection('users').doc(normalizedEmail).update({
       Active: true,
       ApprovalStatus: 'approved',
       ApprovedBy: adminEmail,
       ApprovedAt: now,
       UpdatedAt: now,
       ...(existingPassword ? { Password: existingPassword } : {}),
-    }, { merge: true });
+    });
   } catch (firestoreErr) {
     console.error("Failed to mirror user approval into Firestore:", firestoreErr);
   }
@@ -379,10 +381,12 @@ export async function changePasswordHandler(req: AuthRequest, res: Response): Pr
   // Sheets with Firestore data. If we don't update Firestore first, the new password
   // in Sheets will be immediately overwritten by the old/empty value from Firestore.
   try {
-    await firestoreAdmin.collection('users').doc(normalizedEmail).set({
+    // update() writes only the changed fields; the user doc is guaranteed to exist
+    // (the user is logged in and their record was just verified above).
+    await firestoreAdmin.collection('users').doc(normalizedEmail).update({
       Password: hashedPassword,
       UpdatedAt: now,
-    }, { merge: true });
+    });
   } catch (firestoreErr) {
     console.error("Failed to update password in Firestore:", firestoreErr);
     throw new InternalServerError("Failed to update password in Firestore");

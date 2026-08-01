@@ -120,7 +120,7 @@ export default function ScheduledReports({
       const subTeam = subTeams.find(st => st.SubTeamID === submissionSubTeamId);
       const isSubTeamLeader = subTeam?.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase());
       const team = teams.find(t => t.TeamID === submissionTeamId);
-      const isTeamLeader = team?.TeamLeaderEmails?.includes(currentUser.Email);
+      const isTeamLeader = team?.TeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase());
       if (!currentUser || (!isSubTeamLeader && !isTeamLeader && !isAdminLevel(currentUser.Role))) {
         setSubmissionError('You can only submit reports for your own sub-team');
         setTimeout(() => setSubmissionError(null), 3000);
@@ -236,8 +236,8 @@ export default function ScheduledReports({
     ? teams.filter(t => t.Active)
     : currentUser ? teams.filter(t => {
       if (!t.Active) return false;
-      const isTeamLeader = t.TeamLeaderEmails?.includes(currentUser.Email);
-      const isStakeholder = t.StakeholderEmails?.includes(currentUser.Email);
+      const isTeamLeader = t.TeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase());
+      const isStakeholder = t.StakeholderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase());
       // Check if user is a sub-team leader for any sub-team within this team
       const teamSubTeams = subTeams?.filter(st => st.TeamID === t.TeamID) || [];
       const isSubTeamLeader = teamSubTeams.some(st =>
@@ -305,7 +305,7 @@ export default function ScheduledReports({
           <div className="space-y-3 sm:space-y-4">
             {visibleTeams.map(team => {
               const teamMembers = users.filter(u => u.TeamIDs.includes(team.TeamID));
-              const userIsTeamLeader = team.TeamLeaderEmails?.includes(currentUser.Email);
+              const userIsTeamLeader = team.TeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase());
               // Check if user is a sub-team leader for any sub-team within this team
               const teamSubTeams = subTeams?.filter(st => st.TeamID === team.TeamID && st.Active) || [];
               const userIsSubTeamLeader = teamSubTeams.some(st =>
@@ -609,7 +609,7 @@ export default function ScheduledReports({
                 // 1. Team is configured for sub-team reports AND
                 // 2. User is a sub-team leader OR team leader OR admin
                 if (teamConfig?.level === 'subteam' && teamSubTeams.length > 0) {
-                  const userIsTeamLeader = team?.TeamLeaderEmails?.includes(currentUser.Email);
+                  const userIsTeamLeader = team?.TeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase());
                   const userIsSubTeamLeader = teamSubTeams.some(st =>
                     st.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase())
                   );

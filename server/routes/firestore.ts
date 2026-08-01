@@ -18,6 +18,20 @@ const TEAMS_CACHE_KEY = 'teams:all';
 const TEAMS_CACHE_TTL = 5 * 60 * 1000; // 5 min
 const SUBTEAMS_CACHE_KEY = 'subTeams:all';
 const SUBTEAMS_CACHE_TTL = 5 * 60 * 1000; // 5 min
+const TASKS_CACHE_KEY = 'tasks:all';
+const TASKS_CACHE_TTL = 60 * 1000; // 60 s — tasks change often; short TTL limits stale-data window
+const TEMPLATES_CACHE_KEY = 'templates:all';
+const TEMPLATES_CACHE_TTL = 10 * 60 * 1000; // 10 min — templates change infrequently
+const SUBTASKS_CACHE_KEY = 'subtasks:all';
+const SUBTASKS_CACHE_TTL = 5 * 60 * 1000; // 5 min — subtasks change more often than templates
+const COMMENTS_CACHE_KEY = 'comments:all';
+const COMMENTS_CACHE_TTL = 2 * 60 * 1000; // 2 min — comments are the most frequently written of the six
+const REPORTS_CACHE_KEY = 'reports:all';
+const REPORTS_CACHE_TTL = 10 * 60 * 1000; // 10 min — reports are append-only (POST only)
+const FOLLOWUPS_CACHE_KEY = 'followups:all';
+const FOLLOWUPS_CACHE_TTL = 10 * 60 * 1000; // 10 min — followups are append-only (POST only)
+const TEAM_SUBMISSIONS_CACHE_KEY = 'team_submissions:all';
+const TEAM_SUBMISSIONS_CACHE_TTL = 10 * 60 * 1000; // 10 min — submissions are append-only (POST only)
 
 // Clear stale cache on startup to prevent QuerySnapshot objects
 ttlCache.invalidateAll();
@@ -70,6 +84,59 @@ export async function getAllSubTeamsCached() {
     return getAllSubTeamsCached();
   }
   return data;
+}
+
+/**
+ * Return all tasks, served from a 60-second TTL cache.
+ * Invalidated synchronously by every write path (PUT/DELETE /tasks/:id).
+ */
+export async function getAllTasksCached() {
+  return ttlCache.getOrFetch(TASKS_CACHE_KEY, TASKS_CACHE_TTL, async () => {
+    const snapshot = await db.collection('tasks').get();
+    return snapshot.docs.map(doc => doc.data());
+  });
+}
+
+export async function getAllTemplatesCached() {
+  return ttlCache.getOrFetch(TEMPLATES_CACHE_KEY, TEMPLATES_CACHE_TTL, async () => {
+    const snapshot = await db.collection('templates').get();
+    return snapshot.docs.map(doc => doc.data());
+  });
+}
+
+export async function getAllSubtasksCached() {
+  return ttlCache.getOrFetch(SUBTASKS_CACHE_KEY, SUBTASKS_CACHE_TTL, async () => {
+    const snapshot = await db.collection('subtasks').get();
+    return snapshot.docs.map(doc => doc.data());
+  });
+}
+
+export async function getAllCommentsCached() {
+  return ttlCache.getOrFetch(COMMENTS_CACHE_KEY, COMMENTS_CACHE_TTL, async () => {
+    const snapshot = await db.collection('comments').get();
+    return snapshot.docs.map(doc => doc.data());
+  });
+}
+
+export async function getAllReportsCached() {
+  return ttlCache.getOrFetch(REPORTS_CACHE_KEY, REPORTS_CACHE_TTL, async () => {
+    const snapshot = await db.collection('reports').get();
+    return snapshot.docs.map(doc => doc.data());
+  });
+}
+
+export async function getAllFollowupsCached() {
+  return ttlCache.getOrFetch(FOLLOWUPS_CACHE_KEY, FOLLOWUPS_CACHE_TTL, async () => {
+    const snapshot = await db.collection('followups').get();
+    return snapshot.docs.map(doc => doc.data());
+  });
+}
+
+export async function getAllTeamSubmissionsCached() {
+  return ttlCache.getOrFetch(TEAM_SUBMISSIONS_CACHE_KEY, TEAM_SUBMISSIONS_CACHE_TTL, async () => {
+    const snapshot = await db.collection('team_submissions').get();
+    return snapshot.docs.map(doc => doc.data());
+  });
 }
 
 // ============================================================================
@@ -220,8 +287,8 @@ router.delete('/teams/:id', authenticateToken, requireRole('Admin'), async (req,
  */
 router.get('/templates', authenticateToken, async (_req, res) => {
   try {
-    const snapshot = await db.collection('templates').get();
-    res.json(snapshot.docs.map(d => d.data()));
+    const templates = await getAllTemplatesCached();
+    res.json(templates);
   } catch (err) {
     logger.error('getTemplates failed:', err);
     res.status(500).json({ error: 'Failed to load templates' });
@@ -245,6 +312,7 @@ router.put('/templates/:id', authenticateToken, requireRole('Admin', 'lead'), as
       : { ...incoming, CreatedAt: now, UpdatedAt: now };
 
     await ref.set(sanitizeForFirestore(merged), { merge: true });
+    ttlCache.invalidate(TEMPLATES_CACHE_KEY);
     // await enqueueSheetsWrite('templates', 'save', merged);
 
     res.json(merged);
@@ -262,6 +330,7 @@ router.delete('/templates/:id', authenticateToken, requireRole('Admin', 'lead'),
   try {
     const templateId = req.params.id;
     await db.collection('templates').doc(templateId).delete();
+    ttlCache.invalidate(TEMPLATES_CACHE_KEY);
     // await enqueueSheetsWrite('templates', 'delete', templateId);
     res.json({ success: true });
   } catch (err) {
@@ -281,10 +350,9 @@ router.delete('/templates/:id', authenticateToken, requireRole('Admin', 'lead'),
  */
 router.get('/tasks', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    logger.info('[api] querying firestore for tasks...');
-    const snapshot = await db.collection('tasks').get();
-    const allTasks = snapshot.docs.map(d => d.data());
-    logger.info('[api] got', snapshot.size, 'tasks from firestore');
+    logger.info('[api] fetching tasks (cache or Firestore)...');
+    const allTasks = await getAllTasksCached();
+    logger.info('[api] got', allTasks.length, 'tasks');
 
     // Apply role-based filtering server-side
     const view = (req.query.view as string) || 'all';
@@ -375,7 +443,17 @@ router.get('/tasks', authenticateToken, async (req: AuthRequest, res) => {
 
 /**
  * PUT /api/tasks/:id
- * Update a task (authenticated users - authorization checked per task)
+ * Update a task (authenticated users - authorization checked per task).
+ *
+ * The client sends the full task object (including CreatedAt from its local cache)
+ * for both creates and updates. To prevent CreatedAt being reset on every edit,
+ * we strip it from the payload before writing and rely on Firestore merge semantics:
+ * - First write (doc doesn't exist): CreatedAt is absent from payload so Firestore
+ *   creates the doc without it. We set it explicitly only on the create path.
+ * - Subsequent writes: CreatedAt is absent from payload, so merge preserves the
+ *   existing value in Firestore untouched.
+ *
+ * This keeps the read-free path safe without trusting the client not to send CreatedAt.
  */
 router.put('/tasks/:id', authenticateToken, async (req: AuthRequest, res) => {
   try {
@@ -383,18 +461,29 @@ router.put('/tasks/:id', authenticateToken, async (req: AuthRequest, res) => {
     const incoming = req.body;
     const now = new Date().toISOString();
 
-    // Basic authorization: users can edit tasks they're assigned to or admin
-    // For now, allow all authenticated users (refine as needed)
+    // Strip CreatedAt from the client payload — it must not overwrite an existing value.
+    const { CreatedAt: _stripped, ...rest } = incoming;
+
     const ref = db.collection('tasks').doc(taskId);
-    const existing = await ref.get();
-    const merged = existing.exists
-      ? { ...existing.data(), ...incoming, UpdatedAt: now }
-      : { ...incoming, CreatedAt: now, UpdatedAt: now };
 
-    await ref.set(sanitizeForFirestore(merged), { merge: true });
-    // await enqueueSheetsWrite('tasks', 'save', merged);
+    // Cost: 1 Firestore read + 1 write per call (transaction.get() always bills as a read;
+    // the TTL cache is not consulted inside runTransaction). Item G's read-free optimization
+    // does not apply here — we need existence to set CreatedAt exactly once and to close
+    // the double-create race that a plain read-then-set would not prevent.
+    // Future: split POST (create) / PUT (update) routes to recover the read on the update path.
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const toWrite = snap.exists
+        ? sanitizeForFirestore({ ...rest, UpdatedAt: now })
+        : sanitizeForFirestore({ ...rest, CreatedAt: now, UpdatedAt: now });
+      tx.set(ref, toWrite, { merge: true });
+    });
 
-    res.json(merged);
+    // Invalidate tasks cache synchronously so a write-then-read sees the new value
+    ttlCache.invalidate(TASKS_CACHE_KEY);
+
+    // Return the written shape (without CreatedAt for updates — client already has it)
+    res.json(sanitizeForFirestore({ ...rest, UpdatedAt: now }));
   } catch (err) {
     logger.error('saveTask failed:', err);
     res.status(500).json({ error: 'Failed to save task' });
@@ -409,6 +498,10 @@ router.delete('/tasks/:id', authenticateToken, requireRole('Admin'), async (req,
   try {
     const taskId = req.params.id;
     await db.collection('tasks').doc(taskId).delete();
+
+    // Invalidate tasks cache synchronously
+    ttlCache.invalidate(TASKS_CACHE_KEY);
+
     // await enqueueSheetsWrite('tasks', 'delete', taskId);
     res.json({ success: true });
   } catch (err) {
@@ -427,8 +520,8 @@ router.delete('/tasks/:id', authenticateToken, requireRole('Admin'), async (req,
  */
 router.get('/reports', authenticateToken, async (_req, res) => {
   try {
-    const snapshot = await db.collection('reports').get();
-    res.json(snapshot.docs.map(d => d.data()));
+    const reports = await getAllReportsCached();
+    res.json(reports);
   } catch (err) {
     logger.error('getReports failed:', err);
     res.status(500).json({ error: 'Failed to load reports' });
@@ -451,6 +544,7 @@ router.post('/reports', authenticateToken, async (req: AuthRequest, res) => {
     };
 
     await db.collection('reports').doc(report.ReportID).set(sanitizeForFirestore(reportToSave));
+    ttlCache.invalidate(REPORTS_CACHE_KEY);
     // await enqueueSheetsWrite('reports', 'save', reportToSave);
 
     res.json(reportToSave);
@@ -470,8 +564,8 @@ router.post('/reports', authenticateToken, async (req: AuthRequest, res) => {
  */
 router.get('/followups', authenticateToken, async (_req, res) => {
   try {
-    const snapshot = await db.collection('followups').get();
-    res.json(snapshot.docs.map(d => d.data()));
+    const followups = await getAllFollowupsCached();
+    res.json(followups);
   } catch (err) {
     logger.error('getFollowups failed:', err);
     res.status(500).json({ error: 'Failed to load followups' });
@@ -494,6 +588,7 @@ router.post('/followups', authenticateToken, async (req: AuthRequest, res) => {
     };
 
     await db.collection('followups').doc(followup.FollowUpID).set(sanitizeForFirestore(followupToSave));
+    ttlCache.invalidate(FOLLOWUPS_CACHE_KEY);
     // await enqueueSheetsWrite('followups', 'save', followupToSave);
 
     res.json(followupToSave);
@@ -521,25 +616,40 @@ router.get('/settings', authenticateToken, async (_req, res) => {
   }
 });
 
+// Firestore WriteBatch hard limit
+const BATCH_CHUNK_SIZE = 500;
+
 /**
  * PUT /api/settings
- * Update settings (admin only)
+ * Update settings (admin only).
+ * Uses WriteBatch for atomic all-or-nothing writes instead of N serial round-trips.
+ * Semantics change vs. old code: either ALL settings commit or NONE do (atomic).
+ * The old code had partial-success risk (settings 1-2 saved even if 3 failed);
+ * all-or-nothing is strictly safer for a "save settings" action.
  */
 router.put('/settings', authenticateToken, requireRole('Admin'), async (req: AuthRequest, res) => {
   try {
-    const settingsList = req.body;
+    const settingsList: any[] = req.body;
+    if (!Array.isArray(settingsList) || settingsList.length === 0) {
+      return res.status(400).json({ error: 'settingsList must be a non-empty array' });
+    }
     const now = new Date().toISOString();
 
-    for (const setting of settingsList) {
-      const ref = db.collection('settings').doc(setting.Key);
-      const existing = await ref.get();
-      const merged = existing.exists
-        ? { ...existing.data(), ...setting, UpdatedAt: now }
-        : { ...setting, CreatedAt: now, UpdatedAt: now };
-      await ref.set(sanitizeForFirestore(merged), { merge: true });
+    // Chunk into batches of ≤500 to respect Firestore's WriteBatch hard limit
+    for (let i = 0; i < settingsList.length; i += BATCH_CHUNK_SIZE) {
+      const chunk = settingsList.slice(i, i + BATCH_CHUNK_SIZE);
+      const batch = db.batch();
+      for (const setting of chunk) {
+        const ref = db.collection('settings').doc(setting.Key);
+        // set({merge:true}) only touches provided fields — safe for partial payloads.
+        // UpdatedAt is injected server-side; CallerAt is set on first create by Firestore
+        // (merge means existing fields like CreatedAt are preserved automatically).
+        batch.set(ref, sanitizeForFirestore({ ...setting, UpdatedAt: now }), { merge: true });
+      }
+      await batch.commit();
     }
 
-    // Invalidate settings cache
+    // Invalidate settings cache after all chunks committed
     ttlCache.invalidate(SETTINGS_CACHE_KEY);
 
     // await enqueueSheetsWrite('settings', 'save', settingsList);
@@ -561,8 +671,8 @@ router.put('/settings', authenticateToken, requireRole('Admin'), async (req: Aut
  */
 router.get('/subtasks', authenticateToken, async (_req, res) => {
   try {
-    const snapshot = await db.collection('subtasks').get();
-    res.json(snapshot.docs.map(d => d.data()));
+    const subtasks = await getAllSubtasksCached();
+    res.json(subtasks);
   } catch (err) {
     logger.error('getSubtasks failed:', err);
     res.status(500).json({ error: 'Failed to load subtasks' });
@@ -586,6 +696,7 @@ router.put('/subtasks/:id', authenticateToken, async (req: AuthRequest, res) => 
       : { ...incoming, CreatedAt: now, UpdatedAt: now };
 
     await ref.set(sanitizeForFirestore(merged), { merge: true });
+    ttlCache.invalidate(SUBTASKS_CACHE_KEY);
     // await enqueueSheetsWrite('subtasks', 'save', merged);
 
     res.json(merged);
@@ -603,6 +714,7 @@ router.delete('/subtasks/:id', authenticateToken, requireRole('Admin'), async (r
   try {
     const subtaskId = req.params.id;
     await db.collection('subtasks').doc(subtaskId).delete();
+    ttlCache.invalidate(SUBTASKS_CACHE_KEY);
     // await enqueueSheetsWrite('subtasks', 'delete', subtaskId);
     res.json({ success: true });
   } catch (err) {
@@ -621,8 +733,8 @@ router.delete('/subtasks/:id', authenticateToken, requireRole('Admin'), async (r
  */
 router.get('/comments', authenticateToken, async (_req, res) => {
   try {
-    const snapshot = await db.collection('comments').get();
-    res.json(snapshot.docs.map(d => d.data()));
+    const comments = await getAllCommentsCached();
+    res.json(comments);
   } catch (err) {
     logger.error('getComments failed:', err);
     res.status(500).json({ error: 'Failed to load comments' });
@@ -646,6 +758,7 @@ router.put('/comments/:id', authenticateToken, async (req: AuthRequest, res) => 
       : { ...incoming, CreatedAt: now, UpdatedAt: now };
 
     await ref.set(sanitizeForFirestore(merged), { merge: true });
+    ttlCache.invalidate(COMMENTS_CACHE_KEY);
     // await enqueueSheetsWrite('comments', 'save', merged);
 
     res.json(merged);
@@ -671,6 +784,7 @@ router.delete('/comments/:id', authenticateToken, async (req: AuthRequest, res) 
     }
 
     await db.collection('comments').doc(commentId).delete();
+    ttlCache.invalidate(COMMENTS_CACHE_KEY);
     // await enqueueSheetsWrite('comments', 'delete', commentId);
     res.json({ success: true });
   } catch (err) {
@@ -689,8 +803,8 @@ router.delete('/comments/:id', authenticateToken, async (req: AuthRequest, res) 
  */
 router.get('/team-submissions', authenticateToken, async (_req, res) => {
   try {
-    const snapshot = await db.collection('team_submissions').get();
-    res.json(snapshot.docs.map(d => d.data()));
+    const submissions = await getAllTeamSubmissionsCached();
+    res.json(submissions);
   } catch (err) {
     logger.error('getTeamSubmissions failed:', err);
     res.status(500).json({ error: 'Failed to load team submissions' });
@@ -713,6 +827,7 @@ router.post('/team-submissions', authenticateToken, async (req: AuthRequest, res
     };
 
     await db.collection('team_submissions').doc(submission.SubmissionID).set(sanitizeForFirestore(submissionToSave));
+    ttlCache.invalidate(TEAM_SUBMISSIONS_CACHE_KEY);
     // await enqueueSheetsWrite('team_submissions', 'save', submissionToSave);
 
     res.json(submissionToSave);

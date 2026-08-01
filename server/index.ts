@@ -54,12 +54,6 @@ async function startServer() {
 
   app.set('trust proxy', 1);
 
-  // Log all incoming requests at the very start
-  app.use((req, res, next) => {
-    logger.info('[express-start] request received:', req.method, req.path);
-    next();
-  });
-
   app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');

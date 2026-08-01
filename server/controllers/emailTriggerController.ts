@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { sendTriggeredEmail } from '../services/emailService';
-import { triggerTaskDueSoonEmail, triggerTaskOverdueEmail } from '../services/emailTriggerService';
+import { triggerTaskCreationEmail, triggerTaskAssignmentEmail, triggerTaskDueSoonEmail, triggerTaskOverdueEmail, triggerReportSubmissionEmail, triggerTaskClosureEmail } from '../services/emailTriggerService';
 import { logger } from '../utils/logger';
 
 /**
@@ -23,34 +22,7 @@ export async function triggerTaskCreationHandler(req: AuthRequest, res: Response
     // Fire and forget
     res.json({ success: true, message: 'Task creation email triggered' });
 
-    const recipients = assignedToEmail.split(',').map((e: string) => e.trim()).filter(Boolean);
-    const threadTaskId = task.ParentTaskID || task.TaskID;
-    const rootTitle = task.Title.replace(/^Follow-up #\d+:\s*/i, '');
-    const emailSubject = `[${threadTaskId}] ${rootTitle}`;
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
-
-    // Build HTML content from template variables
-    const htmlContent = `
-      <p>A new task has been created and assigned to you:</p>
-      <p>
-        <strong>Task ID:</strong> ${task.TaskID}<br>
-        <strong>Title:</strong> ${task.Title}<br>
-        <strong>Description:</strong> ${task.Description || ''}<br>
-        <strong>Priority:</strong> ${task.Priority}<br>
-        <strong>Due Date:</strong> ${task.DueDate}<br>
-        <strong>Created By:</strong> ${creatorEmail}
-      </p>
-      <p>Please log in and start working on this task.</p>
-      <p><a href="${appUrl}">Open PMS</a></p>
-    `;
-
-    sendTriggeredEmail({
-      actingUserEmail: creatorEmail,
-      to: recipients,
-      subject: emailSubject,
-      html: htmlContent,
-      replyTo: creatorEmail,
-    }).catch(err => {
+    triggerTaskCreationEmail(creatorEmail, assignedToEmail, task).catch(err => {
       logger.error('[CONTROLLER ERROR] Error in fire-and-forget task creation email trigger:', err);
     });
   } catch (err) {
@@ -86,35 +58,7 @@ export async function triggerTaskAssignmentHandler(req: AuthRequest, res: Respon
 
     logger.info('[CONTROLLER DEBUG] Response sent, now triggering email in background');
 
-    const recipients = assignedToEmail.split(',').map((e: string) => e.trim()).filter(Boolean);
-    const threadTaskId = task.ParentTaskID || task.TaskID;
-    const rootTitle = task.Title.replace(/^Follow-up #\d+:\s*/i, '');
-    const emailSubject = `[${threadTaskId}] ${rootTitle}`;
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
-
-    // Build HTML content from template variables
-    const htmlContent = `
-      <p>You have been assigned a new task:</p>
-      <p>
-        <strong>Task ID:</strong> ${task.TaskID}<br>
-        <strong>Title:</strong> ${task.Title}<br>
-        <strong>Description:</strong> ${task.Description || ''}<br>
-        <strong>Priority:</strong> ${task.Priority}<br>
-        <strong>Due Date:</strong> ${task.DueDate}<br>
-        <strong>Assigned By:</strong> ${assignerEmail}
-      </p>
-      <p>Please review and start working on this task.</p>
-      <p><a href="${appUrl}">Open PMS</a></p>
-    `;
-
-    // Fire and forget - don't wait for email to send
-    sendTriggeredEmail({
-      actingUserEmail: assignerEmail,
-      to: recipients,
-      subject: emailSubject,
-      html: htmlContent,
-      replyTo: assignerEmail,
-    }).catch(err => {
+    triggerTaskAssignmentEmail(assignerEmail, assignedToEmail, task).catch(err => {
       logger.error('[CONTROLLER ERROR] Error in fire-and-forget email trigger:', err);
     });
 
@@ -190,37 +134,13 @@ export async function triggerReportSubmissionHandler(req: AuthRequest, res: Resp
       return;
     }
 
-    const threadTaskId = task.ParentTaskID || task.TaskID;
-    const rootTitle = task.Title.replace(/^Follow-up #\d+:\s*/i, '');
-    const emailSubject = `[${threadTaskId}] ${rootTitle}`;
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
-
-    // Build HTML content from template variables
-    const htmlContent = `
-      <p>A progress report has been submitted:</p>
-      <p>
-        <strong>Task:</strong> ${task.Title}<br>
-        <strong>Task ID:</strong> ${task.TaskID}<br>
-        <strong>Submitted By:</strong> ${submitterEmail}
-      </p>
-      <p><strong>Report Content:</strong></p>
-      <p>${reportContent}</p>
-      <p><a href="${appUrl}">Open PMS</a></p>
-    `;
-
-    sendTriggeredEmail({
-      actingUserEmail: submitterEmail,
-      to: [allocatorEmail],
-      subject: emailSubject,
-      html: htmlContent,
-      replyTo: submitterEmail,
-    }).catch(err => {
-      logger.error('Error in fire-and-forget report submission email trigger:', err);
-    });
-
     res.json({
       success: true,
       message: 'Report submission email triggered',
+    });
+
+    triggerReportSubmissionEmail(submitterEmail, allocatorEmail, task, reportContent).catch(err => {
+      logger.error('Error in fire-and-forget report submission email trigger:', err);
     });
   } catch (err) {
     logger.error('Error in report submission email trigger:', err);
@@ -240,35 +160,11 @@ export async function triggerTaskClosureHandler(req: AuthRequest, res: Response)
       return;
     }
 
-    const threadTaskId = task.ParentTaskID || task.TaskID;
-    const rootTitle = task.Title.replace(/^Follow-up #\d+:\s*/i, '');
-    const emailSubject = `[${threadTaskId}] ${rootTitle}`;
-    const toEmail = allocatorEmail || assignedToEmail;
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    res.json({ success: true, message: 'Task closure email triggered' });
 
-    // Build HTML content from template variables
-    const htmlContent = `
-      <p>The following task has been marked as closed:</p>
-      <p>
-        <strong>Task:</strong> ${task.Title}<br>
-        <strong>Task ID:</strong> ${task.TaskID}<br>
-        <strong>Closed By:</strong> ${closedByEmail}
-      </p>
-      <p><strong>Close Remarks:</strong></p>
-      <p>${closeRemark}</p>
-      <p><a href="${appUrl}">Open PMS</a></p>
-    `;
-
-    sendTriggeredEmail({
-      actingUserEmail: closedByEmail,
-      to: [toEmail],
-      subject: emailSubject,
-      html: htmlContent,
-      replyTo: closedByEmail,
-    }).catch(err => {
+    triggerTaskClosureEmail(closedByEmail, assignedToEmail, task, closeRemark, allocatorEmail).catch(err => {
       logger.error('Error in fire-and-forget closure email trigger:', err);
     });
-    res.json({ success: true, message: 'Task closure email triggered' });
   } catch (err) {
     logger.error('Error in task closure email trigger:', err);
     res.status(500).json({ error: 'Failed to trigger email' });

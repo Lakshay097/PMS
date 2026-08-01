@@ -1,6 +1,9 @@
 import { firestoreAdmin } from './firebaseAdmin';
 import { logger } from '../utils/logger';
 
+// Firestore hard limit for getAll() calls
+const GETALL_CHUNK_SIZE = 500;
+
 export interface UserOnboardingStatus {
   email: string;
   firstReportEmailSent: boolean;
@@ -53,17 +56,37 @@ export async function hasReceivedFirstReportEmail(email: string): Promise<boolea
 }
 
 /**
- * Get all users who haven't received their first report email yet
+ * Get all users who haven't received their first report email yet.
+ * Uses getAll() for a single batched Firestore round-trip instead of
+ * one .get() per email (N+1 → 1 read, or ceil(N/500) for large lists).
  */
 export async function getUsersWithoutFirstEmail(emails: string[]): Promise<string[]> {
+  if (emails.length === 0) return [];
+
   try {
+    const normalised = emails.map(e => e.toLowerCase());
+
+    // Chunk into batches of ≤500 to respect Firestore's getAll() hard limit
     const result: string[] = [];
-    for (const email of emails) {
-      const hasReceived = await hasReceivedFirstReportEmail(email);
-      if (!hasReceived) {
-        result.push(email);
+
+    for (let i = 0; i < normalised.length; i += GETALL_CHUNK_SIZE) {
+      const chunk = normalised.slice(i, i + GETALL_CHUNK_SIZE);
+      const refs = chunk.map(email =>
+        firestoreAdmin.collection(COLLECTION_NAME).doc(email)
+      );
+
+      // getAll() returns DocumentSnapshot[] in the same order as refs
+      const docs = await firestoreAdmin.getAll(...refs);
+
+      for (let j = 0; j < docs.length; j++) {
+        const doc = docs[j];
+        const hasReceived = doc.exists && (doc.data() as UserOnboardingStatus)?.firstReportEmailSent === true;
+        if (!hasReceived) {
+          result.push(chunk[j]);
+        }
       }
     }
+
     return result;
   } catch (err) {
     logger.error('Error getting users without first email:', err);
