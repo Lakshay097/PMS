@@ -240,7 +240,12 @@ export function useTaskOperations({
           closedByEmail: currentUser.Email,
           assignedToEmail: targetTask.AssignedToEmail,
           allocatorEmail: targetTask.AssignedByEmail,
-          task: updatedTask,
+          task: {
+            TaskID: updatedTask.TaskID,
+            Title: updatedTask.Title,
+            Description: updatedTask.Description,
+            CompletionDate: updatedTask.CompletionDate || nowStr.split('T')[0],
+          },
           closeRemark: remark,
         });
       } catch (err) {

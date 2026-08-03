@@ -248,12 +248,15 @@ function getWeekOfDate(date: Date): string {
 
 /**
  * Atomically claim a reminder slot for a team using Firestore .create()
- * Returns true if the slot was claimed (first to claim), false if already claimed
- * This prevents race conditions where multiple processes might try to send simultaneously
+ * Returns true if the slot was claimed (first to claim), false if already claimed or sent.
+ * If the slot exists but is in 'failed' status, it is eligible for retry —
+ * the doc is deleted first and then re-claimed atomically.
+ * This prevents race conditions where multiple processes might try to send simultaneously.
  */
 async function tryClaimReminderSlot(teamId: string, todayStr: string): Promise<boolean> {
+  const docRef = firestoreAdmin.collection('report_reminder_sent_log').doc(`${teamId}_${todayStr}`);
   try {
-    await firestoreAdmin.collection('report_reminder_sent_log').doc(`${teamId}_${todayStr}`).create({
+    await docRef.create({
       teamId,
       date: todayStr,
       status: 'claimed',
@@ -262,7 +265,27 @@ async function tryClaimReminderSlot(teamId: string, todayStr: string): Promise<b
     return true; // we own this slot
   } catch (err: any) {
     if (err.code === 6 || String(err.message).includes('ALREADY_EXISTS')) {
-      return false; // someone else already claimed/sent it
+      // Doc already exists — check if it's a failed attempt eligible for retry
+      try {
+        const existing = await docRef.get();
+        if (existing.exists && existing.data()?.status === 'failed') {
+          // Re-claim by overwriting — this is safe because only 'failed' status
+          // indicates the previous attempt did NOT send an email.
+          // 'claimed' or 'sent' docs must never be overwritten.
+          await docRef.set({
+            teamId,
+            date: todayStr,
+            status: 'claimed',
+            claimedAt: new Date().toISOString(),
+            retriedAt: new Date().toISOString(),
+          });
+          logger.info(`[SCHEDULER] Re-claimed failed slot for team ${teamId} on ${todayStr} — will retry`);
+          return true;
+        }
+      } catch (retryErr) {
+        logger.error(`Error checking/reclaiming failed slot for team ${teamId}:`, retryErr);
+      }
+      return false; // slot is claimed or sent — skip
     }
     logger.error(`Error claiming reminder slot for team ${teamId}:`, err);
     throw err; // fail CLOSED on unexpected Firestore errors — don't risk a duplicate send
@@ -284,8 +307,9 @@ async function markReminderSentToday(teamId: string, todayStr: string): Promise<
 }
 
 /**
- * Mark that a reminder send failed for a specific team
- * This allows retries later in the day if needed
+ * Mark that a reminder send failed for a specific team.
+ * A 'failed' slot is eligible for retry on the next scheduler invocation
+ * (same day), so the scheduler will attempt to re-claim and resend.
  */
 async function markReminderFailed(teamId: string, todayStr: string, error: string): Promise<void> {
   try {
@@ -619,8 +643,25 @@ export async function checkAndSendReportReminders(triggeredBy: 'scheduler' | 'ma
 
     for (const config of configs) {
       if (!config.active) continue;
-      
-      // Atomically claim the reminder slot for this team (right before sending, not after eligibility check)
+
+      // 1. Time check FIRST — don't burn the slot if it's simply too early in the day.
+      //    The slot is a one-per-day atomic resource; claiming it before the time check
+      //    would permanently prevent the email from being sent on that day.
+      if (!shouldSendReminderForTeam(config)) {
+        logger.info(`[SCHEDULER] Skipping ${config.teamName} - not time yet in their timezone (${config.timezone})`);
+        jobRunLog.skippedCount++;
+        jobRunLog.teamsProcessed.push({
+          teamId: config.teamId,
+          teamName: config.teamName,
+          status: 'skipped',
+          reason: 'Not time yet in team timezone',
+          recipients: [],
+        });
+        continue;
+      }
+
+      // 2. Atomically claim the reminder slot — prevents duplicate sends across retries,
+      //    concurrent Cloud Scheduler invocations, and manual triggers on the same day.
       const claimed = await tryClaimReminderSlot(config.teamId, todayStr);
       if (!claimed) {
         logger.info(`[SCHEDULER] Skipping ${config.teamName} - slot already claimed/sent today`);
@@ -630,20 +671,6 @@ export async function checkAndSendReportReminders(triggeredBy: 'scheduler' | 'ma
           teamName: config.teamName,
           status: 'skipped',
           reason: 'Already sent today',
-          recipients: [],
-        });
-        continue;
-      }
-      
-      // Use per-team timezone check instead of global server time
-      if (!shouldSendReminderForTeam(config)) {
-        logger.info(`[SCHEDULER] Skipping ${config.teamName} - not time yet in their timezone (${config.timezone})`);
-        jobRunLog.skippedCount++;
-        jobRunLog.teamsProcessed.push({
-          teamId: config.teamId,
-          teamName: config.teamName,
-          status: 'skipped',
-          reason: 'Not time yet in team timezone',
           recipients: [],
         });
         continue;

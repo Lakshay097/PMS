@@ -696,7 +696,7 @@ export default function AdminPanel({
       RecurrenceType: tempRecurrence,
       StartDate: start,
       NextGenerationDate: start,
-      LastGeneratedDate: null,
+      LastGeneratedDate: '',
       AssignedByEmail: currentUserEmail,
       AssignedToEmail: matchedUser.Email,
       AssignedToRole: matchedUser.Role as any,

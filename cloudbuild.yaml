@@ -86,7 +86,7 @@ steps:
 
       - '--set-env-vars=REMINDER_SENDER_EMAIL=rajeev.1@pw.live'
 
-      - '--set-env-vars=SCHEDULER_SERVICE_ACCOUNT_EMAIL=pms-scheduler-sa@pms-taskflow-500309.iam.gserviceaccount.com'
+      - '--set-env-vars=SCHEDULER_SERVICE_ACCOUNT_EMAIL=pms-scheduler-sa@project-4d15c10f-d947-4431-b51.iam.gserviceaccount.com'
 
       - '--set-env-vars=VITE_FIREBASE_API_KEY=AIzaSyA8WTF6H0jyVtJFumtBdH_pOKfF6f8ocsE'
 
