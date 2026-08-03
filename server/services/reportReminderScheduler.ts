@@ -62,16 +62,18 @@ const SUBTEAMS_CACHE_KEY = 'subTeams:all';
 const TEAMS_CACHE_TTL = 5 * 60 * 1000; // 5 min
 const SUBTEAMS_CACHE_TTL = 5 * 60 * 1000; // 5 min
 
-async function getAllTeamsCached() {
-  return ttlCache.getOrFetch(TEAMS_CACHE_KEY, TEAMS_CACHE_TTL, () =>
-    firestoreAdmin.collection('teams').get()
-  );
+async function getAllTeamsCached(): Promise<Array<{ id: string; data: FirebaseFirestore.DocumentData }>> {
+  return ttlCache.getOrFetch(TEAMS_CACHE_KEY, TEAMS_CACHE_TTL, async () => {
+    const snapshot = await firestoreAdmin.collection('teams').get();
+    return snapshot.docs.map(doc => ({ id: doc.id, data: doc.data() }));
+  });
 }
 
-async function getAllSubTeamsCached() {
-  return ttlCache.getOrFetch(SUBTEAMS_CACHE_KEY, SUBTEAMS_CACHE_TTL, () =>
-    firestoreAdmin.collection('sub_teams').get()
-  );
+async function getAllSubTeamsCached(): Promise<Array<{ id: string; data: FirebaseFirestore.DocumentData }>> {
+  return ttlCache.getOrFetch(SUBTEAMS_CACHE_KEY, SUBTEAMS_CACHE_TTL, async () => {
+    const snapshot = await firestoreAdmin.collection('sub_teams').get();
+    return snapshot.docs.map(doc => ({ id: doc.id, data: doc.data() }));
+  });
 }
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
@@ -620,25 +622,23 @@ export async function checkAndSendReportReminders(triggeredBy: 'scheduler' | 'ma
     logger.info(`Found ${configs.length} team report configurations`);
 
     // Get all teams from Firestore for name lookup (cached)
-    const teamsSnapshot = await getAllTeamsCached();
+    const teamDocs = await getAllTeamsCached();
     const teamMap = new Map<string, string>();
-    teamsSnapshot.forEach(doc => {
-      const team = doc.data();
-      if (team.Active !== false) {
-        teamMap.set(doc.id, team.TeamName);
+    for (const doc of teamDocs) {
+      if (doc.data.Active !== false) {
+        teamMap.set(doc.id, doc.data.TeamName);
       }
-    });
+    }
 
     // Get all sub-teams from Firestore for name lookup (cached)
-    const subTeamsSnapshot = await getAllSubTeamsCached();
+    const subTeamDocs = await getAllSubTeamsCached();
     const subTeamMap = new Map<string, { name: string; parentTeamId: string }>();
-    subTeamsSnapshot.forEach(doc => {
-      const subTeam = doc.data();
+    for (const doc of subTeamDocs) {
       subTeamMap.set(doc.id, {
-        name: subTeam.SubTeamName,
-        parentTeamId: subTeam.TeamID,
+        name: doc.data.SubTeamName,
+        parentTeamId: doc.data.TeamID,
       });
-    });
+    }
 
     // Process each configuration
     const entitiesToRemind: TeamWithConfig[] = [];

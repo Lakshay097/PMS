@@ -30,7 +30,7 @@ steps:
 
       - '--allow-unauthenticated'
 
-      - '--port=3000'
+      - '--port=8080'
 
       - '--memory=512Mi'
 

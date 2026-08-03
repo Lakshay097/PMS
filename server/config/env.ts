@@ -52,7 +52,10 @@ export const config = {
 
   // Google Service Account
   GOOGLE_SERVICE_ACCOUNT_EMAIL: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',
-  GOOGLE_PRIVATE_KEY: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n') || '',
+  GOOGLE_PRIVATE_KEY: (() => {
+    const raw = process.env.GOOGLE_PRIVATE_KEY ?? '';
+    return raw.includes('\\n') ? raw.replace(/\\n/g, '\n') : raw;
+  })(),
   GOOGLE_SPREADSHEET_ID: process.env.GOOGLE_SPREADSHEET_ID || '',
 
   // File Upload

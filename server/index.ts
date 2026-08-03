@@ -22,9 +22,15 @@ import { startReportReminderScheduler } from './services/reportReminderScheduler
 validateEnv();
 
 async function startServer() {
-  // Initialize email-related sheets
-  await gmailAuthController.initializeEmailSheets();
-  await initializeTeamSubmissionsSheet();
+  // Initialize email-related sheets in the background so they don't
+  // block the server from binding to the port. Cloud Run health checks
+  // will fail if the server takes too long to start listening.
+  gmailAuthController.initializeEmailSheets().catch(err =>
+    logger.error('Background initializeEmailSheets failed:', err)
+  );
+  initializeTeamSubmissionsSheet().catch(err =>
+    logger.error('Background initializeTeamSubmissionsSheet failed:', err)
+  );
 
   // Note: Email sending is now dynamic based on acting user's OAuth token
   // No system sender check needed - users must connect their own Gmail accounts
