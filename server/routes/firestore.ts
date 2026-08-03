@@ -11,9 +11,9 @@ import { ttlCache } from '../utils/ttlCache';
 const router = Router();
 
 const SETTINGS_CACHE_KEY = 'settings:all';
-const SETTINGS_CACHE_TTL = 2 * 60 * 1000; // 2 min
+const SETTINGS_CACHE_TTL = 5 * 60 * 1000; // 5 min — settings change infrequently; all write paths invalidate on save
 const USERS_CACHE_KEY = 'users:all';
-const USERS_CACHE_TTL = 5 * 60 * 1000; // 5 min
+const USERS_CACHE_TTL = 10 * 60 * 1000; // 10 min — users change rarely; all write paths invalidate on save
 const TEAMS_CACHE_KEY = 'teams:all';
 const TEAMS_CACHE_TTL = 5 * 60 * 1000; // 5 min
 const SUBTEAMS_CACHE_KEY = 'subTeams:all';
@@ -208,15 +208,15 @@ router.put('/users/:email', authenticateToken, async (req: AuthRequest, res) => 
  */
 router.get('/teams', authenticateToken, async (_req, res) => {
   try {
-    logger.info('[api] querying firestore for teams...');
-    const snapshot = await db.collection('teams').get();
-    const teams = snapshot.docs.map(d => d.data());
-    logger.info('[api] got', snapshot.size, 'teams from firestore');
+    logger.info('[api] fetching teams (cache or Firestore)...');
+    // Use the cache — avoids a live Firestore collection read on every request.
+    const teams = await getAllTeamsCached();
+    logger.info('[api] got', teams.length, 'teams');
 
     // Attach team leader emails and stakeholder emails from settings (cached)
     const settings = await getAllSettingsCached();
 
-    const teamsWithLeaders = teams.map((team: any) => {
+    const teamsWithLeaders = (teams as any[]).map((team: any) => {
       const leaderSetting = settings.find((s: any) => s.Key === `team_${team.TeamID}_leaders`);
       const leaderEmails = leaderSetting?.Value
         ? leaderSetting.Value.split(',').map((e: string) => e.trim()).filter(Boolean)
@@ -252,6 +252,7 @@ router.put('/teams/:id', authenticateToken, requireRole('Admin'), async (req: Au
       : { ...incoming, CreatedAt: now, UpdatedAt: now };
 
     await ref.set(sanitizeForFirestore(merged), { merge: true });
+    ttlCache.invalidate(TEAMS_CACHE_KEY);
     // await enqueueSheetsWrite('teams', 'save', merged);
 
     res.json(merged);
@@ -269,6 +270,7 @@ router.delete('/teams/:id', authenticateToken, requireRole('Admin'), async (req,
   try {
     const teamId = req.params.id;
     await db.collection('teams').doc(teamId).delete();
+    ttlCache.invalidate(TEAMS_CACHE_KEY);
     // await enqueueSheetsWrite('teams', 'delete', teamId);
     res.json({ success: true });
   } catch (err) {
@@ -971,10 +973,16 @@ router.delete('/email-templates/:name', authenticateToken, requireRole('Admin'),
  */
 router.get('/sub-teams', authenticateToken, async (_req, res) => {
   try {
-    const snapshot = await db.collection('sub_teams').get();
-    const subTeams = snapshot.docs.map(d => ({
-      ...d.data(),
-      id: d.id
+    // Use the cache — avoids a live Firestore collection read on every request.
+    const rawSubTeams = await getAllSubTeamsCached();
+
+    // getAllSubTeamsCached returns plain data objects; re-attach the doc id field
+    // that the old live query used to add (used by the client as a React key).
+    // The SubTeamID field already carries the same value, so we only add `id` for
+    // backward-compat with any client code that reads `st.id` directly.
+    const subTeams = (rawSubTeams as any[]).map((st: any) => ({
+      ...st,
+      id: st.SubTeamID ?? st.id,
     }));
 
     // Attach sub-team leader emails from settings (cached)
@@ -1016,6 +1024,7 @@ router.put('/sub-teams/:id', authenticateToken, async (req, res) => {
       : { ...persistable, CreatedAt: now, UpdatedAt: now };
 
     await ref.set(sanitizeForFirestore(merged), { merge: true });
+    ttlCache.invalidate(SUBTEAMS_CACHE_KEY);
     // await enqueueSheetsWrite('sub_teams', 'save', merged);
 
     // Return with derived field for client
@@ -1034,6 +1043,7 @@ router.delete('/sub-teams/:id', authenticateToken, async (req, res) => {
   try {
     const id = req.params.id;
     await db.collection('sub_teams').doc(id).delete();
+    ttlCache.invalidate(SUBTEAMS_CACHE_KEY);
     // await enqueueSheetsWrite('sub_teams', 'delete', id);
     res.json({ success: true });
   } catch (err) {

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Filter, X, ChevronDown, Search, Calendar } from 'lucide-react';
-import { User as UserType, Team } from '../../../types';
+import { User as UserType } from '../../../types';
 import { ROLE, isAdminLevel } from '../../../constants/status';
 import { getAllSubordinates } from '../../../utils/userUtils';
 
@@ -8,20 +8,19 @@ interface TaskFiltersProps {
   filterStatus: string[];
   filterPriority: string;
   filterAssigneeNames: string[];
-  filterTeamIDs: string[];
   filterDateFrom: string;
   filterDateTo: string;
+  filterAssignedByEmails: string[];
   searchQuery: string;
   currentUser: UserType;
   users: UserType[];
-  teams: Team[];
   isDarkMode: boolean;
   onFilterStatusChange: (value: string[]) => void;
   onFilterPriorityChange: (value: string) => void;
   onFilterAssigneeNamesChange: (value: string[]) => void;
-  onFilterTeamIDsChange: (value: string[]) => void;
   onFilterDateFromChange: (value: string) => void;
   onFilterDateToChange: (value: string) => void;
+  onFilterAssignedByEmailsChange: (value: string[]) => void;
   onSearchQueryChange: (value: string) => void;
 }
 
@@ -29,31 +28,30 @@ export default function TaskFilters({
   filterStatus,
   filterPriority,
   filterAssigneeNames,
-  filterTeamIDs,
   filterDateFrom,
   filterDateTo,
+  filterAssignedByEmails,
   searchQuery,
   currentUser,
   users,
-  teams,
   isDarkMode,
   onFilterStatusChange,
   onFilterPriorityChange,
   onFilterAssigneeNamesChange,
-  onFilterTeamIDsChange,
   onFilterDateFromChange,
   onFilterDateToChange,
+  onFilterAssignedByEmailsChange,
   onSearchQueryChange,
 }: TaskFiltersProps) {
   const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
-  const [isTeamDropdownOpen, setIsTeamDropdownOpen] = useState(false);
+  const [isAssignedByDropdownOpen, setIsAssignedByDropdownOpen] = useState(false);
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [assigneeSearchQuery, setAssigneeSearchQuery] = useState('');
+  const [assignedBySearchQuery, setAssignedBySearchQuery] = useState('');
   const assigneeDropdownRef = useRef<HTMLDivElement>(null);
-  const teamDropdownRef = useRef<HTMLDivElement>(null);
+  const assignedByDropdownRef = useRef<HTMLDivElement>(null);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close assignee dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (assigneeDropdownRef.current && !assigneeDropdownRef.current.contains(event.target as Node)) {
@@ -64,18 +62,6 @@ export default function TaskFilters({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Close team dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (teamDropdownRef.current && !teamDropdownRef.current.contains(event.target as Node)) {
-        setIsTeamDropdownOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Close status dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
@@ -86,7 +72,16 @@ export default function TaskFilters({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Get filtered users based on role and search
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (assignedByDropdownRef.current && !assignedByDropdownRef.current.contains(event.target as Node)) {
+        setIsAssignedByDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const getFilteredUsers = () => {
     let filteredUsers;
     if (!currentUser) {
@@ -95,7 +90,7 @@ export default function TaskFilters({
       filteredUsers = users.filter(u => u.Active);
     } else if (currentUser.Role === ROLE.STAKEHOLDER) {
       const subStakeholderEmails = getAllSubordinates(currentUser.Email, users);
-      filteredUsers = users.filter(u => 
+      filteredUsers = users.filter(u =>
         u.Active && (
           u.Email.toLowerCase() === currentUser.Email.toLowerCase() ||
           subStakeholderEmails.includes(u.Email.toLowerCase())
@@ -105,7 +100,6 @@ export default function TaskFilters({
       filteredUsers = users.filter(u => u.Active && u.Email.toLowerCase() === currentUser.Email.toLowerCase());
     }
 
-    // Apply search filter
     if (assigneeSearchQuery) {
       filteredUsers = filteredUsers.filter(u =>
         u.FullName.toLowerCase().includes(assigneeSearchQuery.toLowerCase()) ||
@@ -126,21 +120,46 @@ export default function TaskFilters({
     }
   };
 
+  const getAssignedByUsers = () => {
+    let eligibleUsers: UserType[];
+    if (!currentUser) {
+      eligibleUsers = users.filter(u => u.Active);
+    } else if (isAdminLevel(currentUser.Role)) {
+      eligibleUsers = users.filter(u => u.Active);
+    } else if (currentUser.Role === ROLE.STAKEHOLDER) {
+      eligibleUsers = users.filter(u => u.Active && u.Email.toLowerCase() === currentUser.Email.toLowerCase());
+    } else {
+      eligibleUsers = users.filter(u => u.Active);
+    }
+
+    if (assignedBySearchQuery) {
+      eligibleUsers = eligibleUsers.filter(u =>
+        u.FullName.toLowerCase().includes(assignedBySearchQuery.toLowerCase()) ||
+        u.Email.toLowerCase().includes(assignedBySearchQuery.toLowerCase())
+      );
+    }
+
+    return eligibleUsers;
+  };
+
+  const assignedByUsers = getAssignedByUsers();
+
+  const toggleAssignedBy = (email: string) => {
+    if (filterAssignedByEmails.includes(email)) {
+      onFilterAssignedByEmailsChange(filterAssignedByEmails.filter(e => e !== email));
+    } else {
+      onFilterAssignedByEmailsChange([...filterAssignedByEmails, email]);
+    }
+  };
+
   const clearAll = () => {
     onFilterStatusChange(['All']);
     onFilterAssigneeNamesChange([]);
-    onFilterTeamIDsChange([]);
     onFilterDateFromChange('');
     onFilterDateToChange('');
+    onFilterAssignedByEmailsChange([]);
     setAssigneeSearchQuery('');
-  };
-
-  const toggleTeam = (teamId: string) => {
-    if (filterTeamIDs.includes(teamId)) {
-      onFilterTeamIDsChange(filterTeamIDs.filter(id => id !== teamId));
-    } else {
-      onFilterTeamIDsChange([...filterTeamIDs, teamId]);
-    }
+    setAssignedBySearchQuery('');
   };
 
   const toggleStatus = (status: string) => {
@@ -160,6 +179,26 @@ export default function TaskFilters({
       }
     }
   };
+
+  // Shared class helpers
+  const inputBase = isDarkMode
+    ? 'bg-[#1E293B] border-[#334155] text-white'
+    : 'bg-slate-50 border-slate-200 text-slate-900';
+
+  const dropdownPanel = isDarkMode
+    ? 'bg-[#1E293B] border border-[#334155]'
+    : 'bg-white border border-[#E5E7EB]';
+
+  const dropdownItem = isDarkMode
+    ? 'text-slate-200 hover:bg-[#334155]/60'
+    : 'text-slate-800 hover:bg-slate-100';
+
+  const dividerBorder = isDarkMode ? 'border-[#334155]' : 'border-[#E5E7EB]';
+
+  const clearBtn = isDarkMode
+    ? 'text-slate-400 hover:text-white hover:bg-[#334155]/50'
+    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100';
+
   return (
     <div className={`border rounded-xl p-3 sm:p-4 flex flex-wrap gap-2 sm:gap-4 items-center ${isDarkMode ? 'bg-[#0F141F] border-[#1E293B]' : 'bg-white border-[#E5E7EB]'}`}>
       <div className={`flex items-center space-x-1.5 sm:space-x-2 text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -167,31 +206,30 @@ export default function TaskFilters({
         <span className="hidden sm:inline">Filters:</span>
         <span className="sm:hidden">Filter</span>
       </div>
-      {/* Search Input */}
+
+      {/* Search */}
       <div className="relative">
-        <Search size={14} className={`absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 text-muted sm:size-4`} />
+        <Search size={14} className={`absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 sm:size-4 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
         <input
           type="text"
           placeholder="Search tasks..."
           value={searchQuery}
           onChange={(e) => onSearchQueryChange(e.target.value)}
-          className="pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border border-token bg-surface text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-muted"
+          className={`pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${inputBase} placeholder:${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}
         />
       </div>
+
+      {/* Status */}
       <div className="relative" ref={statusDropdownRef}>
         <button
           onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
-          className={`flex items-center gap-1.5 sm:gap-2 border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            isDarkMode 
-              ? 'bg-[#1E293B] border-[#334155] text-white' 
-              : 'bg-slate-50 border-slate-200 text-slate-900'
-          }`}
+          className={`flex items-center gap-1.5 sm:gap-2 border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${inputBase}`}
         >
           <Filter size={14} className="sm:size-4" />
           <span className="hidden sm:inline">Status</span>
           {filterStatus.length > 0 && !filterStatus.includes('All') && (
             <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${
-              isDarkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700'
+              isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
             }`}>
               {filterStatus.length}
             </span>
@@ -200,16 +238,12 @@ export default function TaskFilters({
         </button>
 
         {isStatusDropdownOpen && (
-          <div className={`absolute top-full left-0 mt-2 w-48 sm:w-56 rounded-lg shadow-lg z-50 ${
-            isDarkMode ? 'bg-[#1E293B] border border-[#334155]' : 'bg-white border border-[#E5E7EB]'
-          }`}>
+          <div className={`absolute top-full left-0 mt-2 w-48 sm:w-56 rounded-lg shadow-lg z-50 ${dropdownPanel}`}>
             <div className="max-h-60 overflow-y-auto p-2">
               {['All', 'In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'].map(status => (
                 <label
                   key={status}
-                  className={`flex items-center gap-2 sm:gap-3 p-2 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-[#334155]/50 transition-colors ${
-                    isDarkMode ? 'text-white' : 'text-slate-900'
-                  }`}
+                  className={`flex items-center gap-2 sm:gap-3 p-2 rounded-md cursor-pointer transition-colors ${dropdownItem}`}
                 >
                   <input
                     type="checkbox"
@@ -223,14 +257,10 @@ export default function TaskFilters({
             </div>
 
             {filterStatus.length > 0 && !filterStatus.includes('All') && (
-              <div className="p-2 border-t border-[#E5E7EB] dark:border-[#334155]">
+              <div className={`p-2 border-t ${dividerBorder}`}>
                 <button
                   onClick={() => onFilterStatusChange(['All'])}
-                  className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-md transition-colors ${
-                    isDarkMode 
-                      ? 'text-slate-400 hover:text-white hover:bg-[#334155]/50' 
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
+                  className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-md transition-colors ${clearBtn}`}
                 >
                   <X size={12} className="sm:size-3.5" />
                   Clear status
@@ -240,14 +270,12 @@ export default function TaskFilters({
           </div>
         )}
       </div>
+
+      {/* Priority */}
       <select
         value={filterPriority}
         onChange={(e) => onFilterPriorityChange(e.target.value)}
-        className={`border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-          isDarkMode 
-            ? 'bg-[#1E293B] border-[#334155] text-white' 
-            : 'bg-slate-50 border-slate-200 text-slate-900'
-        }`}
+        className={`border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${inputBase}`}
       >
         <option value="All">All priority</option>
         <option value="Critical">Critical</option>
@@ -255,21 +283,19 @@ export default function TaskFilters({
         <option value="Medium">Medium</option>
         <option value="Low">Low</option>
       </select>
+
+      {/* Assignees */}
       <div className="relative" ref={assigneeDropdownRef}>
         <button
           onClick={() => setIsAssigneeDropdownOpen(!isAssigneeDropdownOpen)}
-          className={`flex items-center gap-1.5 sm:gap-2 border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            isDarkMode 
-              ? 'bg-[#1E293B] border-[#334155] text-white' 
-              : 'bg-slate-50 border-slate-200 text-slate-900'
-          }`}
+          className={`flex items-center gap-1.5 sm:gap-2 border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${inputBase}`}
         >
           <Filter size={14} className="sm:size-4" />
           <span className="hidden sm:inline">Assignees</span>
           <span className="sm:hidden">Users</span>
           {filterAssigneeNames.length > 0 && (
             <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${
-              isDarkMode ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'
+              isDarkMode ? 'bg-blue-500/20 text-blue-300' : 'bg-blue-100 text-blue-700'
             }`}>
               {filterAssigneeNames.length}
             </span>
@@ -278,28 +304,24 @@ export default function TaskFilters({
         </button>
 
         {isAssigneeDropdownOpen && (
-          <div className={`absolute top-full left-0 mt-2 w-64 sm:w-72 rounded-lg shadow-lg z-50 ${
-            isDarkMode ? 'bg-[#1E293B] border border-[#334155]' : 'bg-white border border-[#E5E7EB]'
-          }`}>
-            {/* Search input */}
-            <div className="p-2 sm:p-3 border-b border-[#E5E7EB] dark:border-[#334155]">
+          <div className={`absolute top-full left-0 mt-2 w-64 sm:w-72 rounded-lg shadow-lg z-50 ${dropdownPanel}`}>
+            <div className={`p-2 sm:p-3 border-b ${dividerBorder}`}>
               <div className="relative">
-                <Search size={12} className={`absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} sm:size-3.5`} />
+                <Search size={12} className={`absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 sm:size-3.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
                 <input
                   type="text"
                   placeholder="Search assignees..."
                   value={assigneeSearchQuery}
                   onChange={(e) => setAssigneeSearchQuery(e.target.value)}
-                  className={`w-full pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    isDarkMode 
-                      ? 'bg-[#0F141F] border border-[#334155] text-white placeholder-slate-500' 
-                      : 'bg-slate-50 border border-[#E5E7EB] text-slate-900 placeholder-slate-500'
+                  className={`w-full pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-md border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    isDarkMode
+                      ? 'bg-[#0F141F] border-[#334155] text-white placeholder:text-slate-500'
+                      : 'bg-slate-50 border-[#E5E7EB] text-slate-900 placeholder:text-slate-400'
                   }`}
                 />
               </div>
             </div>
 
-            {/* Assignee list */}
             <div className="max-h-60 overflow-y-auto p-2">
               {filteredUsers.length === 0 ? (
                 <div className={`text-center py-3 sm:py-4 text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -309,9 +331,7 @@ export default function TaskFilters({
                 filteredUsers.map(user => (
                   <label
                     key={user.UserID}
-                    className={`flex items-center gap-2 sm:gap-3 p-2 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-[#334155]/50 transition-colors ${
-                      isDarkMode ? 'text-white' : 'text-slate-900'
-                    }`}
+                    className={`flex items-center gap-2 sm:gap-3 p-2 rounded-md cursor-pointer transition-colors ${dropdownItem}`}
                   >
                     <input
                       type="checkbox"
@@ -325,16 +345,11 @@ export default function TaskFilters({
               )}
             </div>
 
-            {/* Clear all button */}
             {filterAssigneeNames.length > 0 && (
-              <div className="p-2 border-t border-[#E5E7EB] dark:border-[#334155]">
+              <div className={`p-2 border-t ${dividerBorder}`}>
                 <button
                   onClick={clearAll}
-                  className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-md transition-colors ${
-                    isDarkMode 
-                      ? 'text-slate-400 hover:text-white hover:bg-[#334155]/50' 
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
+                  className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-md transition-colors ${clearBtn}`}
                 >
                   <X size={12} className="sm:size-3.5" />
                   Clear all
@@ -345,71 +360,75 @@ export default function TaskFilters({
         )}
       </div>
 
-      {/* Team Filter */}
-      <div className="relative" ref={teamDropdownRef}>
+      {/* Assigned By */}
+      <div className="relative" ref={assignedByDropdownRef}>
         <button
-          onClick={() => setIsTeamDropdownOpen(!isTeamDropdownOpen)}
-          className={`flex items-center gap-1.5 sm:gap-2 border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-            isDarkMode 
-              ? 'bg-[#1E293B] border-[#334155] text-white' 
-              : 'bg-slate-50 border-slate-200 text-slate-900'
-          }`}
+          onClick={() => setIsAssignedByDropdownOpen(!isAssignedByDropdownOpen)}
+          className={`flex items-center gap-1.5 sm:gap-2 border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${inputBase}`}
         >
           <Filter size={14} className="sm:size-4" />
-          <span>Teams</span>
-          {filterTeamIDs.length > 0 && (
+          <span className="hidden sm:inline">Assigned By</span>
+          <span className="sm:hidden">By</span>
+          {filterAssignedByEmails.length > 0 && (
             <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${
-              isDarkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700'
+              isDarkMode ? 'bg-orange-500/20 text-orange-300' : 'bg-orange-100 text-orange-700'
             }`}>
-              {filterTeamIDs.length}
+              {filterAssignedByEmails.length}
             </span>
           )}
-          <ChevronDown size={12} className={`transition-transform sm:size-3.5 ${isTeamDropdownOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown size={12} className={`transition-transform sm:size-3.5 ${isAssignedByDropdownOpen ? 'rotate-180' : ''}`} />
         </button>
 
-        {isTeamDropdownOpen && (
-          <div className={`absolute top-full left-0 mt-2 w-64 sm:w-72 rounded-lg shadow-lg z-50 ${
-            isDarkMode ? 'bg-[#1E293B] border border-[#334155]' : 'bg-white border border-[#E5E7EB]'
-          }`}>
-            {/* Team list */}
+        {isAssignedByDropdownOpen && (
+          <div className={`absolute top-full left-0 mt-2 w-64 sm:w-72 rounded-lg shadow-lg z-50 ${dropdownPanel}`}>
+            <div className={`p-2 sm:p-3 border-b ${dividerBorder}`}>
+              <div className="relative">
+                <Search size={12} className={`absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 sm:size-3.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
+                <input
+                  type="text"
+                  placeholder="Search assigners..."
+                  value={assignedBySearchQuery}
+                  onChange={(e) => setAssignedBySearchQuery(e.target.value)}
+                  className={`w-full pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-md border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    isDarkMode
+                      ? 'bg-[#0F141F] border-[#334155] text-white placeholder:text-slate-500'
+                      : 'bg-slate-50 border-[#E5E7EB] text-slate-900 placeholder:text-slate-400'
+                  }`}
+                />
+              </div>
+            </div>
+
             <div className="max-h-60 overflow-y-auto p-2">
-              {teams.length === 0 ? (
+              {assignedByUsers.length === 0 ? (
                 <div className={`text-center py-3 sm:py-4 text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                  No teams found
+                  No users found
                 </div>
               ) : (
-                teams.map(team => (
+                assignedByUsers.map(user => (
                   <label
-                    key={team.TeamID}
-                    className={`flex items-center gap-2 sm:gap-3 p-2 rounded-md cursor-pointer hover:bg-slate-100 dark:hover:bg-[#334155]/50 transition-colors ${
-                      isDarkMode ? 'text-white' : 'text-slate-900'
-                    }`}
+                    key={user.UserID}
+                    className={`flex items-center gap-2 sm:gap-3 p-2 rounded-md cursor-pointer transition-colors ${dropdownItem}`}
                   >
                     <input
                       type="checkbox"
-                      checked={filterTeamIDs.includes(team.TeamID)}
-                      onChange={() => toggleTeam(team.TeamID)}
+                      checked={filterAssignedByEmails.includes(user.Email)}
+                      onChange={() => toggleAssignedBy(user.Email)}
                       className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
                     />
-                    <span className="flex-1 text-xs sm:text-sm">{team.TeamName}</span>
+                    <span className="flex-1 text-xs sm:text-sm">{user.FullName}</span>
                   </label>
                 ))
               )}
             </div>
 
-            {/* Clear all button */}
-            {filterTeamIDs.length > 0 && (
-              <div className="p-2 border-t border-[#E5E7EB] dark:border-[#334155]">
+            {filterAssignedByEmails.length > 0 && (
+              <div className={`p-2 border-t ${dividerBorder}`}>
                 <button
-                  onClick={() => onFilterTeamIDsChange([])}
-                  className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-md transition-colors ${
-                    isDarkMode 
-                      ? 'text-slate-400 hover:text-white hover:bg-[#334155]/50' 
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
+                  onClick={() => { onFilterAssignedByEmailsChange([]); setAssignedBySearchQuery(''); }}
+                  className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-md transition-colors ${clearBtn}`}
                 >
                   <X size={12} className="sm:size-3.5" />
-                  Clear teams
+                  Clear assigned by
                 </button>
               </div>
             )}
@@ -417,29 +436,48 @@ export default function TaskFilters({
         )}
       </div>
 
-      {/* Date Range Filter */}
+      {/* Due Date Filter */}
       <div className="flex items-center gap-1.5 sm:gap-2">
-        <div className={`flex items-center gap-1.5 sm:gap-2 border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-[#E5E7EB]'}`}>
-          <Calendar size={14} className={isDarkMode ? 'text-slate-400' : 'text-slate-500'} />
+        <span className={`text-xs sm:text-sm font-medium flex items-center gap-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+          <Calendar size={14} className="sm:size-4" />
+          <span className="hidden sm:inline">Due Date:</span>
+        </span>
+        <div className={`flex items-center gap-1.5 sm:gap-2 border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm ${
+          isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'
+        }`}>
+          <label className={`text-[10px] sm:text-xs font-medium shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>From</label>
           <input
             type="date"
             value={filterDateFrom}
             onChange={(e) => onFilterDateFromChange(e.target.value)}
-            className={`bg-transparent focus:outline-none text-xs sm:text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}
-            placeholder="From"
+            className={`bg-transparent focus:outline-none text-xs sm:text-sm w-[120px] sm:w-[130px] ${
+              isDarkMode ? 'text-slate-100 [color-scheme:dark]' : 'text-slate-900 [color-scheme:light]'
+            }`}
           />
         </div>
-        <span className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>to</span>
-        <div className={`flex items-center gap-1.5 sm:gap-2 border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-[#E5E7EB]'}`}>
-          <Calendar size={14} className={isDarkMode ? 'text-slate-400' : 'text-slate-500'} />
+        <span className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>—</span>
+        <div className={`flex items-center gap-1.5 sm:gap-2 border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm ${
+          isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'
+        }`}>
+          <label className={`text-[10px] sm:text-xs font-medium shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>To</label>
           <input
             type="date"
             value={filterDateTo}
             onChange={(e) => onFilterDateToChange(e.target.value)}
-            className={`bg-transparent focus:outline-none text-xs sm:text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}
-            placeholder="To"
+            className={`bg-transparent focus:outline-none text-xs sm:text-sm w-[120px] sm:w-[130px] ${
+              isDarkMode ? 'text-slate-100 [color-scheme:dark]' : 'text-slate-900 [color-scheme:light]'
+            }`}
           />
         </div>
+        {(filterDateFrom || filterDateTo) && (
+          <button
+            onClick={() => { onFilterDateFromChange(''); onFilterDateToChange(''); }}
+            className={`p-1.5 rounded-md transition-colors ${isDarkMode ? 'text-slate-400 hover:text-white hover:bg-[#334155]/50' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+            title="Clear due date filter"
+          >
+            <X size={12} className="sm:size-3.5" />
+          </button>
+        )}
       </div>
     </div>
   );

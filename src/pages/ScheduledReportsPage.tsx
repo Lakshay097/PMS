@@ -35,7 +35,6 @@ export default function ScheduledReportsPage({
       teamSubmissions={teamSubmissions}
       settings={settings}
       onAddTeamSubmission={onAddTeamSubmission}
-      isDarkMode={isDarkMode}
     />
   );
 }

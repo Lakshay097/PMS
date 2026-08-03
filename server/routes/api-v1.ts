@@ -4,6 +4,9 @@ import { db } from '../firebase';
 import { authenticateToken } from '../middleware/auth';
 import { requireRole } from '../middleware/authz';
 import { getAllUsersCached } from './firestore';
+import { ttlCache } from '../utils/ttlCache';
+
+const USERS_CACHE_KEY = 'users:all';
 
 const router = Router();
 
@@ -52,6 +55,9 @@ router.put('/api/users/:email', authenticateToken, async (req: any, res) => {
 
     // Write to Firestore
     await ref.set(sanitizeForFirestore(merged), { merge: true });
+
+    // Invalidate users cache so the next read reflects this write
+    ttlCache.invalidate(USERS_CACHE_KEY);
 
     // If you have Sheets sync, call it here:
     // await enqueueSheetsWrite('users', 'save', merged);

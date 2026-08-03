@@ -56,8 +56,6 @@ export default function AppShell({
   return (
     <div className="flex h-dvh bg-app">
       <Sidebar
-        currentView={currentView}
-        onViewChange={handleViewChange}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((c) => !c)}
         onSignOut={onSignOut}

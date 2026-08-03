@@ -182,10 +182,13 @@ export function useDatabase(isAuthInitialized: boolean = false) {
     if (isAuthInitialized) {
       loadDatabase();
       // Server-side Sheets sync is now handled by the server
-    } else {
-      // If auth is not initialized, don't keep loading state true
-      setIsLoading(false);
     }
+    // Do NOT set isLoading=false when auth is not yet initialized.
+    // isLoading starts as true and stays true until either:
+    //   a) auth resolves and loadDatabase() completes, or
+    //   b) the user is not authenticated (handled inside loadDatabase via the guard in App.tsx)
+    // Setting it to false here created a window where the dashboard rendered
+    // with empty data between the first render and when auth finished resolving.
   }, [isAuthInitialized]);
 
   return {

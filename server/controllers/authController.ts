@@ -6,6 +6,9 @@ import { AuthRequest } from '../middleware/auth';
 import bcrypt from 'bcrypt';
 import { firestoreAdmin } from '../services/firebaseAdmin';
 import { stringifySetCookie } from 'cookie';
+import { ttlCache } from '../utils/ttlCache';
+
+const USERS_CACHE_KEY = 'users:all';
 
 /**
  * Login request body
@@ -183,6 +186,9 @@ export async function accountRequestHandler(req: Request, res: Response): Promis
     RequestedAt: now,
   });
 
+  // Invalidate users cache — a new pending user is now visible in Firestore
+  ttlCache.invalidate(USERS_CACHE_KEY);
+
   res.json({
     success: true,
     message: "Account request submitted successfully. Please wait for admin approval."
@@ -190,7 +196,6 @@ export async function accountRequestHandler(req: Request, res: Response): Promis
 }
 
 /**
- * POST /api/approve-user
  * Protected endpoint to approve user accounts
  */
 export async function approveUserHandler(req: AuthRequest, res: Response): Promise<void> {
@@ -277,6 +282,9 @@ export async function approveUserHandler(req: AuthRequest, res: Response): Promi
   } catch (firestoreErr) {
     console.error("Failed to mirror user approval into Firestore:", firestoreErr);
   }
+
+  // Invalidate users cache — approval changes Active + ApprovalStatus
+  ttlCache.invalidate(USERS_CACHE_KEY);
 
   res.json({
     success: true,
@@ -654,6 +662,9 @@ export async function bulkUploadUsersHandler(req: AuthRequest, res: Response): P
         // Non-fatal: Sheets is the source of truth
       }
     }
+
+    // Invalidate users cache once after all docs are written
+    ttlCache.invalidate(USERS_CACHE_KEY);
   }
 
   res.json({

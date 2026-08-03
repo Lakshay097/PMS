@@ -5,7 +5,6 @@ import { getEmailTemplate } from './emailTemplateStorage';
 import { getTeamReportConfigs, TeamReportConfig } from './teamReportConfigService';
 import { hasReceivedFirstReportEmail, markFirstReportEmailSent } from './userOnboardingService';
 import { getOrCreateTeamEmailThread, updateTeamEmailThreadId } from './emailLogService';
-import { ttlCache } from '../utils/ttlCache';
 import crypto from 'crypto';
 
 /**
@@ -56,24 +55,22 @@ export async function updateReportReminderThreadId(
 
 import { config } from '../config';
 import { generateGoogleSheetsToken, fetchSheetValues } from './googleSheetsService';
+import { getAllTeamsCached as _getAllTeamsCached, getAllSubTeamsCached as _getAllSubTeamsCached, getAllSettingsCached } from '../routes/firestore';
 
-const TEAMS_CACHE_KEY = 'teams:all';
-const SUBTEAMS_CACHE_KEY = 'subTeams:all';
-const TEAMS_CACHE_TTL = 5 * 60 * 1000; // 5 min
-const SUBTEAMS_CACHE_TTL = 5 * 60 * 1000; // 5 min
-
-async function getAllTeamsCached(): Promise<Array<{ id: string; data: FirebaseFirestore.DocumentData }>> {
-  return ttlCache.getOrFetch(TEAMS_CACHE_KEY, TEAMS_CACHE_TTL, async () => {
-    const snapshot = await firestoreAdmin.collection('teams').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, data: doc.data() }));
-  });
+/**
+ * Thin wrappers that adapt the shared cache's plain-object shape to the
+ * { id, data } shape this scheduler uses internally, WITHOUT defining a
+ * second cache entry under the same key (which would poison the shared cache
+ * with a different object shape).
+ */
+async function getAllTeamsCached(): Promise<Array<{ id: string; data: Record<string, any> }>> {
+  const teams = await _getAllTeamsCached() as Array<Record<string, any>>;
+  return teams.map(t => ({ id: t.TeamID as string, data: t }));
 }
 
-async function getAllSubTeamsCached(): Promise<Array<{ id: string; data: FirebaseFirestore.DocumentData }>> {
-  return ttlCache.getOrFetch(SUBTEAMS_CACHE_KEY, SUBTEAMS_CACHE_TTL, async () => {
-    const snapshot = await firestoreAdmin.collection('sub_teams').get();
-    return snapshot.docs.map(doc => ({ id: doc.id, data: doc.data() }));
-  });
+async function getAllSubTeamsCached(): Promise<Array<{ id: string; data: Record<string, any> }>> {
+  const subTeams = await _getAllSubTeamsCached() as Array<Record<string, any>>;
+  return subTeams.map(st => ({ id: st.SubTeamID as string, data: st }));
 }
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
@@ -604,11 +601,15 @@ export async function checkAndSendReportReminders(triggeredBy: 'scheduler' | 'ma
     }, { merge: true });
 
     try {
-      // Check email_enabled_scheduled_reports flag from Firestore (authoritative source)
-    const scheduledReportsDoc = await firestoreAdmin.collection('settings').doc('email_enabled_scheduled_reports').get();
-    const scheduledReportsEnabled = scheduledReportsDoc.exists 
-      ? scheduledReportsDoc.data()?.Value === 'true'
-      : true; // Default to enabled if setting doesn't exist
+      // Check email_enabled_scheduled_reports flag via the shared settings cache
+      // (2-minute TTL) instead of a live Firestore read on every invocation.
+      // A toggled setting takes effect within the TTL window.
+      const allSettings = await getAllSettingsCached();
+      const scheduledReportsSetting = (allSettings as Array<{ Key: string; Value: string }>)
+        .find(s => s.Key === 'email_enabled_scheduled_reports');
+      const scheduledReportsEnabled = scheduledReportsSetting
+        ? scheduledReportsSetting.Value === 'true'
+        : true; // Default to enabled if setting doesn't exist
 
       if (!scheduledReportsEnabled) {
         logger.info('[SCHEDULER] Skipping — email_enabled_scheduled_reports is disabled in Firestore');

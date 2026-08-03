@@ -142,10 +142,23 @@ export async function checkAndSendDueDateReminders(): Promise<void> {
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
-    // 2. Check cross-process / cross-redeploy daily lock via Firestore
-    const lastDate = await getSettingValue('last_due_date_check_date', '');
-    const lastStatus = await getSettingValue('last_due_date_check_status', '');
-    const lastTimestamp = await getSettingValue('last_due_date_check_timestamp', '');
+    // 2. Check cross-process / cross-redeploy daily lock via Firestore.
+    //    Use getAll() so the 3 lock-state docs cost a single round-trip instead of 3.
+    let lastDate = '';
+    let lastStatus = '';
+    let lastTimestamp = '';
+    try {
+      const [dateDoc, statusDoc, tsDoc] = await firestoreAdmin.getAll(
+        firestoreAdmin.collection(SETTINGS_COLLECTION).doc('last_due_date_check_date'),
+        firestoreAdmin.collection(SETTINGS_COLLECTION).doc('last_due_date_check_status'),
+        firestoreAdmin.collection(SETTINGS_COLLECTION).doc('last_due_date_check_timestamp'),
+      );
+      lastDate      = dateDoc.exists   ? String(dateDoc.data()?.Value   ?? '') : '';
+      lastStatus    = statusDoc.exists ? String(statusDoc.data()?.Value ?? '') : '';
+      lastTimestamp = tsDoc.exists     ? String(tsDoc.data()?.Value     ?? '') : '';
+    } catch (err) {
+      logger.error('TaskDueDateScheduler: Error reading lock state from Firestore, proceeding with defaults', err);
+    }
 
     let isStaleRunning = false;
     if (lastStatus === 'running' && lastTimestamp) {

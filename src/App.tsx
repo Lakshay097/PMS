@@ -155,7 +155,32 @@ export default function App() {
   const [activeUserEmail, setActiveUserEmail] = useState<string>(() => {
     return localStorage.getItem('PMS_active_user_email') || '';
   });
-  const [activeUser, setActiveUser] = useState<User | null>(null);
+
+  // Initialize activeUser eagerly from localStorage so the dashboard never
+  // renders a blank tick while waiting for the users-array useEffect to resolve.
+  const [activeUser, setActiveUser] = useState<User | null>(() => {
+    try {
+      const stored = localStorage.getItem('PMS_user');
+      if (!stored) return null;
+      const parsed = JSON.parse(stored);
+      const email = parsed.Email || parsed.email || '';
+      if (!email) return null;
+      return {
+        ...parsed,
+        Email: email,
+        TeamIDs: parsed.TeamIDs
+          ? (Array.isArray(parsed.TeamIDs) ? parsed.TeamIDs : [parsed.TeamIDs])
+          : (parsed.TeamID ? [parsed.TeamID] : []),
+        TeamNames: parsed.TeamNames
+          ? (Array.isArray(parsed.TeamNames) ? parsed.TeamNames : [parsed.TeamNames])
+          : (parsed.TeamName ? [parsed.TeamName] : []),
+        TeamID: parsed.TeamID || (parsed.TeamIDs?.[0] ?? ''),
+        TeamName: parsed.TeamName || (parsed.TeamNames?.[0] ?? ''),
+      } as User;
+    } catch {
+      return null;
+    }
+  });
 
   // Check whether the active user has a connected Gmail account.
   // Used to gate email sends and show a connect-prompt before any send is attempted.
@@ -829,7 +854,12 @@ export default function App() {
     }
   };
 
-  if (dbIsLoading) {
+  // Block rendering until both auth AND database have fully loaded.
+  // Without the authIsLoading guard, there is a brief window where
+  // auth is still resolving (isAuthenticated=false) but dbIsLoading
+  // has already been set to false (the old else-branch bug), causing
+  // the dashboard to flash with zero data.
+  if (authIsLoading || dbIsLoading) {
     return <DashboardSkeleton />;
   }
 

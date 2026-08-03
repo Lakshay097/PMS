@@ -42,13 +42,16 @@ export default function TasksPage({
   getStatusColor,
 }: TasksPageProps) {
   const [taskSubView, setTaskSubView] = useState<'my-tasks' | 'team-tasks' | 'assigned-by-me'>('my-tasks');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  const [filterAssignedByEmails, setFilterAssignedByEmails] = useState<string[]>([]);
 
   // Compute user roles once per render
   const userRoles = useMemo(() => {
     return getUserRoles(currentUser, teams || [], subTeams || [], settings || []);
   }, [currentUser, teams, subTeams, settings]);
 
-  // Filter tasks based on selected tab
+  // Filter tasks based on selected tab + active filters
   const filteredTasks = useMemo(() => {
     if (!currentUser) return [];
 
@@ -60,31 +63,68 @@ export default function TasksPage({
     const roleFiltered = (tasks || []).filter(task => {
       // Apply view-based filtering using the role-based approach
       if (taskSubView === 'my-tasks') {
-        return splitEmails(task.AssignedToEmail).some(email =>
-          email.toLowerCase() === userEmail
-        );
+        if (!splitEmails(task.AssignedToEmail).some(email => email.toLowerCase() === userEmail)) return false;
+      } else if (taskSubView === 'assigned-by-me') {
+        if (task.AssignedByEmail?.toLowerCase() !== userEmail) return false;
+      } else if (taskSubView === 'team-tasks') {
+        if (!teamTasksFilter(task)) return false;
+      } else {
+        // Default: union of all visible tasks
+        const assignedToMe = splitEmails(task.AssignedToEmail).some(email => email.toLowerCase() === userEmail);
+        const assignedByMe = task.AssignedByEmail?.toLowerCase() === userEmail;
+        const inTeamScope = teamTasksFilter(task);
+        if (!assignedToMe && !assignedByMe && !inTeamScope) return false;
       }
 
-      if (taskSubView === 'assigned-by-me') {
-        return task.AssignedByEmail?.toLowerCase() === userEmail;
+      // Apply status filter
+      if (filters.status && filters.status.length > 0 && !filters.status.includes('All')) {
+        if (!filters.status.includes(task.Status)) return false;
       }
 
-      if (taskSubView === 'team-tasks') {
-        return teamTasksFilter(task);
+      // Apply priority filter
+      if (filters.priority && filters.priority !== 'All') {
+        if (task.Priority !== filters.priority) return false;
       }
 
-      // Default: return union of all visible tasks
-      const assignedToMe = splitEmails(task.AssignedToEmail).some(email =>
-        email.toLowerCase() === userEmail
-      );
-      const assignedByMe = task.AssignedByEmail?.toLowerCase() === userEmail;
-      const inTeamScope = teamTasksFilter(task);
+      // Apply assignee filter
+      if (filters.assignee) {
+        const assigneeEmails = filters.assignee.split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+        if (assigneeEmails.length > 0) {
+          const taskAssignees = splitEmails(task.AssignedToEmail).map(e => e.toLowerCase());
+          if (!assigneeEmails.some(e => taskAssignees.includes(e))) return false;
+        }
+      }
 
-      return assignedToMe || assignedByMe || inTeamScope;
+      // Apply search filter
+      if (filters.searchQuery) {
+        const q = filters.searchQuery.toLowerCase();
+        const matches =
+          task.Title?.toLowerCase().includes(q) ||
+          task.Description?.toLowerCase().includes(q) ||
+          task.TaskID?.toLowerCase().includes(q) ||
+          task.AssignedToEmail?.toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+
+      // Apply Assigned By filter
+      if (filterAssignedByEmails.length > 0) {
+        const taskAssignedBy = task.AssignedByEmail?.toLowerCase() || '';
+        if (!filterAssignedByEmails.some(e => e.toLowerCase() === taskAssignedBy)) return false;
+      }
+
+      // Apply date range filter (against DueDate)
+      if (filterDateFrom) {
+        if (!task.DueDate || task.DueDate < filterDateFrom) return false;
+      }
+      if (filterDateTo) {
+        if (!task.DueDate || task.DueDate > filterDateTo) return false;
+      }
+
+      return true;
     });
 
     return roleFiltered;
-  }, [tasks, currentUser, users, taskSubView, userRoles]);
+  }, [tasks, currentUser, users, taskSubView, userRoles, filters, filterAssignedByEmails, filterDateFrom, filterDateTo]);
 
   return (
     <div className="space-y-6">
@@ -143,21 +183,20 @@ export default function TasksPage({
       <TaskFilters
         filterStatus={filters.status}
         filterPriority={filters.priority}
-        filterAssigneeNames={filters.assignee ? [filters.assignee] : []}
-        filterTeamIDs={[]}
-        filterDateFrom=""
-        filterDateTo=""
+        filterAssigneeNames={filters.assignee ? filters.assignee.split(',').map(e => e.trim()).filter(Boolean) : []}
+        filterDateFrom={filterDateFrom}
+        filterDateTo={filterDateTo}
+        filterAssignedByEmails={filterAssignedByEmails}
         searchQuery={filters.searchQuery || ''}
         currentUser={currentUser}
         users={users}
-        teams={teams}
         isDarkMode={isDarkMode}
         onFilterStatusChange={(value) => onFilterChange('status', value)}
         onFilterPriorityChange={(value) => onFilterChange('priority', value)}
         onFilterAssigneeNamesChange={(value) => onFilterChange('assignee', value.join(','))}
-        onFilterTeamIDsChange={() => {}}
-        onFilterDateFromChange={() => {}}
-        onFilterDateToChange={() => {}}
+        onFilterDateFromChange={setFilterDateFrom}
+        onFilterDateToChange={setFilterDateTo}
+        onFilterAssignedByEmailsChange={setFilterAssignedByEmails}
         onSearchQueryChange={(value) => onFilterChange('searchQuery', value)}
       />
       <TaskList

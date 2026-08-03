@@ -85,7 +85,7 @@ interface DashboardProps {
   teams?: Team[];
   subTeams?: SubTeam[];
   onToggleUserStatus?: (email: string) => void;
-  onUpdateUserRole?: (email: string, role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder') => void;
+  onUpdateUserRole?: (email: string, role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder' | 'Team Leader') => void;
   onApproveUser?: (email: string) => void;
   onAddTeam?: (team: Team) => void;
   onToggleTeamStatus?: (teamId: string) => void;
@@ -177,6 +177,7 @@ export default function Dashboard({
   const [filterStatus, setFilterStatus] = useState<string[]>(['All']);
   const [filterPriority, setFilterPriority] = useState('All');
   const [filterAssignee, setFilterAssignee] = useState<string[]>([]);
+  const [filterAssignedByEmails, setFilterAssignedByEmails] = useState<string[]>([]);
   const [filterTeamIDs, setFilterTeamIDs] = useState<string[]>([]);
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
@@ -422,7 +423,7 @@ export default function Dashboard({
 
           await sendProofEmail({
             teamId: submissionTeamId,
-            subTeamId: submissionSubTeamId,
+            subTeamId: submissionSubTeamId || undefined,
             teamName,
             subTeamName,
             leaderEmails,
@@ -1429,20 +1430,19 @@ export default function Dashboard({
             filterStatus={filterStatus}
             filterPriority={filterPriority}
             filterAssigneeNames={filterAssignee}
-            filterTeamIDs={filterTeamIDs}
             filterDateFrom={filterDateFrom}
             filterDateTo={filterDateTo}
+            filterAssignedByEmails={filterAssignedByEmails}
             searchQuery={searchQuery}
             currentUser={currentUser}
             users={users}
-            teams={teams}
             isDarkMode={isDarkMode}
             onFilterStatusChange={setFilterStatus}
             onFilterPriorityChange={setFilterPriority}
             onFilterAssigneeNamesChange={setFilterAssignee}
-            onFilterTeamIDsChange={setFilterTeamIDs}
             onFilterDateFromChange={setFilterDateFrom}
             onFilterDateToChange={setFilterDateTo}
+            onFilterAssignedByEmailsChange={setFilterAssignedByEmails}
             onSearchQueryChange={setSearchQuery}
           />
           <TaskList
@@ -2116,7 +2116,6 @@ export default function Dashboard({
         const inviteMessage = `Welcome to PMS! Your account has been created as ${role}. You can now log in with your credentials.`;
         triggerNotification('Task Assignment', inviteMessage, email);
       }}
-      isDarkMode={isDarkMode}
     />
   );
 
