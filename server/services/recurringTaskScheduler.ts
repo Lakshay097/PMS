@@ -295,6 +295,12 @@ export async function checkAndGenerateRecurringTaskInstances(): Promise<void> {
             const recipients = template.AssignedToEmail.split(',').map((e: string) => e.trim()).filter(Boolean);
             const appUrl = config.APP_URL || 'http://localhost:3000';
             const emailSubject = `[${newTaskId}] ${template.Title} - [Cycle ${cycleKey}]`;
+
+            // All assignees except the sender go in the To field so every
+            // assigned person can see who else received the same task email.
+            const toRecipients = recipients.filter(
+              (r: string) => r.toLowerCase() !== template.AssignedByEmail.toLowerCase()
+            );
             
             for (const recipient of recipients) {
               const emailSuccess = await sendEmailAsUser(
@@ -322,7 +328,7 @@ export async function checkAndGenerateRecurringTaskInstances(): Promise<void> {
                 undefined, // weekOf
                 undefined, // emailType
                 undefined, // ccEmails
-                undefined, // toRecipients
+                toRecipients, // toRecipients - all assignees in To field
                 'recurring_task_assignment', // eventType
                 true // forceSystemSender - system-generated email
               );

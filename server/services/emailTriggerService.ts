@@ -132,8 +132,19 @@ export async function triggerTaskCreationEmail(
 
     logger.info(`Creation email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
 
-    const allParticipants = threadInfo?.participants?.split(',').map((p: string) => p.trim()).filter(Boolean) || [];
-    const toRecipients = allParticipants.filter((p: string) => p !== actualCreatorEmail && !recipients.includes(p));
+    // Build the full known participant list: creator + all assignees + anyone already in the thread.
+    // toRecipients = everyone except the sender so all assignees appear in the To field.
+    const allKnown = [
+      actualCreatorEmail,
+      ...recipients,
+      ...(threadInfo?.participants?.split(',').map((p: string) => p.trim()).filter(Boolean) || []),
+    ];
+    const uniqueKnown = [...new Set(allKnown.map(e => e.toLowerCase()))];
+    const toRecipients = uniqueKnown
+      .filter(e => e !== actualCreatorEmail.toLowerCase())
+      .map(e => allKnown.find(a => a.toLowerCase() === e) || e);
+
+    logger.info(`[TRIGGER DEBUG] Creation email TO recipients: ${toRecipients.join(', ') || 'none'}`);
 
     for (const recipient of recipients) {
       const assignedToName = usersMap.get(recipient.trim().toLowerCase()) || recipient;
