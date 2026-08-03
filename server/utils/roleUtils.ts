@@ -91,6 +91,7 @@ function parseSubTeamLeaderSettings(userEmail: string, settings: AppSetting[]): 
   const pattern = /^team_(.+)_subteam_(.+)_leaders$/;
 
   for (const setting of settings) {
+    if (!setting.Key) continue;
     const match = setting.Key.match(pattern);
     if (match) {
       const subTeamId = match[2];
