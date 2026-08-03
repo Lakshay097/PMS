@@ -423,9 +423,12 @@ async function sendReportReminder(
       }
     }
 
-    // For scheduled report reminders, use the first team leader as the acting user
-    // This ensures emails are sent from a real user account, not a system sender
-    const actingUserEmail = primaryRecipient || recipientEmails[0] || config.DEFAULT_FALLBACK_EMAIL;
+    // For scheduled report reminders, always use REMINDER_SENDER_EMAIL (rajeev.1@pw.live)
+    // which has a valid Gmail OAuth token connected in Settings.
+    // forceSystemSender=true bypasses the per-user OAuth check so emails are sent
+    // regardless of whether individual team leaders have connected their Gmail accounts.
+    const actingUserEmail = process.env.REMINDER_SENDER_EMAIL || config.DEFAULT_FALLBACK_EMAIL;
+    logger.info(`[SCHEDULER] Using system sender ${actingUserEmail} for team ${team.teamName}`);
     
     const result = await sendEmailAsUser(
       actingUserEmail,
@@ -444,7 +447,7 @@ async function sendReportReminder(
       undefined, // ccEmails
       recipientEmails, // toRecipients - all leaders in TO field
       'report_reminder', // eventType
-      false // forceSystemSender - use acting user's Gmail account
+      true // forceSystemSender - use REMINDER_SENDER_EMAIL's OAuth token, not per-user
     );
 
     if (result.success && result.gmailThreadId && result.gmailMessageId) {
