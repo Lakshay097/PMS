@@ -11,6 +11,17 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
+  if (res.status === 401) {
+    // Token is missing or expired — clear stale tokens and force re-login
+    // so the user sees the login page instead of an empty dashboard.
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('PMS_auth_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('PMS_user');
+    window.location.href = '/login';
+    throw new Error(`API ${method} ${path} failed: 401 Unauthorized — redirecting to login`);
+  }
+
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`API ${method} ${path} failed: ${res.status} ${text}`);

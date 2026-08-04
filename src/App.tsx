@@ -146,7 +146,7 @@ export default function App() {
     loadDatabase,
     syncDatabase,
     silentSync,
-  } = useDatabase(!authIsLoading && isAuthenticated);
+  } = useDatabase(!authIsLoading && isAuthenticated, authIsLoading);
 
   // Real-time sync â€” invalidates React Query cache on SSE events
   useRealtimeSync(token);

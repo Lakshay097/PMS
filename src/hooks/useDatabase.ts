@@ -3,7 +3,7 @@ import { User, Task, Team, SubTeam, TaskTemplate, AppSetting, TaskReport, Follow
 import { dbService, initializeDatabaseWithRace, getPrimaryDatabase, forceClearAllCaches, getSyncStatus, subscribeToSyncStatus, setDatabaseSwitchCallback, switchToFirestoreBackup, registerOptimisticCallback } from '../lib/dbService';
 import { logger } from '../utils/logger';
 
-export function useDatabase(isAuthInitialized: boolean = false) {
+export function useDatabase(isAuthInitialized: boolean = false, authIsLoading: boolean = true) {
   const [users, setUsers] = useState<User[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -180,16 +180,19 @@ export function useDatabase(isAuthInitialized: boolean = false) {
   // Load database when auth initializes
   useEffect(() => {
     if (isAuthInitialized) {
+      // Auth resolved AND user is authenticated — load data.
       loadDatabase();
       // Server-side Sheets sync is now handled by the server
+    } else if (!authIsLoading) {
+      // Auth has finished resolving but the user is NOT authenticated
+      // (token missing, expired, or invalid). Release the loading gate so
+      // App.tsx stops showing DashboardSkeleton and ProtectedRoute can
+      // redirect to /login.
+      setIsLoading(false);
     }
-    // Do NOT set isLoading=false when auth is not yet initialized.
-    // isLoading starts as true and stays true until either:
-    //   a) auth resolves and loadDatabase() completes, or
-    //   b) the user is not authenticated (handled inside loadDatabase via the guard in App.tsx)
-    // Setting it to false here created a window where the dashboard rendered
-    // with empty data between the first render and when auth finished resolving.
-  }, [isAuthInitialized]);
+    // When authIsLoading is still true we do nothing — isLoading stays true
+    // and the skeleton keeps showing until auth settles.
+  }, [isAuthInitialized, authIsLoading]);
 
   return {
     users,

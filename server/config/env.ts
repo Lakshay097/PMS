@@ -41,7 +41,20 @@ export const config = {
   // JWT
   JWT_SECRET: process.env.JWT_SECRET || 'change-this-secret-in-production',
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
-  JWT_EXPIRATION_SECONDS: 3600,
+  // Parse JWT_EXPIRES_IN into seconds so createAccessToken can use it.
+  // Supports formats: '7d', '24h', '604800s', or a plain number string.
+  // Falls back to 7 days (604800 s) so sessions survive overnight without forcing re-login.
+  JWT_EXPIRATION_SECONDS: (() => {
+    const raw = process.env.JWT_EXPIRES_IN || '7d';
+    const match = raw.match(/^(\d+)(d|h|m|s)?$/);
+    if (!match) return 604800; // 7d default
+    const n = parseInt(match[1], 10);
+    const unit = match[2] || 's';
+    return unit === 'd' ? n * 86400
+         : unit === 'h' ? n * 3600
+         : unit === 'm' ? n * 60
+         : n;
+  })(),
 
   // Bcrypt
   BCRYPT_ROUNDS: parseInt(process.env.BCRYPT_ROUNDS || '12'),

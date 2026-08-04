@@ -51,6 +51,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         logger.error('Failed to parse stored user or token:', error);
         clearAuthData();
+        setIsLoading(false);
+        return;
       }
     }
 
@@ -65,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setRefreshToken(null);
     setUser(null);
+    setIsLoading(false);
   };
 
   /**
