@@ -25,7 +25,7 @@ export function useRealtimeSync(token: string | null) {
     if (!token) return;
     esRef.current?.close();
 
-    const es = new EventSource(`/api/changes/stream`);
+    const es = new EventSource(`/changes/stream`);
     esRef.current = es;
 
     es.addEventListener('connected', () => {

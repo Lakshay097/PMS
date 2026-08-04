@@ -347,7 +347,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const raw = await api.get<any[]>('/api/users');
+      const raw = await api.get<any[]>('/users');
       const users: User[] = raw.map(u => {
         return {
           ...u,
@@ -395,7 +395,7 @@ export const dbService = {
     // Background async: Write via API
     (async () => {
       const persist = async () => {
-        await api.put(`/api/users/${encodeURIComponent(user.Email)}`, finalUser);
+        await api.put(`/users/${encodeURIComponent(user.Email)}`, finalUser);
       };
       try {
         await persist();
@@ -415,7 +415,7 @@ export const dbService = {
             // onFail: show error toast and rollback
             // Rollback optimistic update
             const rollback = async () => {
-              const raw = await api.get<any[]>('/api/users');
+              const raw = await api.get<any[]>('/users');
               const rollbackData: User[] = raw.map(u => {
                 return {
                   ...u,
@@ -442,8 +442,8 @@ export const dbService = {
 
     try {
       const [teams, settings] = await Promise.all([
-        api.get<Team[]>('/api/teams'),
-        api.get<AppSetting[]>('/api/settings')
+        api.get<Team[]>('/teams'),
+        api.get<AppSetting[]>('/settings')
       ]);
 
       // Load team leader emails and stakeholder emails from settings and attach to teams
@@ -488,7 +488,7 @@ export const dbService = {
     // Background async: Write via API
     (async () => {
       const persist = async () => {
-        await api.put(`/api/teams/${team.TeamID}`, teamToSave);
+        await api.put(`/teams/${team.TeamID}`, teamToSave);
       };
       try {
         await persist();
@@ -529,7 +529,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.put(`/api/teams/${teamId}`, team);
+        await api.put(`/teams/${teamId}`, team);
       };
       try {
         await persist();
@@ -566,7 +566,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.del(`/api/teams/${teamId}`);
+        await api.del(`/teams/${teamId}`);
       };
       try {
         await persist();
@@ -597,7 +597,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const templates = await api.get<TaskTemplate[]>('/api/templates');
+      const templates = await api.get<TaskTemplate[]>('/templates');
       setCache('templates', templates);
       return templates;
     } catch (error) {
@@ -625,7 +625,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.put(`/api/templates/${template.TemplateID}`, templateToSave);
+        await api.put(`/templates/${template.TemplateID}`, templateToSave);
       };
       try {
         await persist();
@@ -640,7 +640,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<TaskTemplate[]>('/api/templates');
+              const raw = await api.get<TaskTemplate[]>('/templates');
               setCache('templates', raw);
               notifyOptimisticUpdate('templates', raw);
             };
@@ -661,7 +661,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.del(`/api/templates/${templateId}`);
+        await api.del(`/templates/${templateId}`);
       };
       try {
         await persist();
@@ -675,7 +675,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<TaskTemplate[]>('/api/templates');
+              const raw = await api.get<TaskTemplate[]>('/templates');
               setCache('templates', raw);
               notifyOptimisticUpdate('templates', raw);
             };
@@ -692,7 +692,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const raw = await api.get<any[]>('/api/tasks');
+      const raw = await api.get<any[]>('/tasks');
       const tasks: Task[] = raw.map(t => {
         return {
           ...t,
@@ -735,7 +735,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.put(`/api/tasks/${task.TaskID}`, finalTask);
+        await api.put(`/tasks/${task.TaskID}`, finalTask);
       };
       try {
         await persist();
@@ -750,7 +750,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<any[]>('/api/tasks');
+              const raw = await api.get<any[]>('/tasks');
               const rollbackData: Task[] = raw.map(t => {
                 return { ...t, AssignedToTeamIDs: t.AssignedToTeamIDs ? (Array.isArray(t.AssignedToTeamIDs) ? t.AssignedToTeamIDs : [t.AssignedToTeamIDs]) : (t.TeamID ? [t.TeamID] : []) };
               });
@@ -774,7 +774,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.del(`/api/tasks/${taskId}`);
+        await api.del(`/tasks/${taskId}`);
       };
       try {
         await persist();
@@ -788,7 +788,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<any[]>('/api/tasks');
+              const raw = await api.get<any[]>('/tasks');
               const rollbackData: Task[] = raw.map(t => {
                 return { ...t, AssignedToTeamIDs: t.AssignedToTeamIDs ? (Array.isArray(t.AssignedToTeamIDs) ? t.AssignedToTeamIDs : [t.AssignedToTeamIDs]) : (t.TeamID ? [t.TeamID] : []) };
               });
@@ -808,7 +808,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const reports = await api.get<TaskReport[]>('/api/reports');
+      const reports = await api.get<TaskReport[]>('/reports');
       setCache('reports', reports);
       return reports;
     } catch (error) {
@@ -826,7 +826,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.post('/api/reports', report);
+        await api.post('/reports', report);
       };
       try {
         await persist();
@@ -840,7 +840,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<TaskReport[]>('/api/reports');
+              const raw = await api.get<TaskReport[]>('/reports');
               setCache('reports', raw);
               notifyOptimisticUpdate('reports', raw);
             };
@@ -857,7 +857,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const followups = await api.get<FollowUp[]>('/api/followups');
+      const followups = await api.get<FollowUp[]>('/followups');
       setCache('followups', followups);
       return followups;
     } catch (error) {
@@ -875,7 +875,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.post('/api/followups', follow);
+        await api.post('/followups', follow);
       };
       try {
         await persist();
@@ -889,7 +889,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<FollowUp[]>('/api/followups');
+              const raw = await api.get<FollowUp[]>('/followups');
               setCache('followups', raw);
               notifyOptimisticUpdate('followups', raw);
             };
@@ -906,7 +906,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const settings = await api.get<AppSetting[]>('/api/settings');
+      const settings = await api.get<AppSetting[]>('/settings');
       setCache('settings', settings);
       return settings;
     } catch (error) {
@@ -928,7 +928,7 @@ export const dbService = {
     // Background async: Write via API
     (async () => {
       const persist = async () => {
-        await api.put('/api/settings', settingsList);
+        await api.put('/settings', settingsList);
       };
       try {
         await persist();
@@ -943,7 +943,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<AppSetting[]>('/api/settings');
+              const raw = await api.get<AppSetting[]>('/settings');
               setCache('settings', raw);
               notifyOptimisticUpdate('settings', raw);
             };
@@ -961,7 +961,7 @@ export const dbService = {
 
     try {
       // Server caps to 200 entries
-      const audits = await api.get<AuditLog[]>('/api/auditlogs');
+      const audits = await api.get<AuditLog[]>('/auditlogs');
       setCache('auditlogs', audits);
       return audits;
     } catch (error) {
@@ -975,7 +975,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const emailTemplates = await api.get<EmailTemplate[]>('/api/email-templates');
+      const emailTemplates = await api.get<EmailTemplate[]>('/email-templates');
       setCache('email_templates', emailTemplates);
       return emailTemplates;
     } catch (error) {
@@ -1009,7 +1009,7 @@ export const dbService = {
     // Background async: Write via API
     (async () => {
       const persist = async () => {
-        await api.put(`/api/email-templates/${template.templateName}`, finalTemplate);
+        await api.put(`/email-templates/${template.templateName}`, finalTemplate);
       };
       try {
         await persist();
@@ -1023,7 +1023,7 @@ export const dbService = {
       } catch (err) {
         // Rollback optimistic update
         const rollback = async () => {
-          const raw = await api.get<EmailTemplate[]>('/api/email-templates');
+          const raw = await api.get<EmailTemplate[]>('/email-templates');
           setCache('email_templates', raw);
           notifyOptimisticUpdate('email_templates', raw);
         };
@@ -1043,14 +1043,14 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.del(`/api/email-templates/${templateName}`);
+        await api.del(`/email-templates/${templateName}`);
       };
       try {
         await persist();
         notifyChange('email_templates', 'deleted', templateName).catch(() => {});
       } catch (err) {
         const rollback = async () => {
-          const raw = await api.get<EmailTemplate[]>('/api/email-templates');
+          const raw = await api.get<EmailTemplate[]>('/email-templates');
           setCache('email_templates', raw);
           notifyOptimisticUpdate('email_templates', raw);
         };
@@ -1066,7 +1066,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const subtasks = await api.get<Subtask[]>('/api/subtasks');
+      const subtasks = await api.get<Subtask[]>('/subtasks');
       setCache('subtasks', subtasks);
       return subtasks;
     } catch (error) {
@@ -1095,7 +1095,7 @@ export const dbService = {
     // Background async: Write via API
     (async () => {
       const persist = async () => {
-        await api.put(`/api/subtasks/${subtask.SubtaskID}`, subtaskToSave);
+        await api.put(`/subtasks/${subtask.SubtaskID}`, subtaskToSave);
       };
       try {
         await persist();
@@ -1109,7 +1109,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<Subtask[]>('/api/subtasks');
+              const raw = await api.get<Subtask[]>('/subtasks');
               setCache('subtasks', raw);
               notifyOptimisticUpdate('subtasks', raw);
             };
@@ -1155,7 +1155,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<Subtask[]>('/api/subtasks');
+              const raw = await api.get<Subtask[]>('/subtasks');
               setCache('subtasks', raw);
               notifyOptimisticUpdate('subtasks', raw);
             };
@@ -1172,7 +1172,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const comments = await api.get<Comment[]>('/api/comments');
+      const comments = await api.get<Comment[]>('/comments');
       setCache('comments', comments);
       return comments;
     } catch (error) {
@@ -1191,7 +1191,7 @@ export const dbService = {
     // Background async: Write via API
     (async () => {
       const persist = async () => {
-        await api.put(`/api/comments/${comment.CommentID}`, comment);
+        await api.put(`/comments/${comment.CommentID}`, comment);
       };
       try {
         await persist();
@@ -1205,7 +1205,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<Comment[]>('/api/comments');
+              const raw = await api.get<Comment[]>('/comments');
               setCache('comments', raw);
               notifyOptimisticUpdate('comments', raw);
             };
@@ -1221,7 +1221,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const submissions = await api.get<TeamSubmission[]>('/api/team-submissions');
+      const submissions = await api.get<TeamSubmission[]>('/team-submissions');
       setCache('teamSubmissions', submissions);
       return submissions;
     } catch (error) {
@@ -1238,7 +1238,7 @@ export const dbService = {
     // Background async: Write via API
     (async () => {
       const persist = async () => {
-        await api.post('/api/team-submissions', submission);
+        await api.post('/team-submissions', submission);
       };
       try {
         await persist();
@@ -1253,7 +1253,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<TeamSubmission[]>('/api/team-submissions');
+              const raw = await api.get<TeamSubmission[]>('/team-submissions');
               setCache('teamSubmissions', raw);
               notifyOptimisticUpdate('teamSubmissions', raw);
             };
@@ -1274,7 +1274,7 @@ export const dbService = {
 
     try {
       // Server attaches sub-team leader emails from settings
-      const subTeams = await api.get<SubTeam[]>('/api/sub-teams');
+      const subTeams = await api.get<SubTeam[]>('/sub-teams');
       setCache('sub_teams', subTeams);
       return subTeams;
     } catch (error) {
@@ -1303,7 +1303,7 @@ export const dbService = {
     // Background async: Write via API
     (async () => {
       const persist = async () => {
-        await api.put(`/api/sub-teams/${subTeam.SubTeamID}`, subTeamToSave);
+        await api.put(`/sub-teams/${subTeam.SubTeamID}`, subTeamToSave);
       };
       try {
         await persist();
@@ -1336,7 +1336,7 @@ export const dbService = {
     // Background async: Delete via API
     (async () => {
       const persist = async () => {
-        await api.del(`/api/sub-teams/${subTeamId}`);
+        await api.del(`/sub-teams/${subTeamId}`);
       };
       try {
         await persist();
@@ -1391,19 +1391,19 @@ export const dbService = {
       teamSubmissions,
       audits  
     ] = await Promise.all([
-      api.get<any[]>('/api/users'),
-      api.get<any[]>('/api/tasks'),
-      api.get<Team[]>('/api/teams'),
-      api.get<SubTeam[]>('/api/sub-teams'),
-      api.get<TaskTemplate[]>('/api/templates'),
-      api.get<AppSetting[]>('/api/settings'),
-      api.get<EmailTemplate[]>('/api/email-templates'),
-      api.get<TaskReport[]>('/api/reports'),
-      api.get<FollowUp[]>('/api/followups'),
-      api.get<Subtask[]>('/api/subtasks'),
-      api.get<Comment[]>('/api/comments'),
-      api.get<TeamSubmission[]>('/api/team-submissions'),
-      api.get<AuditLog[]>('/api/auditlogs')
+      api.get<any[]>('/users'),
+      api.get<any[]>('/tasks'),
+      api.get<Team[]>('/teams'),
+      api.get<SubTeam[]>('/sub-teams'),
+      api.get<TaskTemplate[]>('/templates'),
+      api.get<AppSetting[]>('/settings'),
+      api.get<EmailTemplate[]>('/email-templates'),
+      api.get<TaskReport[]>('/reports'),
+      api.get<FollowUp[]>('/followups'),
+      api.get<Subtask[]>('/subtasks'),
+      api.get<Comment[]>('/comments'),
+      api.get<TeamSubmission[]>('/team-submissions'),
+      api.get<AuditLog[]>('/auditlogs')
     ]);
 
     // Apply the same data transformations as individual getters
@@ -1568,7 +1568,7 @@ export const dbService = {
       
       // API write to Firestore
       try {
-        await api.post('/api/auditlogs', logRecord);
+        await api.post('/auditlogs', logRecord);
       } catch (err) {
       }
     } catch (error) {

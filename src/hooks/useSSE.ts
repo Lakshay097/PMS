@@ -18,7 +18,7 @@ export function useSSE(
   useEffect(() => {
     setSseConnectionStatus('connecting');
 
-    const eventSource = new EventSource('/api/sse');
+    const eventSource = new EventSource('/sse');
 
     eventSource.onopen = () => {
       setSseConnectionStatus('connected');

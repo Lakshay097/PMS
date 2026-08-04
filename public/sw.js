@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'msea8m0j';
+const CACHE_VERSION = 'mseauclb';
 const STATIC_CACHE_NAME = `taskflow-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE_NAME = `taskflow-dynamic-${CACHE_VERSION}`;
 
@@ -203,7 +203,7 @@ async function syncPendingTasks() {
     
     for (const task of pendingTasks) {
       try {
-        const response = await fetch('/api/tasks', {
+        const response = await fetch('/tasks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(task)
