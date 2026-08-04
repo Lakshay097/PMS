@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'msd7455c';
+const CACHE_VERSION = 'msea8m0j';
 const STATIC_CACHE_NAME = `taskflow-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE_NAME = `taskflow-dynamic-${CACHE_VERSION}`;
 

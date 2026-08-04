@@ -261,6 +261,9 @@ gcloud builds submit --config cloudbuild.yaml
 
 ## Known Issues / Technical Debt
 
+- **VITE_API_BASE must be empty (or `/api`) in production builds.** `src/lib/apiClient.ts` uses `VITE_API_BASE` as its base URL; Vite bakes this value into the bundle at build time. If `.env` contains `VITE_API_BASE=http://localhost:3000` when running `npm run build`, the production bundle will hardcode `localhost:3000` and all API calls will 404 on Cloud Run. The fix: keep `VITE_API_BASE=` (empty) in `.env` for local work — the Vite dev server proxy handles `/api` routing. The `Dockerfile` / `cloudbuild.yaml` always pass `--build-arg VITE_API_BASE=/api` so Cloud Build deployments are safe regardless of the local `.env` value.
+
+
 - ~~`Architecture.md` was previously stale (described old Sheets-only architecture). This version is accurate.~~ **RESOLVED**
 - `NODE_ENV=production` in `.env` causes `import.meta.env.DEV = false` locally — breaks `DEV`-guarded code paths and registers the service worker in dev mode. Change to `NODE_ENV=development` for local development.
 - `FIREBASE_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY` are required by the Firebase Admin SDK (server) but not listed in `.env.example`.

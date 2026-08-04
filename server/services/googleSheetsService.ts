@@ -29,14 +29,21 @@ export async function generateGoogleSheetsToken(): Promise<GoogleSheetsTokenResp
 
     // Warn early if key doesn't look like a valid PEM block — catches secrets
     // stored incorrectly in Cloud Secret Manager (e.g. extra escaping).
-    const formattedKeyCheck = privateKey.replace(/\\n/g, "\n");
-    if (!formattedKeyCheck.includes('-----BEGIN PRIVATE KEY-----')) {
-      logger.error("GOOGLE_PRIVATE_KEY does not appear to be a valid PEM key. Check that the secret is stored with real newlines (not escaped \\\\n) in Cloud Secret Manager.");
+    if (!privateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+      logger.error(
+        "GOOGLE_PRIVATE_KEY does not contain '-----BEGIN PRIVATE KEY-----'. " +
+        `Key starts with: ${privateKey.slice(0, 60).replace(/\n/g, '\\n')}. ` +
+        "Check that the secret in Cloud Secret Manager is stored with real newlines."
+      );
+      return null;
     }
 
     // RS256 JWT claims
+    // Google requires the SA JWT assertion to expire within 3600 s (1 hour).
+    // Use GOOGLE_SA_JWT_EXPIRATION_SECONDS, NOT JWT_EXPIRATION_SECONDS (which
+    // is the user session lifetime and can be days/weeks — far too long for Google).
     const iat = Math.floor(Date.now() / 1000);
-    const exp = iat + config.JWT_EXPIRATION_SECONDS;
+    const exp = iat + config.GOOGLE_SA_JWT_EXPIRATION_SECONDS;
     const claims = {
       iss: email,
       scope: "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file",
@@ -52,7 +59,7 @@ export async function generateGoogleSheetsToken(): Promise<GoogleSheetsTokenResp
     const sign = crypto.createSign("RSA-SHA256");
     sign.update(`${base64UrlHeader}.${base64UrlPayload}`);
 
-    const formattedKey = privateKey.replace(/\\n/g, "\n");
+    const formattedKey = privateKey;
     const signature = sign.sign(formattedKey, "base64url");
 
     const jwt = `${base64UrlHeader}.${base64UrlPayload}.${signature}`;

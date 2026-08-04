@@ -1,7 +1,16 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? '';
+// API base URL resolution:
+// - In production (Cloud Run) or any same-origin deployment, we want relative
+//   URLs so requests go to the same host: /api/users, /api/tasks, etc.
+// - VITE_API_BASE is only useful for local dev cross-origin scenarios, but the
+//   Vite proxy already forwards /api/* to Express on port 3000, so we don't
+//   need it at all.
+// - We explicitly discard any absolute URL (http/https) that may have been
+//   baked in by a stale build so it can never break a production deployment.
+const _raw = import.meta.env.VITE_API_BASE ?? '';
+const API_BASE = _raw.startsWith('http') ? '' : _raw;
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const token = localStorage.getItem('auth_token'); 
+  const token = localStorage.getItem('PMS_auth_token') || localStorage.getItem('auth_token');
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers: {

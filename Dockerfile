@@ -8,28 +8,32 @@ ARG VITE_FIREBASE_API_KEY
 ARG VITE_FIREBASE_AUTH_DOMAIN
 ARG VITE_FIREBASE_PROJECT_ID
 ARG VITE_FIREBASE_APP_ID
-ARG VITE_API_BASE_URL
+# Both names accepted — VITE_API_BASE_URL is used by src/api/client.ts
+# VITE_API_BASE is used by src/lib/apiClient.ts
+ARG VITE_API_BASE_URL=/api
+ARG VITE_API_BASE=/api
 
-# Set them as environment variables for the build
+# Set them as environment variables so Vite bakes them into the bundle at build time
 ENV VITE_FIREBASE_API_KEY=$VITE_FIREBASE_API_KEY
 ENV VITE_FIREBASE_AUTH_DOMAIN=$VITE_FIREBASE_AUTH_DOMAIN
 ENV VITE_FIREBASE_PROJECT_ID=$VITE_FIREBASE_PROJECT_ID
 ENV VITE_FIREBASE_APP_ID=$VITE_FIREBASE_APP_ID
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_API_BASE=$VITE_API_BASE
 
 # Copy package files first for better layer caching
 COPY package.json package-lock.json ./
 
-# Install dependencies with cache
+# Install ALL dependencies (dev deps needed for the build step)
 RUN npm ci --prefer-offline --no-audit
 
 # Copy source files
 COPY . .
 
-# Build the application
+# Build the application (vite build + esbuild server bundle + postbuild)
 RUN npm run build
 
-# Stage 2: Production image
+# Stage 2: Production image — only what the server needs at runtime
 FROM node:20-alpine AS runner
 
 WORKDIR /app
@@ -37,20 +41,21 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json ./
 
-# Install only production dependencies with cache
+# Install only production dependencies
 RUN npm ci --only=production --prefer-offline --no-audit
 
-# Copy built files from builder stage
+# Copy compiled output from builder
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/firebase-blueprint.json ./
 
-# Expose port (Cloud Run expects 8080)
+# Expose port (Cloud Run injects PORT=8080 at runtime)
 EXPOSE 8080
 
-# Set environment to production
+# NODE_ENV and PORT are set by Cloud Run env vars at runtime;
+# these are just safe defaults for local docker run.
 ENV NODE_ENV=production
 ENV PORT=8080
 
-# Start the application
+# Start the compiled server bundle
 CMD ["node", "dist/server.mjs"]

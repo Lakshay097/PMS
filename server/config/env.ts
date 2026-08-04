@@ -55,6 +55,10 @@ export const config = {
          : unit === 'm' ? n * 60
          : n;
   })(),
+  // Google Service Account JWT assertion lifetime.
+  // Google's OAuth token endpoint requires this to be at most 3600 s (1 hour).
+  // This is SEPARATE from JWT_EXPIRATION_SECONDS which governs user session tokens.
+  GOOGLE_SA_JWT_EXPIRATION_SECONDS: 3600,
 
   // Bcrypt
   BCRYPT_ROUNDS: parseInt(process.env.BCRYPT_ROUNDS || '12'),
@@ -67,7 +71,16 @@ export const config = {
   GOOGLE_SERVICE_ACCOUNT_EMAIL: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',
   GOOGLE_PRIVATE_KEY: (() => {
     const raw = process.env.GOOGLE_PRIVATE_KEY ?? '';
-    return raw.includes('\\n') ? raw.replace(/\\n/g, '\n') : raw;
+    // Normalize any level of \n escaping (single or double) into real newlines.
+    // Cloud Secret Manager can add an extra layer of escaping depending on how
+    // the secret was originally stored (e.g. via the console vs. gcloud CLI).
+    // We keep replacing until there are no more escaped newlines left so the
+    // PEM block is always parseable by Node's crypto module.
+    let key = raw;
+    while (key.includes('\\n')) {
+      key = key.replace(/\\n/g, '\n');
+    }
+    return key;
   })(),
   GOOGLE_SPREADSHEET_ID: process.env.GOOGLE_SPREADSHEET_ID || '',
 
