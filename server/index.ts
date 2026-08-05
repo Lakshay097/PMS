@@ -119,7 +119,8 @@ async function startServer() {
 
   if (config.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
-    app.use('/api', (_req, res) => res.status(404).json({ error: 'Not Found' }));
+    // Vite middleware handles everything that isn't already handled by the API routes above.
+    // Do NOT add an /api catch-all here — it would shadow routes registered after this point.
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");

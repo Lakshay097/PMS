@@ -163,7 +163,7 @@ export interface EmailTemplate {
 
 export interface SystemAlert {
   ID: string;
-  Type: 'Delay Alert' | 'ETA Breach' | 'Task Assignment' | 'Progress Update';
+  Type: 'Delay Alert' | 'ETA Breach' | 'Task Assignment' | 'Progress Update' | 'error';
   Message: string;
   EmailSentTo: string;
   Timestamp: string;

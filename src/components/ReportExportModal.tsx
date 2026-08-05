@@ -36,8 +36,12 @@ export default function ReportExportModal({
   if (!isOpen) return null;
 
   // Stakeholders = users who have at least one assigned task
+  // A user is a stakeholder if their email appears in any task's AssignedToEmail
+  // (which may be a single email or a comma-separated list for group tasks).
   const stakeholders = users.filter(u =>
-    tasks.some(t => t.AssignedToEmail === u.Email)
+    tasks.some(t =>
+      t.AssignedToEmail?.split(',').map(e => e.trim()).includes(u.Email)
+    )
   );
 
   const toggleSection = (key: keyof ReportExportOptions) =>

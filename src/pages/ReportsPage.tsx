@@ -4,7 +4,7 @@ import Reports from '../components/features/reports/Reports';
 
 interface ReportsPageProps {
   tasks: Task[];
-  currentUser: UserType;
+  currentUser?: UserType;
   users?: UserType[];
   teams?: Team[];
   subTeams?: SubTeam[];

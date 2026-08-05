@@ -4,6 +4,73 @@ import { getOrCreateTaskEmailThread } from './emailLogService';
 import { generateGoogleSheetsToken, fetchSheetValues } from './googleSheetsService';
 import { ttlCache } from '../utils/ttlCache';
 import { getAllSettingsCached } from '../routes/firestore';
+import { firestoreAdmin } from './firebaseAdmin';
+
+// ---------------------------------------------------------------------------
+// Server-side idempotency guard for task emails
+// Prevents duplicate sends when the frontend fires the trigger endpoint more
+// than once for the same (taskId, recipientEmail) within a short window.
+// Uses Firestore with a TTL-style approach: we .create() a short-lived doc;
+// concurrent/duplicate calls see ALREADY_EXISTS and bail out.
+// The doc is auto-cleaned by Firestore TTL (field: expiresAt, configured in
+// Firestore console) or left to expire naturally — it's only a few KB.
+// ---------------------------------------------------------------------------
+const EMAIL_DEDUP_WINDOW_MS = 90 * 1000; // 90 seconds
+
+/**
+ * Tries to claim a send slot for the given (taskId, recipient, emailType).
+ * Returns true if this caller owns the slot (should proceed with send).
+ * Returns false if another caller already claimed it within the dedup window.
+ */
+async function tryClaimEmailSlot(
+  taskId: string,
+  recipientEmail: string,
+  emailType: string
+): Promise<boolean> {
+  const key = `${emailType}_${taskId}_${recipientEmail.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+  const docRef = firestoreAdmin.collection('email_send_locks').doc(key);
+  const expiresAt = new Date(Date.now() + EMAIL_DEDUP_WINDOW_MS);
+  try {
+    await docRef.create({
+      taskId,
+      recipientEmail,
+      emailType,
+      claimedAt: new Date().toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    });
+    return true; // we own this slot
+  } catch (err: any) {
+    if (err.code === 6 || String(err.message).includes('ALREADY_EXISTS')) {
+      // Slot already claimed — check if it has expired (clock-based fallback)
+      try {
+        const existing = await docRef.get();
+        if (existing.exists) {
+          const data = existing.data();
+          if (data?.expiresAt && new Date(data.expiresAt) < new Date()) {
+            // Previous slot has expired — reclaim it
+            await docRef.set({
+              taskId,
+              recipientEmail,
+              emailType,
+              claimedAt: new Date().toISOString(),
+              expiresAt: expiresAt.toISOString(),
+            });
+            logger.info(`[EMAIL DEDUP] Reclaimed expired slot for ${emailType} task=${taskId} to=${recipientEmail}`);
+            return true;
+          }
+        }
+      } catch (checkErr) {
+        logger.warn(`[EMAIL DEDUP] Error checking expired slot for ${key}:`, checkErr);
+      }
+      logger.info(`[EMAIL DEDUP] Duplicate send blocked for ${emailType} task=${taskId} to=${recipientEmail}`);
+      return false;
+    }
+    // Unexpected Firestore error — fail open (let the send proceed) so emails
+    // are never silently dropped due to a storage issue.
+    logger.warn(`[EMAIL DEDUP] Firestore error claiming slot for ${key}, proceeding with send:`, err);
+    return true;
+  }
+}
 
 /**
  * Reads a single email_enabled_{type} flag from the cached settings collection.
@@ -199,9 +266,26 @@ export async function triggerTaskAssignmentEmail(
     logger.info(`[TRIGGER DEBUG] triggerTaskAssignmentEmail called: assigner=${assignerEmail}, assignedTo=${assignedToEmail}, task=${task.TaskID}`);
     const recipients = assignedToEmail.split(',').map((e: string) => e.trim()).filter(Boolean);
     const threadTaskId = task.ParentTaskID || task.TaskID;
+
+    // --- Idempotency: claim a send slot per (taskId, recipient) ---
+    // This prevents duplicate emails when the endpoint is called concurrently
+    // (e.g. React StrictMode double-invoke, user double-click, network retry).
+    const dedupedRecipients: string[] = [];
+    for (const recipient of recipients) {
+      const claimed = await tryClaimEmailSlot(threadTaskId, recipient, 'task_assignment');
+      if (!claimed) {
+        logger.info(`[TRIGGER DEBUG] Skipping ${recipient} for task ${threadTaskId} — duplicate send within dedup window`);
+        continue;
+      }
+      dedupedRecipients.push(recipient);
+    }
+    if (dedupedRecipients.length === 0) {
+      logger.info(`[TRIGGER DEBUG] All recipients already handled for task ${threadTaskId} — skipping`);
+      return;
+    }
     const rootTitle = task.Title.replace(/^Follow-up #\d+:\s*/i, '');
     const emailSubject = `[${threadTaskId}] ${rootTitle}`;
-    const threadInfo = await getOrCreateTaskEmailThread(threadTaskId, recipients[0]);
+    const threadInfo = await getOrCreateTaskEmailThread(threadTaskId, dedupedRecipients[0]);
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
 
     const usersMap = await loadUsersNameMap();
@@ -215,9 +299,9 @@ export async function triggerTaskAssignmentEmail(
 
     logger.info(`Assignment email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
 
-    // All known participants for this task = assigner + all assignees.
-    // Every email CCs everyone except the current sender and primary To,
-    // so the full thread is visible to all parties regardless of who sends next.
+    // All known participants for this task = assigner + all assignees (full list, not just deduped).
+    // Every email puts everyone except the current sender in the TO field so the full thread
+    // is visible to all parties regardless of who sends next.
     const allKnown = [
       actualAssignerEmail,
       ...recipients,
@@ -225,20 +309,11 @@ export async function triggerTaskAssignmentEmail(
     ];
     const uniqueKnown = [...new Set(allKnown.map(e => e.toLowerCase()))];
 
-    // Track sent recipients in this batch to prevent duplicates
-    const sentRecipients = new Set<string>();
-
-    for (const recipient of recipients) {
-      // Skip if already sent to this recipient in this batch
-      if (sentRecipients.has(recipient.toLowerCase())) {
-        logger.info(`[TRIGGER DEBUG] Skipping ${recipient} - already sent in this batch`);
-        continue;
-      }
-
+    for (const recipient of dedupedRecipients) {
       logger.info(`[TRIGGER DEBUG] Sending to recipient: ${recipient}`);
       const assignedToName = usersMap.get(recipient.trim().toLowerCase()) || recipient;
 
-      // TO = everyone except sender (actualAssignerEmail) - first recipient is primary TO, others are additional TO
+      // TO = everyone except sender (actualAssignerEmail)
       const toRecipients = uniqueKnown
         .filter(e => e !== actualAssignerEmail.toLowerCase())
         .map(e => allKnown.find(a => a.toLowerCase() === e) || e);
@@ -279,8 +354,6 @@ export async function triggerTaskAssignmentEmail(
       logger.info(`[TRIGGER DEBUG] Email send result for ${recipient}: success=${result.success}, usedFallback=${result.usedFallback}, error=${result.error || 'none'}`);
       if (!result.success && result.error) {
         logger.error(`[TRIGGER ERROR] Failed to send email to ${recipient}: ${result.error}`);
-      } else if (result.success) {
-        sentRecipients.add(recipient.toLowerCase());
       }
     }
   } catch (err) {

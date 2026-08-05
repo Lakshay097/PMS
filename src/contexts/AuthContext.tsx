@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { User } from '../types/index';
 import { login, mapUserResponseToUser, refreshToken as refreshTokenApi } from '../api/auth';
 import { logger } from '../utils/logger';
@@ -16,48 +16,54 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// ---------------------------------------------------------------------------
+// Synchronous helpers — run once at module load time so useState initialisers
+// can read a fully-resolved auth state without needing a useEffect round-trip.
+// ---------------------------------------------------------------------------
+function readStoredAuth(): { token: string | null; refreshToken: string | null; user: User | null } {
+  try {
+    const storedToken = localStorage.getItem('auth_token');
+    const storedUser  = localStorage.getItem('PMS_user');
+
+    if (!storedToken || !storedUser) {
+      return { token: null, refreshToken: null, user: null };
+    }
+
+    // Validate JWT expiry synchronously
+    const tokenPayload = JSON.parse(atob(storedToken.split('.')[1]));
+    const currentTime  = Math.floor(Date.now() / 1000);
+    if (tokenPayload.exp && tokenPayload.exp < currentTime) {
+      logger.warn('Stored access token is expired — clearing on init');
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('PMS_auth_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('PMS_user');
+      return { token: null, refreshToken: null, user: null };
+    }
+
+    return {
+      token:        storedToken,
+      refreshToken: localStorage.getItem('refresh_token'),
+      user:         JSON.parse(storedUser) as User,
+    };
+  } catch {
+    return { token: null, refreshToken: null, user: null };
+  }
+}
+
 /**
  * AuthProvider component to manage authentication state
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [refreshToken, setRefreshToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Single lazy read — runs once synchronously before the first render so
+  // auth state is already populated without a useEffect round-trip.
+  const [authState] = useState(readStoredAuth);
 
-  // Load user, token, and refresh token from localStorage on mount
-  useEffect(() => {
-    const storedToken = localStorage.getItem('auth_token');
-    const storedRefreshToken = localStorage.getItem('refresh_token');
-    const storedUser = localStorage.getItem('PMS_user');
-
-    if (storedToken && storedUser) {
-      try {
-        // Validate token by checking if it's expired
-        const tokenPayload = JSON.parse(atob(storedToken.split('.')[1]));
-        const currentTime = Math.floor(Date.now() / 1000);
-        
-        // Check if token is expired (access tokens expire in 1 hour)
-        if (tokenPayload.exp && tokenPayload.exp < currentTime) {
-          logger.warn('Stored access token is expired, clearing auth data');
-          clearAuthData();
-          setIsLoading(false);
-          return;
-        }
-
-        setToken(storedToken);
-        setRefreshToken(storedRefreshToken);
-        setUser(JSON.parse(storedUser));
-      } catch (error) {
-        logger.error('Failed to parse stored user or token:', error);
-        clearAuthData();
-        setIsLoading(false);
-        return;
-      }
-    }
-
-    setIsLoading(false);
-  }, []);
+  const [user, setUser]                 = useState<User | null>(authState.user);
+  const [token, setToken]               = useState<string | null>(authState.token);
+  const [refreshToken, setRefreshToken] = useState<string | null>(authState.refreshToken);
+  // isLoading starts false because auth is resolved synchronously above.
+  const [isLoading, setIsLoading]       = useState(false);
 
   const clearAuthData = () => {
     localStorage.removeItem('auth_token');

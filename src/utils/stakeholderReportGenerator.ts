@@ -152,18 +152,36 @@ export function buildStakeholderData(
     return true;
   });
 
-  // Collect stakeholder emails: either selected ones, or every assignee found
-  const allEmails = new Set<string>();
-  tasks.forEach(t => t.AssignedToEmail && allEmails.add(t.AssignedToEmail));
+  // Expand all tasks into individual-email → task pairs.
+  // A task with AssignedToEmail = "a@x.com,b@x.com" becomes two entries,
+  // one for each assignee, so the task appears under each person's section.
+  const individualEmails = new Set<string>();
+  tasks.forEach(t => {
+    if (!t.AssignedToEmail) return;
+    t.AssignedToEmail.split(',')
+      .map(e => e.trim())
+      .filter(Boolean)
+      .forEach(e => individualEmails.add(e));
+  });
+
+  // Determine which individual emails to include
   const targetEmails =
     options.stakeholderEmails.length > 0
       ? options.stakeholderEmails
-      : Array.from(allEmails);
+      : Array.from(individualEmails);
 
   return targetEmails
-    .map(key => {
-      const { displayName, displayContact, isGroup } = formatStakeholder(key, users);
-      const theirTasks = tasks.filter(t => t.AssignedToEmail === key);
+    .map(email => {
+      const { displayName, displayContact, isGroup } = formatStakeholder(email, users);
+
+      // A task belongs to this person if their email appears anywhere in
+      // the comma-separated AssignedToEmail field.
+      const theirTasks = tasks.filter(t => {
+        if (!t.AssignedToEmail) return false;
+        return t.AssignedToEmail.split(',')
+          .map(e => e.trim())
+          .includes(email);
+      });
 
       const reportsByTask = new Map<string, TaskReport[]>();
       theirTasks.forEach(t => {
@@ -187,7 +205,7 @@ export function buildStakeholderData(
       });
 
       return {
-        email: key,
+        email,
         displayName,
         displayContact,
         isGroup,
@@ -522,21 +540,28 @@ class PdfWriter {
   }
 
   /** Summary dashboard: overall stats across all included stakeholders. */
-  summaryDashboard(data: StakeholderData[]) {
+  summaryDashboard(data: StakeholderData[], allTasks: Task[]) {
+    // Count unique task IDs across all stakeholders so that a task shared
+    // between multiple assignees is only counted once in the summary.
+    const uniqueTaskIds = new Set<string>();
+    data.forEach(s => {
+      [...s.activeTasks, ...s.completedTasks, ...s.overdueTasks, ...s.notWorkedOn]
+        .forEach(t => uniqueTaskIds.add(t.TaskID));
+    });
+
     const totals = data.reduce(
       (acc, s) => {
-        acc.stakeholders += 1;
         acc.active += s.activeTasks.length;
         acc.completed += s.completedTasks.length;
         acc.overdue += s.overdueTasks.length;
         acc.notWorkedOn += s.notWorkedOn.length;
         return acc;
       },
-      { stakeholders: 0, active: 0, completed: 0, overdue: 0, notWorkedOn: 0 }
+      { active: 0, completed: 0, overdue: 0, notWorkedOn: 0 }
     );
 
     const cards = [
-      { label: 'Stakeholders', value: totals.stakeholders, color: COLORS.primary },
+      { label: 'Total Tasks', value: uniqueTaskIds.size, color: COLORS.primary },
       { label: 'Active', value: totals.active, color: COLORS.inProgress },
       { label: 'Completed', value: totals.completed, color: COLORS.completed },
       { label: 'Overdue', value: totals.overdue, color: COLORS.overdue },
@@ -634,7 +659,7 @@ export async function generateStakeholderReport(
 
   if (options.includeSummaryDashboard) {
     w.sectionHeader('Overview', COLORS.primary);
-    w.summaryDashboard(data);
+    w.summaryDashboard(data, tasks);
   }
 
   for (const s of data) {

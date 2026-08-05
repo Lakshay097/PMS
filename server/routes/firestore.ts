@@ -11,17 +11,17 @@ import { ttlCache } from '../utils/ttlCache';
 const router = Router();
 
 const SETTINGS_CACHE_KEY = 'settings:all';
-const SETTINGS_CACHE_TTL = 5 * 60 * 1000; // 5 min — settings change infrequently; all write paths invalidate on save
+const SETTINGS_CACHE_TTL = 30 * 60 * 1000; // 30 min — settings change rarely; all write paths invalidate on save
 const USERS_CACHE_KEY = 'users:all';
 const USERS_CACHE_TTL = 10 * 60 * 1000; // 10 min — users change rarely; all write paths invalidate on save
 const TEAMS_CACHE_KEY = 'teams:all';
-const TEAMS_CACHE_TTL = 5 * 60 * 1000; // 5 min
+const TEAMS_CACHE_TTL = 30 * 60 * 1000; // 30 min — teams change rarely; all write paths invalidate on save
 const SUBTEAMS_CACHE_KEY = 'subTeams:all';
-const SUBTEAMS_CACHE_TTL = 5 * 60 * 1000; // 5 min
+const SUBTEAMS_CACHE_TTL = 30 * 60 * 1000; // 30 min — sub-teams change rarely; all write paths invalidate on save
 const TASKS_CACHE_KEY = 'tasks:all';
 const TASKS_CACHE_TTL = 60 * 1000; // 60 s — tasks change often; short TTL limits stale-data window
 const TEMPLATES_CACHE_KEY = 'templates:all';
-const TEMPLATES_CACHE_TTL = 10 * 60 * 1000; // 10 min — templates change infrequently
+const TEMPLATES_CACHE_TTL = 60 * 60 * 1000; // 60 min — templates are edited infrequently; invalidated on every write
 const SUBTASKS_CACHE_KEY = 'subtasks:all';
 const SUBTASKS_CACHE_TTL = 5 * 60 * 1000; // 5 min — subtasks change more often than templates
 const COMMENTS_CACHE_KEY = 'comments:all';
@@ -33,8 +33,13 @@ const FOLLOWUPS_CACHE_TTL = 10 * 60 * 1000; // 10 min — followups are append-o
 const TEAM_SUBMISSIONS_CACHE_KEY = 'team_submissions:all';
 const TEAM_SUBMISSIONS_CACHE_TTL = 10 * 60 * 1000; // 10 min — submissions are append-only (POST only)
 
-// Clear stale cache on startup to prevent QuerySnapshot objects
-ttlCache.invalidateAll();
+// In development, module hot-reload can leave stale QuerySnapshot objects in
+// the cache. Wipe on startup only in that environment; in production the cache
+// is always fresh (new process = empty Map) so this call is a no-op that still
+// adds latency on every cold start.
+if (process.env.NODE_ENV !== 'production') {
+  ttlCache.invalidateAll();
+}
 
 export async function getAllSettingsCached() {
   return ttlCache.getOrFetch(SETTINGS_CACHE_KEY, SETTINGS_CACHE_TTL, async () => {

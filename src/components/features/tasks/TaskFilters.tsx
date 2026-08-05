@@ -125,9 +125,17 @@ export default function TaskFilters({
     if (!currentUser) {
       eligibleUsers = users.filter(u => u.Active);
     } else if (isAdminLevel(currentUser.Role)) {
+      // Admins see everyone
       eligibleUsers = users.filter(u => u.Active);
     } else if (currentUser.Role === ROLE.STAKEHOLDER) {
-      eligibleUsers = users.filter(u => u.Active && u.Email.toLowerCase() === currentUser.Email.toLowerCase());
+      // Stakeholders can be assigned tasks by admin-level users or by themselves.
+      // Show all active admin-level users plus the stakeholder themselves.
+      eligibleUsers = users.filter(u =>
+        u.Active && (
+          isAdminLevel(u.Role) ||
+          u.Email.toLowerCase() === currentUser.Email.toLowerCase()
+        )
+      );
     } else {
       eligibleUsers = users.filter(u => u.Active);
     }

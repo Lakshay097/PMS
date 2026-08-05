@@ -60,7 +60,7 @@ import { useTheme } from '../../../contexts/ThemeContext';
 
 interface DashboardProps {
   tasks: Task[];
-  currentUser: UserType;
+  currentUser?: UserType;
   onNewTask: (assigneeEmail?: string, teamIds?: string[]) => void;
   onTaskClick: (task: Task) => void;
   onLogout: () => void;
@@ -77,7 +77,7 @@ interface DashboardProps {
   onToggleUserActive?: (userId: string, active: boolean) => void;
   onSyncDatabase?: () => void;
   isSyncing?: boolean;
-  lastSyncTime?: string;
+  lastSyncTime?: string | undefined;
   dbConnectionStatus?: 'connected' | 'disconnected' | 'error';
   audits?: AuditLog[];
   settings?: AppSetting[];
@@ -111,7 +111,7 @@ interface DashboardProps {
   syncStatus?: 'synced' | 'syncing' | 'error';
   teamSubmissions?: TeamSubmission[];
   onAddTeamSubmission?: (submission: TeamSubmission) => void;
-  triggerNotification?: (type: string, message: string, emailSentTo: string) => void;
+  triggerNotification?: (type: 'Delay Alert' | 'ETA Breach' | 'Task Assignment' | 'Progress Update' | 'error', message: string, emailSentTo: string) => void;
   onRefreshUsers?: () => Promise<void>;
 }
 
@@ -543,7 +543,7 @@ export default function Dashboard({
       const token = localStorage.getItem('auth_token');
       if (!token) return;
 
-      const response = await fetch('/api/auth/gmail/status', {
+      const response = await fetch('/auth/gmail/status', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -567,7 +567,7 @@ export default function Dashboard({
         return;
       }
 
-      const response = await fetch('/api/auth/gmail/url', {
+      const response = await fetch('/auth/gmail/url', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -597,7 +597,7 @@ export default function Dashboard({
       const token = localStorage.getItem('auth_token');
       if (!token) return;
 
-      const response = await fetch('/api/auth/gmail/disconnect', {
+      const response = await fetch('/auth/gmail/disconnect', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -680,14 +680,9 @@ export default function Dashboard({
     if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
     return t.DueDate === today;
   }).length;
-  const oneWeekAgo = new Date();
-  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-  const completedThisWeek = visibleTasksForOverview.filter(t => {
-    if (t.Status !== 'Closed' && t.Status !== 'Reviewed') return false;
-    if (!t.CompletionDate) return false;
-    const completionDate = new Date(t.CompletionDate);
-    return completionDate >= oneWeekAgo;
-  }).length;
+  const completedTotal = visibleTasksForOverview.filter(t =>
+    t.Status === 'Closed' || t.Status === 'Reviewed'
+  ).length;
 
   // Get tasks needing attention (overdue or high priority), scoped to this user
   const priorityTasks = visibleTasksForOverview
@@ -1105,17 +1100,17 @@ export default function Dashboard({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          onClick={() => navigate(ROUTES.TASKS)}
+          onClick={() => navigate(ROUTES.TASKS, { state: { statusFilter: ['Closed', 'Reviewed'] } })}
           className="border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all bg-surface border-token hover:border-green-500/50"
         >
           <div className="flex items-center justify-between mb-2">
             <div className="w-7 h-7 sm:w-8 sm:h-8 bg-green-500/10 rounded-lg flex items-center justify-center">
               <CheckCircle className="text-green-400" size={16} />
             </div>
-            <span className="text-[9px] sm:text-[10px] text-muted">Last 7 days</span>
+            <span className="text-[9px] sm:text-[10px] text-muted">All time</span>
           </div>
-          <p className="text-xl sm:text-2xl font-bold text-primary">{completedThisWeek}</p>
-          <p className="text-[10px] sm:text-xs mt-1 text-muted">Completed This Week</p>
+          <p className="text-xl sm:text-2xl font-bold text-primary">{completedTotal}</p>
+          <p className="text-[10px] sm:text-xs mt-1 text-muted">Completed</p>
         </motion.div>
       </div>
 

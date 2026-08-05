@@ -4,7 +4,7 @@ import ScheduledReports from '../components/features/schedules/ScheduledReports'
 
 interface ScheduledReportsPageProps {
   tasks: Task[];
-  currentUser: UserType;
+  currentUser?: UserType;
   users?: UserType[];
   teams?: Team[];
   subTeams?: SubTeam[];

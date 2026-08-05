@@ -3,7 +3,7 @@ import { config } from '../config/env';
 import { getGmailToken, updateGmailAccessToken, deleteGmailToken, markNeedsReauth } from './gmailTokenStorage';
 import { refreshAccessToken } from './gmailOAuthService';
 import { replaceTemplateVariables } from './emailTemplateStorage';
-import { logEmailSuccess, logEmailFailure, logEmailRetry, updateTaskEmailThreadId } from './emailLogService';
+import { logEmailSuccess, logEmailFailure, updateTaskEmailThreadId } from './emailLogService';
 import { getEmailTemplate } from './emailTemplateStorage';
 import { firestoreAdmin } from './firebaseAdmin';
 
@@ -291,7 +291,7 @@ export async function sendEmailAsUser(
         }
         accessToken = refreshed.access_token;
         await updateGmailAccessToken(senderEmail, accessToken, refreshed.expires_in);
-        await logEmailRetry(senderEmail, toEmail, subject);
+        // Token was refreshed proactively — not a send retry, so don't log 'retrying'
         logger.info(`[TOKEN DEBUG] Token refreshed successfully for ${senderEmail}`);
       } catch (refreshErr) {
         logger.error(`[TOKEN ERROR] Token refresh exception for ${senderEmail}:`, refreshErr);
@@ -401,7 +401,7 @@ export async function sendEmailAsUser(
     tokenCache.delete(senderEmail); // force a fresh read on retry
     const retryToken = await getGmailToken(senderEmail);
     if (retryToken && retryToken.refreshToken && !retryToken.needsReauth) {
-      await logEmailFailure(senderEmail, toEmail, subject, 'Gmail API send failed — retrying');
+      await logEmailFailure(senderEmail, toEmail, subject, 'Gmail API send failed — retrying with refreshed token');
       const refreshed = await refreshAccessToken(retryToken.refreshToken);
       if (refreshed) {
         accessToken = refreshed.access_token;

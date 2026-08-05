@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useAppModals } from './hooks/useAppModals';
 import { useDatabase } from './hooks/useDatabase';
@@ -146,9 +146,10 @@ export default function App() {
     loadDatabase,
     syncDatabase,
     silentSync,
+    silentSyncCollection,
   } = useDatabase(!authIsLoading && isAuthenticated, authIsLoading);
 
-  // Real-time sync â€” invalidates React Query cache on SSE events
+  // Real-time sync — invalidates React Query cache on SSE events
   useRealtimeSync(token);
 
   // Active Simulated Session email state
@@ -205,7 +206,7 @@ export default function App() {
     setGmailLoading(true);
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch('/api/gmail/disconnect', {
+      const response = await fetch('/gmail/disconnect', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -240,7 +241,7 @@ export default function App() {
 
   // Dispatches a simulated alert and email log
   const triggerNotification = (
-    type: 'Delay Alert' | 'ETA Breach' | 'Task Assignment' | 'Progress Update',
+    type: 'Delay Alert' | 'ETA Breach' | 'Task Assignment' | 'Progress Update' | 'error',
     message: string,
     emailSentTo: string
   ) => {
@@ -341,7 +342,20 @@ export default function App() {
   const [filterAssigneeNames, setFilterAssigneeNames] = useState<string[]>([]);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [simulationMessage, setSimulationMessage] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
-  
+
+  // Apply status filter passed via navigation state (e.g. from Dashboard KPI cards)
+  useEffect(() => {
+    const navState = location.state as { statusFilter?: string[] } | null;
+    if (navState?.statusFilter && navState.statusFilter.length > 0) {
+      setFilterStatus(navState.statusFilter.join(','));
+      // Clear the state so navigating away and back doesn't re-apply it
+      window.history.replaceState({}, '');
+    }
+  }, [location]);
+
+  // Derive the status array for TasksPage � handles both single values and comma-joined values (e.g. "Closed,Reviewed")
+  const filterStatusArray = filterStatus === 'All' ? [] : filterStatus.split(',').map(s => s.trim()).filter(Boolean);
+
   // Task view tabs
   const [taskViewTab, setTaskViewTab] = useState<'active' | 'history'>('active');
   
@@ -452,7 +466,8 @@ export default function App() {
     return () => clearTimeout(debounced as any);
   }, [searchQuery]);
 
-  // Manual sync function for AdminPanel - use silent sync to avoid blocking UI
+  // Manual sync function — used only by the explicit "Sync" button in the UI.
+  // For post-mutation refreshes, use silentSyncCollection() instead.
   const handleManualSync = async () => {
     await silentSync();
   };
@@ -593,7 +608,7 @@ export default function App() {
     const emailToNameMap = new Map(
       users.map(u => [u.Email?.toLowerCase() || '', u.FullName])
     );
-    // FIX: Task has TeamID but no TeamName field — look the name up from `teams`
+    // FIX: Task has TeamID but no TeamName field � look the name up from `teams`
     // instead of referencing a property that doesn't exist on Task.
     const teamIdToNameMap = new Map(
       teams.map(t => [t.TeamID, t.TeamName])
@@ -740,6 +755,7 @@ export default function App() {
   });
 
   const handleSubmitProgressReport = async (data: any) => {
+    if (!activeUser) return;
     const propId = `RP-${Math.floor(1000 + Math.random() * 8999)}`;
     const nowStr = new Date().toISOString();
 
@@ -784,14 +800,14 @@ export default function App() {
 
       try {
         if (!gmailConnected) {
-          // Sender's Gmail not connected — show prompt instead of a silent send failure
+          // Sender's Gmail not connected � show prompt instead of a silent send failure
           setSimulationMessage({
             type: 'error',
-            text: `Gmail not connected for ${activeUser.Email}. Connect your Gmail account in Settings → Gmail to send report and closure emails.`,
+            text: `Gmail not connected for ${activeUser?.Email}. Connect your Gmail account in Settings ? Gmail to send report and closure emails.`,
           });
           connectGmail().catch(() => {});
         } else {
-          // Use typed API wrappers — fire-and-forget
+          // Use typed API wrappers � fire-and-forget
           triggerReportSubmissionEmail({
             submitterEmail: activeUser.Email,
             allocatorEmail: targetTask.AssignedByEmail,
@@ -808,7 +824,12 @@ export default function App() {
               closedByEmail: activeUser.Email,
               assignedToEmail: targetTask.AssignedToEmail,
               allocatorEmail: targetTask.AssignedByEmail,
-              task: updatedTask,
+              task: {
+                TaskID: updatedTask.TaskID,
+                Title: updatedTask.Title,
+                Description: updatedTask.Description,
+                CompletionDate: updatedTask.CompletionDate || nowStr.split('T')[0],
+              },
               closeRemark: data.WorkSummary,
             }).catch(err => logger.error('Failed to trigger closure email:', err));
           }
@@ -823,8 +844,9 @@ export default function App() {
     }
 
     await logAudit('Report', propId, 'Published Progress Report', '', JSON.stringify({ TaskID: data.TaskID, Status: data.StatusUpdate }));
-    // Trigger sync after action
-    handleManualSync();
+    // Refresh only the two collections affected by a report submission.
+    void silentSyncCollection('tasks');
+    void silentSyncCollection('reports');
     setIsReportModalOpen(false);
     setIsDrawerOpen(false);
     setSelectedTask(null);
@@ -985,7 +1007,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <MainLayout
-                currentUser={activeUser}
+                currentUser={activeUser || undefined}
                 onLogout={() => {
                   localStorage.removeItem('PMS_active_user_email');
                   localStorage.removeItem('PMS_auth_token');
@@ -1010,7 +1032,7 @@ export default function App() {
                   <Suspense fallback={<Spinner size="lg" />}>
                     <DashboardPage
         tasks={getVisibleTasks()}
-        currentUser={activeUser}
+        currentUser={activeUser || undefined}
         onNewTask={(assigneeEmail, teamIds) => {
           setPreSelectedAssignee(assigneeEmail);
           setPreSelectedTeamIDs(teamIds);
@@ -1057,8 +1079,8 @@ export default function App() {
               Password: hashedPassword
             };
             await dbService.saveUser(userDataWithHashedPassword);
-            // Trigger sync after action
-            handleManualSync();
+            // Refresh only the users collection after adding a user.
+            void silentSyncCollection('users');
           } catch (error) {
             throw error;
           }
@@ -1066,8 +1088,8 @@ export default function App() {
         onAddTemplate={async (templateData) => {
           try {
             await dbService.saveTemplate(templateData);
-            // Trigger sync after action
-            handleManualSync();
+            // Refresh only templates after adding a template.
+            void silentSyncCollection('templates');
           } catch (error) {
             throw error;
           }
@@ -1077,8 +1099,8 @@ export default function App() {
             const template = templates.find(t => t.TemplateID === templateId);
             if (template) {
               await dbService.saveTemplate({ ...template, Active: !template.Active });
-              // Trigger sync after action
-              handleManualSync();
+              // Refresh only templates after toggling status.
+              void silentSyncCollection('templates');
             }
           } catch (error) {
             throw error;
@@ -1088,8 +1110,8 @@ export default function App() {
           try {
             await dbService.saveTeam(teamData);
             await logAudit('Team', teamData.TeamID, 'Created Team', '', JSON.stringify(teamData));
-            // Trigger sync after action
-            handleManualSync();
+            // Refresh only teams after adding a team.
+            void silentSyncCollection('teams');
           } catch (error) {
             throw error;
           }
@@ -1185,8 +1207,8 @@ export default function App() {
         onToggleTeamStatus={async (teamId) => {
           try {
             await dbService.toggleTeamStatus(teamId);
-            // Trigger sync after action
-            handleManualSync();
+            // Refresh only teams after toggling status.
+            void silentSyncCollection('teams');
           } catch (error) {
             throw error;
           }
@@ -1233,7 +1255,7 @@ export default function App() {
                 }
                 // Only sync the body content, not frequency/sendTime/triggerCondition/active
                 if (key.endsWith('_value') || (!key.includes('_') && emailTemplateKeys.includes(baseKey))) {
-                  await fetch('/api/auth/email/templates/update', {
+                  await fetch('/auth/email/templates/update', {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
@@ -1273,7 +1295,7 @@ export default function App() {
             // Note: saveTeamSubmission already does optimistic update to cache
             // and notifies listeners, so we don't need to manually add to state here
             // to avoid duplicate entries
-            handleManualSync();
+            void silentSyncCollection('team_submissions');
           } catch (error) {
             throw error;
           }
@@ -1297,7 +1319,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <MainLayout
-                currentUser={activeUser}
+                currentUser={activeUser || undefined}
                 onLogout={() => {
                   localStorage.removeItem('PMS_active_user_email');
                   localStorage.removeItem('PMS_auth_token');
@@ -1311,7 +1333,7 @@ export default function App() {
                   <TasksPage
                   tasks={getVisibleTasks()}
                   filters={{
-                    status: filterStatus === 'All' ? [] : [filterStatus],
+                    status: filterStatusArray,
                     priority: filterPriority,
                     assignee: filterAssigneeNames.join(','),
                     searchQuery: debouncedSearchQuery
@@ -1357,7 +1379,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <MainLayout
-                currentUser={activeUser}
+                currentUser={activeUser || undefined}
                 onLogout={() => {
                   localStorage.removeItem('PMS_active_user_email');
                   localStorage.removeItem('PMS_auth_token');
@@ -1371,7 +1393,7 @@ export default function App() {
                   <TasksPage
                   tasks={getVisibleTasks()}
                   filters={{
-                    status: filterStatus === 'All' ? [] : [filterStatus],
+                    status: filterStatusArray,
                     priority: filterPriority,
                     assignee: filterAssigneeNames.join(','),
                     searchQuery: debouncedSearchQuery
@@ -1443,11 +1465,11 @@ export default function App() {
                   onApproveUser={handleApproveUser}
                   onAddTeam={async (team) => {
                     await dbService.saveTeam(team);
-                    handleManualSync();
+                    void silentSyncCollection('teams');
                   }}
                   onToggleTeamStatus={async (teamId) => {
                     await dbService.toggleTeamStatus(teamId);
-                    handleManualSync();
+                    void silentSyncCollection('teams');
                   }}
                   onUpdateUserTeams={handleUpdateUserTeams}
                   onDeleteTeam={handleDeleteTeam}
@@ -1468,7 +1490,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <MainLayout
-                currentUser={activeUser}
+                currentUser={activeUser || undefined}
                 onLogout={() => {
                   localStorage.removeItem('PMS_active_user_email');
                   localStorage.removeItem('PMS_auth_token');
@@ -1487,11 +1509,11 @@ export default function App() {
                   subTeams={subTeams}
                   onAddTeam={async (team) => {
                     await dbService.saveTeam(team);
-                    handleManualSync();
+                    void silentSyncCollection('teams');
                   }}
                   onToggleTeamStatus={async (teamId) => {
                     await dbService.toggleTeamStatus(teamId);
-                    handleManualSync();
+                    void silentSyncCollection('teams');
                   }}
                   onUpdateUserTeams={handleUpdateUserTeams}
                   onDeleteTeam={handleDeleteTeam}
@@ -1576,7 +1598,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <MainLayout
-                currentUser={activeUser}
+                currentUser={activeUser || undefined}
                 onLogout={() => {
                   localStorage.removeItem('PMS_active_user_email');
                   localStorage.removeItem('PMS_auth_token');
@@ -1613,7 +1635,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <MainLayout
-                currentUser={activeUser}
+                currentUser={activeUser || undefined}
                 onLogout={() => {
                   localStorage.removeItem('PMS_active_user_email');
                   localStorage.removeItem('PMS_auth_token');
@@ -1634,7 +1656,7 @@ export default function App() {
                   settings={settings}
                   onAddTeamSubmission={async (submission) => {
                     await dbService.saveTeamSubmission(submission);
-                    handleManualSync();
+                    void silentSyncCollection('team_submissions');
                   }}
                   isDarkMode={isDarkMode}
                 />
@@ -1650,7 +1672,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <MainLayout
-                currentUser={activeUser}
+                currentUser={activeUser || undefined}
                 onLogout={() => {
                   localStorage.removeItem('PMS_active_user_email');
                   localStorage.removeItem('PMS_auth_token');
@@ -1668,13 +1690,13 @@ export default function App() {
                   templates={templates}
                   onAddTemplate={async (template) => {
                     await dbService.saveTemplate(template);
-                    handleManualSync();
+                    void silentSyncCollection('templates');
                   }}
                   onToggleTemplateStatus={async (templateId) => {
                     const template = templates.find(t => t.TemplateID === templateId);
                     if (template) {
                       await dbService.saveTemplate({ ...template, Active: !template.Active });
-                      handleManualSync();
+                      void silentSyncCollection('templates');
                     }
                   }}
                   isDarkMode={isDarkMode}
@@ -1691,7 +1713,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <MainLayout
-                currentUser={activeUser}
+                currentUser={activeUser || undefined}
                 onLogout={() => {
                   localStorage.removeItem('PMS_active_user_email');
                   localStorage.removeItem('PMS_auth_token');

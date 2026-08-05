@@ -5,7 +5,7 @@ import { isAdminLevel } from '../constants/status';
 
 interface SchedulesPageProps {
   tasks: Task[];
-  currentUser: UserType;
+  currentUser?: UserType;
   users?: UserType[];
   templates?: TaskTemplate[];
   onAddTemplate?: (template: TaskTemplate) => void;

@@ -347,7 +347,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const raw = await api.get<any[]>('/users');
+      const raw = await api.get<any[]>('/api/users');
       const users: User[] = raw.map(u => {
         return {
           ...u,
@@ -395,7 +395,7 @@ export const dbService = {
     // Background async: Write via API
     (async () => {
       const persist = async () => {
-        await api.put(`/users/${encodeURIComponent(user.Email)}`, finalUser);
+        await api.put(`/api/users/${encodeURIComponent(user.Email)}`, finalUser);
       };
       try {
         await persist();
@@ -415,7 +415,7 @@ export const dbService = {
             // onFail: show error toast and rollback
             // Rollback optimistic update
             const rollback = async () => {
-              const raw = await api.get<any[]>('/users');
+              const raw = await api.get<any[]>('/api/users');
               const rollbackData: User[] = raw.map(u => {
                 return {
                   ...u,
@@ -442,8 +442,8 @@ export const dbService = {
 
     try {
       const [teams, settings] = await Promise.all([
-        api.get<Team[]>('/teams'),
-        api.get<AppSetting[]>('/settings')
+        api.get<Team[]>('/api/teams'),
+        api.get<AppSetting[]>('/api/settings')
       ]);
 
       // Load team leader emails and stakeholder emails from settings and attach to teams
@@ -488,7 +488,7 @@ export const dbService = {
     // Background async: Write via API
     (async () => {
       const persist = async () => {
-        await api.put(`/teams/${team.TeamID}`, teamToSave);
+        await api.put(`/api/teams/${team.TeamID}`, teamToSave);
       };
       try {
         await persist();
@@ -529,7 +529,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.put(`/teams/${teamId}`, team);
+        await api.put(`/api/teams/${teamId}`, team);
       };
       try {
         await persist();
@@ -566,7 +566,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.del(`/teams/${teamId}`);
+        await api.del(`/api/teams/${teamId}`);
       };
       try {
         await persist();
@@ -597,7 +597,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const templates = await api.get<TaskTemplate[]>('/templates');
+      const templates = await api.get<TaskTemplate[]>('/api/templates');
       setCache('templates', templates);
       return templates;
     } catch (error) {
@@ -625,7 +625,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.put(`/templates/${template.TemplateID}`, templateToSave);
+        await api.put(`/api/templates/${template.TemplateID}`, templateToSave);
       };
       try {
         await persist();
@@ -661,7 +661,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.del(`/templates/${templateId}`);
+        await api.del(`/api/templates/${templateId}`);
       };
       try {
         await persist();
@@ -692,7 +692,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const raw = await api.get<any[]>('/tasks');
+      const raw = await api.get<any[]>('/api/tasks');
       const tasks: Task[] = raw.map(t => {
         return {
           ...t,
@@ -735,7 +735,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.put(`/tasks/${task.TaskID}`, finalTask);
+        await api.put(`/api/tasks/${task.TaskID}`, finalTask);
       };
       try {
         await persist();
@@ -750,7 +750,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<any[]>('/tasks');
+              const raw = await api.get<any[]>('/api/tasks');
               const rollbackData: Task[] = raw.map(t => {
                 return { ...t, AssignedToTeamIDs: t.AssignedToTeamIDs ? (Array.isArray(t.AssignedToTeamIDs) ? t.AssignedToTeamIDs : [t.AssignedToTeamIDs]) : (t.TeamID ? [t.TeamID] : []) };
               });
@@ -774,7 +774,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.del(`/tasks/${taskId}`);
+        await api.del(`/api/tasks/${taskId}`);
       };
       try {
         await persist();
@@ -788,7 +788,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<any[]>('/tasks');
+              const raw = await api.get<any[]>('/api/tasks');
               const rollbackData: Task[] = raw.map(t => {
                 return { ...t, AssignedToTeamIDs: t.AssignedToTeamIDs ? (Array.isArray(t.AssignedToTeamIDs) ? t.AssignedToTeamIDs : [t.AssignedToTeamIDs]) : (t.TeamID ? [t.TeamID] : []) };
               });
@@ -808,7 +808,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const reports = await api.get<TaskReport[]>('/reports');
+      const reports = await api.get<TaskReport[]>('/api/reports');
       setCache('reports', reports);
       return reports;
     } catch (error) {
@@ -857,7 +857,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const followups = await api.get<FollowUp[]>('/followups');
+      const followups = await api.get<FollowUp[]>('/api/followups');
       setCache('followups', followups);
       return followups;
     } catch (error) {
@@ -906,7 +906,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const settings = await api.get<AppSetting[]>('/settings');
+      const settings = await api.get<AppSetting[]>('/api/settings');
       setCache('settings', settings);
       return settings;
     } catch (error) {
@@ -961,7 +961,7 @@ export const dbService = {
 
     try {
       // Server caps to 200 entries
-      const audits = await api.get<AuditLog[]>('/auditlogs');
+      const audits = await api.get<AuditLog[]>('/api/auditlogs');
       setCache('auditlogs', audits);
       return audits;
     } catch (error) {
@@ -975,7 +975,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const emailTemplates = await api.get<EmailTemplate[]>('/email-templates');
+      const emailTemplates = await api.get<EmailTemplate[]>('/api/email-templates');
       setCache('email_templates', emailTemplates);
       return emailTemplates;
     } catch (error) {
@@ -1009,7 +1009,7 @@ export const dbService = {
     // Background async: Write via API
     (async () => {
       const persist = async () => {
-        await api.put(`/email-templates/${template.templateName}`, finalTemplate);
+        await api.put(`/api/email-templates/${template.templateName}`, finalTemplate);
       };
       try {
         await persist();
@@ -1043,7 +1043,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.del(`/email-templates/${templateName}`);
+        await api.del(`/api/email-templates/${templateName}`);
       };
       try {
         await persist();
@@ -1066,7 +1066,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const subtasks = await api.get<Subtask[]>('/subtasks');
+      const subtasks = await api.get<Subtask[]>('/api/subtasks');
       setCache('subtasks', subtasks);
       return subtasks;
     } catch (error) {
@@ -1095,7 +1095,7 @@ export const dbService = {
     // Background async: Write via API
     (async () => {
       const persist = async () => {
-        await api.put(`/subtasks/${subtask.SubtaskID}`, subtaskToSave);
+        await api.put(`/api/subtasks/${subtask.SubtaskID}`, subtaskToSave);
       };
       try {
         await persist();
@@ -1172,7 +1172,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const comments = await api.get<Comment[]>('/comments');
+      const comments = await api.get<Comment[]>('/api/comments');
       setCache('comments', comments);
       return comments;
     } catch (error) {
@@ -1191,7 +1191,7 @@ export const dbService = {
     // Background async: Write via API
     (async () => {
       const persist = async () => {
-        await api.put(`/comments/${comment.CommentID}`, comment);
+        await api.put(`/api/comments/${comment.CommentID}`, comment);
       };
       try {
         await persist();
@@ -1221,7 +1221,7 @@ export const dbService = {
     if (cached) return cached;
 
     try {
-      const submissions = await api.get<TeamSubmission[]>('/team-submissions');
+      const submissions = await api.get<TeamSubmission[]>('/api/team-submissions');
       setCache('teamSubmissions', submissions);
       return submissions;
     } catch (error) {
@@ -1274,7 +1274,7 @@ export const dbService = {
 
     try {
       // Server attaches sub-team leader emails from settings
-      const subTeams = await api.get<SubTeam[]>('/sub-teams');
+      const subTeams = await api.get<SubTeam[]>('/api/sub-teams');
       setCache('sub_teams', subTeams);
       return subTeams;
     } catch (error) {
@@ -1303,7 +1303,7 @@ export const dbService = {
     // Background async: Write via API
     (async () => {
       const persist = async () => {
-        await api.put(`/sub-teams/${subTeam.SubTeamID}`, subTeamToSave);
+        await api.put(`/api/sub-teams/${subTeam.SubTeamID}`, subTeamToSave);
       };
       try {
         await persist();
@@ -1336,7 +1336,7 @@ export const dbService = {
     // Background async: Delete via API
     (async () => {
       const persist = async () => {
-        await api.del(`/sub-teams/${subTeamId}`);
+        await api.del(`/api/sub-teams/${subTeamId}`);
       };
       try {
         await persist();
@@ -1375,7 +1375,33 @@ export const dbService = {
     teamSubmissions: TeamSubmission[];
     audits: AuditLog[];  
   }> {
-    // Read all collections from API in parallel
+    // Read all collections from API in parallel.
+    // Promise.allSettled ensures a single slow/failed collection (e.g. auditlogs
+    // on a cold server) does not wipe out the entire batch — the failed collection
+    // falls back to an empty array and the rest of the data loads normally.
+    const results = await Promise.allSettled([
+      api.get<any[]>('/api/users'),
+      api.get<any[]>('/api/tasks'),
+      api.get<Team[]>('/api/teams'),
+      api.get<SubTeam[]>('/api/sub-teams'),
+      api.get<TaskTemplate[]>('/api/templates'),
+      api.get<AppSetting[]>('/api/settings'),
+      api.get<EmailTemplate[]>('/api/email-templates'),
+      api.get<TaskReport[]>('/api/reports'),
+      api.get<FollowUp[]>('/api/followups'),
+      api.get<Subtask[]>('/api/subtasks'),
+      api.get<Comment[]>('/api/comments'),
+      api.get<TeamSubmission[]>('/api/team-submissions'),
+      api.get<AuditLog[]>('/api/auditlogs'),
+    ]);
+
+    // Helper: extract value from settled result, falling back to [] on rejection
+    function settled<T>(result: PromiseSettledResult<T[]>, name: string): T[] {
+      if (result.status === 'fulfilled') return result.value;
+      logger.error(`batchLoadAll: failed to load ${name}:`, (result as PromiseRejectedResult).reason);
+      return [];
+    }
+
     const [
       usersRaw,
       tasksRaw,
@@ -1389,22 +1415,22 @@ export const dbService = {
       subtasks,
       comments,
       teamSubmissions,
-      audits  
-    ] = await Promise.all([
-      api.get<any[]>('/users'),
-      api.get<any[]>('/tasks'),
-      api.get<Team[]>('/teams'),
-      api.get<SubTeam[]>('/sub-teams'),
-      api.get<TaskTemplate[]>('/templates'),
-      api.get<AppSetting[]>('/settings'),
-      api.get<EmailTemplate[]>('/email-templates'),
-      api.get<TaskReport[]>('/reports'),
-      api.get<FollowUp[]>('/followups'),
-      api.get<Subtask[]>('/subtasks'),
-      api.get<Comment[]>('/comments'),
-      api.get<TeamSubmission[]>('/team-submissions'),
-      api.get<AuditLog[]>('/auditlogs')
-    ]);
+      audits,
+    ] = [
+      settled<any>(results[0] as PromiseSettledResult<any[]>, 'users'),
+      settled<any>(results[1] as PromiseSettledResult<any[]>, 'tasks'),
+      settled<Team>(results[2] as PromiseSettledResult<Team[]>, 'teams'),
+      settled<SubTeam>(results[3] as PromiseSettledResult<SubTeam[]>, 'sub-teams'),
+      settled<TaskTemplate>(results[4] as PromiseSettledResult<TaskTemplate[]>, 'templates'),
+      settled<AppSetting>(results[5] as PromiseSettledResult<AppSetting[]>, 'settings'),
+      settled<EmailTemplate>(results[6] as PromiseSettledResult<EmailTemplate[]>, 'email-templates'),
+      settled<TaskReport>(results[7] as PromiseSettledResult<TaskReport[]>, 'reports'),
+      settled<FollowUp>(results[8] as PromiseSettledResult<FollowUp[]>, 'followups'),
+      settled<Subtask>(results[9] as PromiseSettledResult<Subtask[]>, 'subtasks'),
+      settled<Comment>(results[10] as PromiseSettledResult<Comment[]>, 'comments'),
+      settled<TeamSubmission>(results[11] as PromiseSettledResult<TeamSubmission[]>, 'team-submissions'),
+      settled<AuditLog>(results[12] as PromiseSettledResult<AuditLog[]>, 'auditlogs'),
+    ];
 
     // Apply the same data transformations as individual getters
     const users: User[] = usersRaw.map(u => {

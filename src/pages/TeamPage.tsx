@@ -8,7 +8,7 @@ import { Plus, ChevronRight, ChevronDown, User, Search } from 'lucide-react';
 
 interface TeamPageProps {
   tasks: Task[];
-  currentUser: UserType;
+  currentUser?: UserType;
   users?: UserType[];
   teams?: Team[];
   subTeams?: SubTeam[];

@@ -77,7 +77,7 @@ export default function SettingsPage({ user, onLogout }: SettingsPageProps) {
       const token = localStorage.getItem('auth_token');
       if (!token) return;
 
-      const response = await fetch('/api/auth/gmail/status', {
+      const response = await fetch('/auth/gmail/status', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -98,7 +98,7 @@ export default function SettingsPage({ user, onLogout }: SettingsPageProps) {
       const token = localStorage.getItem('auth_token');
       if (!token) return;
 
-      const response = await fetch('/api/auth/gmail/url', {
+      const response = await fetch('/auth/gmail/url', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -124,7 +124,7 @@ export default function SettingsPage({ user, onLogout }: SettingsPageProps) {
       const token = localStorage.getItem('auth_token');
       if (!token) return;
 
-      const response = await fetch('/api/auth/gmail/disconnect', {
+      const response = await fetch('/auth/gmail/disconnect', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

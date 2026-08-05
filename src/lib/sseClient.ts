@@ -1,5 +1,5 @@
 // SSE Client for real-time change sync
-// Connects to /api/changes/stream and handles reconnection with backoff
+// Connects to /changes/stream and handles reconnection with backoff
 import { logger } from '../utils/logger';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'error';

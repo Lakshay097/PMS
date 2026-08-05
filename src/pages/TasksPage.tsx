@@ -13,7 +13,7 @@ interface TasksPageProps {
     assignee: string;
     searchQuery: string;
   };
-  currentUser: UserType;
+  currentUser?: UserType;
   users: UserType[];
   teams: Team[];
   subTeams: SubTeam[];

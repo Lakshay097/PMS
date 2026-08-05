@@ -1,6 +1,10 @@
 import { firestoreAdmin } from './firebaseAdmin';
 import { generateGoogleSheetsToken } from './googleSheetsService';
 import { config } from '../config';
+import { ttlCache } from '../utils/ttlCache';
+
+const EMAIL_TEMPLATES_CACHE_KEY = 'email_templates:all';
+const EMAIL_TEMPLATES_CACHE_TTL = 10 * 60 * 1000; // 10 min — templates change infrequently
 
 /**
  * Email template sync: Google Sheets ⇄ Firestore
@@ -99,6 +103,7 @@ export async function importTemplatesFromSheets(
   }
 
   await batch.commit();
+  ttlCache.invalidate(EMAIL_TEMPLATES_CACHE_KEY);
   console.info(`[emailTemplateSync] imported ${imported.length} templates from ${SHEET_NAME} by ${actingUserEmail}`);
   return imported;
 }
@@ -123,6 +128,7 @@ export async function saveTemplate(
 
   // 1) Firestore first — this is what the mail senders read.
   await firestoreAdmin.collection(COLLECTION).doc(templateName).set(record, { merge: true });
+  ttlCache.invalidate(EMAIL_TEMPLATES_CACHE_KEY);
 
   // 2) Write back to the sheet (retry once).
   let sheetsSynced = false;
@@ -144,8 +150,10 @@ export async function saveTemplate(
 // ─── list ────────────────────────────────────────────────────────────
 
 export async function listTemplates(): Promise<EmailTemplateRecord[]> {
-  const snap = await firestoreAdmin.collection(COLLECTION).get();
-  return snap.docs
-    .map((d) => d.data() as EmailTemplateRecord)
-    .sort((a, b) => a.templateName.localeCompare(b.templateName));
+  return ttlCache.getOrFetch(EMAIL_TEMPLATES_CACHE_KEY, EMAIL_TEMPLATES_CACHE_TTL, async () => {
+    const snap = await firestoreAdmin.collection(COLLECTION).get();
+    return snap.docs
+      .map((d) => d.data() as EmailTemplateRecord)
+      .sort((a, b) => a.templateName.localeCompare(b.templateName));
+  });
 }

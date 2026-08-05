@@ -1,7 +1,9 @@
 #!/bin/bash
 
-# Setup Cloud Scheduler job for weekly report reminders
-# This script creates the Cloud Scheduler job that triggers weekly PPT email reminders
+# Setup Cloud Scheduler job for report reminders
+# This script creates the Cloud Scheduler job that triggers hourly report reminder checks.
+# The actual send logic filters by each team's configured reminderDay, reminderTime, and timezone
+# (stored in Firestore team_report_config), so running hourly covers all teams on any day.
 
 set -e
 
@@ -32,19 +34,19 @@ echo "📅 Creating Cloud Scheduler job..."
 gcloud scheduler jobs create http $JOB_NAME \
     --location=$REGION \
     --project=$PROJECT_ID \
-    --schedule="0 9 * * 1" \
+    --schedule="0 * * * *" \
     --time-zone="Asia/Kolkata" \
     --uri="$SERVICE_URL/api/internal/run-weekly-reminders" \
     --http-method=POST \
     --oidc-service-account-email="$SCHEDULER_SERVICE_ACCOUNT" \
     --oidc-token-audience="$SERVICE_URL" \
-    --description="Weekly report reminder emails for PMS teams"
+    --description="Hourly report reminder check for PMS teams (per-team day/time/timezone configured in Firestore)"
 
 echo "✅ Cloud Scheduler job created successfully!"
 echo ""
 echo "📋 Job Details:"
 echo "  Name: $JOB_NAME"
-echo "  Schedule: Every Monday at 9:00 AM IST"
+echo "  Schedule: Every hour (0 * * * *) — per-team day/time/timezone filter applied server-side"
 echo "  Timezone: Asia/Kolkata"
 echo "  Endpoint: $SERVICE_URL/api/internal/run-weekly-reminders"
 echo "  Method: POST"

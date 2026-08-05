@@ -15,8 +15,8 @@ interface UseTaskOperationsProps {
   silentSync: () => Promise<void>;
   selectedTask: Task | null;
   setSelectedTask: (task: Task | null) => void;
-  triggerNotification: (type: string, message: string, emailSentTo: string) => void;
-  formatEmailTemplate: (key: string, task: Partial<Task>) => string;
+  triggerNotification: (type: 'Delay Alert' | 'ETA Breach' | 'Task Assignment' | 'Progress Update' | 'error', message: string, emailSentTo: string) => void;
+  formatEmailTemplate: (key: 'template_assigned_email' | 'template_delayed_email', task: Partial<Task>) => string;
   logAudit: (entity: string, id: string, action: string, oldValue: string, newValue: string) => Promise<void>;
   setIsSimulatingRecurrence: (isSimulating: boolean) => void;
   setSimulationMessage: (message: { type: "error" | "success" | "info"; text: string } | null) => void;

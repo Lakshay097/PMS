@@ -1,7 +1,41 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { User, Task, Team, SubTeam, TaskTemplate, AppSetting, TaskReport, FollowUp, Subtask, Comment, EmailTemplate, TeamSubmission, AuditLog } from '../types';
 import { dbService, initializeDatabaseWithRace, getPrimaryDatabase, forceClearAllCaches, getSyncStatus, subscribeToSyncStatus, setDatabaseSwitchCallback, switchToFirestoreBackup, registerOptimisticCallback } from '../lib/dbService';
+import { api } from '../lib/apiClient';
 import { logger } from '../utils/logger';
+
+// Collections that can be refreshed individually.
+// Kept in sync with the API route names in server/routes/firestore.ts.
+const COLLECTION_ROUTES: Record<string, string> = {
+  users:           '/api/users',
+  tasks:           '/api/tasks',
+  teams:           '/api/teams',
+  sub_teams:       '/api/sub-teams',
+  templates:       '/api/templates',
+  settings:        '/api/settings',
+  email_templates: '/api/email-templates',
+  reports:         '/api/reports',
+  followups:       '/api/followups',
+  subtasks:        '/api/subtasks',
+  comments:        '/api/comments',
+  team_submissions:'/api/team-submissions',
+  auditlogs:       '/api/auditlogs',
+};
+
+// Synchronously determine whether a valid auth token exists in localStorage.
+// Mirrors the same check in AuthContext so useDatabase can set the correct
+// initial isLoading state without waiting for a useEffect cycle.
+function hasValidStoredToken(): boolean {
+  try {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return false;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return false;
+    return !!localStorage.getItem('PMS_user');
+  } catch {
+    return false;
+  }
+}
 
 export function useDatabase(isAuthInitialized: boolean = false, authIsLoading: boolean = true) {
   const [users, setUsers] = useState<User[]>([]);
@@ -17,10 +51,15 @@ export function useDatabase(isAuthInitialized: boolean = false, authIsLoading: b
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [teamSubmissions, setTeamSubmissions] = useState<TeamSubmission[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Start loading only if there is a valid token — unauthenticated users should
+  // never be gated behind a spinner waiting for data that will never arrive.
+  const [isLoading, setIsLoading] = useState(() => hasValidStoredToken());
+  // Guard against double-loading when isAuthInitialized flips more than once
+  // (e.g. React StrictMode double-invoke or a token refresh triggering a re-render).
+  const loadedRef = useRef(false);
   const [dbConnectionStatus, setDbConnectionStatus] = useState<'connected' | 'disconnected' | 'error'>('connected');
   const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<string | undefined>(undefined);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
   const [databaseSwitchMessage, setDatabaseSwitchMessage] = useState<string | null>(null);
 
@@ -56,10 +95,14 @@ export function useDatabase(isAuthInitialized: boolean = false, authIsLoading: b
       setTeamSubmissions(data.teamSubmissions || []);
       setLastSyncTime(new Date().toISOString());
     } catch (error) {
-      setDbConnectionStatus('error');
-      // Show user-facing error message
-      setDatabaseSwitchMessage('Unable to connect. Please check your connection and refresh.');
-      setTimeout(() => setDatabaseSwitchMessage(null), 10000);
+      // A 401 means the token expired mid-load; apiClient already redirects to
+      // /login, so don't show a generic error banner — just stay quiet.
+      const is401 = error instanceof Error && error.message.includes('401');
+      if (!is401) {
+        setDbConnectionStatus('error');
+        setDatabaseSwitchMessage('Unable to connect. Please check your connection and refresh.');
+        setTimeout(() => setDatabaseSwitchMessage(null), 10000);
+      }
     } finally {
       setIsLoading(false);
       setIsSyncing(false);
@@ -96,6 +139,43 @@ export function useDatabase(isAuthInitialized: boolean = false, authIsLoading: b
       setDbConnectionStatus('error');
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  /**
+   * Refresh a single collection from the server without touching the other 12.
+   * Use this instead of silentSync() after any mutation — it costs exactly
+   * 1 API call (which may be served from the server-side TTL cache) instead of 13.
+   *
+   * Supported keys: 'users' | 'tasks' | 'teams' | 'sub_teams' | 'templates' |
+   *   'settings' | 'email_templates' | 'reports' | 'followups' | 'subtasks' |
+   *   'comments' | 'team_submissions' | 'auditlogs'
+   */
+  const silentSyncCollection = async (collection: keyof typeof COLLECTION_ROUTES) => {
+    const route = COLLECTION_ROUTES[collection];
+    if (!route) {
+      logger.warn(`[silentSyncCollection] Unknown collection: ${collection}`);
+      return;
+    }
+    try {
+      const data = await api.get<any[]>(route);
+      switch (collection) {
+        case 'users':            setUsers(data as User[]); break;
+        case 'tasks':            setTasks(data as Task[]); break;
+        case 'teams':            setTeams(data as Team[]); break;
+        case 'sub_teams':        setSubTeams(data as SubTeam[]); break;
+        case 'templates':        setTemplates(data as TaskTemplate[]); break;
+        case 'settings':         setSettings(data as AppSetting[]); break;
+        case 'email_templates':  setEmailTemplates(data as EmailTemplate[]); break;
+        case 'reports':          setReports(data as TaskReport[]); break;
+        case 'followups':        setFollowUps(data as FollowUp[]); break;
+        case 'subtasks':         setSubtasks(data as Subtask[]); break;
+        case 'comments':         setComments(data as Comment[]); break;
+        case 'team_submissions':  setTeamSubmissions(data as TeamSubmission[]); break;
+        case 'auditlogs':        setAudits(data as AuditLog[]); break;
+      }
+    } catch (error) {
+      logger.error(`[silentSyncCollection] Failed to refresh ${collection}:`, error);
     }
   };
 
@@ -181,13 +261,18 @@ export function useDatabase(isAuthInitialized: boolean = false, authIsLoading: b
   useEffect(() => {
     if (isAuthInitialized) {
       // Auth resolved AND user is authenticated — load data.
+      // Use the ref guard so that a token-refresh re-render doesn't trigger
+      // a redundant full reload (silentSync handles background refreshes).
+      // Reset the guard when isAuthInitialized goes false→true (fresh login).
       loadDatabase();
+      loadedRef.current = true;
       // Server-side Sheets sync is now handled by the server
     } else if (!authIsLoading) {
       // Auth has finished resolving but the user is NOT authenticated
       // (token missing, expired, or invalid). Release the loading gate so
       // App.tsx stops showing DashboardSkeleton and ProtectedRoute can
       // redirect to /login.
+      loadedRef.current = false; // reset so a subsequent login triggers a fresh load
       setIsLoading(false);
     }
     // When authIsLoading is still true we do nothing — isLoading stays true
@@ -230,5 +315,6 @@ export function useDatabase(isAuthInitialized: boolean = false, authIsLoading: b
     loadDatabase,
     syncDatabase,
     silentSync,
+    silentSyncCollection,
   };
 }

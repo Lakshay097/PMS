@@ -4,7 +4,7 @@ import Dashboard from '../components/features/dashboard/Dashboard';
 
 interface DashboardPageProps {
   tasks: Task[];
-  currentUser: UserType;
+  currentUser?: UserType;
   // teamIds param was previously absent, causing it to be silently dropped at
   // this boundary when App.tsx passed it (e.g. "Assign Task to Team" button).
   onNewTask: (assigneeEmail?: string, teamIds?: string[]) => void;
@@ -23,7 +23,7 @@ interface DashboardPageProps {
   onToggleUserActive?: (userId: string, active: boolean) => void;
   onSyncDatabase?: () => void;
   isSyncing?: boolean;
-  lastSyncTime?: string;
+  lastSyncTime?: string | undefined;
   dbConnectionStatus?: 'connected' | 'disconnected' | 'error';
   audits?: AuditLog[];
   settings?: AppSetting[];
@@ -35,7 +35,7 @@ interface DashboardPageProps {
   reports?: TaskReport[];
   teamSubmissions?: TeamSubmission[];
   onAddTeamSubmission?: (submission: TeamSubmission) => void;
-  triggerNotification?: (type: string, message: string, emailSentTo: string) => void;
+  triggerNotification?: (type: 'Delay Alert' | 'ETA Breach' | 'Task Assignment' | 'Progress Update' | 'error', message: string, emailSentTo: string) => void;
   onToggleUserStatus?: (email: string) => void;
   onUpdateUserRole?: (email: string, role: 'Admin' | 'Stakeholder' | 'Sub-stakeholder') => void;
   onApproveUser?: (email: string) => void;

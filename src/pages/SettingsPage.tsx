@@ -3,7 +3,7 @@ import { User as UserType, AppSetting, EmailTemplate } from '../types';
 import DashboardSettings from '../components/settings/DashboardSettings';
 
 interface SettingsPageProps {
-  currentUser: UserType;
+  currentUser?: UserType;
   settings?: AppSetting[];
   emailTemplates?: EmailTemplate[];
   onUpdateSetting?: (key: string, value: string) => void;

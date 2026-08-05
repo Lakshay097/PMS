@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Trash2, Search } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Trash2, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Task, User as UserType } from '../../../types';
 import { ROLE, isAdminLevel } from '../../../constants/status';
 
@@ -15,6 +15,15 @@ interface TaskListProps {
   onDeleteTask?: (taskId: string) => void;
 }
 
+type SortOrder = 'asc' | 'desc';
+
+function formatAssignedDate(dateStr: string | undefined): string {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
 export default function TaskList({
   tasks,
   onTaskClick,
@@ -26,11 +35,43 @@ export default function TaskList({
   taskSubView = 'my-tasks',
   onDeleteTask,
 }: TaskListProps) {
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+
+  const sortedTasks = useMemo(() => {
+    return [...tasks].sort((a, b) => {
+      const aDate = a.CreatedAt ? new Date(a.CreatedAt).getTime() : 0;
+      const bDate = b.CreatedAt ? new Date(b.CreatedAt).getTime() : 0;
+      return sortOrder === 'desc' ? bDate - aDate : aDate - bDate;
+    });
+  }, [tasks, sortOrder]);
+
+  const toggleSort = () => setSortOrder(prev => (prev === 'desc' ? 'asc' : 'desc'));
+
   return (
     <div className="border rounded-xl overflow-hidden bg-surface border-token">
+      {/* Sort header */}
+      <div className="flex items-center justify-between px-4 sm:px-6 py-2 sm:py-3 border-b border-[var(--color-border)] bg-surface">
+        <span className="text-[10px] sm:text-xs text-secondary">
+          {sortedTasks.length} task{sortedTasks.length !== 1 ? 's' : ''}
+        </span>
+        <button
+          onClick={toggleSort}
+          className="flex items-center gap-1 text-[10px] sm:text-xs text-secondary hover:text-primary transition-colors"
+          title="Sort by assigned date"
+        >
+          {sortOrder === 'desc' ? (
+            <ArrowDown size={12} className="shrink-0" />
+          ) : (
+            <ArrowUp size={12} className="shrink-0" />
+          )}
+          <span>Assigned Date</span>
+          <ArrowUpDown size={11} className="shrink-0 opacity-50" />
+        </button>
+      </div>
+
       <div className="divide-y divide-[var(--color-border)]">
         {/* PERF-CHECK: if list exceeds 50 items, add @tanstack/react-virtual */}
-        {tasks.map((task) => {
+        {sortedTasks.map((task) => {
           return (
             <div
               key={task.TaskID}
@@ -50,7 +91,8 @@ export default function TaskList({
                   <h4 className={`font-medium text-sm sm:text-base mb-2 line-clamp-2 ${isDarkMode ? 'text-white' : 'text-primary'}`}>{task.Title}</h4>
                   <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-[10px] sm:text-xs text-secondary">
                     <span>Due: {task.DueDate}</span>
-                    <span>Assigned to: {task.AssignedToEmail.split(',').map(email => email.trim().split('@')[0]).join(', ')}</span>
+                    <span>Assigned by: {task.AssignedByEmail ? task.AssignedByEmail.split('@')[0] : '—'}</span>
+                    <span>When assigned: {formatAssignedDate(task.CreatedAt)}</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
@@ -76,7 +118,7 @@ export default function TaskList({
             </div>
           );
         })}
-        {tasks.length === 0 && (
+        {sortedTasks.length === 0 && (
           <div className={`p-8 sm:p-12 text-center text-secondary`}>
             {emptyMessage}
           </div>
