@@ -125,9 +125,12 @@ export function getVisibleTasks(tasks: Task[], activeUser: any, currentView: str
   });
   
   const afterStatusFilter = afterViewFilter.filter(task => {
-    // Apply status filter
+    // Apply status filter — supports both a single value ("Closed") and a
+    // comma-joined multi-value string ("Closed,Reviewed") produced when the
+    // Dashboard KPI cards navigate with a statusFilter array.
     if (filters.status && filters.status !== 'All') {
-      return task.Status === filters.status;
+      const statuses = filters.status.split(',').map((s: string) => s.trim()).filter(Boolean);
+      return statuses.includes(task.Status);
     }
     return true;
   });
