@@ -13,9 +13,9 @@ interface SSEEventHandlers {
 export class SSEClient {
   private eventSource: EventSource | null = null;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 10;
-  private reconnectDelay = 2000; // Start with 2s
-  private maxReconnectDelay = 30000; // Cap at 30s
+  private maxReconnectAttempts = 20; // Increased from 10 to 20
+  private reconnectDelay = 1000; // Start with 1s (reduced from 2s)
+  private maxReconnectDelay = 60000; // Cap at 60s (increased from 30s)
   private handlers: SSEEventHandlers;
   private status: ConnectionStatus = 'disconnected';
   private localLastSyncTimestamp: string | null = null;
@@ -51,7 +51,7 @@ export class SSEClient {
         try {
           const data = JSON.parse(event.data);
           this.reconnectAttempts = 0;
-          this.reconnectDelay = 2000;
+          this.reconnectDelay = 1000; // Reset to initial delay
           this.setStatus('connected');
           
           if (this.handlers.onConnected) {

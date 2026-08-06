@@ -20,6 +20,7 @@ export function useRealtimeSync(token: string | null) {
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const backoff = useRef(1000);
   const lastHeartbeat = useRef(Date.now());
+  const maxBackoff = 60000; // Increased from 30s to 60s
 
   function connect() {
     if (!token) return;
@@ -62,7 +63,7 @@ export function useRealtimeSync(token: string | null) {
       esRef.current = null;
       reconnectRef.current = setTimeout(() => {
         connect();
-        backoff.current = Math.min(backoff.current * 2, 30_000);
+        backoff.current = Math.min(backoff.current * 2, maxBackoff);
       }, backoff.current);
     };
   }

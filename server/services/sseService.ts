@@ -26,14 +26,20 @@ export class SSEService {
       this.connections.delete(res);
     });
 
-    // Keep connection alive with ping every 25s
+    // Keep connection alive with ping every 15s (Cloud Run has 60s timeout)
     const pingInterval = setInterval(() => {
       if (this.connections.has(res)) {
-        res.write(`event: ping\ndata: {}\n\n`);
+        try {
+          res.write(`event: ping\ndata: {}\n\n`);
+        } catch (err) {
+          // Connection might be dead, remove it
+          this.connections.delete(res);
+          clearInterval(pingInterval);
+        }
       } else {
         clearInterval(pingInterval);
       }
-    }, 25000);
+    }, 15000);
   }
 
   /**
