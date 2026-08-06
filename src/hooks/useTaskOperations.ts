@@ -154,7 +154,7 @@ export function useTaskOperations({
               Title: newTask.Title,
               Description: newTask.Description,
               DueDate: newTask.DueDate,
-              Priority: Array.isArray(newTask.Priority) ? newTask.Priority : [newTask.Priority as any],
+              Priority: Array.isArray(newTask.Priority) ? newTask.Priority.join(',') : newTask.Priority as string,
               AttachmentLink: newTask.AttachmentLink,
             },
           });

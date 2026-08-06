@@ -193,7 +193,7 @@ export default function TasksPage({
 
       <TaskFilters
         filterStatus={filters.status}
-        filterPriority={Array.isArray(filters.priority) ? filters.priority.join(',') : filters.priority}
+        filterPriority={Array.isArray(filters.priority) ? filters.priority : filters.priority ? filters.priority.split(',') : []}
         filterAssigneeNames={filters.assignee ? filters.assignee.split(',').map(e => e.trim()).filter(Boolean) : []}
         filterDateFrom={filterDateFrom}
         filterDateTo={filterDateTo}
