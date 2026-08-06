@@ -546,8 +546,26 @@ export default function App() {
     return { overdue, soon };
   };
 
+  // TEMP DEBUG — remove after diagnosis
+  useEffect(() => {
+    if (tasks.length > 0 || users.length > 0) {
+      console.warn('[DEBUG] tasks.length:', tasks.length);
+      console.warn('[DEBUG] users.length:', users.length);
+      console.warn('[DEBUG] activeUser:', activeUser ? { Email: activeUser.Email, Role: activeUser.Role, TeamIDs: activeUser.TeamIDs } : null);
+      console.warn('[DEBUG] activeUserEmail (localStorage):', activeUserEmail);
+      console.warn('[DEBUG] visibleTasks.length:', visibleTasks.length);
+      if (tasks.length > 0 && activeUser) {
+        const sample = tasks[0];
+        console.warn('[DEBUG] sample task[0]:', { TaskID: sample.TaskID, AssignedToEmail: sample.AssignedToEmail, AssignedByEmail: sample.AssignedByEmail, Active: (sample as any).Active, DeletedAt: (sample as any).DeletedAt });
+      }
+    }
+  }, [tasks, users, activeUser, visibleTasks]);
+
   const getFilteredTasks = () => {
-    if (!activeUser) return [];
+    if (!activeUser) {
+      console.warn('[DEBUG] getFilteredTasks: activeUser is null, returning []');
+      return [];
+    }
     const today = new Date();
     today.setHours(0,0,0,0);
 
@@ -622,6 +640,7 @@ export default function App() {
       return isAssignee;
     });
 
+    console.warn('[DEBUG] getFilteredTasks result:', visible.length, 'of', tasks.length, '| role:', activeUser.Role, '| email:', activeUser.Email);
     return visible;
   };
 

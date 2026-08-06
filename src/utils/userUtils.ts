@@ -25,7 +25,7 @@ export function getAllSubordinates(
   const directSubs = allUsers.filter(u => 
     u.ManagerEmail?.toLowerCase() === normalizedEmail
   );
-  const result: string[] = directSubs.map(u => u.Email);
+  const result: string[] = directSubs.map(u => (u.Email || '').toLowerCase());
   for (const sub of directSubs) {
     result.push(...getAllSubordinates(sub.Email, allUsers, visited));
   }
