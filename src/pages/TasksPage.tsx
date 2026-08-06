@@ -9,7 +9,7 @@ interface TasksPageProps {
   tasks: Task[];
   filters: {
     status: string[];
-    priority: string;
+    priority: string | string[];
     assignee: string;
     searchQuery: string;
   };
@@ -79,11 +79,22 @@ export default function TasksPage({
       // Apply status filter
       if (filters.status && filters.status.length > 0 && !filters.status.includes('All')) {
         if (!filters.status.includes(task.Status)) return false;
+      } else if (typeof filters.status === 'string' && filters.status !== 'All') {
+        // Handle string status filter (backward compatibility)
+        if (task.Status !== filters.status) return false;
       }
 
       // Apply priority filter
       if (filters.priority && filters.priority !== 'All') {
-        if (task.Priority !== filters.priority) return false;
+        // Handle both string and array priority filters
+        if (Array.isArray(filters.priority)) {
+          if (filters.priority.length === 0) return true; // Empty array means no filter
+          const taskPriorities = Array.isArray(task.Priority) ? task.Priority : [task.Priority];
+          if (!filters.priority.some(p => taskPriorities.includes(p))) return false;
+        } else {
+          const taskPriorities = Array.isArray(task.Priority) ? task.Priority : [task.Priority];
+          if (!taskPriorities.includes(filters.priority)) return false;
+        }
       }
 
       // Apply assignee filter
