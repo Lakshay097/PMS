@@ -1,7 +1,7 @@
 # Setup Cloud Scheduler job for report reminders
-# This script creates the Cloud Scheduler job that triggers hourly report reminder checks.
+# This script creates the Cloud Scheduler job that triggers daily report reminder checks at 9AM IST.
 # The actual send logic filters by each team's configured reminderDay, reminderTime, and timezone
-# (stored in Firestore team_report_config), so running hourly covers all teams on any day.
+# (stored in Firestore team_report_config), so running daily covers all teams on any day.
 
 $ErrorActionPreference = "Stop"
 
@@ -33,19 +33,19 @@ Write-Host "📅 Creating Cloud Scheduler job..." -ForegroundColor Yellow
 gcloud scheduler jobs create http $JOB_NAME `
     --location=$REGION `
     --project=$PROJECT_ID `
-    --schedule="0 * * * *" `
+    --schedule="0 9 * * *" `
     --time-zone="Asia/Kolkata" `
     --uri="$SERVICE_URL/api/internal/run-weekly-reminders" `
     --http-method=POST `
     --oidc-service-account-email="$SCHEDULER_SERVICE_ACCOUNT" `
     --oidc-token-audience="$SERVICE_URL" `
-    --description="Hourly report reminder check for PMS teams (per-team day/time/timezone configured in Firestore)"
+    --description="Daily report reminder check for PMS teams at 9AM IST (per-team day/time/timezone filter applied server-side)"
 
 Write-Host "✅ Cloud Scheduler job created successfully!" -ForegroundColor Green
 Write-Host ""
 Write-Host "📋 Job Details:" -ForegroundColor Cyan
 Write-Host "  Name: $JOB_NAME" -ForegroundColor White
-Write-Host "  Schedule: Every hour (0 * * * *) — per-team day/time/timezone filter applied server-side" -ForegroundColor White
+Write-Host "  Schedule: Daily at 9AM IST (0 9 * * *) — per-team day/time/timezone filter applied server-side" -ForegroundColor White
 Write-Host "  Endpoint: $SERVICE_URL/api/internal/run-weekly-reminders" -ForegroundColor White
 Write-Host "  Method: POST" -ForegroundColor White
 Write-Host "  Auth: OIDC with service account $SCHEDULER_SERVICE_ACCOUNT" -ForegroundColor White
