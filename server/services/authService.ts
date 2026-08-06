@@ -1,9 +1,9 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { config } from '../config';
-import { BadRequestError, InternalServerError, UnauthorizedError } from '../utils/AppError';
-import { generateGoogleSheetsToken, fetchSheetValues } from './googleSheetsService';
+import { BadRequestError, UnauthorizedError } from '../utils/AppError';
 import { logger } from '../utils/logger';
+import { firestoreAdmin } from './firebaseAdmin';
 
 /**
  * User response interface
@@ -89,62 +89,49 @@ export function createToken(
 }
 
 /**
- * Performs user login — reads role from Google Sheets (source of truth).
+ * Performs user login — reads from Firestore (same source as all other endpoints).
+ * Previously read from Google Sheets, which caused login failures when the
+ * SA clock drifted and the Sheets token fetch returned invalid_grant.
  */
 export async function login(email: string, password: string): Promise<LoginResponse> {
   if (!email || !password) {
     throw new BadRequestError("Email and password are required");
   }
 
-  const tokenData = await generateGoogleSheetsToken();
-  if (!tokenData) {
-    throw new InternalServerError("Failed to authenticate with Google Sheets");
-  }
-
-  const spreadsheetId = tokenData.spreadsheetId;
-  if (!spreadsheetId) {
-    throw new InternalServerError("Spreadsheet ID not found");
-  }
-
-  const usersRange = 'users!A:R';
-  const users = await fetchSheetValues(tokenData.accessToken, spreadsheetId, usersRange);
-
-  if (!users || users.length === 0) {
-    throw new InternalServerError("Failed to fetch users");
-  }
-
   const normalizedEmail = email.toLowerCase();
-  let foundUser: any[] | null = null;
 
-  for (let i = 1; i < users.length; i++) {
-    const row = users[i];
-    if (row[2] === normalizedEmail) {
-      foundUser = row;
-      break;
-    }
-  }
+  // Read directly from Firestore — doc ID is the lowercased email
+  const docRef = firestoreAdmin.collection('users').doc(normalizedEmail);
+  const snap = await docRef.get();
 
-  if (!foundUser) {
+  if (!snap.exists) {
     throw new UnauthorizedError("Invalid email or password");
   }
 
-  // Check if user is active
-  const activeValue = foundUser[7];
-  if (activeValue !== 'true' && activeValue !== 'TRUE' && activeValue !== true) {
+  const user = snap.data() as Record<string, any>;
+
+  // Check active status — stored as boolean or string in Firestore
+  const activeValue = user.Active;
+  if (activeValue !== true && activeValue !== 'true' && activeValue !== 'TRUE') {
     throw new UnauthorizedError("Account is not active. Please wait for admin approval.");
   }
 
-  const storedPassword: string | undefined = foundUser[12];
+  // Check approval status
+  if (user.ApprovalStatus && user.ApprovalStatus !== 'approved') {
+    throw new UnauthorizedError("Account is not active. Please wait for admin approval.");
+  }
+
+  const storedPassword: string | undefined = user.Password;
   if (!storedPassword) {
     throw new UnauthorizedError("Account has no password set. Please contact your administrator.");
   }
 
   const isBcryptHash = storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2a$');
-
   let passwordMatches = false;
   if (isBcryptHash) {
     passwordMatches = await bcrypt.compare(password, storedPassword);
   } else {
+    // Legacy plaintext fallback
     passwordMatches = password === storedPassword;
   }
 
@@ -152,14 +139,15 @@ export async function login(email: string, password: string): Promise<LoginRespo
     throw new UnauthorizedError("Invalid email or password");
   }
 
-  const userId   = foundUser[0]; // UserID (A)
-  const fullName = foundUser[1]; // FullName (B)
-  const role     = foundUser[3]; // Role (D)
-  const teamId   = foundUser[5]; // TeamID (F)
-  const teamName = foundUser[6]; // TeamName (G)
-  const active   = foundUser[7] === 'true' || foundUser[7] === true;
+  const userId   = user.UserID   || '';
+  const fullName = user.FullName || '';
+  const role     = user.Role     || '';
+  const teamId   = user.TeamID   || (Array.isArray(user.TeamIDs)   && user.TeamIDs.length   > 0 ? user.TeamIDs[0]   : '');
+  const teamName = user.TeamName || (Array.isArray(user.TeamNames) && user.TeamNames.length > 0 ? user.TeamNames[0] : '');
 
-  const accessToken = createAccessToken(normalizedEmail, userId, role, fullName);
+  logger.info(`[login] Firestore login success for ${normalizedEmail}, role=${role}`);
+
+  const accessToken  = createAccessToken(normalizedEmail, userId, role, fullName);
   const refreshToken = createRefreshToken(normalizedEmail, userId);
 
   return {
@@ -172,7 +160,7 @@ export async function login(email: string, password: string): Promise<LoginRespo
       FullName: fullName,
       TeamID: teamId,
       TeamName: teamName,
-      Active: active,
+      Active: true,
     },
     expiresIn: config.JWT_EXPIRATION_SECONDS + 's',
     refreshTokenExpiresIn: '30d',
@@ -195,20 +183,34 @@ export function verifyToken(token: string): any {
  * @param refreshToken - The refresh token
  * @returns New access token and refresh token, or null if invalid
  */
-export function refreshAccessTokenFromRefreshToken(refreshToken: string): { token: string; refreshToken: string; expiresIn: string } | null {
+export async function refreshAccessTokenFromRefreshToken(refreshToken: string): Promise<{ token: string; refreshToken: string; expiresIn: string } | null> {
   try {
     const decoded = jwt.verify(refreshToken, config.JWT_SECRET) as any;
-    
+
     // Verify this is a refresh token
     if (decoded.type !== 'refresh') {
       logger.warn('Invalid refresh token: not a refresh token type');
       return null;
     }
-    
-    // Create new tokens
-    const newAccessToken = createAccessToken(decoded.email, decoded.userId, decoded.role, decoded.fullName);
+
+    // Re-read current role/fullName from Firestore so the new access token
+    // always reflects the latest user data (role changes take effect immediately).
+    let role = decoded.role || '';
+    let fullName = decoded.fullName || '';
+    try {
+      const snap = await firestoreAdmin.collection('users').doc(decoded.email).get();
+      if (snap.exists) {
+        const u = snap.data() as Record<string, any>;
+        role     = u.Role     || role;
+        fullName = u.FullName || fullName;
+      }
+    } catch (fsErr) {
+      logger.warn('[refreshToken] Firestore lookup failed, using token values:', fsErr);
+    }
+
+    const newAccessToken  = createAccessToken(decoded.email, decoded.userId, role, fullName);
     const newRefreshToken = createRefreshToken(decoded.email, decoded.userId);
-    
+
     return {
       token: newAccessToken,
       refreshToken: newRefreshToken,

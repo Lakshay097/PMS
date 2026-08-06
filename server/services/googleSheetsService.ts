@@ -42,8 +42,14 @@ export async function generateGoogleSheetsToken(): Promise<GoogleSheetsTokenResp
     // Google requires the SA JWT assertion to expire within 3600 s (1 hour).
     // Use GOOGLE_SA_JWT_EXPIRATION_SECONDS, NOT JWT_EXPIRATION_SECONDS (which
     // is the user session lifetime and can be days/weeks — far too long for Google).
-    const iat = Math.floor(Date.now() / 1000);
-    const exp = iat + config.GOOGLE_SA_JWT_EXPIRATION_SECONDS;
+    //
+    // Clock-skew guard: subtract 60 s from iat so the assertion is valid even
+    // if the Cloud Run container clock is slightly ahead of Google's servers.
+    // Google tolerates ±5 min skew; 60 s is a safe conservative buffer that
+    // still leaves ~59 min of usable token lifetime.
+    const now = Math.floor(Date.now() / 1000);
+    const iat = now - 60; // back-date by 60 s to absorb container clock drift
+    const exp = now + config.GOOGLE_SA_JWT_EXPIRATION_SECONDS;
     const claims = {
       iss: email,
       scope: "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file",

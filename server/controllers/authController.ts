@@ -446,7 +446,7 @@ export async function refreshTokenHandler(req: Request, res: Response): Promise<
   }
 
   const { refreshAccessTokenFromRefreshToken } = await import('../services/authService');
-  const newTokens = refreshAccessTokenFromRefreshToken(refreshToken);
+  const newTokens = await refreshAccessTokenFromRefreshToken(refreshToken);
 
   if (!newTokens) {
     throw new UnauthorizedError("Invalid or expired refresh token");
