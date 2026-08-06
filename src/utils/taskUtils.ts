@@ -23,9 +23,13 @@ export function getStatusBadgeStyle(status: string) {
 
 export function getVisibleTasks(tasks: Task[], activeUser: any, currentView: string, filters: any, users: any[] = []) {
   if (!tasks) return [];
+  if (!activeUser) return []; // Guard against null user
   
   const today = getCurrentLocalDate();
   const userEmail = activeUser.Email?.toLowerCase() || '';
+  
+  // If user has no email, return empty tasks (invalid user state)
+  if (!userEmail) return [];
   
   // Get hierarchical subordinates for the current user (if they are a stakeholder/team leader)
   const subStakeholderEmails = activeUser.Role === ROLE.STAKEHOLDER || activeUser.Role === ROLE.TEAM_LEADER
@@ -135,9 +139,23 @@ export function getVisibleTasks(tasks: Task[], activeUser: any, currentView: str
     return true;
   });
   
-  const afterPriorityFilter = afterStatusFilter.filter(task => {
+  const afterCategoryFilter = afterStatusFilter.filter(task => {
+    // Apply category filter
+    if (filters.category && filters.category !== 'All') {
+      return task.TaskType === filters.category;
+    }
+    return true;
+  });
+  
+  const afterPriorityFilter = afterCategoryFilter.filter(task => {
     // Apply priority filter
     if (filters.priority && filters.priority !== 'All') {
+      // Handle both string and array priority filters
+      if (Array.isArray(filters.priority)) {
+        if (filters.priority.length === 0) return true; // Empty array means no filter
+        const priorities = Array.isArray(task.Priority) ? task.Priority : [task.Priority];
+        return filters.priority.some(p => priorities.includes(p));
+      }
       return task.Priority === filters.priority;
     }
     return true;
@@ -161,6 +179,7 @@ export function getVisibleTasks(tasks: Task[], activeUser: any, currentView: str
 
 export function getOverdueAndSoonTasks(tasks: Task[], activeUser: any, users: any[] = []) {
   if (!tasks) return { overdue: [], soon: [] };
+  if (!activeUser) return { overdue: [], soon: [] }; // Guard against null user
   
   const today = getCurrentLocalDate();
   const threeDaysFromNow = new Date();
