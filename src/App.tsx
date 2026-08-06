@@ -336,7 +336,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterScope, setFilterScope] = useState<'all_visible' | 'assigned_to_me' | 'created_by_me' | 'assigned_by_me'>('all_visible');
   const [filterStatus, setFilterStatus] = useState<string>('All');
-  const [filterPriority, setFilterPriority] = useState<string>('All');
+  const [filterPriority, setFilterPriority] = useState<string[]>([]);
   const [filterCategory, setFilterCategory] = useState<string>('All');
   const [filterType, setFilterType] = useState<string>('All');
   const [filterAssigneeNames, setFilterAssigneeNames] = useState<string[]>([]);
@@ -645,7 +645,8 @@ export default function App() {
 
     // Secondary Dropdowns
     const matchesStatus = filterStatus === 'All' || task.Status === filterStatus;
-    const matchesPriority = filterPriority === 'All' || task.Priority === filterPriority;
+    const priorities = Array.isArray(task.Priority) ? task.Priority : [task.Priority];
+    const matchesPriority = filterPriority.length === 0 || filterPriority.some(p => priorities.includes(p));
     const matchesType = filterType === 'All' || task.TaskType === filterType;
     const matchesAssigneeSearch = filterAssigneeNames.length === 0 || 
       filterAssigneeNames.some(email => assignees.includes(email));

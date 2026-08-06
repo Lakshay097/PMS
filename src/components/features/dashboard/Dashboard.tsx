@@ -175,7 +175,7 @@ export default function Dashboard({
   const { isDarkMode } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string[]>(['All']);
-  const [filterPriority, setFilterPriority] = useState('All');
+  const [filterPriority, setFilterPriority] = useState<string[]>([]);
   const [filterAssignee, setFilterAssignee] = useState<string[]>([]);
   const [filterAssignedByEmails, setFilterAssignedByEmails] = useState<string[]>([]);
   const [filterTeamIDs, setFilterTeamIDs] = useState<string[]>([]);
@@ -482,7 +482,7 @@ export default function Dashboard({
     const dateToParam = params.get('dateTo');
 
     if (statusParam) setFilterStatus(statusParam.split(','));
-    if (priorityParam) setFilterPriority(priorityParam);
+    if (priorityParam) setFilterPriority(priorityParam.split(','));
     if (assigneesParam) setFilterAssignee(assigneesParam.split(','));
     if (teamsParam) setFilterTeamIDs(teamsParam.split(','));
     if (dateFromParam) setFilterDateFrom(dateFromParam);
@@ -916,10 +916,10 @@ export default function Dashboard({
         filtered = filtered.filter(t => filterStatus.includes(t.Status));
       }
     }
-    if (filterPriority !== 'All') {
+    if (filterPriority.length > 0) {
       filtered = filtered.filter(t => {
         const priorities = Array.isArray(t.Priority) ? t.Priority : [t.Priority];
-        return priorities.includes(filterPriority);
+        return filterPriority.some(p => priorities.includes(p));
       });
     }
     if (filterAssignee.length > 0) {

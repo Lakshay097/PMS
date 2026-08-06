@@ -3,10 +3,11 @@ import { Filter, X, ChevronDown, Search, Calendar } from 'lucide-react';
 import { User as UserType } from '../../../types';
 import { ROLE, isAdminLevel } from '../../../constants/status';
 import { getAllSubordinates } from '../../../utils/userUtils';
+import MultiselectDropdown from '../../../components/shared/MultiselectDropdown';
 
 interface TaskFiltersProps {
   filterStatus: string[];
-  filterPriority: string;
+  filterPriority: string[];
   filterAssigneeNames: string[];
   filterDateFrom: string;
   filterDateTo: string;
@@ -16,7 +17,7 @@ interface TaskFiltersProps {
   users: UserType[];
   isDarkMode: boolean;
   onFilterStatusChange: (value: string[]) => void;
-  onFilterPriorityChange: (value: string) => void;
+  onFilterPriorityChange: (value: string[]) => void;
   onFilterAssigneeNamesChange: (value: string[]) => void;
   onFilterDateFromChange: (value: string) => void;
   onFilterDateToChange: (value: string) => void;
@@ -280,21 +281,19 @@ export default function TaskFilters({
       </div>
 
       {/* Priority */}
-      <div className="flex flex-wrap gap-1">
-        {['All', 'Critical', 'High', 'Medium', 'Low'].map((p) => (
-          <button
-            key={p}
-            onClick={() => onFilterPriorityChange(p)}
-            className={`px-2 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
-              filterPriority === p
-                ? 'bg-blue-600 text-white'
-                : inputBase + ' border hover:border-blue-500'
-            }`}
-          >
-            {p}
-          </button>
-        ))}
-      </div>
+      <MultiselectDropdown
+        label="Priority"
+        options={[
+          { value: 'Critical', label: 'Critical' },
+          { value: 'High', label: 'High' },
+          { value: 'Medium', label: 'Medium' },
+          { value: 'Low', label: 'Low' }
+        ]}
+        selectedValues={filterPriority}
+        onSelectionChange={onFilterPriorityChange}
+        isDarkMode={isDarkMode}
+        badgeColor="orange"
+      />
 
       {/* Assignees */}
       <div className="relative" ref={assigneeDropdownRef}>
