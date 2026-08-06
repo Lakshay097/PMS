@@ -11,19 +11,9 @@ import { getAllSubordinates } from './utils/userUtils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logger } from './utils/logger';
 import { ROLE, isAdminLevel } from './constants/status';
-import {
-  INITIAL_USERS,
-  INITIAL_TEAMS,
-  INITIAL_TEMPLATES,
-  INITIAL_TASKS,
-  INITIAL_REPORTS,
-  INITIAL_FOLLOWUPS,
-  INITIAL_SETTINGS
-} from './initialData';
 import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AppSetting, TaskStatus, SystemAlert, Subtask, Comment, TeamSubmission } from './types/index';
-import { dbService, initializeDatabase, setOfflineSaveNotification } from './lib/dbService';
-import { initAuth, sheetsApi } from './lib/sheetsService';
-import { checkAndGenerateRecurringTasks, evaluateOverdueTasks } from './lib/taskEngine';
+import { dbService, setOfflineSaveNotification } from './lib/dbService';
+import { initAuth } from './lib/sheetsService';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { useAuth } from './contexts/AuthContext';
 import { useTheme } from './contexts/ThemeContext';
@@ -546,26 +536,8 @@ export default function App() {
     return { overdue, soon };
   };
 
-  // TEMP DEBUG — remove after diagnosis
-  useEffect(() => {
-    if (tasks.length > 0 || users.length > 0) {
-      console.warn('[DEBUG] tasks.length:', tasks.length);
-      console.warn('[DEBUG] users.length:', users.length);
-      console.warn('[DEBUG] activeUser:', activeUser ? { Email: activeUser.Email, Role: activeUser.Role, TeamIDs: activeUser.TeamIDs } : null);
-      console.warn('[DEBUG] activeUserEmail (localStorage):', activeUserEmail);
-      console.warn('[DEBUG] visibleTasks.length:', visibleTasks.length);
-      if (tasks.length > 0 && activeUser) {
-        const sample = tasks[0];
-        console.warn('[DEBUG] sample task[0]:', { TaskID: sample.TaskID, AssignedToEmail: sample.AssignedToEmail, AssignedByEmail: sample.AssignedByEmail, Active: (sample as any).Active, DeletedAt: (sample as any).DeletedAt });
-      }
-    }
-  }, [tasks, users, activeUser, visibleTasks]);
-
   const getFilteredTasks = () => {
-    if (!activeUser) {
-      console.warn('[DEBUG] getFilteredTasks: activeUser is null, returning []');
-      return [];
-    }
+    if (!activeUser) return [];
     const today = new Date();
     today.setHours(0,0,0,0);
 
@@ -640,7 +612,6 @@ export default function App() {
       return isAssignee;
     });
 
-    console.warn('[DEBUG] getFilteredTasks result:', visible.length, 'of', tasks.length, '| role:', activeUser.Role, '| email:', activeUser.Email);
     return visible;
   };
 
