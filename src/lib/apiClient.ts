@@ -6,8 +6,10 @@
 //   need it at all.
 // - We explicitly discard any absolute URL (http/https) that may have been
 //   baked in by a stale build so it can never break a production deployment.
+// - We also discard '/api' specifically: every call path already starts with
+//   '/api/...' so prepending '/api' again would produce '/api/api/...' (404).
 const _raw = import.meta.env.VITE_API_BASE ?? '';
-const API_BASE = _raw.startsWith('http') ? '' : _raw;
+const API_BASE = (_raw.startsWith('http') || _raw === '/api' || _raw === '/api/') ? '' : _raw;
 
 // Track in-flight refresh to prevent race conditions
 let refreshPromise: Promise<boolean> | null = null;

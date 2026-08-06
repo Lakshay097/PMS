@@ -10,8 +10,10 @@ ARG VITE_FIREBASE_PROJECT_ID
 ARG VITE_FIREBASE_APP_ID
 # Both names accepted — VITE_API_BASE_URL is used by src/api/client.ts
 # VITE_API_BASE is used by src/lib/apiClient.ts
-ARG VITE_API_BASE_URL=/api
-ARG VITE_API_BASE=/api
+# These MUST be empty: call paths already include /api (e.g. /api/users).
+# Setting either to '/api' produces double-prefix URLs (/api/api/users → 404).
+ARG VITE_API_BASE_URL=
+ARG VITE_API_BASE=
 
 # Set them as environment variables so Vite bakes them into the bundle at build time
 ENV VITE_FIREBASE_API_KEY=$VITE_FIREBASE_API_KEY

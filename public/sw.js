@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'msh3mrhf';
+const CACHE_VERSION = 'v2-fix-api-prefix';
 const STATIC_CACHE_NAME = `taskflow-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE_NAME = `taskflow-dynamic-${CACHE_VERSION}`;
 

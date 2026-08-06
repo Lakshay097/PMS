@@ -475,7 +475,10 @@ export default function App() {
   // 2. Track Active User Session adaptation
   useEffect(() => {
     if (users.length > 0) {
-      const found = users.find(u => u.Email === activeUserEmail);
+      // Case-insensitive email match — Firestore may store emails with different
+      // casing than what was saved in localStorage at login time.
+      const activeUserEmailLower = activeUserEmail?.toLowerCase() || '';
+      const found = users.find(u => (u.Email || '').toLowerCase() === activeUserEmailLower);
       if (found) {
         // Always trust the Role from the login JWT (stored in PMS_user) rather than
         // the Firestore users array, which may be stale or have a different value.
@@ -486,7 +489,7 @@ export default function App() {
           if (storedUser) {
             const parsed = JSON.parse(storedUser);
             const storedEmail = (parsed.Email || parsed.email || '').toLowerCase();
-            if (storedEmail === activeUserEmail?.toLowerCase()) {
+            if (storedEmail === activeUserEmailLower) {
               loginRole = parsed.Role || parsed.role;
             }
           }
@@ -505,7 +508,8 @@ export default function App() {
         if (storedUser) {
           try {
             const parsedUser = JSON.parse(storedUser);
-            if (parsedUser.Email === activeUserEmail || parsedUser.email === activeUserEmail) {
+            const parsedEmail = (parsedUser.Email || parsedUser.email || '').toLowerCase();
+            if (parsedEmail === activeUserEmailLower) {
               const normalizedUser = {
                 ...parsedUser,
                 Email: parsedUser.Email || parsedUser.email || activeUserEmail,
@@ -548,8 +552,19 @@ export default function App() {
     today.setHours(0,0,0,0);
 
     // Get hierarchical subordinates for stakeholders
-    const subordinateEmails = activeUser.Role === ROLE.STAKEHOLDER 
+    const subordinateEmails = activeUser.Role === ROLE.STAKEHOLDER
       ? getAllSubordinates(activeUser.Email, users)
+      : [];
+
+    // Get team members for Team Leaders
+    const teamMemberEmails = activeUser.Role === ROLE.TEAM_LEADER
+      ? users
+          .filter(u =>
+            u.TeamIDs?.some((tid: string) => activeUser.TeamIDs?.includes(tid)) &&
+            (u.Email || '').toLowerCase() !== (activeUser.Email || '').toLowerCase() &&
+            u.Active
+          )
+          .map((u: User) => (u.Email || '').toLowerCase())
       : [];
 
     // Get visible sub-team IDs for Sub-Team Leader visibility
@@ -573,29 +588,38 @@ export default function App() {
       if (task.DeletedAt) return false;
 
       const assignees = (task.AssignedToEmail || '').split(',').map(e => e.trim().toLowerCase());
-      const isAssignee = assignees.includes(activeUser.Email?.toLowerCase() || '');
+      const userEmailLower = (activeUser.Email || '').toLowerCase();
+      const isAssignee = assignees.includes(userEmailLower);
+      const isAssigner = (task.AssignedByEmail || '').toLowerCase() === userEmailLower;
+
+      if (activeUser.Role === ROLE.TEAM_LEADER) {
+        const assignedToTeamMember = assignees.some(email => teamMemberEmails.includes(email));
+        return isAssignee || isAssigner || assignedToTeamMember;
+      }
 
       if (activeUser.Role === ROLE.STAKEHOLDER) {
         // Stakeholders see tasks assigned to them, by them, or to their hierarchical subordinates
-        const hasSubordinateAssignee = assignees.some(email => 
+        const hasSubordinateAssignee = assignees.some(email =>
           subordinateEmails.includes(email)
         );
-        return isAssignee || task.AssignedByEmail?.toLowerCase() === activeUser.Email?.toLowerCase() || hasSubordinateAssignee;
+        return isAssignee || isAssigner || hasSubordinateAssignee;
       }
+
       if (activeUser.Role === ROLE.SUB_STAKEHOLDER) {
         // Sub-stakeholders see tasks assigned to them
         // Additionally, if they are a Sub-Team Leader, they see tasks for their sub-team members
         if (visibleSubTeamIds.length > 0) {
           // Check if task assignee is in any of the visible sub-teams
-          const assigneeUser = users.find(u => assignees.includes(u.Email?.toLowerCase() || ''));
+          const assigneeUser = users.find((u: User) => assignees.includes((u.Email || '').toLowerCase()));
           if (assigneeUser && assigneeUser.SubTeamIDs) {
-            const hasVisibleSubTeam = assigneeUser.SubTeamIDs.some(stId => visibleSubTeamIds.includes(stId));
+            const hasVisibleSubTeam = assigneeUser.SubTeamIDs.some((stId: string) => visibleSubTeamIds.includes(stId));
             if (hasVisibleSubTeam) return true;
           }
         }
         return isAssignee;
       }
-      return false;
+
+      return isAssignee;
     });
 
     return visible;

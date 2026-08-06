@@ -1,9 +1,10 @@
 steps:
 
   # Step 1: Build the Docker image.
-  # Both VITE_API_BASE and VITE_API_BASE_URL are passed so both API client
-  # modules (src/lib/apiClient.ts and src/api/client.ts) get '/api' baked
-  # into the Vite bundle at build time.
+  # VITE_API_BASE and VITE_API_BASE_URL are intentionally left EMPTY.
+  # apiClient.ts calls paths that already include the /api prefix (e.g. /api/users).
+  # Setting either var to '/api' would produce double-prefix URLs (/api/api/users → 404).
+  # The production bundle uses relative same-origin URLs, so no base is needed.
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
@@ -19,9 +20,9 @@ steps:
       - '--build-arg'
       - 'VITE_FIREBASE_APP_ID=1:1086239964586:web:239a15d2885b99d8c87fd3'
       - '--build-arg'
-      - 'VITE_API_BASE_URL=/api'
+      - 'VITE_API_BASE_URL='
       - '--build-arg'
-      - 'VITE_API_BASE=/api'
+      - 'VITE_API_BASE='
       - '--build-arg'
       - 'SKIP_SHEETS_SYNC=true'
       - '.'

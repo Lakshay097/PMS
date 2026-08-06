@@ -21,8 +21,8 @@ export function useTaskMetrics({
   users = [],
 }: UseTaskMetricsProps) {
   const visibleTasks = useMemo(() => {
-    return getVisibleTasks(tasks, activeUser, currentView, filters);
-  }, [tasks, activeUser, currentView, filters]);
+    return getVisibleTasks(tasks, activeUser, currentView, filters, users);
+  }, [tasks, activeUser, currentView, filters, users]);
 
   const { overdue, soon } = useMemo(() => {
     return getOverdueAndSoonTasks(tasks, activeUser, users);
