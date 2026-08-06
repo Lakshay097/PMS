@@ -280,17 +280,21 @@ export default function TaskFilters({
       </div>
 
       {/* Priority */}
-      <select
-        value={filterPriority}
-        onChange={(e) => onFilterPriorityChange(e.target.value)}
-        className={`border rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${inputBase}`}
-      >
-        <option value="All">All priority</option>
-        <option value="Critical">Critical</option>
-        <option value="High">High</option>
-        <option value="Medium">Medium</option>
-        <option value="Low">Low</option>
-      </select>
+      <div className="flex flex-wrap gap-1">
+        {['All', 'Critical', 'High', 'Medium', 'Low'].map((p) => (
+          <button
+            key={p}
+            onClick={() => onFilterPriorityChange(p)}
+            className={`px-2 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+              filterPriority === p
+                ? 'bg-blue-600 text-white'
+                : inputBase + ' border hover:border-blue-500'
+            }`}
+          >
+            {p}
+          </button>
+        ))}
+      </div>
 
       {/* Assignees */}
       <div className="relative" ref={assigneeDropdownRef}>
