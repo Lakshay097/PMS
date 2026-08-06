@@ -45,7 +45,7 @@ export class SSEClient {
     this.setStatus('connecting');
 
     try {
-      this.eventSource = new EventSource('/changes/stream');
+      this.eventSource = new EventSource('/api/changes/stream');
 
       this.eventSource.addEventListener('connected', (event: MessageEvent) => {
         try {
