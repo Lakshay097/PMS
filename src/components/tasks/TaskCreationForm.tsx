@@ -97,7 +97,7 @@ export default function TaskCreationForm({
       recurrenceType: 'One-time',
       startDate: new Date().toISOString().split('T')[0],
       dueDate: '',
-      priority: 'Medium',
+      priority: ['Medium'],
       assigneeEmail: '',
       assignedByEmail: '',
       teamIds: [],  

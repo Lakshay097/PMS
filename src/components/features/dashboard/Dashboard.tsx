@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAllSubordinates } from '../../../utils/userUtils';
 import { getVisibleSubTeamIds, isSubTeamLeader, isTeamLeader } from '../../../utils/subTeamUtils';
@@ -172,6 +172,7 @@ export default function Dashboard({
   onRefreshUsers,
 }: DashboardProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isDarkMode } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string[]>(['All']);
@@ -193,6 +194,18 @@ export default function Dashboard({
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailLoading, setGmailLoading] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Reset filters when switching between Dashboard sub-views
+  useEffect(() => {
+    setSearchQuery('');
+    setFilterStatus(['All']);
+    setFilterPriority([]);
+    setFilterAssignee([]);
+    setFilterAssignedByEmails([]);
+    setFilterTeamIDs([]);
+    setFilterDateFrom('');
+    setFilterDateTo('');
+  }, [location.pathname]);
 
   // Scheduled Tasks submission state
   const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
@@ -494,7 +507,7 @@ export default function Dashboard({
     const params = new URLSearchParams(window.location.search);
     if (filterStatus.length > 0 && !filterStatus.includes('All')) params.set('status', filterStatus.join(','));
     else params.delete('status');
-    if (filterPriority !== 'All') params.set('priority', filterPriority);
+    if (filterPriority.length > 0) params.set('priority', filterPriority.join(','));
     else params.delete('priority');
     if (filterAssignee.length > 0) params.set('assignees', filterAssignee.join(','));
     else params.delete('assignees');
@@ -919,7 +932,7 @@ export default function Dashboard({
     if (filterPriority.length > 0) {
       filtered = filtered.filter(t => {
         const priorities = Array.isArray(t.Priority) ? t.Priority : [t.Priority];
-        return filterPriority.some(p => priorities.includes(p));
+        return filterPriority.some(p => priorities.includes(p as any));
       });
     }
     if (filterAssignee.length > 0) {
@@ -1892,11 +1905,12 @@ export default function Dashboard({
                                 Date: {report.ReportDate || 'N/A'}
                               </div>
                             </div>
-                            <span className={`text-xs font-bold px-2 py-1 rounded border ${report.StatusUpdate === 'Submitted' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                                report.StatusUpdate === 'In Progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                  'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                            <span className={`text-xs font-bold px-2 py-1 rounded border ${task.Status === 'Closed' || task.Status === 'Reviewed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                                task.Status === 'In Progress' || task.Status === 'Submitted' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                  task.Status === 'Not Started' ? 'bg-gray-500/10 text-gray-400 border-gray-500/20' :
+                                    'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
                               }`}>
-                              {report.StatusUpdate || 'Unknown'}
+                              {task.Status || 'Unknown'}
                             </span>
                           </div>
                           <div className={`mb-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
@@ -2021,11 +2035,12 @@ export default function Dashboard({
                                     Date: {report.ReportDate || 'N/A'}
                                   </div>
                                 </div>
-                                <span className={`text-xs font-bold px-2 py-1 rounded border ${report.StatusUpdate === 'Submitted' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                                    report.StatusUpdate === 'In Progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                      'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                                <span className={`text-xs font-bold px-2 py-1 rounded border ${task.Status === 'Closed' || task.Status === 'Reviewed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                                    task.Status === 'In Progress' || task.Status === 'Submitted' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                      task.Status === 'Not Started' ? 'bg-gray-500/10 text-gray-400 border-gray-500/20' :
+                                        'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
                                   }`}>
-                                  {report.StatusUpdate || 'Unknown'}
+                                  {task.Status || 'Unknown'}
                                 </span>
                               </div>
                               <div className={`mb-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>

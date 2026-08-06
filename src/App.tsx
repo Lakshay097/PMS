@@ -281,7 +281,7 @@ export default function App() {
       .replace(/{TaskID}/g, task.TaskID || '')
       .replace(/{Title}/g, task.Title || '')
       .replace(/{Description}/g, task.Description || '')
-      .replace(/{Priority}/g, task.Priority || '')
+      .replace(/{Priority}/g, Array.isArray(task.Priority) ? task.Priority.join(', ') : task.Priority || '')
       .replace(/{DueDate}/g, task.DueDate || '')
       .replace(/{AssignedToEmail}/g, task.AssignedToEmail || '')
       .replace(/{AssignedByEmail}/g, task.AssignedByEmail || '')
@@ -342,6 +342,23 @@ export default function App() {
       window.history.replaceState({}, '');
     }
   }, [location]);
+
+  // Reset search filters when navigating between different main sections
+  useEffect(() => {
+    const currentPath = location.pathname;
+    
+    // Clear search and filters when entering reports or other non-tasks sections
+    if (currentPath === ROUTES.REPORTS || currentPath === ROUTES.WEEKLY_REPORTS || 
+        currentPath === ROUTES.TEAM || currentPath === ROUTES.ADMIN || currentPath === ROUTES.SETTINGS) {
+      setSearchQuery('');
+      setDebouncedSearchQuery('');
+      setFilterStatus('All');
+      setFilterPriority([]);
+      setFilterCategory('All');
+      setFilterType('All');
+      setFilterAssigneeNames([]);
+    }
+  }, [location.pathname]);
 
   // Derive the status array for TasksPage � handles both single values and comma-joined values (e.g. "Closed,Reviewed")
   const filterStatusArray = filterStatus === 'All' ? [] : filterStatus.split(',').map(s => s.trim()).filter(Boolean);
@@ -660,7 +677,8 @@ export default function App() {
     // Secondary Dropdowns
     const matchesStatus = filterStatus === 'All' || task.Status === filterStatus;
     const priorities = Array.isArray(task.Priority) ? task.Priority : [task.Priority];
-    const matchesPriority = filterPriority.length === 0 || filterPriority.some(p => priorities.includes(p));
+    const filterPriorities = Array.isArray(filterPriority) ? filterPriority : [filterPriority];
+    const matchesPriority = filterPriorities.length === 0 || filterPriorities.some(p => priorities.includes(p as any));
     const matchesType = filterType === 'All' || task.TaskType === filterType;
     const matchesAssigneeSearch = filterAssigneeNames.length === 0 || 
       filterAssigneeNames.some(email => assignees.includes(email));
@@ -1353,7 +1371,7 @@ export default function App() {
                     assignee: filterAssigneeNames.join(','),
                     searchQuery: debouncedSearchQuery
                   }}
-                  currentUser={activeUser}
+                  currentUser={activeUser || undefined}
                   users={users}
                   teams={teams}
                   subTeams={subTeams}
@@ -1361,7 +1379,7 @@ export default function App() {
                   isDarkMode={isDarkMode}
                   onFilterChange={(filterType, value) => {
                     if (filterType === 'status') setFilterStatus(Array.isArray(value) ? value.join(',') : value as string);
-                    if (filterType === 'priority') setFilterPriority(value as string);
+                    if (filterType === 'priority') setFilterPriority(Array.isArray(value) ? value : []);
                     if (filterType === 'assignee') setFilterAssigneeNames(Array.isArray(value) ? value : [value as string]);
                     if (filterType === 'searchQuery') setSearchQuery(value as string);
                   }}
@@ -1421,7 +1439,7 @@ export default function App() {
                     assignee: filterAssigneeNames.join(','),
                     searchQuery: debouncedSearchQuery
                   }}
-                  currentUser={activeUser}
+                  currentUser={activeUser || undefined}
                   users={users}
                   teams={teams}
                   subTeams={subTeams}
@@ -1429,7 +1447,7 @@ export default function App() {
                   isDarkMode={isDarkMode}
                   onFilterChange={(filterType, value) => {
                     if (filterType === 'status') setFilterStatus(Array.isArray(value) ? value.join(',') : value as string);
-                    if (filterType === 'priority') setFilterPriority(value as string);
+                    if (filterType === 'priority') setFilterPriority(Array.isArray(value) ? value : []);
                     if (filterType === 'assignee') setFilterAssigneeNames(Array.isArray(value) ? value : [value as string]);
                     if (filterType === 'searchQuery') setSearchQuery(value as string);
                   }}
@@ -1470,7 +1488,7 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={[ROLE.ADMIN]}>
               <MainLayout
-                currentUser={activeUser}
+                currentUser={activeUser || undefined}
                 onLogout={() => {
                   localStorage.removeItem('PMS_active_user_email');
                   localStorage.removeItem('PMS_auth_token');
@@ -1534,7 +1552,7 @@ export default function App() {
                 <Suspense fallback={<Spinner size="lg" />}>
                   <TeamPage
                   tasks={getVisibleTasks()}
-                  currentUser={activeUser}
+                  currentUser={activeUser || undefined}
                   users={users}
                   teams={teams}
                   subTeams={subTeams}
@@ -1642,7 +1660,7 @@ export default function App() {
                 <Suspense fallback={<Spinner size="lg" />}>
                   <ReportsPage
                   tasks={getVisibleTasks()}
-                  currentUser={activeUser}
+                  currentUser={activeUser || undefined}
                   users={users}
                   teams={teams}
                   subTeams={subTeams}
@@ -1679,7 +1697,7 @@ export default function App() {
                 <Suspense fallback={<Spinner size="lg" />}>
                   <ScheduledReportsPage
                   tasks={getVisibleTasks()}
-                  currentUser={activeUser}
+                  currentUser={activeUser || undefined}
                   users={users}
                   teams={teams}
                   subTeams={subTeams}
@@ -1716,7 +1734,7 @@ export default function App() {
                 <Suspense fallback={<Spinner size="lg" />}>
                   <SchedulesPage
                   tasks={getVisibleTasks()}
-                  currentUser={activeUser}
+                  currentUser={activeUser || undefined}
                   users={users}
                   templates={templates}
                   onAddTemplate={async (template) => {
@@ -1756,7 +1774,7 @@ export default function App() {
               >
                 <Suspense fallback={<Spinner size="lg" />}>
                   <SettingsPage
-                  currentUser={activeUser}
+                  currentUser={activeUser || undefined}
                   settings={settings}
                   emailTemplates={emailTemplates}
                   onUpdateSetting={handleUpdateSetting}
@@ -1784,7 +1802,7 @@ export default function App() {
           {/* Create Task modal */}
           {isTaskModalOpen && (
             <CreateTaskModal
-            currentUser={activeUser}
+            currentUser={activeUser || undefined}
             usersList={users}
             teamsList={teams}
             subTeamsList={subTeams}
@@ -1814,7 +1832,7 @@ export default function App() {
               setIsDrawerOpen(false);
               setSelectedTask(null);
             }}
-            currentUser={activeUser}
+            currentUser={activeUser || undefined}
             reports={reports}
             subtasks={subtasks}
             onOpenReportModal={() => setIsReportModalOpen(true)}
@@ -1841,7 +1859,7 @@ export default function App() {
             isOpen={isReportModalOpen}
             onClose={() => setIsReportModalOpen(false)}
             onSubmit={handleSubmitProgressReport}
-            currentUser={activeUser}
+            currentUser={activeUser || undefined}
             subtasks={subtasks.filter(s => s.TaskID === selectedTask.TaskID)}
           />
         )}
@@ -1866,7 +1884,7 @@ export default function App() {
           <EditProfileModal
             isOpen={isEditProfileModalOpen}
             onClose={() => setIsEditProfileModalOpen(false)}
-            currentUser={activeUser}
+            currentUser={activeUser || undefined}
             onSave={(updatedUser) => {
               setUsers(prev => prev.map(u => u.UserID === activeUser.UserID ? { ...u, ...updatedUser } : u));
               setActiveUser(prev => prev ? { ...prev, ...updatedUser } : null);

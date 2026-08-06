@@ -51,7 +51,10 @@ export default function OverviewDashboard({ tasks, onTaskClick, onViewAllTasks, 
 
   // Get urgent tasks (needs attention)
   const urgentTasks = tasks
-    .filter(t => t.Status === 'Overdue' || t.Priority === 'Critical' || t.Priority === 'High')
+    .filter(t => {
+      const priorities = Array.isArray(t.Priority) ? t.Priority : [t.Priority];
+      return t.Status === 'Overdue' || priorities.includes('Critical') || priorities.includes('High');
+    })
     .filter(t => t.Status !== 'Closed')
     .slice(0, 6);
 

@@ -2405,12 +2405,12 @@ export default function AdminPanel({
                           </div>
 
                           <div className="flex gap-1.5">
-                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${template.Priority === 'Critical' ? (isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200') :
-                              template.Priority === 'High' ? (isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-orange-50 text-orange-700 border-orange-200') :
-                                template.Priority === 'Medium' ? (isDarkMode ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 'bg-yellow-50 text-yellow-700 border-yellow-200') :
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${(Array.isArray(template.Priority) ? template.Priority : [template.Priority]).includes('Critical') ? (isDarkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-700 border-red-200') :
+                              (Array.isArray(template.Priority) ? template.Priority : [template.Priority]).includes('High') ? (isDarkMode ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-orange-50 text-orange-700 border-orange-200') :
+                                (Array.isArray(template.Priority) ? template.Priority : [template.Priority]).includes('Medium') ? (isDarkMode ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 'bg-yellow-50 text-yellow-700 border-yellow-200') :
                                   (isDarkMode ? 'bg-slate-500/10 text-slate-400 border-slate-500/20' : 'bg-slate-50 text-slate-700 border-slate-200')
                               }`}>
-                              {template.Priority} priority
+                              {Array.isArray(template.Priority) ? template.Priority.join(', ') : template.Priority} priority
                             </span>
                           </div>
 

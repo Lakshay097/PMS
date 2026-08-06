@@ -196,7 +196,7 @@ export default function TaskDetailDrawer({
                       }}
                     >
                       <div className="flex items-center gap-2">
-                        <StatusBadge status={report.StatusUpdate} size="sm" />
+                        <StatusBadge status={reportTask?.Status || 'Unknown'} size="sm" />
                         <span className="text-xs text-muted">
                           {new Date(report.ReportDate).toLocaleString()}
                         </span>

@@ -90,10 +90,10 @@ export default function TasksPage({
         if (Array.isArray(filters.priority)) {
           if (filters.priority.length === 0) return true; // Empty array means no filter
           const taskPriorities = Array.isArray(task.Priority) ? task.Priority : [task.Priority];
-          if (!filters.priority.some(p => taskPriorities.includes(p))) return false;
+          if (!filters.priority.some(p => taskPriorities.includes(p as any))) return false;
         } else {
           const taskPriorities = Array.isArray(task.Priority) ? task.Priority : [task.Priority];
-          if (!taskPriorities.includes(filters.priority)) return false;
+          if (!taskPriorities.includes(filters.priority as any)) return false;
         }
       }
 
@@ -193,7 +193,7 @@ export default function TasksPage({
 
       <TaskFilters
         filterStatus={filters.status}
-        filterPriority={filters.priority}
+        filterPriority={Array.isArray(filters.priority) ? filters.priority.join(',') : filters.priority}
         filterAssigneeNames={filters.assignee ? filters.assignee.split(',').map(e => e.trim()).filter(Boolean) : []}
         filterDateFrom={filterDateFrom}
         filterDateTo={filterDateTo}

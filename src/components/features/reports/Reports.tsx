@@ -495,11 +495,12 @@ export default function Reports({
                               Date: {report.ReportDate || 'N/A'}
                             </div>
                           </div>
-                          <span className={`text-xs font-bold px-2 py-1 rounded border ${report.StatusUpdate === 'Submitted' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                              report.StatusUpdate === 'In Progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                          <span className={`text-xs font-bold px-2 py-1 rounded border ${task.Status === 'Closed' || task.Status === 'Reviewed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                              task.Status === 'In Progress' || task.Status === 'Submitted' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                task.Status === 'Not Started' ? 'bg-gray-500/10 text-gray-400 border-gray-500/20' :
+                                  'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
                             }`}>
-                            {report.StatusUpdate || 'Unknown'}
+                            {task.Status || 'Unknown'}
                           </span>
                         </div>
                         <div className={`mb-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
@@ -577,8 +578,10 @@ export default function Reports({
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className={`text-xs font-bold px-2 py-1 rounded border ${task.Status === 'Submitted' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                            'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                        <span className={`text-xs font-bold px-2 py-1 rounded border ${task.Status === 'Closed' || task.Status === 'Reviewed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                            task.Status === 'In Progress' || task.Status === 'Submitted' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                              task.Status === 'Not Started' ? 'bg-gray-500/10 text-gray-400 border-gray-500/20' :
+                                'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
                           }`}>
                           {task.Status || 'Unknown'}
                         </span>
@@ -620,11 +623,12 @@ export default function Reports({
                                   Date: {report.ReportDate || 'N/A'}
                                 </div>
                               </div>
-                              <span className={`text-xs font-bold px-2 py-1 rounded border ${report.StatusUpdate === 'Submitted' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                                  report.StatusUpdate === 'In Progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                    'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                              <span className={`text-xs font-bold px-2 py-1 rounded border ${task.Status === 'Closed' || task.Status === 'Reviewed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                                  task.Status === 'In Progress' || task.Status === 'Submitted' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                    task.Status === 'Not Started' ? 'bg-gray-500/10 text-gray-400 border-gray-500/20' :
+                                      'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
                                 }`}>
-                                {report.StatusUpdate || 'Unknown'}
+                                {task.Status || 'Unknown'}
                               </span>
                             </div>
                             <div className={`mb-3 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>

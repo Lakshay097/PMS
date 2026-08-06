@@ -1165,7 +1165,7 @@ export default function TaskDrawer({
                             )}
                           </div>
                           <span className="text-[10px] border px-2 py-0.5 rounded font-mono font-bold bg-slate-100 text-slate-800 border-token">
-                            {report.StatusUpdate}
+                            {task.Status}
                           </span>
                         </div>
 
