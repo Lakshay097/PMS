@@ -1358,7 +1358,15 @@ export default function App() {
                     setIsTaskModalOpen(true);
                   }}
                   getPriorityColor={(priority) => {
-                    switch(priority) {
+                    const priorities = Array.isArray(priority) ? priority : [priority];
+                    // Use the highest priority for styling
+                    const priorityOrder = ['Low', 'Medium', 'High', 'Critical'];
+                    const highestPriority = priorities.reduce((highest, current) => {
+                      return priorityOrder.indexOf(current) > priorityOrder.indexOf(highest) ? current : highest;
+                    }, 'Low');
+
+                    switch(highestPriority) {
+                      case 'Critical': return 'text-red-600 bg-red-50';
                       case 'High': return 'text-red-600 bg-red-50';
                       case 'Medium': return 'text-yellow-600 bg-yellow-50';
                       case 'Low': return 'text-green-600 bg-green-50';
@@ -1418,7 +1426,15 @@ export default function App() {
                     setIsTaskModalOpen(true);
                   }}
                   getPriorityColor={(priority) => {
-                    switch(priority) {
+                    const priorities = Array.isArray(priority) ? priority : [priority];
+                    // Use the highest priority for styling
+                    const priorityOrder = ['Low', 'Medium', 'High', 'Critical'];
+                    const highestPriority = priorities.reduce((highest, current) => {
+                      return priorityOrder.indexOf(current) > priorityOrder.indexOf(highest) ? current : highest;
+                    }, 'Low');
+
+                    switch(highestPriority) {
+                      case 'Critical': return 'text-red-600 bg-red-50';
                       case 'High': return 'text-red-600 bg-red-50';
                       case 'Medium': return 'text-yellow-600 bg-yellow-50';
                       case 'Low': return 'text-green-600 bg-green-50';

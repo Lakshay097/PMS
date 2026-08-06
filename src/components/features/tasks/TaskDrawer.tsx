@@ -185,6 +185,17 @@ export default function TaskDrawer({
     }
   };
 
+  const getPriorityStyles = (priorities: string[]) => {
+    if (!Array.isArray(priorities)) return getPriorityStyle(priorities);
+    if (priorities.length === 0) return 'bg-slate-100 text-secondary';
+    if (priorities.length === 1) return getPriorityStyle(priorities[0]);
+    // Multiple priorities - return a combined style
+    if (priorities.includes('Critical')) return 'bg-red-50 text-red-700 font-bold border border-red-200';
+    if (priorities.includes('High')) return 'bg-orange-50 text-orange-700';
+    if (priorities.includes('Medium')) return 'bg-sky-50 text-sky-700';
+    return 'bg-slate-100 text-secondary';
+  };
+
   // Parse multiple assignees if comma-separated
   const isCurrentUserAssignee = (task.AssignedToEmail || '')
     .split(',')
@@ -297,8 +308,8 @@ export default function TaskDrawer({
               <span className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2.5 py-0.5 rounded-full border font-bold ${getStatusStyle(task.Status)}`}>
                 {task.Status}
               </span>
-              <span className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-md font-bold ${getPriorityStyle(task.Priority)}`}>
-                {task.Priority} Priority
+              <span className={`text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-md font-bold ${getPriorityStyles(task.Priority)}`}>
+                {Array.isArray(task.Priority) ? task.Priority.join(', ') : task.Priority} Priority
               </span>
             </div>
             <h2 className="text-xs sm:text-sm font-bold tracking-tight mt-1.5 sm:mt-2 text-white line-clamp-1 font-sans">

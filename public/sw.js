@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'msfxi4cm';
+const CACHE_VERSION = 'msh3mrhf';
 const STATIC_CACHE_NAME = `taskflow-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE_NAME = `taskflow-dynamic-${CACHE_VERSION}`;
 
@@ -175,10 +175,18 @@ if (request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/in
             return response;
           })
           .catch(() => {
-            // Return offline page for navigation requests
+            // Navigation requests fall back to the offline shell
             if (request.mode === 'navigate') {
-              return caches.match('/offline.html');
+              return caches.match('/offline.html').then(r =>
+                r || new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } })
+              );
             }
+            // Non-navigation requests (images, fonts, etc.) return a minimal error response
+            // rather than undefined, which would cause "Failed to convert value to 'Response'".
+            return new Response('Network error', {
+              status: 503,
+              headers: { 'Content-Type': 'text/plain' },
+            });
           });
       })
   );

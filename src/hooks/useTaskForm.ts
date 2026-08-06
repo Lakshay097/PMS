@@ -7,10 +7,17 @@ interface UseTaskFormProps {
 }
 
 export function useTaskForm({ initialTask, onSubmit }: UseTaskFormProps) {
-  const [fields, setFields] = useState({
+  const [fields, setFields] = useState<{
+    title: string;
+    description: string;
+    priorities: ('Low' | 'Medium' | 'High' | 'Critical')[];
+    status: string;
+    assignee: string;
+    dueDate: string;
+  }>({
     title: initialTask?.Title || '',
     description: initialTask?.Description || '',
-    priority: initialTask?.Priority || 'Medium',
+    priorities: Array.isArray(initialTask?.Priority) ? initialTask.Priority : (initialTask?.Priority ? [initialTask.Priority] : ['Medium']),
     status: initialTask?.Status || 'Not Started',
     assignee: initialTask?.AssignedToEmail || '',
     dueDate: initialTask?.DueDate || '',
@@ -20,7 +27,7 @@ export function useTaskForm({ initialTask, onSubmit }: UseTaskFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const handleChange = (field: string, value: string) => {
+  const handleChange = (field: string, value: string | string[]) => {
     setFields(prev => ({ ...prev, [field]: value }));
     // Clear error for this field when user starts typing
     if (errors[field]) {
@@ -69,7 +76,7 @@ export function useTaskForm({ initialTask, onSubmit }: UseTaskFormProps) {
       await onSubmit({
         Title: fields.title,
         Description: fields.description,
-        Priority: fields.priority as 'Low' | 'Medium' | 'High' | 'Critical',
+        Priority: fields.priorities as ('Low' | 'Medium' | 'High' | 'Critical')[],
         Status: fields.status as 'Not Started' | 'In Progress' | 'Submitted' | 'Reviewed' | 'Closed' | 'Reopened' | 'Overdue',
         AssignedToEmail: fields.assignee,
         DueDate: fields.dueDate,
@@ -87,7 +94,7 @@ export function useTaskForm({ initialTask, onSubmit }: UseTaskFormProps) {
     setFields({
       title: initialTask?.Title || '',
       description: initialTask?.Description || '',
-      priority: initialTask?.Priority || 'Medium',
+      priorities: Array.isArray(initialTask?.Priority) ? initialTask.Priority : (initialTask?.Priority ? [initialTask.Priority] : ['Medium']),
       status: initialTask?.Status || 'Not Started',
       assignee: initialTask?.AssignedToEmail || '',
       dueDate: initialTask?.DueDate || '',

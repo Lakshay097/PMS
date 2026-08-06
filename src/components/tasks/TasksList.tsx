@@ -46,7 +46,10 @@ export default function TasksList({ tasks, onTaskClick, onCreateTask, currentUse
     if (statusFilter !== 'all' && task.Status !== statusFilter) return false;
 
     // Priority filter
-    if (priorityFilter !== 'all' && task.Priority !== priorityFilter) return false;
+    if (priorityFilter !== 'all') {
+      const taskPriorities = Array.isArray(task.Priority) ? task.Priority : [task.Priority];
+      if (!taskPriorities.includes(priorityFilter)) return false;
+    }
 
     return true;
   }), [tasks, savedView, currentUserId, searchQuery, statusFilter, priorityFilter]);

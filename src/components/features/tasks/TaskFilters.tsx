@@ -12,7 +12,7 @@ interface TaskFiltersProps {
   filterDateTo: string;
   filterAssignedByEmails: string[];
   searchQuery: string;
-  currentUser: UserType;
+  currentUser?: UserType;
   users: UserType[];
   isDarkMode: boolean;
   onFilterStatusChange: (value: string[]) => void;

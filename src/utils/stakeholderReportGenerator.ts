@@ -541,31 +541,35 @@ class PdfWriter {
 
   /** Summary dashboard: overall stats across all included stakeholders. */
   summaryDashboard(data: StakeholderData[], allTasks: Task[]) {
-    // Count unique task IDs across all stakeholders so that a task shared
-    // between multiple assignees is only counted once in the summary.
+    // Count unique task IDs per category to avoid double-counting tasks
+    // shared between multiple assignees
+    const activeTaskIds = new Set<string>();
+    const completedTaskIds = new Set<string>();
+    const overdueTaskIds = new Set<string>();
+    const notWorkedOnTaskIds = new Set<string>();
+
+    data.forEach(s => {
+      s.activeTasks.forEach(t => activeTaskIds.add(t.TaskID));
+      s.completedTasks.forEach(t => completedTaskIds.add(t.TaskID));
+      s.overdueTasks.forEach(t => overdueTaskIds.add(t.TaskID));
+      s.notWorkedOn.forEach(t => notWorkedOnTaskIds.add(t.TaskID));
+    });
+
+    // Total unique tasks across all categories
     const uniqueTaskIds = new Set<string>();
     data.forEach(s => {
       [...s.activeTasks, ...s.completedTasks, ...s.overdueTasks, ...s.notWorkedOn]
         .forEach(t => uniqueTaskIds.add(t.TaskID));
     });
 
-    const totals = data.reduce(
-      (acc, s) => {
-        acc.active += s.activeTasks.length;
-        acc.completed += s.completedTasks.length;
-        acc.overdue += s.overdueTasks.length;
-        acc.notWorkedOn += s.notWorkedOn.length;
-        return acc;
-      },
-      { active: 0, completed: 0, overdue: 0, notWorkedOn: 0 }
-    );
+    // Active tasks = in-progress + not started (activeTasks + notWorkedOn)
+    const totalActive = activeTaskIds.size + notWorkedOnTaskIds.size;
 
     const cards = [
       { label: 'Total Tasks', value: uniqueTaskIds.size, color: COLORS.primary },
-      { label: 'Active', value: totals.active, color: COLORS.inProgress },
-      { label: 'Completed', value: totals.completed, color: COLORS.completed },
-      { label: 'Overdue', value: totals.overdue, color: COLORS.overdue },
-      { label: 'Not Worked On', value: totals.notWorkedOn, color: COLORS.notStarted },
+      { label: 'Active', value: totalActive, color: COLORS.inProgress },
+      { label: 'Completed', value: completedTaskIds.size, color: COLORS.completed },
+      { label: 'Overdue', value: overdueTaskIds.size, color: COLORS.overdue },
     ];
 
     const d = this.doc;

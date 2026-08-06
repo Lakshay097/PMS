@@ -17,7 +17,7 @@ interface CreateTaskModalProps {
   onSubmit: (data: {
     Title: string;
     Description: string;
-    Priority: 'Low' | 'Medium' | 'High' | 'Critical';
+    Priority: ('Low' | 'Medium' | 'High' | 'Critical')[];
     TaskType: 'One-time' | 'Recurring';
     RecurrenceType: 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Half-yearly' | 'One-time';
     StartDate: string;
@@ -35,7 +35,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
   const [taskType, setTaskType] = useState<'One-time' | 'Recurring'>('One-time');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState<'Low' | 'Medium' | 'High' | 'Critical'>('Medium');
+  const [priorities, setPriorities] = useState<('Low' | 'Medium' | 'High' | 'Critical')[]>(['Medium']);
   const [recurrenceType, setRecurrenceType] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Half-yearly'>('Weekly');
 
   // Track whether user has manually selected a day (for Weekly recurrence)
@@ -132,7 +132,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
     return currentUserTeams.has(t.TeamID);
   });
 
-  // Auto-generate title from priority, description and date
+  // Auto-generate title from priorities, description and date
   useEffect(() => {
     if (description.trim() && dueDate) {
       // Extract first few words from description (up to 5 words)
@@ -144,10 +144,10 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
       const formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
       // Generate title with priority
-      const generatedTitle = `[${priority}] ${descriptionSnippet} - ${formattedDate}`;
+      const generatedTitle = `[${priorities.join(', ')}] ${descriptionSnippet} - ${formattedDate}`;
       setTitle(generatedTitle);
     }
-  }, [description, dueDate, priority]);
+  }, [description, dueDate, priorities]);
 
   // Filter stakeholders based on search query
   const filteredStakeholders = filteredAssignees.filter(user =>
@@ -261,7 +261,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
     onSubmit({
       Title: title,
       Description: description,
-      Priority: priority,
+      Priority: priorities,
       TaskType: taskType,
       RecurrenceType: taskType === 'Recurring' ? recurrenceType : 'One-time',
       StartDate: startDate,
@@ -274,7 +274,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
     // Reset fields
     setTitle('');
     setDescription('');
-    setPriority('Medium');
+    setPriorities(['Medium']);
     setStartDate(todayStr);
     setDueDate(nextWeekStr);
     setAttachmentLink('');
@@ -581,25 +581,29 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
 
             <div>
               <label className="block text-[12.5px] font-semibold text-[#9AA3B8] tracking-wide mb-2">
-                Priority ranking
+                Priority ranking (select multiple)
               </label>
-              <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-[#E7B84B] shadow-[0_0_0_3px_rgba(231,184,75,0.18)]"></span>
-                <select
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value as any)}
-                  className="w-full text-[14px] bg-[#131928] border border-[#29334A] rounded-[10px] pl-8 pr-10 py-3 text-[#EDF0F7] focus:outline-none focus:border-[#E7B84B] focus:shadow-[0_0_0_3px_rgba(231,184,75,0.18)] appearance-none cursor-pointer transition-all"
-                  style={{
-                    backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\' viewBox=\'0 0 10 6\'%3E%3Cpath d=\'M1 1l4 4 4-4\' stroke=\'%239AA3B8\' stroke-width=\'1.6\' fill=\'none\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3C/svg%3E")',
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 14px center'
-                  }}
-                >
-                  <option value="Low">Low Priority</option>
-                  <option value="Medium">Medium Priority</option>
-                  <option value="High">High Priority</option>
-                  <option value="Critical">Critical</option>
-                </select>
+              <div className="flex flex-wrap gap-2">
+                {(['Low', 'Medium', 'High', 'Critical'] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => {
+                      if (priorities.includes(p)) {
+                        setPriorities(priorities.filter(pr => pr !== p));
+                      } else {
+                        setPriorities([...priorities, p]);
+                      }
+                    }}
+                    className={`px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${
+                      priorities.includes(p)
+                        ? 'bg-[#E7B84B] text-[#0B0F1A] shadow-[0_0_0_3px_rgba(231,184,75,0.18)]'
+                        : 'bg-[#131928] border border-[#29334A] text-[#9AA3B8] hover:border-[#E7B84B] hover:text-[#EDF0F7]'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
               </div>
             </div>
           </div>

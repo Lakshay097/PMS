@@ -20,7 +20,7 @@ export interface TaskFormData {
   recurrenceType: 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Half-yearly' | 'One-time';
   startDate: string;
   dueDate: string;
-  priority: 'Low' | 'Medium' | 'High' | 'Critical';
+  priority: ('Low' | 'Medium' | 'High' | 'Critical')[];
   assigneeEmail: string;
   assignedByEmail: string;
   teamIds: string[];
@@ -42,7 +42,7 @@ export default function TaskCreationForm({
     recurrenceType: task?.RecurrenceType || 'One-time',
     startDate: task?.StartDate || new Date().toISOString().split('T')[0],
     dueDate: task?.DueDate || '',
-    priority: task?.Priority || 'Medium',
+    priority: Array.isArray(task?.Priority) ? task.Priority : (task?.Priority ? [task.Priority] : ['Medium']),
     assigneeEmail: task?.AssignedToEmail || '',
     assignedByEmail: task?.AssignedByEmail || '',
     teamIds: task?.AssignedToTeamIDs || [],

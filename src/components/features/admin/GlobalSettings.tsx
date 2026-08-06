@@ -41,7 +41,7 @@ interface GlobalSettingsProps {
 }
 
 const DEFAULT_SETTINGS: Setting[] = [
-  { key: 'task_default_priority', name: 'Default task priority', description: 'Priority assigned to new tasks', value: 'Medium', type: 'select', options: ['Low', 'Medium', 'High', 'Critical'], category: 'task-rules', lastChanged: '2024-01-15' },
+  { key: 'task_default_priority', name: 'Default task priority', description: 'Priority assigned to new tasks (default single value)', value: 'Medium', type: 'select', options: ['Low', 'Medium', 'High', 'Critical'], category: 'task-rules', lastChanged: '2024-01-15' },
   { key: 'task_auto_close_days', name: 'Auto-archive completed tasks', description: 'Days after completion before tasks are archived', value: '30', type: 'number', category: 'task-rules', lastChanged: '2024-01-10' },
   { key: 'task_require_description', name: 'Require task description', description: 'Make the description field mandatory', value: 'true', type: 'boolean', category: 'task-rules', lastChanged: '2024-01-05' },
   { key: 'scheduler_enabled', name: 'Enable scheduler', description: 'Master switch for recurring task generation', value: 'true', type: 'boolean', category: 'scheduler', risky: true, lastChanged: '2024-01-20' },

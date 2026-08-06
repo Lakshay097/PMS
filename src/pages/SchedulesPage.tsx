@@ -28,7 +28,7 @@ export default function SchedulesPage({
   // Form state for new template
   const [tempTitle, setTempTitle] = useState('');
   const [tempDesc, setTempDesc] = useState('');
-  const [tempPriority, setTempPriority] = useState<'Low' | 'Medium' | 'High' | 'Critical'>('Medium');
+  const [tempPriority, setTempPriority] = useState<('Low' | 'Medium' | 'High' | 'Critical')[]>(['Medium']);
   const [tempRecurrence, setTempRecurrence] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Half-yearly'>('Monthly');
   const [tempAssignToEmail, setTempAssignToEmail] = useState('');
   const [tempStartDate, setTempStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -62,6 +62,11 @@ export default function SchedulesPage({
       return;
     }
 
+    if (!currentUser) {
+      setTemplateErrorMessage('User not authenticated.');
+      return;
+    }
+
     const newId = `TMP-${Date.now()}`;
     const now = new Date().toISOString();
 
@@ -87,6 +92,7 @@ export default function SchedulesPage({
     setTimeout(() => setTemplateSuccessMessage(null), 3000);
     setTempTitle('');
     setTempDesc('');
+    setTempPriority(['Medium']);
     setTempAssignToEmail('');
     setIsCreateModalOpen(false);
   };
@@ -102,8 +108,15 @@ export default function SchedulesPage({
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
+  const getPriorityColor = (priority: string | string[]) => {
+    const priorities = Array.isArray(priority) ? priority : [priority];
+    // Use the highest priority for styling
+    const priorityOrder = ['Low', 'Medium', 'High', 'Critical'];
+    const highestPriority = priorities.reduce((highest, current) => {
+      return priorityOrder.indexOf(current) > priorityOrder.indexOf(highest) ? current : highest;
+    }, 'Low');
+
+    switch (highestPriority) {
       case 'Critical': return 'bg-red-500/10 text-red-400 border-red-500/20';
       case 'High': return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
       case 'Medium': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
@@ -177,7 +190,7 @@ export default function SchedulesPage({
                         {template.RecurrenceType}
                       </span>
                       <span className={`text-xs font-medium px-2 py-0.5 rounded border ${getPriorityColor(template.Priority)}`}>
-                        {template.Priority}
+                        {Array.isArray(template.Priority) ? template.Priority.join(', ') : template.Priority}
                       </span>
                       {!template.Active && (
                         <span className="text-xs font-medium px-2 py-0.5 rounded bg-gray-500/10 text-gray-400 border-gray-500/20">
@@ -289,18 +302,32 @@ export default function SchedulesPage({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                    Priority
+                    Priority (select multiple)
                   </label>
-                  <select
-                    value={tempPriority}
-                    onChange={(e) => setTempPriority(e.target.value as any)}
-                    className={`w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
-                  >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Critical">Critical</option>
-                  </select>
+                  <div className="flex flex-wrap gap-2">
+                    {(['Low', 'Medium', 'High', 'Critical'] as const).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => {
+                          if (tempPriority.includes(p)) {
+                            setTempPriority(tempPriority.filter(pr => pr !== p));
+                          } else {
+                            setTempPriority([...tempPriority, p]);
+                          }
+                        }}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                          tempPriority.includes(p)
+                            ? 'bg-blue-600 text-white'
+                            : isDarkMode
+                              ? 'bg-[#1E293B] border border-[#334155] text-slate-300 hover:border-blue-500'
+                              : 'bg-slate-50 border border-slate-200 text-slate-600 hover:border-blue-500'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>

@@ -379,7 +379,7 @@ export default function AdminPanel({
   // Define template state
   const [tempTitle, setTempTitle] = useState('');
   const [tempDesc, setTempDesc] = useState('');
-  const [tempPriority, setTempPriority] = useState<'Low' | 'Medium' | 'High' | 'Critical'>('Medium');
+  const [tempPriority, setTempPriority] = useState<('Low' | 'Medium' | 'High' | 'Critical')[]>(['Medium']);
   const [tempRecurrence, setTempRecurrence] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Half-yearly'>('Monthly');
   const [tempAssignToEmail, setTempAssignToEmail] = useState('');
   const [tempStartDate, setTempStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -710,6 +710,7 @@ export default function AdminPanel({
     setTimeout(() => setTemplateSuccessMessage(null), 3000);
     setTempTitle('');
     setTempDesc('');
+    setTempPriority(['Medium']);
   };
 
   const handleReportRequirementChange = (teamId: string, level: 'team' | 'subteam') => {
@@ -2298,19 +2299,30 @@ export default function AdminPanel({
                     </div>
 
                     <div>
-                      <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Priority</label>
-                      <div className="relative">
-                        <select
-                          value={tempPriority}
-                          onChange={(e) => setTempPriority(e.target.value as any)}
-                          className={`w-full text-sm rounded-lg pl-3 pr-7 py-2 border appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer ${isDarkMode ? 'bg-[#334155] border-[#475569] text-white' : 'bg-slate-50 border-slate-200 text-slate-800'}`}
-                        >
-                          <option value="Low">Low</option>
-                          <option value="Medium">Medium</option>
-                          <option value="High">High</option>
-                          <option value="Critical">Critical</option>
-                        </select>
-                        <ChevronDown size={14} className={`pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`} />
+                      <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Priority (select multiple)</label>
+                      <div className="flex flex-wrap gap-2">
+                        {(['Low', 'Medium', 'High', 'Critical'] as const).map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => {
+                              if (tempPriority.includes(p)) {
+                                setTempPriority(tempPriority.filter(pr => pr !== p));
+                              } else {
+                                setTempPriority([...tempPriority, p]);
+                              }
+                            }}
+                            className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                              tempPriority.includes(p)
+                                ? 'bg-blue-600 text-white'
+                                : isDarkMode
+                                  ? 'bg-[#334155] border border-[#475569] text-slate-300 hover:border-blue-500'
+                                  : 'bg-slate-50 border border-slate-200 text-slate-600 hover:border-blue-500'
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </div>

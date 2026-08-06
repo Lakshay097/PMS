@@ -209,6 +209,7 @@ export default function Dashboard({
 
   // Compute user roles once per render - used for both tab visibility and data queries
   const userRoles = useMemo(() => {
+    if (!currentUser) return [];
     return getUserRoles(currentUser, teams || [], subTeams || [], settings || []);
   }, [currentUser, teams, subTeams, settings]);
 
@@ -336,10 +337,10 @@ export default function Dashboard({
     // Permission check: sub-team leaders can only submit for their own sub-team
     if (submissionSubTeamId) {
       const subTeam = subTeams.find(st => st.SubTeamID === submissionSubTeamId);
-      const isSubTeamLeader = subTeam?.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase());
+      const isSubTeamLeader = subTeam?.SubTeamLeaderEmails?.some(e => e.toLowerCase() === currentUser?.Email?.toLowerCase() || '');
       const team = teams.find(t => t.TeamID === submissionTeamId);
-      const isTeamLeader = team?.TeamLeaderEmails?.some(e => e.toLowerCase() === currentUser.Email.toLowerCase());
-      if (!isSubTeamLeader && !isTeamLeader && !isAdminLevel(currentUser.Role)) {
+      const isTeamLeader = team?.TeamLeaderEmails?.some(e => e.toLowerCase() === currentUser?.Email?.toLowerCase() || '');
+      if (!isSubTeamLeader && !isTeamLeader && !isAdminLevel(currentUser?.Role || '')) {
         setSubmissionError('You can only submit reports for your own sub-team');
         setTimeout(() => setSubmissionError(null), 3000);
         return;
@@ -391,7 +392,7 @@ export default function Dashboard({
         SubmissionID: submissionId,
         TeamID: submissionTeamId,
         SubTeamID: submissionSubTeamId || undefined,
-        SubmittedBy: currentUser.Email,
+        SubmittedBy: currentUser?.Email || '',
         SubmittedAt: new Date().toISOString(),
         Note: submissionNote.trim() || undefined,
         AttachmentLinks: attachmentLinks || undefined,
@@ -429,7 +430,7 @@ export default function Dashboard({
             leaderEmails,
             attachmentLinks: attachmentLinks || '',
             note: submissionNote.trim() || undefined,
-            submittedBy: currentUser.Email
+            submittedBy: currentUser?.Email || ''
           });
         }
       } catch (emailError) {
@@ -654,7 +655,7 @@ export default function Dashboard({
 
     return (tasks || []).filter(task => {
       // Admin sees all tasks
-      if (userRoles.some(r => r.type === 'Admin')) return true;
+      if (userRoles.some((r: any) => r.type === 'Admin')) return true;
 
       // Apply union-based visibility
       const assignedToMe = splitEmails(task.AssignedToEmail).some(email =>
@@ -689,7 +690,8 @@ export default function Dashboard({
     .filter(t => {
       if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
       const isOverdue = t.DueDate < today;
-      const isHighPriority = t.Priority === 'High' || t.Priority === 'Critical';
+      const priorities = Array.isArray(t.Priority) ? t.Priority : [t.Priority];
+      const isHighPriority = priorities.includes('High') || priorities.includes('Critical');
       return isOverdue || isHighPriority;
     })
     .slice(0, 5);
@@ -720,7 +722,7 @@ export default function Dashboard({
     const canSeeMultipleUsers = isAdminLevel(currentUser.Role) ||
       teams?.some(t => isTeamLeader(currentUser.Email, t)) ||
       subTeams?.some(st => isSubTeamLeader(currentUser.Email, st)) ||
-      userRoles.some(r => r.type === 'Stakeholder');
+      userRoles.some((r: any) => r.type === 'Stakeholder');
 
     if (!canSeeMultipleUsers) {
       // For sub-stakeholders, show only their own data
@@ -769,8 +771,15 @@ export default function Dashboard({
     return data.slice(0, 10); // Limit to top 10 users
   }, [visibleTasksForOverview, currentUser, teams, subTeams, userRoles]);
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
+  const getPriorityColor = (priority: string | string[]) => {
+    const priorities = Array.isArray(priority) ? priority : [priority];
+    // Use the highest priority for styling
+    const priorityOrder = ['Low', 'Medium', 'High', 'Critical'];
+    const highestPriority = priorities.reduce((highest, current) => {
+      return priorityOrder.indexOf(current) > priorityOrder.indexOf(highest) ? current : highest;
+    }, 'Low');
+
+    switch (highestPriority) {
       case 'Critical': return 'bg-red-500/10 text-red-400 border-red-500/20';
       case 'High': return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
       case 'Medium': return 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20';
@@ -908,7 +917,10 @@ export default function Dashboard({
       }
     }
     if (filterPriority !== 'All') {
-      filtered = filtered.filter(t => t.Priority === filterPriority);
+      filtered = filtered.filter(t => {
+        const priorities = Array.isArray(t.Priority) ? t.Priority : [t.Priority];
+        return priorities.includes(filterPriority);
+      });
     }
     if (filterAssignee.length > 0) {
       filtered = filtered.filter(t =>
@@ -1157,7 +1169,7 @@ export default function Dashboard({
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2">
                         <span className={`text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border ${getPriorityColor(task.Priority)}`}>
-                          {task.Priority}
+                          {Array.isArray(task.Priority) ? task.Priority.join(', ') : task.Priority}
                         </span>
                         <span className={`text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border ${getStatusColor(task.Status)}`}>
                           {task.Status}
@@ -1286,14 +1298,14 @@ export default function Dashboard({
                         type="number" 
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fontSize: 10, fill: 'var(--color-muted)' }}
+                        tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }}
                       />
                       <YAxis 
                         type="category" 
                         dataKey="name" 
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fontSize: 10, fill: 'var(--color-muted)' }}
+                        tick={{ fontSize: 10, fill: 'var(--color-text-muted)' }}
                         width={65}
                       />
                       <Tooltip 
@@ -1313,7 +1325,7 @@ export default function Dashboard({
                   <div className="h-full flex flex-col items-center justify-center text-muted">
                     <Inbox className="mb-2" size={32} />
                     <p className="text-xs">
-                      {currentUser && (isAdminLevel(currentUser.Role) || teams?.some(t => isTeamLeader(currentUser.Email, t)) || subTeams?.some(st => isSubTeamLeader(currentUser.Email, st)) || userRoles.some(r => r.type === 'Stakeholder'))
+                      {currentUser && (isAdminLevel(currentUser.Role) || teams?.some(t => isTeamLeader(currentUser.Email, t)) || subTeams?.some(st => isSubTeamLeader(currentUser.Email, st)) || userRoles.some((r: any) => r.type === 'Stakeholder'))
                         ? 'No task data yet'
                         : 'Your task activity will show up here'
                       }
@@ -1465,7 +1477,7 @@ export default function Dashboard({
                       <div className="flex items-center space-x-2 mb-2">
                         <h4 className="font-medium text-primary">{template.Title}</h4>
                         <span className={`text-xs font-bold px-2 py-1 rounded border ${getPriorityColor(template.Priority)}`}>
-                          {template.Priority}
+                          {Array.isArray(template.Priority) ? template.Priority.join(', ') : template.Priority}
                         </span>
                       </div>
                       <div className="flex items-center space-x-4 text-sm">

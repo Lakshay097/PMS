@@ -7,7 +7,7 @@ interface TaskListProps {
   tasks: Task[];
   onTaskClick: (task: Task) => void;
   isDarkMode: boolean;
-  getPriorityColor: (priority: string) => string;
+  getPriorityColor: (priority: string | string[]) => string;
   getStatusColor: (status: string) => string;
   emptyMessage?: string;
   currentUser?: UserType;
@@ -82,7 +82,7 @@ export default function TaskList({
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2">
                     <span className={`text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border ${getPriorityColor(task.Priority)}`}>
-                      {task.Priority}
+                      {Array.isArray(task.Priority) ? task.Priority.join(', ') : task.Priority}
                     </span>
                     <span className={`text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border ${getStatusColor(task.Status)}`}>
                       {task.Status}

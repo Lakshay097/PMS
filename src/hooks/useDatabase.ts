@@ -5,21 +5,22 @@ import { api } from '../lib/apiClient';
 import { logger } from '../utils/logger';
 
 // Collections that can be refreshed individually.
-// Kept in sync with the API route names in server/routes/firestore.ts.
+// Paths are relative to API_BASE — do NOT include /api here because
+// apiClient.ts already prepends VITE_API_BASE (/api) to every request.
 const COLLECTION_ROUTES: Record<string, string> = {
-  users:           '/api/users',
-  tasks:           '/api/tasks',
-  teams:           '/api/teams',
-  sub_teams:       '/api/sub-teams',
-  templates:       '/api/templates',
-  settings:        '/api/settings',
-  email_templates: '/api/email-templates',
-  reports:         '/api/reports',
-  followups:       '/api/followups',
-  subtasks:        '/api/subtasks',
-  comments:        '/api/comments',
-  team_submissions:'/api/team-submissions',
-  auditlogs:       '/api/auditlogs',
+  users:            '/users',
+  tasks:            '/tasks',
+  teams:            '/teams',
+  sub_teams:        '/sub-teams',
+  templates:        '/templates',
+  settings:         '/settings',
+  email_templates:  '/email-templates',
+  reports:          '/reports',
+  followups:        '/followups',
+  subtasks:         '/subtasks',
+  comments:         '/comments',
+  team_submissions: '/team-submissions',
+  auditlogs:        '/auditlogs',
 };
 
 // Synchronously determine whether a valid auth token exists in localStorage.

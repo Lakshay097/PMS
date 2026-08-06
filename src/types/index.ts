@@ -70,7 +70,7 @@ export interface TaskTemplate {
   TemplateID: string;
   Title: string;
   Description: string;
-  Priority: 'Low' | 'Medium' | 'High' | 'Critical';
+  Priority: ('Low' | 'Medium' | 'High' | 'Critical')[];
   RecurrenceType: 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Half-yearly';
   StartDate: string;
   NextGenerationDate: string;
@@ -92,7 +92,7 @@ export interface Task {
   ParentTaskID: string | null;
   Title: string;
   Description: string;
-  Priority: 'Low' | 'Medium' | 'High' | 'Critical';
+  Priority: ('Low' | 'Medium' | 'High' | 'Critical')[];
   TaskType: 'One-time' | 'Recurring';
   RecurrenceType: 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Half-yearly' | 'One-time';
   CycleKey: string | null; // prevent duplicate trigger generation

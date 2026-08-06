@@ -6,7 +6,6 @@ npm-debug.log
 .git
 .gitignore
 README.md
-dist
 .vscode
 .idea
 *.log

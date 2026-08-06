@@ -22,7 +22,7 @@ interface TasksPageProps {
   onFilterChange: (filterType: 'status' | 'priority' | 'assignee' | 'searchQuery', value: string | string[]) => void;
   onTaskClick: (task: Task) => void;
   onNewTask: () => void;
-  getPriorityColor: (priority: string) => string;
+  getPriorityColor: (priority: string | string[]) => string;
   getStatusColor: (status: string) => string;
 }
 

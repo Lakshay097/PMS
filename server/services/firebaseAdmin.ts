@@ -14,13 +14,15 @@ function getFirestoreAdmin(): Firestore {
 
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
-  // Cloud Run secrets may be stored with literal \n text OR real newlines.
-  // Normalise both: first replace escaped \\n sequences, then collapse any
-  // accidental double-newlines that would result from a double-replace.
+  // Cloud Run secrets may be stored with literal \n text OR real newlines,
+  // or with multiple layers of escaping (e.g. \\n, \\\\n). Loop-replace until
+  // no escaped newlines remain, matching the same logic used for GOOGLE_PRIVATE_KEY
+  // in env.ts.
   const rawKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY ?? '';
-  const privateKey = rawKey.includes('\\n')
-    ? rawKey.replace(/\\n/g, '\n')
-    : rawKey;
+  let privateKey = rawKey;
+  while (privateKey.includes('\\n')) {
+    privateKey = privateKey.replace(/\\n/g, '\n');
+  }
 
   // Use explicit credentials when available (local development)
   // Fall back to ADC when credentials are not present (Cloud Run)

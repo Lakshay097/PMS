@@ -1380,19 +1380,19 @@ export const dbService = {
     // on a cold server) does not wipe out the entire batch — the failed collection
     // falls back to an empty array and the rest of the data loads normally.
     const results = await Promise.allSettled([
-      api.get<any[]>('/api/users'),
-      api.get<any[]>('/api/tasks'),
-      api.get<Team[]>('/api/teams'),
-      api.get<SubTeam[]>('/api/sub-teams'),
-      api.get<TaskTemplate[]>('/api/templates'),
-      api.get<AppSetting[]>('/api/settings'),
-      api.get<EmailTemplate[]>('/api/email-templates'),
-      api.get<TaskReport[]>('/api/reports'),
-      api.get<FollowUp[]>('/api/followups'),
-      api.get<Subtask[]>('/api/subtasks'),
-      api.get<Comment[]>('/api/comments'),
-      api.get<TeamSubmission[]>('/api/team-submissions'),
-      api.get<AuditLog[]>('/api/auditlogs'),
+      api.get<any[]>('/users'),
+      api.get<any[]>('/tasks'),
+      api.get<Team[]>('/teams'),
+      api.get<SubTeam[]>('/sub-teams'),
+      api.get<TaskTemplate[]>('/templates'),
+      api.get<AppSetting[]>('/settings'),
+      api.get<EmailTemplate[]>('/email-templates'),
+      api.get<TaskReport[]>('/reports'),
+      api.get<FollowUp[]>('/followups'),
+      api.get<Subtask[]>('/subtasks'),
+      api.get<Comment[]>('/comments'),
+      api.get<TeamSubmission[]>('/team-submissions'),
+      api.get<AuditLog[]>('/auditlogs'),
     ]);
 
     // Helper: extract value from settled result, falling back to [] on rejection
