@@ -74,10 +74,10 @@ export default function Reports({
     // First apply role-based visibility filter
     const roleFilteredReports = getVisibleReports(reports, currentUser, tasks || [], users || [], teams || [], subTeams || [], settings || []);
 
-    // Filter for tasks with appropriate status
+    // Show all reports regardless of task status for better visibility
     const taskReports = roleFilteredReports.filter(r => {
       const task = tasks?.find(t => t.TaskID === r.TaskID);
-      return task && (task.Status === 'Submitted' || task.Status === 'In Progress');
+      return task !== undefined; // Only filter out reports with no associated task
     });
 
     // Apply team filter to reports

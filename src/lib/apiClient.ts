@@ -87,9 +87,12 @@ async function request<T>(method: string, path: string, requestBody?: unknown): 
     method,
     headers: {
       'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: requestBody !== undefined ? JSON.stringify(requestBody) : undefined,
+    cache: 'no-store',
   });
 
   if (res.status === 401) {
@@ -103,9 +106,12 @@ async function request<T>(method: string, path: string, requestBody?: unknown): 
         method,
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: requestBody !== undefined ? JSON.stringify(requestBody) : undefined,
+        cache: 'no-store',
       });
       
       if (!retryRes.ok) {

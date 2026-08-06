@@ -111,7 +111,7 @@ async function writeWithBackoff(fn: () => Promise<any>, retries = 3): Promise<an
 async function enqueueSheetsWrite(collection: string, operation: 'save' | 'delete', data: any): Promise<void> {
   try {
     // Call server API to enqueue the write operation
-    await api.post('/sheets/enqueue-write', { collection, operation, data });
+    await api.post('/api/sheets/enqueue-write', { collection, operation, data });
     setSyncStatus('syncing');
   } catch (error) {
     // Optionally implement local fallback or retry logic here
@@ -139,7 +139,11 @@ function getIdFieldForCollection(collection: string): string {
 
 function getFromCache<T>(key: string): T[] | null {
   const cached = memoryCache.get(key);
-  if (!cached) return null;
+  if (!cached) {
+    logger.log(`[cache] MISS for key: ${key}`);
+    return null;
+  }
+  logger.log(`[cache] HIT for key: ${key}, count:`, (cached as T[]).length);
   return cached as T[];
 }
 
@@ -640,7 +644,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<TaskTemplate[]>('/templates');
+              const raw = await api.get<TaskTemplate[]>('/api/templates');
               setCache('templates', raw);
               notifyOptimisticUpdate('templates', raw);
             };
@@ -675,7 +679,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<TaskTemplate[]>('/templates');
+              const raw = await api.get<TaskTemplate[]>('/api/templates');
               setCache('templates', raw);
               notifyOptimisticUpdate('templates', raw);
             };
@@ -826,7 +830,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.post('/reports', report);
+        await api.post('/api/reports', report);
       };
       try {
         await persist();
@@ -840,7 +844,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<TaskReport[]>('/reports');
+              const raw = await api.get<TaskReport[]>('/api/reports');
               setCache('reports', raw);
               notifyOptimisticUpdate('reports', raw);
             };
@@ -875,7 +879,7 @@ export const dbService = {
 
     (async () => {
       const persist = async () => {
-        await api.post('/followups', follow);
+        await api.post('/api/followups', follow);
       };
       try {
         await persist();
@@ -889,7 +893,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<FollowUp[]>('/followups');
+              const raw = await api.get<FollowUp[]>('/api/followups');
               setCache('followups', raw);
               notifyOptimisticUpdate('followups', raw);
             };
@@ -928,7 +932,7 @@ export const dbService = {
     // Background async: Write via API
     (async () => {
       const persist = async () => {
-        await api.put('/settings', settingsList);
+        await api.put('/api/settings', settingsList);
       };
       try {
         await persist();
@@ -943,7 +947,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<AppSetting[]>('/settings');
+              const raw = await api.get<AppSetting[]>('/api/settings');
               setCache('settings', raw);
               notifyOptimisticUpdate('settings', raw);
             };
@@ -1023,7 +1027,7 @@ export const dbService = {
       } catch (err) {
         // Rollback optimistic update
         const rollback = async () => {
-          const raw = await api.get<EmailTemplate[]>('/email-templates');
+          const raw = await api.get<EmailTemplate[]>('/api/email-templates');
           setCache('email_templates', raw);
           notifyOptimisticUpdate('email_templates', raw);
         };
@@ -1050,7 +1054,7 @@ export const dbService = {
         notifyChange('email_templates', 'deleted', templateName).catch(() => {});
       } catch (err) {
         const rollback = async () => {
-          const raw = await api.get<EmailTemplate[]>('/email-templates');
+          const raw = await api.get<EmailTemplate[]>('/api/email-templates');
           setCache('email_templates', raw);
           notifyOptimisticUpdate('email_templates', raw);
         };
@@ -1109,7 +1113,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<Subtask[]>('/subtasks');
+              const raw = await api.get<Subtask[]>('/api/subtasks');
               setCache('subtasks', raw);
               notifyOptimisticUpdate('subtasks', raw);
             };
@@ -1155,7 +1159,7 @@ export const dbService = {
           () => {},
           async () => {
             const rollback = async () => {
-              const raw = await api.get<Subtask[]>('/subtasks');
+              const raw = await api.get<Subtask[]>('/api/subtasks');
               setCache('subtasks', raw);
               notifyOptimisticUpdate('subtasks', raw);
             };
@@ -1238,7 +1242,7 @@ export const dbService = {
     // Background async: Write via API
     (async () => {
       const persist = async () => {
-        await api.post('/team-submissions', submission);
+        await api.post('/api/team-submissions', submission);
       };
       try {
         await persist();
@@ -1380,24 +1384,27 @@ export const dbService = {
     // on a cold server) does not wipe out the entire batch — the failed collection
     // falls back to an empty array and the rest of the data loads normally.
     const results = await Promise.allSettled([
-      api.get<any[]>('/users'),
-      api.get<any[]>('/tasks'),
-      api.get<Team[]>('/teams'),
-      api.get<SubTeam[]>('/sub-teams'),
-      api.get<TaskTemplate[]>('/templates'),
-      api.get<AppSetting[]>('/settings'),
-      api.get<EmailTemplate[]>('/email-templates'),
-      api.get<TaskReport[]>('/reports'),
-      api.get<FollowUp[]>('/followups'),
-      api.get<Subtask[]>('/subtasks'),
-      api.get<Comment[]>('/comments'),
-      api.get<TeamSubmission[]>('/team-submissions'),
-      api.get<AuditLog[]>('/auditlogs'),
+      api.get<any[]>('/api/users'),
+      api.get<any[]>('/api/tasks'),
+      api.get<Team[]>('/api/teams'),
+      api.get<SubTeam[]>('/api/sub-teams'),
+      api.get<TaskTemplate[]>('/api/templates'),
+      api.get<AppSetting[]>('/api/settings'),
+      api.get<EmailTemplate[]>('/api/email-templates'),
+      api.get<TaskReport[]>('/api/reports'),
+      api.get<FollowUp[]>('/api/followups'),
+      api.get<Subtask[]>('/api/subtasks'),
+      api.get<Comment[]>('/api/comments'),
+      api.get<TeamSubmission[]>('/api/team-submissions'),
+      api.get<AuditLog[]>('/api/auditlogs'),
     ]);
 
     // Helper: extract value from settled result, falling back to [] on rejection
     function settled<T>(result: PromiseSettledResult<T[]>, name: string): T[] {
-      if (result.status === 'fulfilled') return result.value;
+      if (result.status === 'fulfilled') {
+        logger.log(`batchLoadAll: loaded ${name}, count:`, result.value?.length || 0);
+        return result.value;
+      }
       logger.error(`batchLoadAll: failed to load ${name}:`, (result as PromiseRejectedResult).reason);
       return [];
     }
@@ -1463,6 +1470,7 @@ export const dbService = {
 
     // Populate cache for each collection so subsequent
     // individual reads hit cache, not API
+    logger.log('[batchLoadAll] populating cache with loaded data');
     setCache('users', users);
     setCache('tasks', tasks);
     setCache('teams', teams);
@@ -1594,7 +1602,7 @@ export const dbService = {
       
       // API write to Firestore
       try {
-        await api.post('/auditlogs', logRecord);
+        await api.post('/api/auditlogs', logRecord);
       } catch (err) {
       }
     } catch (error) {
