@@ -43,13 +43,14 @@ export async function generateGoogleSheetsToken(): Promise<GoogleSheetsTokenResp
     // Use GOOGLE_SA_JWT_EXPIRATION_SECONDS, NOT JWT_EXPIRATION_SECONDS (which
     // is the user session lifetime and can be days/weeks — far too long for Google).
     //
-    // Clock-skew guard: subtract 300 s (5 min) from iat so the assertion is valid even
-    // if the Cloud Run container clock is significantly ahead of Google's servers.
-    // Google tolerates ±5 min skew; 300 s provides a robust buffer while still leaving
-    // ~55 min of usable token lifetime.
+    // Clock-skew guard: subtract 300 s (5 min) from iat AND exp to keep the total
+    // token lifetime at exactly 60 minutes while absorbing container clock drift.
+    // Google tolerates ±5 min skew; this ensures the token is valid even if the
+    // Cloud Run container clock is ahead of Google's servers.
     const now = Math.floor(Date.now() / 1000);
-    const iat = now - 300; // back-date by 5 min to absorb container clock drift
-    const exp = now + config.GOOGLE_SA_JWT_EXPIRATION_SECONDS;
+    const skew = 300; // 5 min buffer for clock skew
+    const iat = now - skew;
+    const exp = now + config.GOOGLE_SA_JWT_EXPIRATION_SECONDS - skew;
     const claims = {
       iss: email,
       scope: "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file",
