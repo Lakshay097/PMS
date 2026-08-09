@@ -5,12 +5,16 @@ import {
   CloudDownload,
   Loader2,
   Save,
+  Settings,
 } from 'lucide-react';
 import {
   EmailTemplateRecord,
+  EmailTemplateMapping,
+  getEmailTemplateMappings,
   importEmailTemplatesFromSheets,
   listEmailTemplates,
   saveEmailTemplate,
+  updateEmailTemplateMapping,
 } from '../../api/emailTemplates';
 import { FormField, Input, Textarea } from '../shared/FormField';
 
@@ -50,6 +54,10 @@ export default function EmailTemplatesTab({
     | { kind: 'ok' | 'warn' | 'error'; text: string }
     | null
   >(null);
+  const [mappings, setMappings] = useState<EmailTemplateMapping>({});
+  const [loadingMappings, setLoadingMappings] = useState(false);
+  const [updatingMapping, setUpdatingMapping] = useState<string | null>(null);
+  const [showMappings, setShowMappings] = useState(false);
 
   const selected = useMemo(
   () => (templates ?? []).find((t) => t.templateName === selectedName) ?? null,
@@ -75,8 +83,24 @@ export default function EmailTemplatesTab({
   }
 };
 
+  const loadMappings = async () => {
+  setLoadingMappings(true);
+  try {
+    console.log('Loading email template mappings...');
+    const res = await getEmailTemplateMappings();
+    console.log('Loaded mappings:', res.mappings);
+    setMappings(res.mappings || {});
+  } catch (err: any) {
+    console.error('Failed to load mappings:', err);
+    setStatus({ kind: 'error', text: err?.message ?? 'Could not load mappings' });
+  } finally {
+    setLoadingMappings(false);
+  }
+};
+
   useEffect(() => {
     load();
+    loadMappings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -144,6 +168,38 @@ export default function EmailTemplatesTab({
     }
   };
 
+  const handleMappingChange = async (emailType: string, templateName: string) => {
+    if (!templateName) {
+      setStatus({ kind: 'error', text: 'Please select a template' });
+      return;
+    }
+    setUpdatingMapping(emailType);
+    try {
+      console.log(`Updating mapping: ${emailType} -> ${templateName}`);
+      const res = await updateEmailTemplateMapping(emailType, templateName);
+      console.log('Mapping updated successfully:', res.mappings);
+      setMappings(res.mappings);
+      setStatus({ kind: 'ok', text: `Updated ${emailType} to use ${templateName}` });
+    } catch (err: any) {
+      console.error('Failed to update mapping:', err);
+      setStatus({ kind: 'error', text: err.message ?? 'Failed to update mapping' });
+    } finally {
+      setUpdatingMapping(null);
+    }
+  };
+
+  // Email type display names
+  const emailTypeLabels: Record<string, string> = {
+    task_creation: 'Task Creation',
+    task_assignment: 'Task Assignment',
+    task_delay: 'Task Delay/Overdue',
+    task_reporting: 'Task Reporting',
+    task_completion: 'Task Completion',
+    scheduled_reminders: 'Scheduled Reminders',
+    scheduled_report_first: 'First Scheduled Report',
+    report_submitted: 'Report Submitted',
+  };
+
   // Simple variable highlight for preview: {{name}}, {taskTitle}, etc.
   const previewBody = useMemo(
     () =>
@@ -173,20 +229,77 @@ export default function EmailTemplatesTab({
             to the Sheet.
           </p>
         </div>
-        <button
-          onClick={handleImport}
-          disabled={importing}
-          className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium
-            border border-token text-secondary hover-surface disabled:opacity-50"
-        >
-          {importing ? (
-            <Loader2 size={16} className="animate-spin" />
-          ) : (
-            <CloudDownload size={16} />
-          )}
-          Import from Sheets
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowMappings(!showMappings)}
+            className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium
+              border border-token text-secondary hover-surface"
+          >
+            <Settings size={16} />
+            {showMappings ? 'Hide Mappings' : 'Manage Mappings'}
+          </button>
+          <button
+            onClick={handleImport}
+            disabled={importing}
+            className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium
+              border border-token text-secondary hover-surface disabled:opacity-50"
+          >
+            {importing ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <CloudDownload size={16} />
+            )}
+            Import from Sheets
+          </button>
+        </div>
       </div>
+
+      {/* Email Type Mappings Section */}
+      {showMappings && (
+        <div className="border border-token rounded-lg bg-surface p-4">
+          <h4 className="text-sm font-semibold text-primary mb-3">Email Type to Template Mappings</h4>
+          <p className="text-xs text-muted mb-4">
+            Configure which email template is used for each type of email notification.
+          </p>
+          {loadingMappings ? (
+            <div className="flex items-center gap-2 text-secondary text-sm">
+              <Loader2 size={14} className="animate-spin" /> Loading mappings...
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {Object.entries(emailTypeLabels).map(([emailType, label]) => (
+                <div key={emailType} className="flex items-center justify-between py-2 border-b border-token last:border-b-0">
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-primary">{label}</div>
+                    <div className="text-xs text-muted">{emailType}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={mappings[emailType] || ''}
+                      onChange={(e) => handleMappingChange(emailType, e.target.value)}
+                      disabled={updatingMapping === emailType}
+                      className="ml-4 px-3 py-1.5 rounded-md text-sm border border-token bg-surface text-secondary hover-surface focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:opacity-50 disabled:cursor-not-allowed min-w-[200px]"
+                    >
+                      <option value="">Select template...</option>
+                      {templates.map((t) => (
+                        <option key={t.templateName} value={t.templateName}>
+                          {t.templateName}
+                        </option>
+                      ))}
+                    </select>
+                    {updatingMapping === emailType && (
+                      <Loader2 size={14} className="animate-spin text-secondary" />
+                    )}
+                    {mappings[emailType] && (
+                      <span className="text-xs text-muted">({mappings[emailType]})</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Status banner */}
       {status && (

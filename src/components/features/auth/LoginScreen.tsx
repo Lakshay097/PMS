@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Mail, Lock, LogIn, Eye, EyeOff, UserPlus } from 'lucide-react';
 import { User } from '../../../types/index';
 import AccountRequest from './AccountRequest';
-import { login, mapUserResponseToUser } from '../../../api/auth';
+import { useAuth } from '../../../contexts/AuthContext';
 
 interface LoginScreenProps {
   usersList: User[];
@@ -10,6 +10,7 @@ interface LoginScreenProps {
 }
 
 export default function LoginScreen({ usersList, onLoginSuccess }: LoginScreenProps) {
+  const { login: authLogin } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -46,12 +47,8 @@ export default function LoginScreen({ usersList, onLoginSuccess }: LoginScreenPr
     setIsLoading(true);
 
     try {
-      const data = await login({ email: trimmedEmail, password });
-
-      const user = mapUserResponseToUser(data.user);
-      localStorage.setItem('PMS_auth_token', data.token);
-      localStorage.setItem('auth_token', data.token);
-      localStorage.setItem('PMS_user', JSON.stringify(user));
+      // Must go through AuthContext so isAuthenticated flips and useDatabase loads data.
+      const user = await authLogin(trimmedEmail, password);
       onLoginSuccess(user.Email, user);
       setIsLoading(false);
     } catch (err: any) {

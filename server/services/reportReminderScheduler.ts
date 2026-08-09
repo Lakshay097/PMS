@@ -8,6 +8,32 @@ import { getOrCreateTeamEmailThread, updateTeamEmailThreadId } from './emailLogS
 import crypto from 'crypto';
 
 /**
+ * Gets the template name for scheduled report reminders from Firestore mappings.
+ * Falls back to default template names if no mapping exists.
+ */
+async function getTemplateForScheduledReminders(isFirstTime: boolean): Promise<string> {
+  try {
+    const mappingsDoc = await firestoreAdmin.collection('settings').doc('email_template_mappings').get();
+    if (mappingsDoc.exists) {
+      const mappings = mappingsDoc.data();
+      const templateName = isFirstTime ? mappings?.['scheduled_report_first'] : mappings?.['scheduled_reminders'];
+      if (templateName) {
+        logger.info(`[TEMPLATE MAPPING] Using custom template '${templateName}' for scheduled ${isFirstTime ? 'first' : 'reminder'} report`);
+        return templateName;
+      }
+    }
+
+    // Fall back to default
+    const defaultTemplate = isFirstTime ? 'template_scheduled_report_first' : 'template_scheduled_report_reminder';
+    logger.info(`[TEMPLATE MAPPING] Using default template '${defaultTemplate}' for scheduled ${isFirstTime ? 'first' : 'reminder'} report`);
+    return defaultTemplate;
+  } catch (err) {
+    logger.warn(`[TEMPLATE MAPPING] Error getting mapping for scheduled report, using default`, err);
+    return isFirstTime ? 'template_scheduled_report_first' : 'template_scheduled_report_reminder';
+  }
+}
+
+/**
  * Gets or creates a report reminder email thread.
  * Uses Google Sheets team_email_threads to match the task email threading pattern.
  */
@@ -362,7 +388,7 @@ async function sendReportReminder(
   weekOf: string
 ): Promise<{ success: boolean; gmailThreadId?: string; gmailMessageId?: string }> {
   try {
-    const templateName = isFirstTime ? 'template_scheduled_report_first' : 'template_scheduled_report_reminder';
+    const templateName = await getTemplateForScheduledReminders(isFirstTime);
     const template = await getEmailTemplate(templateName);
     
     if (!template) {

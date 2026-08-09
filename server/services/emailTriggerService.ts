@@ -73,6 +73,67 @@ async function tryClaimEmailSlot(
 }
 
 /**
+ * Tries to claim a task-level send slot for consolidated emails.
+ * Uses a hash of the recipient list to allow legitimate reassignments with different people.
+ * Returns true if this caller owns the slot (should proceed with send).
+ * Returns false if another caller already claimed it within the dedup window.
+ */
+async function tryClaimTaskLevelSlot(
+  taskId: string,
+  recipients: string[],
+  emailType: string
+): Promise<boolean> {
+  // Create a simple hash of the recipient list for uniqueness
+  const recipientHash = recipients
+    .map(r => r.trim().toLowerCase())
+    .sort()
+    .join(',');
+  const key = `${emailType}_task_${taskId}_${recipientHash.replace(/[^a-z0-9@.,]/g, '_')}`;
+  const docRef = firestoreAdmin.collection('email_send_locks').doc(key);
+  const expiresAt = new Date(Date.now() + EMAIL_DEDUP_WINDOW_MS);
+  try {
+    await docRef.create({
+      taskId,
+      recipientEmail: recipients.join(', '), // Store actual emails, not synthetic string
+      emailType,
+      claimedAt: new Date().toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    });
+    return true; // we own this slot
+  } catch (err: any) {
+    if (err.code === 6 || String(err.message).includes('ALREADY_EXISTS')) {
+      // Slot already claimed — check if it has expired (clock-based fallback)
+      try {
+        const existing = await docRef.get();
+        if (existing.exists) {
+          const data = existing.data();
+          if (data?.expiresAt && new Date(data.expiresAt) < new Date()) {
+            // Previous slot has expired — reclaim it
+            await docRef.set({
+              taskId,
+              recipientEmail: recipients.join(', '),
+              emailType,
+              claimedAt: new Date().toISOString(),
+              expiresAt: expiresAt.toISOString(),
+            });
+            logger.info(`[EMAIL DEDUP] Reclaimed expired task-level slot for ${emailType} task=${taskId}`);
+            return true;
+          }
+        }
+      } catch (checkErr) {
+        logger.warn(`[EMAIL DEDUP] Error checking expired task-level slot for ${key}:`, checkErr);
+      }
+      logger.info(`[EMAIL DEDUP] Duplicate task-level send blocked for ${emailType} task=${taskId}`);
+      return false;
+    }
+    // Unexpected Firestore error — fail open (let the send proceed) so emails
+    // are never silently dropped due to a storage issue.
+    logger.warn(`[EMAIL DEDUP] Firestore error claiming task-level slot for ${key}, proceeding with send:`, err);
+    return true;
+  }
+}
+
+/**
  * Reads a single email_enabled_{type} flag from the cached settings collection.
  * Uses the shared settings TTL cache (2-minute TTL) instead of a live Firestore
  * read on every invocation. A toggled setting takes effect within the TTL window.
@@ -162,6 +223,53 @@ function resolveEmailsToNames(emails: string, usersMap: Map<string, string>): st
 }
 
 /**
+ * Gets the template name for a given email type from Firestore mappings.
+ * Falls back to default template names if no mapping exists.
+ */
+async function getTemplateForEmailType(emailType: string): Promise<string> {
+  try {
+    const defaultMappings: Record<string, string> = {
+      task_creation: 'template_task_creation',
+      task_assignment: 'template_assigned_email',
+      task_delay: 'template_delayed_email',
+      task_reporting: 'template_task_reporting',
+      task_completion: 'template_task_completion',
+      scheduled_reminders: 'template_scheduled_reminder',
+      scheduled_report_first: 'template_scheduled_report_first',
+      report_submitted: 'template_report_submitted',
+    };
+
+    const mappingsDoc = await firestoreAdmin.collection('settings').doc('email_template_mappings').get();
+    if (mappingsDoc.exists) {
+      const mappings = mappingsDoc.data();
+      const templateName = mappings?.[emailType];
+      if (templateName) {
+        logger.info(`[TEMPLATE MAPPING] Using custom template '${templateName}' for email type '${emailType}'`);
+        return templateName;
+      }
+    }
+
+    // Fall back to default
+    const defaultTemplate = defaultMappings[emailType];
+    logger.info(`[TEMPLATE MAPPING] Using default template '${defaultTemplate}' for email type '${emailType}'`);
+    return defaultTemplate;
+  } catch (err) {
+    logger.warn(`[TEMPLATE MAPPING] Error getting mapping for ${emailType}, using default`, err);
+    const defaultMappings: Record<string, string> = {
+      task_creation: 'template_task_creation',
+      task_assignment: 'template_assigned_email',
+      task_delay: 'template_delayed_email',
+      task_reporting: 'template_task_reporting',
+      task_completion: 'template_task_completion',
+      scheduled_reminders: 'template_scheduled_reminder',
+      scheduled_report_first: 'template_scheduled_report_first',
+      report_submitted: 'template_report_submitted',
+    };
+    return defaultMappings[emailType] || emailType;
+  }
+}
+
+/**
  * All trigger functions pass taskId to sendEmailAsUser so it can persist
  * the real Gmail threadId+messageId after first send, keeping all emails
  * for a task in the same Gmail thread.
@@ -182,6 +290,14 @@ export async function triggerTaskCreationEmail(
     }
     const recipients = assignedToEmail.split(',').map((e: string) => e.trim()).filter(Boolean);
     const threadTaskId = task.ParentTaskID || task.TaskID;
+
+    // --- Idempotency: claim a task-level send slot with recipient hash ---
+    const claimed = await tryClaimTaskLevelSlot(threadTaskId, recipients, 'task_creation');
+    if (!claimed) {
+      logger.info(`[TRIGGER DEBUG] Skipping task ${threadTaskId} — duplicate send within dedup window`);
+      return;
+    }
+
     const rootTitle = task.Title.replace(/^Follow-up #\d+:\s*/i, '');
     const emailSubject = `[${threadTaskId}] ${rootTitle}`;
     const threadInfo = await getOrCreateTaskEmailThread(threadTaskId, recipients[0]);
@@ -196,6 +312,9 @@ export async function triggerTaskCreationEmail(
       logger.error(`[TRIGGER ERROR] No creator email found for task ${task.TaskID}`);
       return;
     }
+
+    // Get the template name from mappings
+    const templateName = await getTemplateForEmailType('task_creation');
 
     logger.info(`Creation email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
 
@@ -213,41 +332,45 @@ export async function triggerTaskCreationEmail(
 
     logger.info(`[TRIGGER DEBUG] Creation email TO recipients: ${toRecipients.join(', ') || 'none'}`);
 
-    for (const recipient of recipients) {
-      const assignedToName = usersMap.get(recipient.trim().toLowerCase()) || recipient;
-      const result = await sendEmailAsUser(
-        actualCreatorEmail,
-        recipient,
-        emailSubject,
-        '',
-        'template_task_creation',
-        {
-          TaskID: task.TaskID,
-          Title: task.Title,
-          Description: task.Description || task.description || '',
-          Priority: task.Priority,
-          DueDate: task.DueDate,
-          AssignedToEmail: recipient,
-          AssignedToName: assignedToName,
-          AssignedByEmail: creatorEmail,
-          AssignedByName: createdByName,
-          AttachmentLink: task.AttachmentLink || 'No attachment',
-          app_url: appUrl,
-        },
-        threadInfo?.threadId,
-        threadInfo?.messageId,
-        threadTaskId,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        toRecipients,
-        'task_creation',
-        false
-      );
-      logger.info(`[TRIGGER DEBUG] Creation email to ${recipient}: success=${result.success}, error=${result.error || 'none'}`);
-    }
+    // Build comma-separated list of assignee names for template
+    const assigneeNames = recipients
+      .map(r => usersMap.get(r.trim().toLowerCase()) || r)
+      .join(', ');
+
+    // Send ONE email to all recipients
+    const result = await sendEmailAsUser(
+      actualCreatorEmail,
+      toRecipients[0] || recipients[0], // Primary recipient for TO field
+      emailSubject,
+      '',
+      templateName,
+      {
+        TaskID: task.TaskID,
+        Title: task.Title,
+        Description: task.Description || task.description || '',
+        Priority: task.Priority,
+        DueDate: task.DueDate,
+        AssignedToEmail: recipients.join(', '), // All assignees
+        AssignedToName: assigneeNames, // All assignee names
+        AssignedByEmail: actualCreatorEmail,
+        AssignedByName: createdByName,
+        AttachmentLink: task.AttachmentLink || 'No attachment',
+        app_url: appUrl,
+      },
+      threadInfo?.threadId,
+      threadInfo?.messageId,
+      threadTaskId,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      toRecipients, // All participants in TO field
+      'task_creation',
+      false
+    );
+
+    logger.info(`[TRIGGER DEBUG] Creation email result: success=${result.success}, error=${result.error || 'none'}`);
   } catch (err) {
     logger.error('[TRIGGER ERROR] Error triggering task creation email:', err);
   }
@@ -267,25 +390,19 @@ export async function triggerTaskAssignmentEmail(
     const recipients = assignedToEmail.split(',').map((e: string) => e.trim()).filter(Boolean);
     const threadTaskId = task.ParentTaskID || task.TaskID;
 
-    // --- Idempotency: claim a send slot per (taskId, recipient) ---
+    // --- Idempotency: claim a task-level send slot with recipient hash ---
+    // Since we now send ONE consolidated email to all recipients, we need task-level dedup
+    // The recipient hash allows legitimate reassignments with different people
     // This prevents duplicate emails when the endpoint is called concurrently
     // (e.g. React StrictMode double-invoke, user double-click, network retry).
-    const dedupedRecipients: string[] = [];
-    for (const recipient of recipients) {
-      const claimed = await tryClaimEmailSlot(threadTaskId, recipient, 'task_assignment');
-      if (!claimed) {
-        logger.info(`[TRIGGER DEBUG] Skipping ${recipient} for task ${threadTaskId} — duplicate send within dedup window`);
-        continue;
-      }
-      dedupedRecipients.push(recipient);
-    }
-    if (dedupedRecipients.length === 0) {
-      logger.info(`[TRIGGER DEBUG] All recipients already handled for task ${threadTaskId} — skipping`);
+    const claimed = await tryClaimTaskLevelSlot(threadTaskId, recipients, 'task_assignment');
+    if (!claimed) {
+      logger.info(`[TRIGGER DEBUG] Skipping task ${threadTaskId} — duplicate send within dedup window`);
       return;
     }
     const rootTitle = task.Title.replace(/^Follow-up #\d+:\s*/i, '');
     const emailSubject = `[${threadTaskId}] ${rootTitle}`;
-    const threadInfo = await getOrCreateTaskEmailThread(threadTaskId, dedupedRecipients[0]);
+    const threadInfo = await getOrCreateTaskEmailThread(threadTaskId, recipients[0]);
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
 
     const usersMap = await loadUsersNameMap();
@@ -295,12 +412,15 @@ export async function triggerTaskAssignmentEmail(
       logger.error(`[TRIGGER ERROR] No assigner email found for task ${task.TaskID}`);
       return;
     }
+
+    // Get the template name from mappings
+    const templateName = await getTemplateForEmailType('task_assignment');
     const assignedByName = usersMap.get(actualAssignerEmail.trim().toLowerCase()) || actualAssignerEmail;
 
     logger.info(`Assignment email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
 
-    // All known participants for this task = assigner + all assignees (full list, not just deduped).
-    // Every email puts everyone except the current sender in the TO field so the full thread
+    // All known participants for this task = assigner + all assignees.
+    // Email puts everyone except the sender in the TO field so the full thread
     // is visible to all parties regardless of who sends next.
     const allKnown = [
       actualAssignerEmail,
@@ -309,52 +429,54 @@ export async function triggerTaskAssignmentEmail(
     ];
     const uniqueKnown = [...new Set(allKnown.map(e => e.toLowerCase()))];
 
-    for (const recipient of dedupedRecipients) {
-      logger.info(`[TRIGGER DEBUG] Sending to recipient: ${recipient}`);
-      const assignedToName = usersMap.get(recipient.trim().toLowerCase()) || recipient;
+    // Build toRecipients ONCE with all participants except sender
+    const toRecipients = uniqueKnown
+      .filter(e => e !== actualAssignerEmail.toLowerCase())
+      .map(e => allKnown.find(a => a.toLowerCase() === e) || e);
 
-      // TO = everyone except sender (actualAssignerEmail)
-      const toRecipients = uniqueKnown
-        .filter(e => e !== actualAssignerEmail.toLowerCase())
-        .map(e => allKnown.find(a => a.toLowerCase() === e) || e);
+    logger.info(`[TRIGGER DEBUG] TO recipients: ${toRecipients.join(', ') || 'none'}`);
 
-      logger.info(`[TRIGGER DEBUG] TO recipients: ${toRecipients.join(', ') || 'none'}`);
+    // Build comma-separated list of assignee names for template
+    const assigneeNames = recipients
+      .map(r => usersMap.get(r.trim().toLowerCase()) || r)
+      .join(', ');
 
-      const result = await sendEmailAsUser(
-        actualAssignerEmail,
-        recipient,
-        emailSubject,
-        '',
-        'template_assigned_email',
-        {
-          TaskID: task.TaskID,
-          Title: task.Title,
-          Description: task.Description || task.description || '',
-          Priority: task.Priority,
-          DueDate: task.DueDate,
-          AssignedToEmail: recipient,
-          AssignedToName: assignedToName,
-          AssignedByEmail: assignerEmail,
-          AssignedByName: assignedByName,
-          AttachmentLink: task.AttachmentLink || 'No attachment',
-          app_url: appUrl,
-        },
-        threadInfo?.threadId,
-        threadInfo?.messageId,
-        threadTaskId,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        toRecipients,
-        'task_assignment',
-        false
-      );
-      logger.info(`[TRIGGER DEBUG] Email send result for ${recipient}: success=${result.success}, usedFallback=${result.usedFallback}, error=${result.error || 'none'}`);
-      if (!result.success && result.error) {
-        logger.error(`[TRIGGER ERROR] Failed to send email to ${recipient}: ${result.error}`);
-      }
+    // Send ONE email to all recipients
+    const result = await sendEmailAsUser(
+      actualAssignerEmail,
+      toRecipients[0] || recipients[0], // Primary recipient for TO field
+      emailSubject,
+      '',
+      templateName,
+      {
+        TaskID: task.TaskID,
+        Title: task.Title,
+        Description: task.Description || task.description || '',
+        Priority: task.Priority,
+        DueDate: task.DueDate,
+        AssignedToEmail: recipients.join(', '), // All assignees
+        AssignedToName: assigneeNames, // All assignee names
+        AssignedByEmail: actualAssignerEmail,
+        AssignedByName: assignedByName,
+        AttachmentLink: task.AttachmentLink || 'No attachment',
+        app_url: appUrl,
+      },
+      threadInfo?.threadId,
+      threadInfo?.messageId,
+      threadTaskId,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      toRecipients, // All participants in TO field
+      'task_assignment',
+      false
+    );
+
+    logger.info(`[TRIGGER DEBUG] Email send result: success=${result.success}, usedFallback=${result.usedFallback}, error=${result.error || 'none'}`);
+    if (!result.success && result.error) {
+      logger.error(`[TRIGGER ERROR] Failed to send assignment email: ${result.error}`);
     }
   } catch (err) {
     logger.error('[TRIGGER ERROR] Error triggering task assignment email:', err);
@@ -374,6 +496,14 @@ export async function triggerTaskDueSoonEmail(
     const recipients = assignedToEmail.split(',').map((e: string) => e.trim()).filter(Boolean);
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
     const threadTaskId = task.ParentTaskID || task.TaskID;
+
+    // --- Idempotency: claim a task-level send slot with recipient hash ---
+    const claimed = await tryClaimTaskLevelSlot(threadTaskId, recipients, 'task_due_soon');
+    if (!claimed) {
+      logger.info(`[TRIGGER DEBUG] Skipping task ${threadTaskId} — duplicate send within dedup window`);
+      return;
+    }
+
     const rootTitle = task.Title.replace(/^Follow-up #\d+:\s*/i, '');
     const emailSubject = `[${threadTaskId}] ${rootTitle}`;
     const threadInfo = await getOrCreateTaskEmailThread(threadTaskId, recipients[0]);
@@ -381,7 +511,10 @@ export async function triggerTaskDueSoonEmail(
     const usersMap = await loadUsersNameMap();
     const assignedByName = usersMap.get(creatorEmail.trim().toLowerCase()) || creatorEmail;
 
-    logger.info(`Due-soon email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
+    // Get the template name from mappings
+    const templateName = await getTemplateForEmailType('task_delay');
+
+    logger.info(`Due-soon email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}, template=${templateName}`);
 
     const allKnown = [
       creatorEmail,
@@ -390,47 +523,51 @@ export async function triggerTaskDueSoonEmail(
     ];
     const uniqueKnown = [...new Set(allKnown.map(e => e.toLowerCase()))];
 
-    for (const recipient of recipients) {
-      const assignedToName = usersMap.get(recipient.trim().toLowerCase()) || recipient;
-      const toRecipients = uniqueKnown
-        .filter(e => e !== creatorEmail.toLowerCase())
-        .map(e => allKnown.find(a => a.toLowerCase() === e) || e);
+    // Build toRecipients ONCE with all participants except sender
+    const toRecipients = uniqueKnown
+      .filter(e => e !== creatorEmail.toLowerCase())
+      .map(e => allKnown.find(a => a.toLowerCase() === e) || e);
 
-      await sendEmailAsUser(
-        creatorEmail,
-        recipient,
-        emailSubject,
-        '',
-        'template_delayed_email',
-        {
-          task_name: task.Title,
-          Title: task.Title,
-          task_id: task.TaskID,
-          Description: task.Description || task.description || '',
-          TaskID: task.TaskID,
-          due_date: task.DueDate,
-          DueDate: task.DueDate,
-          priority: task.Priority,
-          Priority: task.Priority,
-          assigned_to: recipient,
-          AssignedToEmail: recipient,
-          AssignedToName: assignedToName,
-          AssignedByName: assignedByName,
-          app_url: appUrl,
-        },
-        threadInfo?.threadId,
-        threadInfo?.messageId,
-        threadTaskId,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        toRecipients,
-        'task_due_soon',
-        false
-      );
-    }
+    // Build comma-separated list of assignee names for template
+    const assigneeNames = recipients
+      .map(r => usersMap.get(r.trim().toLowerCase()) || r)
+      .join(', ');
+
+    // Send ONE email to all recipients
+    await sendEmailAsUser(
+      creatorEmail,
+      toRecipients[0] || recipients[0], // Primary recipient for TO field
+      emailSubject,
+      '',
+      templateName,
+      {
+        task_name: task.Title,
+        Title: task.Title,
+        task_id: task.TaskID,
+        Description: task.Description || task.description || '',
+        TaskID: task.TaskID,
+        due_date: task.DueDate,
+        DueDate: task.DueDate,
+        priority: task.Priority,
+        Priority: task.Priority,
+        assigned_to: recipients.join(', '), // All assignees
+        AssignedToEmail: recipients.join(', '), // All assignees
+        AssignedToName: assigneeNames, // All assignee names
+        AssignedByName: assignedByName,
+        app_url: appUrl,
+      },
+      threadInfo?.threadId,
+      threadInfo?.messageId,
+      threadTaskId,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      toRecipients, // All participants in TO field
+      'task_due_soon',
+      false
+    );
   } catch (err) {
     logger.error('Error triggering task due soon email:', err);
   }
@@ -449,6 +586,14 @@ export async function triggerTaskOverdueEmail(
     const recipients = assignedToEmail.split(',').map((e: string) => e.trim()).filter(Boolean);
     const appUrl = process.env.APP_URL || 'http://localhost:3000';
     const threadTaskId = task.ParentTaskID || task.TaskID;
+
+    // --- Idempotency: claim a task-level send slot with recipient hash ---
+    const claimed = await tryClaimTaskLevelSlot(threadTaskId, recipients, 'task_overdue');
+    if (!claimed) {
+      logger.info(`[TRIGGER DEBUG] Skipping task ${threadTaskId} — duplicate send within dedup window`);
+      return;
+    }
+
     const rootTitle = task.Title.replace(/^Follow-up #\d+:\s*/i, '');
     const emailSubject = `[${threadTaskId}] ${rootTitle}`;
     const threadInfo = await getOrCreateTaskEmailThread(threadTaskId, recipients[0]);
@@ -456,7 +601,10 @@ export async function triggerTaskOverdueEmail(
     const usersMap = await loadUsersNameMap();
     const assignedByName = usersMap.get(creatorEmail.trim().toLowerCase()) || creatorEmail;
 
-    logger.info(`Overdue email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
+    // Get the template name from mappings
+    const templateName = await getTemplateForEmailType('task_delay');
+
+    logger.info(`Overdue email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}, template=${templateName}`);
 
     const allKnown = [
       creatorEmail,
@@ -465,47 +613,51 @@ export async function triggerTaskOverdueEmail(
     ];
     const uniqueKnown = [...new Set(allKnown.map(e => e.toLowerCase()))];
 
-    for (const recipient of recipients) {
-      const assignedToName = usersMap.get(recipient.trim().toLowerCase()) || recipient;
-      const toRecipients = uniqueKnown
-        .filter(e => e !== creatorEmail.toLowerCase())
-        .map(e => allKnown.find(a => a.toLowerCase() === e) || e);
+    // Build toRecipients ONCE with all participants except sender
+    const toRecipients = uniqueKnown
+      .filter(e => e !== creatorEmail.toLowerCase())
+      .map(e => allKnown.find(a => a.toLowerCase() === e) || e);
 
-      await sendEmailAsUser(
-        creatorEmail,
-        recipient,
-        emailSubject,
-        '',
-        'template_delayed_email',
-        {
-          task_name: task.Title,
-          Title: task.Title,
-          task_id: task.TaskID,
-          Description: task.Description || task.description || '',
-          TaskID: task.TaskID,
-          due_date: task.DueDate,
-          DueDate: task.DueDate,
-          priority: task.Priority,
-          Priority: task.Priority,
-          assigned_to: recipient,
-          AssignedToEmail: recipient,
-          AssignedToName: assignedToName,
-          AssignedByName: assignedByName,
-          app_url: appUrl,
-        },
-        threadInfo?.threadId,
-        threadInfo?.messageId,
-        threadTaskId,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        toRecipients,
-        'task_overdue',
-        false
-      );
-    }
+    // Build comma-separated list of assignee names for template
+    const assigneeNames = recipients
+      .map(r => usersMap.get(r.trim().toLowerCase()) || r)
+      .join(', ');
+
+    // Send ONE email to all recipients
+    await sendEmailAsUser(
+      creatorEmail,
+      toRecipients[0] || recipients[0], // Primary recipient for TO field
+      emailSubject,
+      '',
+      templateName,
+      {
+        task_name: task.Title,
+        Title: task.Title,
+        task_id: task.TaskID,
+        Description: task.Description || task.description || '',
+        TaskID: task.TaskID,
+        due_date: task.DueDate,
+        DueDate: task.DueDate,
+        priority: task.Priority,
+        Priority: task.Priority,
+        assigned_to: recipients.join(', '), // All assignees
+        AssignedToEmail: recipients.join(', '), // All assignees
+        AssignedToName: assigneeNames, // All assignee names
+        AssignedByName: assignedByName,
+        app_url: appUrl,
+      },
+      threadInfo?.threadId,
+      threadInfo?.messageId,
+      threadTaskId,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      toRecipients, // All participants in TO field
+      'task_overdue',
+      false
+    );
   } catch (err) {
     logger.error('Error triggering task overdue email:', err);
   }
@@ -535,7 +687,10 @@ export async function triggerReportSubmissionEmail(
     const submittedByName = usersMap.get(submitterEmail.trim().toLowerCase()) || submitterEmail;
     const allocatorName = usersMap.get(allocatorEmail.trim().toLowerCase()) || allocatorEmail;
 
-    logger.info(`Report email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
+    // Get the template name from mappings
+    const templateName = await getTemplateForEmailType('report_submitted');
+
+    logger.info(`Report email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}, template=${templateName}`);
 
     // All known parties: submitter, allocator, plus anyone already in thread.
     // CC = everyone except sender (submitterEmail) and primary To (allocatorEmail).
@@ -560,7 +715,7 @@ export async function triggerReportSubmissionEmail(
       allocatorEmail,   // to = allocator (Utsav receives the report)
       emailSubject,
       '',
-      'template_report_submitted',
+      templateName,
       {
         task_name: task.Title,
         task_id: task.TaskID,
@@ -628,7 +783,10 @@ export async function triggerTaskClosureEmail(
     const closedByName = usersMap.get(closedByEmail.trim().toLowerCase()) || closedByEmail;
     const toName = usersMap.get(toEmail.trim().toLowerCase()) || toEmail;
 
-    logger.info(`Closure email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}`);
+    // Get the template name from mappings
+    const templateName = await getTemplateForEmailType('task_completion');
+
+    logger.info(`Closure email: task=${task.TaskID}, threadTaskId=${threadTaskId}, threadId=${threadInfo?.threadId || 'NEW'}, template=${templateName}`);
 
     // All known parties: closer, allocator, all assignees, plus anyone already in thread.
     // CC = everyone except sender (closedByEmail) and primary To (toEmail).
@@ -651,7 +809,7 @@ export async function triggerTaskClosureEmail(
       toEmail,        // to = allocator (Utsav) — mirrors report pattern
       emailSubject,
       '',
-      'template_task_closed',
+      templateName,
       {
         task_name: task.Title,
         task_id: task.TaskID,

@@ -34,6 +34,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
   const { isDarkMode } = useTheme();
   const [taskType, setTaskType] = useState<'One-time' | 'Recurring'>('One-time');
   const [title, setTitle] = useState('');
+  const [isTitleManuallySet, setIsTitleManuallySet] = useState(false);
   const [description, setDescription] = useState('');
   const [priorities, setPriorities] = useState<('Low' | 'Medium' | 'High' | 'Critical')[]>(['Medium']);
   const [recurrenceType, setRecurrenceType] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Half-yearly'>('Weekly');
@@ -80,6 +81,9 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
     }
     // Reset user selection flag when modal opens
     setUserSelectedDay(false);
+    // Reset title manual override flag when modal opens
+    setIsTitleManuallySet(false);
+    setTitle('');
   }, [isOpen, preSelectedAssignee, preSelectedTeamIDs]);
 
   // Filter eligible assignees based on role and parent team
@@ -133,7 +137,9 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
   });
 
   // Auto-generate title from priorities, description and date
+  // Only runs when the user has NOT manually provided a title
   useEffect(() => {
+    if (isTitleManuallySet) return;
     if (description.trim() && dueDate) {
       // Extract first few words from description (up to 5 words)
       const words = description.trim().split(/\s+/).slice(0, 5);
@@ -147,7 +153,7 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
       const generatedTitle = `[${priorities.join(', ')}] ${descriptionSnippet} - ${formattedDate}`;
       setTitle(generatedTitle);
     }
-  }, [description, dueDate, priorities]);
+  }, [description, dueDate, priorities, isTitleManuallySet]);
 
   // Filter stakeholders based on search query
   const filteredStakeholders = filteredAssignees.filter(user =>
@@ -373,16 +379,17 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
           <div>
             <label className="block text-[12.5px] font-semibold text-[#9AA3B8] tracking-wide mb-2 flex items-center gap-1.5">
               Title <span className="text-[#F0577A]">*</span>
-              <span className="text-[#4C6EF5] opacity-85 text-[12px] font-medium">(Auto-generated from description & date)</span>
+              <span className="text-[#4C6EF5] opacity-85 text-[12px] font-medium">(Optional — auto-generated from description & date if left blank)</span>
             </label>
             <input
               type="text"
-              required
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setIsTitleManuallySet(true);
+              }}
               placeholder="[Medium] d - Aug 7"
               className="w-full text-[14px] bg-[#131928] border border-[#29334A] rounded-[10px] px-3.5 py-3 text-[#EDF0F7] placeholder-[#4B5468] focus:outline-none focus:border-[#E7B84B] focus:shadow-[0_0_0_3px_rgba(231,184,75,0.18)] transition-all"
-              readOnly
               style={{ fontStyle: 'normal' }}
             />
           </div>

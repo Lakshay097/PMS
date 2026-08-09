@@ -45,7 +45,7 @@ import {
 import { Task, User as UserType, TaskTemplate, AppSetting, Team, SubTeam, TaskReport, AuditLog, EmailTemplate, TeamSubmission } from '../../../types';
 import { ROLE, isAdminLevel } from '../../../constants/status';
 import AdminPanel from '../../AdminPanel';
-import TaskList from '../tasks/TaskList';
+import TaskCardList from '../tasks/TaskCardList';
 import TaskFilters from '../tasks/TaskFilters';
 import MultiselectDropdown from '../../shared/MultiselectDropdown';
 import BulkActionBar from '../../shared/BulkActionBar';
@@ -698,16 +698,23 @@ export default function Dashboard({
     t.Status === 'Closed' || t.Status === 'Reviewed'
   ).length;
 
-  // Get tasks needing attention (overdue or high priority), scoped to this user
-  const priorityTasks = visibleTasksForOverview
-    .filter(t => {
-      if (t.Status === 'Closed' || t.Status === 'Reviewed') return false;
-      const isOverdue = t.DueDate < today;
-      const priorities = Array.isArray(t.Priority) ? t.Priority : [t.Priority];
-      const isHighPriority = priorities.includes('High') || priorities.includes('Critical');
-      return isOverdue || isHighPriority;
-    })
-    .slice(0, 5);
+  // Active tasks: all non-completed tasks, sorted by assigned date (oldest first)
+  const activeTasksOverview = visibleTasksForOverview
+    .filter(t => t.Status !== 'Closed' && t.Status !== 'Reviewed')
+    .sort((a, b) => {
+      const aDate = a.CreatedAt ? new Date(a.CreatedAt).getTime() : 0;
+      const bDate = b.CreatedAt ? new Date(b.CreatedAt).getTime() : 0;
+      return aDate - bDate;
+    });
+
+  // Completed tasks: sorted by completion date (most recent first)
+  const completedTasksOverview = visibleTasksForOverview
+    .filter(t => t.Status === 'Closed' || t.Status === 'Reviewed')
+    .sort((a, b) => {
+      const aDate = a.CompletionDate ? new Date(a.CompletionDate).getTime() : 0;
+      const bDate = b.CompletionDate ? new Date(b.CompletionDate).getTime() : 0;
+      return bDate - aDate;
+    });
 
   // Chart data for Task Insights
   const completionStatusData = useMemo(() => {
@@ -936,9 +943,11 @@ export default function Dashboard({
       });
     }
     if (filterAssignee.length > 0) {
-      filtered = filtered.filter(t =>
-        filterAssignee.some(email => t.AssignedToEmail?.includes(email))
-      );
+      const normalizedFilterEmails = filterAssignee.map(e => e.toLowerCase());
+      filtered = filtered.filter(t => {
+        const taskAssignees = splitEmails(t.AssignedToEmail).map(e => e.toLowerCase());
+        return normalizedFilterEmails.some(email => taskAssignees.includes(email));
+      });
     }
     if (filterTeamIDs.length > 0) {
       filtered = filtered.filter(t =>
@@ -1057,7 +1066,7 @@ export default function Dashboard({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          onClick={() => navigate(ROUTES.TASKS)}
+          onClick={() => navigate(ROUTES.TASKS, { state: { taskFilter: 'all' } })}
           className="border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all bg-surface border-token hover:border-purple-500/50"
         >
           <div className="flex items-center justify-between mb-2">
@@ -1074,7 +1083,7 @@ export default function Dashboard({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          onClick={() => navigate(ROUTES.TASKS)}
+          onClick={() => navigate(ROUTES.TASKS, { state: { taskFilter: 'active' } })}
           className="border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all bg-surface border-token hover:border-blue-500/50"
         >
           <div className="flex items-center justify-between mb-2">
@@ -1091,7 +1100,7 @@ export default function Dashboard({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          onClick={() => navigate(ROUTES.TASKS)}
+          onClick={() => navigate(ROUTES.TASKS, { state: { taskFilter: 'overdue' } })}
           className="border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all bg-surface border-token hover:border-red-500/50"
         >
           <div className="flex items-center justify-between mb-2">
@@ -1108,7 +1117,7 @@ export default function Dashboard({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          onClick={() => navigate(ROUTES.TASKS)}
+          onClick={() => navigate(ROUTES.TASKS, { state: { taskFilter: 'due-today' } })}
           className="border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all bg-surface border-token hover:border-yellow-500/50"
         >
           <div className="flex items-center justify-between mb-2">
@@ -1125,7 +1134,7 @@ export default function Dashboard({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          onClick={() => navigate(ROUTES.TASKS, { state: { statusFilter: ['Closed', 'Reviewed'] } })}
+          onClick={() => navigate(ROUTES.TASKS, { state: { taskFilter: 'completed' } })}
           className="border rounded-xl p-3 sm:p-4 cursor-pointer hover:shadow-md transition-all bg-surface border-token hover:border-green-500/50"
         >
           <div className="flex items-center justify-between mb-2">
@@ -1139,7 +1148,7 @@ export default function Dashboard({
         </motion.div>
       </div>
 
-      {/* Priority Tasks Section */}
+      {/* Active Tasks Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1148,75 +1157,51 @@ export default function Dashboard({
       >
         <div className="p-4 sm:p-6 border-b flex items-center justify-between border-token">
           <div className="flex items-center space-x-2 sm:space-x-3">
-            <Bell className="text-orange-400" size={18} />
-            <h3 className="font-medium text-sm sm:text-lg text-primary">Priority tasks</h3>
-            <span className="bg-orange-500/10 text-orange-400 text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full border border-orange-500/20">
-              {priorityTasks.length} items
+            <ClipboardList className="text-blue-400" size={18} />
+            <h3 className="font-medium text-sm sm:text-lg text-primary">Active tasks</h3>
+            <span className="bg-blue-500/10 text-blue-400 text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full border border-blue-500/20">
+              {activeTasksOverview.length} items
             </span>
           </div>
-          <button onClick={() => navigate(ROUTES.TASKS)} className="text-blue-400 text-[10px] sm:text-sm font-medium hover:text-blue-300 flex items-center space-x-1">
-            <span className="hidden sm:inline">View all</span>
-            <span className="sm:hidden">View all</span>
+          <button onClick={() => navigate(ROUTES.TASKS, { state: { taskFilter: 'active' } })} className="text-blue-400 text-[10px] sm:text-sm font-medium hover:text-blue-300 flex items-center space-x-1">
+            <span>View all</span>
             <ChevronRight size={16} />
           </button>
         </div>
-        <div className="divide-y divide-[var(--color-border)]">
-          {priorityTasks.length > 0 ? (
-            priorityTasks.map((task, index) => {
-              const daysUntil = getDaysUntilDue(task.DueDate);
-              const dueText = daysUntil < 0 ? 'Overdue' : daysUntil === 0 ? 'Today' : `${daysUntil} days`;
-              const isOverdue = task.DueDate < today;
-              const accentColor = isOverdue ? 'border-l-red-500' : 'border-l-amber-500';
-              const bgColor = isOverdue ? 'bg-red-500/5' : 'bg-amber-500/5';
+        <TaskCardList
+          tasks={activeTasksOverview}
+          users={users}
+          onTaskClick={onTaskClick}
+          emptyMessage="No active tasks at this time"
+        />
+      </motion.div>
 
-              return (
-                <motion.div
-                  key={task.TaskID}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.6 + index * 0.1 }}
-                  onClick={(e) => { e.preventDefault(); onTaskClick(task); }}
-                  className={`${bgColor} ${accentColor} border-l-3 p-4 sm:p-6 transition-colors cursor-pointer hover-surface rounded-r-lg`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2">
-                        <span className={`text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border ${getPriorityColor(task.Priority)}`}>
-                          {Array.isArray(task.Priority) ? task.Priority.join(', ') : task.Priority}
-                        </span>
-                        <span className={`text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border ${getStatusColor(task.Status)}`}>
-                          {task.Status}
-                        </span>
-                        {isOverdue && (
-                          <span className="bg-red-500/10 text-red-400 text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded border border-red-500/20">
-                            Overdue
-                          </span>
-                        )}
-                      </div>
-                      <h4 className="font-medium text-sm sm:text-base mb-2 truncate text-primary">
-                        {task.Title}
-                      </h4>
-                      <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-muted">
-                        <span>Due: {task.DueDate} {daysUntil > 0 && `(${dueText})`}</span>
-                        <span>·</span>
-                        <span>Assigned to: {task.AssignedToEmail.split('@')[0]}</span>
-                      </div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-[10px] sm:text-xs font-mono text-muted">{task.TaskID}</p>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })
-          ) : (
-            <div className="text-center py-6 sm:py-8 text-muted">
-              <CheckCircle className="mx-auto mb-2 text-green-400" size={24} />
-              <p className="text-xs sm:text-sm">No priority tasks at this time</p>
-              <p className="text-[10px] sm:text-xs mt-1">All tasks are on track</p>
-            </div>
-          )}
+      {/* Completed Tasks Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.6 }}
+        className="border rounded-xl bg-surface border-token"
+      >
+        <div className="p-4 sm:p-6 border-b flex items-center justify-between border-token">
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <CheckCircle className="text-green-400" size={18} />
+            <h3 className="font-medium text-sm sm:text-lg text-primary">Completed</h3>
+            <span className="bg-green-500/10 text-green-400 text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full border border-green-500/20">
+              {completedTasksOverview.length} items
+            </span>
+          </div>
+          <button onClick={() => navigate(ROUTES.TASKS, { state: { taskFilter: 'completed' } })} className="text-blue-400 text-[10px] sm:text-sm font-medium hover:text-blue-300 flex items-center space-x-1">
+            <span>View all</span>
+            <ChevronRight size={16} />
+          </button>
         </div>
+        <TaskCardList
+          tasks={completedTasksOverview}
+          users={users}
+          onTaskClick={onTaskClick}
+          emptyMessage="No completed tasks yet"
+        />
       </motion.div>
 
       {/* Task Insights Section */}
@@ -1465,15 +1450,11 @@ export default function Dashboard({
             onFilterAssignedByEmailsChange={setFilterAssignedByEmails}
             onSearchQueryChange={setSearchQuery}
           />
-          <TaskList
+          <TaskCardList
             tasks={filteredTasks}
+            users={users}
             onTaskClick={onTaskClick}
-            isDarkMode={isDarkMode}
-            getPriorityColor={getPriorityColor}
-            getStatusColor={getStatusColor}
-            currentUser={currentUser}
-            taskSubView={taskSubView}
-            onDeleteTask={onDeleteTask}
+            emptyMessage="No tasks found"
           />
         </>
       )}
@@ -1661,6 +1642,10 @@ export default function Dashboard({
   };
 
   const renderReports = () => {
+    if (!currentUser) {
+      return null;
+    }
+
     if (!reports || reports.length === 0) {
       return (
         <div className="space-y-6">
@@ -2114,7 +2099,7 @@ export default function Dashboard({
       emailTemplates={emailTemplates}
       teams={teams}
       subTeams={subTeams}
-      currentUserEmail={currentUser.Email}
+      currentUserEmail={currentUser?.Email}
       onAddUser={onAddUser || (() => { })}
       onToggleUserStatus={onToggleUserStatus || (() => { })}
       onAddTemplate={onAddTemplate || (() => { })}

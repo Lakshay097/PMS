@@ -9,7 +9,7 @@ interface AuthContextType {
   refreshToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   logout: () => void;
   refreshAccessToken: () => Promise<void>;
 }
@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]                 = useState<User | null>(authState.user);
   const [token, setToken]               = useState<string | null>(authState.token);
   const [refreshToken, setRefreshToken] = useState<string | null>(authState.refreshToken);
-  // isLoading starts false because auth is resolved synchronously above.
+  // Auth is resolved synchronously from localStorage — no async gate needed.
   const [isLoading, setIsLoading]       = useState(false);
 
   const clearAuthData = () => {
@@ -70,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('PMS_auth_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('PMS_user');
+    localStorage.removeItem('PMS_active_user_email');
     setToken(null);
     setRefreshToken(null);
     setUser(null);
@@ -77,23 +78,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   /**
-   * Login function using the API
+   * Login function using the API.
+   * Does NOT clear React auth state before the request succeeds — clearing first
+   * flipped isAuthenticated off/on and raced in-flight database loads into empty data.
    */
-  const handleLogin = async (email: string, password: string) => {
-    // Clear any stale session data before establishing new session
-    clearAuthData();
-
+  const handleLogin = async (email: string, password: string): Promise<User> => {
     const data = await login({ email, password });
     const mappedUser = mapUserResponseToUser(data.user);
-
-    setToken(data.token);
-    setRefreshToken(data.refreshToken);
-    setUser(mappedUser);
 
     localStorage.setItem('auth_token', data.token);
     localStorage.setItem('PMS_auth_token', data.token);
     localStorage.setItem('refresh_token', data.refreshToken);
     localStorage.setItem('PMS_user', JSON.stringify(mappedUser));
+
+    setToken(data.token);
+    setRefreshToken(data.refreshToken);
+    setUser(mappedUser);
+
+    return mappedUser;
   };
 
   /**

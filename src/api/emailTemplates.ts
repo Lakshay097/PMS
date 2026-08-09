@@ -34,3 +34,21 @@ export async function saveEmailTemplate(
     data
   );
 }
+
+export interface EmailTemplateMapping {
+  [emailType: string]: string;
+}
+
+export async function getEmailTemplateMappings(): Promise<{ mappings: EmailTemplateMapping }> {
+  return api.get<{ mappings: EmailTemplateMapping }>('/email-templates/mappings');
+}
+
+export async function updateEmailTemplateMapping(
+  emailType: string,
+  templateName: string
+): Promise<{ mappings: EmailTemplateMapping }> {
+  return api.put<{ mappings: EmailTemplateMapping }>('/email-templates/mappings', {
+    emailType,
+    templateName,
+  });
+}

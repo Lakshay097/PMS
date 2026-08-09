@@ -153,9 +153,41 @@ function setCache<T>(key: string, data: T[]): void {
   setTimeout(() => memoryCache.delete(key), CACHE_TTL);
 }
 
+// ---------------------------------------------------------------------------
+// Full-batch load dedupe + short client reuse window
+// Prevents StrictMode / overlapping callers from issuing 13 parallel API
+// round-trips (and the corresponding Firestore collection reads) repeatedly.
+// ---------------------------------------------------------------------------
+type BatchLoadResult = {
+  users: User[];
+  tasks: Task[];
+  teams: Team[];
+  subTeams: SubTeam[];
+  templates: TaskTemplate[];
+  settings: AppSetting[];
+  emailTemplates: EmailTemplate[];
+  reports: TaskReport[];
+  followups: FollowUp[];
+  subtasks: Subtask[];
+  comments: Comment[];
+  teamSubmissions: TeamSubmission[];
+  audits: AuditLog[];
+};
+
+let batchLoadInFlight: Promise<BatchLoadResult> | null = null;
+let lastBatchLoadAt = 0;
+let lastBatchLoadData: BatchLoadResult | null = null;
+const CLIENT_BATCH_REUSE_MS = 30_000; // reuse a successful full load for 30s unless forced
+
+export function invalidateBatchLoadCache(): void {
+  lastBatchLoadAt = 0;
+  lastBatchLoadData = null;
+}
+
 // Force clear all caches to ensure fresh data from Google Sheets
 export function forceClearAllCaches(): void {
   memoryCache.clear();
+  invalidateBatchLoadCache();
 }
 
 export function clearCache(key?: string): void {
@@ -252,10 +284,11 @@ export function setDatabaseSwitchCallback(callback: (newDb: DatabaseType) => voi
   databaseSwitchCallback = callback;
 }
 
-export async function initializeDatabaseWithRace(): Promise<{
+export async function initializeDatabaseWithRace(options?: { force?: boolean }): Promise<{
   data: Awaited<ReturnType<typeof dbService.batchLoadAll>>;
   primary: DatabaseType;
 }> {
+  const force = options?.force === true;
   const FIRESTORE_TIMEOUT_MS = 60000; 
   const SHEETS_TIMEOUT_MS = 20000; // 20 second timeout for Sheets (slower fallback)
 
@@ -269,7 +302,7 @@ export async function initializeDatabaseWithRace(): Promise<{
   try {
     logger.log("Loading from Firestore (primary)...");
     const data = await Promise.race([
-      dbService.batchLoadAll(),
+      dbService.batchLoadAll(force),
       timeoutPromise(FIRESTORE_TIMEOUT_MS, 'firestore')
     ]);
     logger.log("Firestore loaded successfully");
@@ -284,7 +317,7 @@ export async function initializeDatabaseWithRace(): Promise<{
     logger.log("Firestore failed, trying Sheets as fallback...");
     await initializeDatabase();
     const data = await Promise.race([
-      dbService.batchLoadAll(),
+      dbService.batchLoadAll(true),
       timeoutPromise(SHEETS_TIMEOUT_MS, 'sheets')
     ]);
     logger.log("Sheets loaded successfully");
@@ -1364,21 +1397,32 @@ export const dbService = {
   },
 
   // Batch load all collections from API (fast initial load)
-  async batchLoadAll(): Promise<{
-    users: User[];
-    tasks: Task[];
-    teams: Team[];
-    subTeams: SubTeam[];
-    templates: TaskTemplate[];
-    settings: AppSetting[];
-    emailTemplates: EmailTemplate[];
-    reports: TaskReport[];
-    followups: FollowUp[];
-    subtasks: Subtask[];
-    comments: Comment[];
-    teamSubmissions: TeamSubmission[];
-    audits: AuditLog[];  
-  }> {
+  async batchLoadAll(force: boolean = false): Promise<BatchLoadResult> {
+    // Reuse a recent successful full load to avoid hammering Firestore when
+    // multiple callers race (StrictMode, login transition, etc.).
+    if (
+      !force &&
+      lastBatchLoadData &&
+      Date.now() - lastBatchLoadAt < CLIENT_BATCH_REUSE_MS
+    ) {
+      logger.log('[batchLoadAll] reusing in-memory batch result');
+      return lastBatchLoadData;
+    }
+
+    if (batchLoadInFlight) {
+      if (!force) {
+        logger.log('[batchLoadAll] joining in-flight request');
+        return batchLoadInFlight;
+      }
+      // Forced refresh: wait out the in-flight load, then fetch fresh data.
+      try {
+        await batchLoadInFlight;
+      } catch {
+        /* ignore — we are about to refetch */
+      }
+    }
+
+    batchLoadInFlight = (async (): Promise<BatchLoadResult> => {
     // Read all collections from API in parallel.
     // Promise.allSettled ensures a single slow/failed collection (e.g. auditlogs
     // on a cold server) does not wipe out the entire batch — the failed collection
@@ -1485,7 +1529,7 @@ export const dbService = {
     setCache('teamSubmissions', teamSubmissions);
     setCache('auditlogs', audits);
 
-    return {
+    const payload: BatchLoadResult = {
       users,
       tasks,
       teams,
@@ -1500,6 +1544,15 @@ export const dbService = {
       teamSubmissions,
       audits
     };
+
+    lastBatchLoadData = payload;
+    lastBatchLoadAt = Date.now();
+    return payload;
+    })().finally(() => {
+      batchLoadInFlight = null;
+    });
+
+    return batchLoadInFlight;
   },
 
   // Targeted sync for specific collections (for SSE-based sync)

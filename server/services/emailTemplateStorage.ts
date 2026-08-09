@@ -15,7 +15,7 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
     body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f0f4ff;">
   <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid #2563eb;">
     <h2 style="color: #1e3a8a; margin-top: 0;">New Task Created</h2>
-    <p style="color: #666; line-height: 1.6;">Hello {AssignedToName},</p>
+    <p style="color: #666; line-height: 1.6;">Assigned to: {AssignedToName}</p>
     <p style="color: #666; line-height: 1.6;">A new task has been created and assigned to you. Please review the details below:</p>
 
     <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
@@ -68,7 +68,7 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
     body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f0f4ff;">
   <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid #2563eb;">
     <h2 style="color: #1e3a8a; margin-top: 0;">New Task Assignment</h2>
-    <p style="color: #666; line-height: 1.6;">Hello {AssignedToName},</p>
+    <p style="color: #666; line-height: 1.6;">Assigned to: {AssignedToName}</p>
     <p style="color: #666; line-height: 1.6;">You have been assigned a new task. Please review the details below:</p>
 
     <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
@@ -121,7 +121,7 @@ export const DEFAULT_TEMPLATES: EmailTemplate[] = [
     body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff3cd;">
   <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid #ffc107;">
     <h2 style="color: #856404; margin-top: 0;">Task Due Soon</h2>
-    <p style="color: #666; line-height: 1.6;">Hello {AssignedToName},</p>
+    <p style="color: #666; line-height: 1.6;">Assigned to: {AssignedToName}</p>
     <p style="color: #666; line-height: 1.6;">The following task is due within 24 hours:</p>
 
     <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">

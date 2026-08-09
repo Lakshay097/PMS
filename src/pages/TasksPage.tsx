@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Task, User as UserType, Team, SubTeam, AppSetting } from '../types';
-import TaskList from '../components/features/tasks/TaskList';
+import TaskCardList from '../components/features/tasks/TaskCardList';
 import TaskFilters from '../components/features/tasks/TaskFilters';
 import { getUserRoles, getTeamTasksScope, splitEmails, shouldShowTeamTasksTab, shouldShowAssignedByMeTab } from '../utils/roleUtils';
 import { Plus } from 'lucide-react';
@@ -48,6 +48,7 @@ export default function TasksPage({
 
   // Compute user roles once per render
   const userRoles = useMemo(() => {
+    if (!currentUser) return [];
     return getUserRoles(currentUser, teams || [], subTeams || [], settings || []);
   }, [currentUser, teams, subTeams, settings]);
 
@@ -78,9 +79,48 @@ export default function TasksPage({
 
       // Apply status filter
       if (filters.status && filters.status.length > 0 && !filters.status.includes('All')) {
-        if (!filters.status.includes(task.Status)) return false;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const dueDate = task.DueDate ? new Date(task.DueDate) : null;
+        if (dueDate) dueDate.setHours(0, 0, 0, 0);
+
+        const isClosed = task.Status === 'Closed' || task.Status === 'Reviewed';
+
+        for (const status of filters.status) {
+          if (status === 'Active') {
+            // Active = any non-closed/reviewed task
+            if (!isClosed) return true;
+          } else if (status === 'Overdue') {
+            // Overdue = non-closed task with due date before today
+            if (!isClosed && dueDate && dueDate < today) return true;
+          } else if (status === 'Due Today') {
+            // Due Today = non-closed task with due date today
+            if (!isClosed && dueDate && dueDate.getTime() === today.getTime()) return true;
+          } else {
+            // Standard status match
+            if (task.Status === status) return true;
+          }
+        }
+        return false;
       } else if (typeof filters.status === 'string' && filters.status !== 'All') {
-        // Handle string status filter (backward compatibility)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const dueDate = task.DueDate ? new Date(task.DueDate) : null;
+        if (dueDate) dueDate.setHours(0, 0, 0, 0);
+
+        const isClosed = task.Status === 'Closed' || task.Status === 'Reviewed';
+
+        if (filters.status === 'Active') {
+          if (!isClosed) return true;
+          return false;
+        } else if (filters.status === 'Overdue') {
+          if (!isClosed && dueDate && dueDate < today) return true;
+          return false;
+        } else if (filters.status === 'Due Today') {
+          if (!isClosed && dueDate && dueDate.getTime() === today.getTime()) return true;
+          return false;
+        }
+        // Standard status match
         if (task.Status !== filters.status) return false;
       }
 
@@ -88,9 +128,11 @@ export default function TasksPage({
       if (filters.priority && filters.priority !== 'All') {
         // Handle both string and array priority filters
         if (Array.isArray(filters.priority)) {
-          if (filters.priority.length === 0) return true; // Empty array means no filter
-          const taskPriorities = Array.isArray(task.Priority) ? task.Priority : [task.Priority];
-          if (!filters.priority.some(p => taskPriorities.includes(p as any))) return false;
+          if (filters.priority.length > 0) {
+            const taskPriorities = Array.isArray(task.Priority) ? task.Priority : [task.Priority];
+            if (!filters.priority.some(p => taskPriorities.includes(p as any))) return false;
+          }
+          // Empty array means no priority filter - continue to next filters
         } else {
           const taskPriorities = Array.isArray(task.Priority) ? task.Priority : [task.Priority];
           if (!taskPriorities.includes(filters.priority as any)) return false;
@@ -210,14 +252,11 @@ export default function TasksPage({
         onFilterAssignedByEmailsChange={setFilterAssignedByEmails}
         onSearchQueryChange={(value) => onFilterChange('searchQuery', value)}
       />
-      <TaskList
+      <TaskCardList
         tasks={filteredTasks}
+        users={users}
         onTaskClick={onTaskClick}
-        isDarkMode={isDarkMode}
-        getPriorityColor={getPriorityColor}
-        getStatusColor={getStatusColor}
-        currentUser={currentUser}
-        taskSubView={taskSubView}
+        emptyMessage="No tasks found"
       />
     </div>
   );

@@ -12,7 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { logger } from './utils/logger';
 import { ROLE, isAdminLevel } from './constants/status';
 import { User, Team, TaskTemplate, Task, TaskReport, FollowUp, AppSetting, TaskStatus, SystemAlert, Subtask, Comment, TeamSubmission } from './types/index';
-import { dbService, setOfflineSaveNotification } from './lib/dbService';
+import { dbService, setOfflineSaveNotification, forceClearAllCaches } from './lib/dbService';
 import { initAuth } from './lib/sheetsService';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { useAuth } from './contexts/AuthContext';
@@ -97,7 +97,7 @@ export default function App() {
   const { isDarkMode } = useTheme();
 
   // Auth state must be initialized before useDatabase so we can pass the ready flag
-  const { token, isAuthenticated, isLoading: authIsLoading } = useAuth();
+  const { token, isAuthenticated, isLoading: authIsLoading, logout: authLogout } = useAuth();
 
   // Database States loaded from LocalStorage - MUST be called before any conditional logic
   const {
@@ -213,18 +213,18 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('PMS_active_user_email');
-    localStorage.removeItem('PMS_auth_token');
-    localStorage.removeItem('PMS_user');
-    setActiveUserEmail('');
-    setActiveUser(null);
-    navigate(ROUTES.LOGIN);
-  };
-
   // React Router hooks for navigation
   const navigate = useNavigate();
   const location = useLocation();
+
+  const handleLogout = () => {
+    localStorage.removeItem('PMS_active_user_email');
+    setActiveUserEmail('');
+    setActiveUser(null);
+    forceClearAllCaches();
+    authLogout();
+    navigate(ROUTES.LOGIN);
+  };
 
   // Automated notification center state
   const [notifications, setNotifications] = useState<SystemAlert[]>([]);
@@ -333,11 +333,29 @@ export default function App() {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [simulationMessage, setSimulationMessage] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
 
-  // Apply status filter passed via navigation state (e.g. from Dashboard KPI cards)
+  // Apply filter passed via navigation state (e.g. from Dashboard summary cards)
   useEffect(() => {
-    const navState = location.state as { statusFilter?: string[] } | null;
-    if (navState?.statusFilter && navState.statusFilter.length > 0) {
-      setFilterStatus(navState.statusFilter.join(','));
+    const navState = location.state as { taskFilter?: string } | null;
+    if (navState?.taskFilter) {
+      switch (navState.taskFilter) {
+        case 'all':
+          setFilterStatus('All');
+          break;
+        case 'active':
+          setFilterStatus('Active');
+          break;
+        case 'overdue':
+          setFilterStatus('Overdue');
+          break;
+        case 'due-today':
+          setFilterStatus('Due Today');
+          break;
+        case 'completed':
+          setFilterStatus('Closed,Reviewed');
+          break;
+        default:
+          break;
+      }
       // Clear the state so navigating away and back doesn't re-apply it
       window.history.replaceState({}, '');
     }
@@ -681,7 +699,7 @@ export default function App() {
     const matchesPriority = filterPriorities.length === 0 || filterPriorities.some(p => priorities.includes(p as any));
     const matchesType = filterType === 'All' || task.TaskType === filterType;
     const matchesAssigneeSearch = filterAssigneeNames.length === 0 || 
-      filterAssigneeNames.some(email => assignees.includes(email));
+      filterAssigneeNames.some(email => assignees.map(e => e.toLowerCase()).includes(email.toLowerCase()));
 
     return matchesSearch && matchesScope && matchesStatus && matchesPriority && matchesType && matchesAssigneeSearch;
     });
@@ -1041,14 +1059,7 @@ export default function App() {
             <ProtectedRoute>
               <MainLayout
                 currentUser={activeUser || undefined}
-                onLogout={() => {
-                  localStorage.removeItem('PMS_active_user_email');
-                  localStorage.removeItem('PMS_auth_token');
-                  localStorage.removeItem('PMS_user');
-                  setActiveUserEmail('');
-                  setActiveUser(null);
-                  navigate(ROUTES.LOGIN);
-                }}
+                onLogout={handleLogout}
               >
                 <ErrorBoundary
                   fallback={
@@ -1075,14 +1086,7 @@ export default function App() {
           setSelectedTask(task);
           setIsDrawerOpen(true);
         }}
-        onLogout={() => {
-          localStorage.removeItem('PMS_active_user_email');
-          localStorage.removeItem('PMS_auth_token');
-          localStorage.removeItem('PMS_user');
-          setActiveUserEmail('');
-          setActiveUser(null);
-          navigate(ROUTES.LOGIN);
-        }}
+        onLogout={handleLogout}
         templates={templates}
         users={users}
         audits={audits}
@@ -1353,14 +1357,7 @@ export default function App() {
             <ProtectedRoute>
               <MainLayout
                 currentUser={activeUser || undefined}
-                onLogout={() => {
-                  localStorage.removeItem('PMS_active_user_email');
-                  localStorage.removeItem('PMS_auth_token');
-                  localStorage.removeItem('PMS_user');
-                  setActiveUserEmail('');
-                  setActiveUser(null);
-                  navigate(ROUTES.LOGIN);
-                }}
+                onLogout={handleLogout}
               >
                 <Suspense fallback={<Spinner size="lg" />}>
                   <TasksPage
@@ -1380,7 +1377,7 @@ export default function App() {
                   onFilterChange={(filterType, value) => {
                     if (filterType === 'status') setFilterStatus(Array.isArray(value) ? value.join(',') : value as string);
                     if (filterType === 'priority') setFilterPriority(Array.isArray(value) ? value : []);
-                    if (filterType === 'assignee') setFilterAssigneeNames(Array.isArray(value) ? value : [value as string]);
+                    if (filterType === 'assignee') setFilterAssigneeNames(Array.isArray(value) ? value : String(value).split(',').map(e => e.trim()).filter(Boolean));
                     if (filterType === 'searchQuery') setSearchQuery(value as string);
                   }}
                   onTaskClick={(task) => {
@@ -1421,14 +1418,7 @@ export default function App() {
             <ProtectedRoute>
               <MainLayout
                 currentUser={activeUser || undefined}
-                onLogout={() => {
-                  localStorage.removeItem('PMS_active_user_email');
-                  localStorage.removeItem('PMS_auth_token');
-                  localStorage.removeItem('PMS_user');
-                  setActiveUserEmail('');
-                  setActiveUser(null);
-                  navigate(ROUTES.LOGIN);
-                }}
+                onLogout={handleLogout}
               >
                 <Suspense fallback={<Spinner size="lg" />}>
                   <TasksPage
@@ -1448,7 +1438,7 @@ export default function App() {
                   onFilterChange={(filterType, value) => {
                     if (filterType === 'status') setFilterStatus(Array.isArray(value) ? value.join(',') : value as string);
                     if (filterType === 'priority') setFilterPriority(Array.isArray(value) ? value : []);
-                    if (filterType === 'assignee') setFilterAssigneeNames(Array.isArray(value) ? value : [value as string]);
+                    if (filterType === 'assignee') setFilterAssigneeNames(Array.isArray(value) ? value : String(value).split(',').map(e => e.trim()).filter(Boolean));
                     if (filterType === 'searchQuery') setSearchQuery(value as string);
                   }}
                   onTaskClick={(task) => {
@@ -1489,14 +1479,7 @@ export default function App() {
             <ProtectedRoute allowedRoles={[ROLE.ADMIN]}>
               <MainLayout
                 currentUser={activeUser || undefined}
-                onLogout={() => {
-                  localStorage.removeItem('PMS_active_user_email');
-                  localStorage.removeItem('PMS_auth_token');
-                  localStorage.removeItem('PMS_user');
-                  setActiveUserEmail('');
-                  setActiveUser(null);
-                  navigate(ROUTES.LOGIN);
-                }}
+                onLogout={handleLogout}
               >
                 <Suspense fallback={<Spinner size="lg" />}>
                   <AdminPage
@@ -1540,14 +1523,7 @@ export default function App() {
             <ProtectedRoute>
               <MainLayout
                 currentUser={activeUser || undefined}
-                onLogout={() => {
-                  localStorage.removeItem('PMS_active_user_email');
-                  localStorage.removeItem('PMS_auth_token');
-                  localStorage.removeItem('PMS_user');
-                  setActiveUserEmail('');
-                  setActiveUser(null);
-                  navigate(ROUTES.LOGIN);
-                }}
+                onLogout={handleLogout}
               >
                 <Suspense fallback={<Spinner size="lg" />}>
                   <TeamPage
@@ -1648,14 +1624,7 @@ export default function App() {
             <ProtectedRoute>
               <MainLayout
                 currentUser={activeUser || undefined}
-                onLogout={() => {
-                  localStorage.removeItem('PMS_active_user_email');
-                  localStorage.removeItem('PMS_auth_token');
-                  localStorage.removeItem('PMS_user');
-                  setActiveUserEmail('');
-                  setActiveUser(null);
-                  navigate(ROUTES.LOGIN);
-                }}
+                onLogout={handleLogout}
               >
                 <Suspense fallback={<Spinner size="lg" />}>
                   <ReportsPage
@@ -1685,14 +1654,7 @@ export default function App() {
             <ProtectedRoute>
               <MainLayout
                 currentUser={activeUser || undefined}
-                onLogout={() => {
-                  localStorage.removeItem('PMS_active_user_email');
-                  localStorage.removeItem('PMS_auth_token');
-                  localStorage.removeItem('PMS_user');
-                  setActiveUserEmail('');
-                  setActiveUser(null);
-                  navigate(ROUTES.LOGIN);
-                }}
+                onLogout={handleLogout}
               >
                 <Suspense fallback={<Spinner size="lg" />}>
                   <ScheduledReportsPage
@@ -1722,14 +1684,7 @@ export default function App() {
             <ProtectedRoute>
               <MainLayout
                 currentUser={activeUser || undefined}
-                onLogout={() => {
-                  localStorage.removeItem('PMS_active_user_email');
-                  localStorage.removeItem('PMS_auth_token');
-                  localStorage.removeItem('PMS_user');
-                  setActiveUserEmail('');
-                  setActiveUser(null);
-                  navigate(ROUTES.LOGIN);
-                }}
+                onLogout={handleLogout}
               >
                 <Suspense fallback={<Spinner size="lg" />}>
                   <SchedulesPage
@@ -1763,14 +1718,7 @@ export default function App() {
             <ProtectedRoute>
               <MainLayout
                 currentUser={activeUser || undefined}
-                onLogout={() => {
-                  localStorage.removeItem('PMS_active_user_email');
-                  localStorage.removeItem('PMS_auth_token');
-                  localStorage.removeItem('PMS_user');
-                  setActiveUserEmail('');
-                  setActiveUser(null);
-                  navigate(ROUTES.LOGIN);
-                }}
+                onLogout={handleLogout}
               >
                 <Suspense fallback={<Spinner size="lg" />}>
                   <SettingsPage
@@ -1800,9 +1748,9 @@ export default function App() {
         <AnimatePresence>
           
           {/* Create Task modal */}
-          {isTaskModalOpen && (
+          {isTaskModalOpen && activeUser && (
             <CreateTaskModal
-            currentUser={activeUser || undefined}
+            currentUser={activeUser}
             usersList={users}
             teamsList={teams}
             subTeamsList={subTeams}
@@ -1853,13 +1801,13 @@ export default function App() {
         )}
 
         {/* Create Report modal */}
-        {isReportModalOpen && selectedTask && (
+        {isReportModalOpen && selectedTask && activeUser && (
           <CreateReportModal
             task={selectedTask}
             isOpen={isReportModalOpen}
             onClose={() => setIsReportModalOpen(false)}
             onSubmit={handleSubmitProgressReport}
-            currentUser={activeUser || undefined}
+            currentUser={activeUser}
             subtasks={subtasks.filter(s => s.TaskID === selectedTask.TaskID)}
           />
         )}

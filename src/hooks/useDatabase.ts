@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { User, Task, Team, SubTeam, TaskTemplate, AppSetting, TaskReport, FollowUp, Subtask, Comment, EmailTemplate, TeamSubmission, AuditLog } from '../types';
-import { dbService, initializeDatabaseWithRace, getPrimaryDatabase, forceClearAllCaches, getSyncStatus, subscribeToSyncStatus, setDatabaseSwitchCallback, switchToFirestoreBackup, registerOptimisticCallback } from '../lib/dbService';
+import { initializeDatabaseWithRace, getSyncStatus, subscribeToSyncStatus, setDatabaseSwitchCallback, registerOptimisticCallback, forceClearAllCaches } from '../lib/dbService';
 import { api } from '../lib/apiClient';
 import { logger } from '../utils/logger';
 
@@ -51,12 +51,18 @@ export function useDatabase(isAuthInitialized: boolean = false, authIsLoading: b
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [teamSubmissions, setTeamSubmissions] = useState<TeamSubmission[]>([]);
-  // Start loading only if there is a valid token — unauthenticated users should
-  // never be gated behind a spinner waiting for data that will never arrive.
-  const [isLoading, setIsLoading] = useState(() => hasValidStoredToken());
+  // Start loading based on auth state and stored token
+  const [isLoading, setIsLoading] = useState(() => {
+    // If auth is still loading, we should show loading state
+    if (authIsLoading) return true;
+    // Otherwise, only load if we have a valid token
+    return hasValidStoredToken();
+  });
   // Guard against double-loading when isAuthInitialized flips more than once
   // (e.g. React StrictMode double-invoke or a token refresh triggering a re-render).
   const loadedRef = useRef(false);
+  const loadingRef = useRef(false);
+  const loadGenerationRef = useRef(0);
   const [dbConnectionStatus, setDbConnectionStatus] = useState<'connected' | 'disconnected' | 'error'>('connected');
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | undefined>(undefined);
@@ -71,32 +77,56 @@ export function useDatabase(isAuthInitialized: boolean = false, authIsLoading: b
     });
   }, []);
 
-  const loadDatabase = async () => {
+  const applyLoadedData = useCallback((data: Awaited<ReturnType<typeof initializeDatabaseWithRace>>['data']) => {
+    setUsers(data.users);
+    setTasks(data.tasks);
+    setTeams(data.teams);
+    setSubTeams(data.subTeams || []);
+    setTemplates(data.templates);
+    setAudits(data.audits);
+    setSettings(data.settings);
+    setEmailTemplates(data.emailTemplates || []);
+    setReports(data.reports);
+    setFollowUps(data.followups);
+    setSubtasks(data.subtasks);
+    setComments(data.comments);
+    setTeamSubmissions(data.teamSubmissions || []);
+    setLastSyncTime(new Date().toISOString());
+  }, []);
+
+  const loadDatabase = useCallback(async (options?: { force?: boolean }) => {
+    const force = options?.force === true;
+    if (loadingRef.current && !force) {
+      logger.log('[useDatabase] loadDatabase: skipped (already in flight)');
+      return;
+    }
+
+    const generation = ++loadGenerationRef.current;
+    loadingRef.current = true;
+
     try {
       logger.log('[useDatabase] loadDatabase: setting isLoading=true');
       setIsLoading(true);
       setIsSyncing(true);
       setDbConnectionStatus('connected');
 
+      if (force) {
+        forceClearAllCaches();
+      }
+
       // Use race logic to load from whichever database responds first
-      const { data } = await initializeDatabaseWithRace();
+      const { data } = await initializeDatabaseWithRace({ force });
+
+      // Ignore stale results from an older load (logout/login race, StrictMode, etc.)
+      if (generation !== loadGenerationRef.current) {
+        logger.log('[useDatabase] loadDatabase: discarding stale result');
+        return;
+      }
 
       logger.log('[useDatabase] loadDatabase: data loaded, setting state');
-      setUsers(data.users);
-      setTasks(data.tasks);
-      setTeams(data.teams);
-      setSubTeams(data.subTeams || []);
-      setTemplates(data.templates);
-      setAudits(data.audits);
-      setSettings(data.settings);
-      setEmailTemplates(data.emailTemplates || []);
-      setReports(data.reports);
-      setFollowUps(data.followups);
-      setSubtasks(data.subtasks);
-      setComments(data.comments);
-      setTeamSubmissions(data.teamSubmissions || []);
-      setLastSyncTime(new Date().toISOString());
+      applyLoadedData(data);
     } catch (error) {
+      if (generation !== loadGenerationRef.current) return;
       // A 401 means the token expired mid-load; apiClient already redirects to
       // /login, so don't show a generic error banner — just stay quiet.
       const is401 = error instanceof Error && error.message.includes('401');
@@ -106,44 +136,33 @@ export function useDatabase(isAuthInitialized: boolean = false, authIsLoading: b
         setTimeout(() => setDatabaseSwitchMessage(null), 10000);
       }
     } finally {
-      logger.log('[useDatabase] loadDatabase: setting isLoading=false');
-      setIsLoading(false);
-      setIsSyncing(false);
+      if (generation === loadGenerationRef.current) {
+        logger.log('[useDatabase] loadDatabase: setting isLoading=false');
+        setIsLoading(false);
+        setIsSyncing(false);
+        loadingRef.current = false;
+      }
     }
-  };
+  }, [applyLoadedData]);
 
-  const syncDatabase = async () => {
-    await loadDatabase();
-  };
+  const syncDatabase = useCallback(async () => {
+    await loadDatabase({ force: true });
+  }, [loadDatabase]);
 
-  const silentSync = async () => {
+  const silentSync = useCallback(async () => {
     try {
       setIsSyncing(true);
       setDbConnectionStatus('connected');
 
-      // Use race logic to load from whichever database responds first
-      const { data } = await initializeDatabaseWithRace();
+      const { data } = await initializeDatabaseWithRace({ force: true });
 
-      setUsers(data.users);
-      setTasks(data.tasks);
-      setTeams(data.teams);
-      setSubTeams(data.subTeams || []);
-      setTemplates(data.templates);
-      setAudits(data.audits);
-      setSettings(data.settings);
-      setEmailTemplates(data.emailTemplates || []);
-      setReports(data.reports);
-      setFollowUps(data.followups);
-      setSubtasks(data.subtasks);
-      setComments(data.comments);
-      setTeamSubmissions(data.teamSubmissions || []);
-      setLastSyncTime(new Date().toISOString());
+      applyLoadedData(data);
     } catch (error) {
       setDbConnectionStatus('error');
     } finally {
       setIsSyncing(false);
     }
-  };
+  }, [applyLoadedData]);
 
   /**
    * Refresh a single collection from the server without touching the other 12.
@@ -154,7 +173,7 @@ export function useDatabase(isAuthInitialized: boolean = false, authIsLoading: b
    *   'settings' | 'email_templates' | 'reports' | 'followups' | 'subtasks' |
    *   'comments' | 'team_submissions' | 'auditlogs'
    */
-  const silentSyncCollection = async (collection: keyof typeof COLLECTION_ROUTES) => {
+  const silentSyncCollection = useCallback(async (collection: keyof typeof COLLECTION_ROUTES) => {
     const route = COLLECTION_ROUTES[collection];
     if (!route) {
       logger.warn(`[silentSyncCollection] Unknown collection: ${collection}`);
@@ -180,7 +199,7 @@ export function useDatabase(isAuthInitialized: boolean = false, authIsLoading: b
     } catch (error) {
       logger.error(`[silentSyncCollection] Failed to refresh ${collection}:`, error);
     }
-  };
+  }, []);
 
   useEffect(() => {
     // Subscribe to sync status changes
@@ -260,27 +279,38 @@ export function useDatabase(isAuthInitialized: boolean = false, authIsLoading: b
     };
   }, []);
 
-  // Load database when auth initializes
+  // Load database once when auth becomes ready. Do NOT depend on loadDatabase
+  // identity alone without a guard — that previously caused an infinite
+  // load→skeleton→load loop because an unstable function reference re-fired
+  // this effect on every render.
   useEffect(() => {
     if (isAuthInitialized) {
-      // Auth resolved AND user is authenticated — load data.
-      // Use the ref guard so that a token-refresh re-render doesn't trigger
-      // a redundant full reload (silentSync handles background refreshes).
-      // Reset the guard when isAuthInitialized goes false→true (fresh login).
-      loadDatabase();
+      if (loadedRef.current) return;
       loadedRef.current = true;
-      // Server-side Sheets sync is now handled by the server
+      void loadDatabase();
     } else if (!authIsLoading) {
-      // Auth has finished resolving but the user is NOT authenticated
-      // (token missing, expired, or invalid). Release the loading gate so
-      // App.tsx stops showing DashboardSkeleton and ProtectedRoute can
-      // redirect to /login.
-      loadedRef.current = false; // reset so a subsequent login triggers a fresh load
+      // Auth finished resolving but user is not authenticated.
+      loadedRef.current = false;
+      loadGenerationRef.current += 1; // invalidate any in-flight load
+      loadingRef.current = false;
       setIsLoading(false);
+      // Clear in-memory collections so the next login does not briefly show
+      // the previous session's data, and so Firebase isn't hit for a logged-out user.
+      setUsers([]);
+      setTasks([]);
+      setTeams([]);
+      setSubTeams([]);
+      setTemplates([]);
+      setAudits([]);
+      setSettings([]);
+      setEmailTemplates([]);
+      setReports([]);
+      setFollowUps([]);
+      setSubtasks([]);
+      setComments([]);
+      setTeamSubmissions([]);
     }
-    // When authIsLoading is still true we do nothing — isLoading stays true
-    // and the skeleton keeps showing until auth settles.
-  }, [isAuthInitialized, authIsLoading]);
+  }, [isAuthInitialized, authIsLoading, loadDatabase]);
 
   return {
     users,
@@ -315,7 +345,7 @@ export function useDatabase(isAuthInitialized: boolean = false, authIsLoading: b
     lastSyncTime,
     syncStatus,
     databaseSwitchMessage,
-    loadDatabase,
+    loadDatabase: () => loadDatabase({ force: true }),
     syncDatabase,
     silentSync,
     silentSyncCollection,
