@@ -5,6 +5,9 @@ import { checkAndGenerateRecurringTasks } from '../lib/taskEngine';
 import { ROLE, isAdminLevel } from '../constants/status';
 import { canAssignWithinTeam } from '../utils/subTeamUtils';
 import { triggerTaskAssignmentEmail, triggerTaskClosureEmail } from '../api/emailTrigger';
+import { getNewlyAddedEmails } from '../utils/taskFilterUtils';
+import { splitEmails } from '../utils/roleUtils';
+import { logger } from '../utils/logger';
 
 interface UseTaskOperationsProps {
   tasks: Task[];
@@ -259,6 +262,11 @@ export function useTaskOperations({
   const handleUpdateTask = useCallback(async (taskId: string, fields: Partial<Task>) => {
     if (!currentUser) return;
 
+    // StakeholderEmails changes are Admin-only
+    if (fields.StakeholderEmails !== undefined && !isAdminLevel(currentUser.Role)) {
+      throw new Error('Only Admins can add or remove task stakeholders.');
+    }
+
     // Gate assignment changes with canAssignWithinTeam check
     if (fields.AssignedToEmail !== undefined || fields.AssignedToTeamIDs !== undefined) {
       // Validate AssignedToEmail if being updated
@@ -314,6 +322,38 @@ export function useTaskOperations({
 
       await dbService.saveTask(updatedTask);
 
+      // Email only newly added assignees / stakeholders (never re-notify existing)
+      const newlyAddedAssignees = fields.AssignedToEmail !== undefined
+        ? getNewlyAddedEmails(
+            splitEmails(targetTask.AssignedToEmail),
+            splitEmails(fields.AssignedToEmail)
+          )
+        : [];
+      const newlyAddedStakeholders = fields.StakeholderEmails !== undefined
+        ? getNewlyAddedEmails(
+            targetTask.StakeholderEmails || [],
+            fields.StakeholderEmails || []
+          )
+        : [];
+      const notifyEmails = [...new Set([...newlyAddedAssignees, ...newlyAddedStakeholders])];
+
+      if (notifyEmails.length > 0 && currentUser) {
+        triggerTaskAssignmentEmail({
+          assignerEmail: currentUser.Email,
+          assignedToEmail: notifyEmails.join(', '),
+          task: {
+            TaskID: updatedTask.TaskID,
+            Title: updatedTask.Title,
+            Description: updatedTask.Description,
+            DueDate: updatedTask.DueDate,
+            Priority: Array.isArray(updatedTask.Priority)
+              ? updatedTask.Priority.join(', ')
+              : String(updatedTask.Priority),
+            AttachmentLink: updatedTask.AttachmentLink,
+          },
+        }).catch(err => logger.error('Failed to notify newly added stakeholders:', err));
+      }
+
       if (selectedTask && selectedTask.TaskID === taskId) {
         setSelectedTask(updatedTask);
       }
@@ -323,7 +363,24 @@ export function useTaskOperations({
     }
   }, [tasks, selectedTask, setSelectedTask, triggerNotification, logAudit, currentUser, users, subTeams]);
 
-  const handleCreateFollowUp = useCallback(async (parentTaskId: string, reason: string) => {
+  /**
+   * Admin-only stakeholder replace via dedicated endpoint.
+   * Emails only newly added stakeholders.
+   */
+  /**
+   * Admin-only stakeholder replace. Uses the shared update path so emails
+   * go only to newly added stakeholders and cache stays coherent.
+   * (Dedicated PATCH /api/tasks/:id/stakeholders also exists for lean API clients.)
+   */
+  const handleUpdateTaskStakeholders = useCallback(async (taskId: string, stakeholderEmails: string[]) => {
+    await handleUpdateTask(taskId, { StakeholderEmails: stakeholderEmails });
+  }, [handleUpdateTask]);
+
+  const handleCreateFollowUp = useCallback(async (
+    parentTaskId: string,
+    reason: string,
+    stakeholderEmails?: string[]
+  ) => {
     if (!currentUser) return;
 
     const nowStr = new Date().toISOString();
@@ -336,6 +393,14 @@ export function useTaskOperations({
     const newDue = new Date();
     newDue.setDate(newDue.getDate() + 7);
     const newDueStr = `${newDue.getFullYear()}-${String(newDue.getMonth() + 1).padStart(2, '0')}-${String(newDue.getDate()).padStart(2, '0')}`;
+
+    const nextStakeholders = stakeholderEmails !== undefined
+      ? stakeholderEmails
+      : (parent.StakeholderEmails || []);
+    const newlyAddedStakeholders = getNewlyAddedEmails(
+      parent.StakeholderEmails || [],
+      nextStakeholders
+    );
 
     // Update the original task in place - reopen it
     const updatedTask: Task = {
@@ -351,10 +416,28 @@ export function useTaskOperations({
       OriginalDueDate: parent.OriginalDueDate || parent.DueDate,
       EtaRequestCount: 0,               // reset ETA count
       LastReportSummary: '',            // clear last report
+      StakeholderEmails: nextStakeholders,
       UpdatedAt: nowStr,
     };
 
     await dbService.saveTask(updatedTask);
+
+    if (newlyAddedStakeholders.length > 0) {
+      triggerTaskAssignmentEmail({
+        assignerEmail: currentUser.Email,
+        assignedToEmail: newlyAddedStakeholders.join(', '),
+        task: {
+          TaskID: updatedTask.TaskID,
+          Title: updatedTask.Title,
+          Description: updatedTask.Description,
+          DueDate: updatedTask.DueDate,
+          Priority: Array.isArray(updatedTask.Priority)
+            ? updatedTask.Priority.join(', ')
+            : String(updatedTask.Priority),
+          AttachmentLink: updatedTask.AttachmentLink,
+        },
+      }).catch(err => logger.error('Failed to notify follow-up stakeholders:', err));
+    }
 
     // Still create a FollowUp record for audit trail
     const followId = `FLW-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
@@ -484,6 +567,7 @@ export function useTaskOperations({
     handleCreateTaskOrTemplate,
     handleCloseTask,
     handleUpdateTask,
+    handleUpdateTaskStakeholders,
     handleCreateFollowUp,
     handleAddSubtask,
     handleToggleSubtask,

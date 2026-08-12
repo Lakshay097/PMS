@@ -5,7 +5,10 @@ import TaskCard from './TaskCard';
 interface TaskCardListProps {
   tasks: Task[];
   users?: UserType[];
+  currentUser?: UserType;
+  isDarkMode?: boolean;
   onTaskClick?: (task: Task) => void;
+  onUpdateTaskStakeholders?: (taskId: string, stakeholderEmails: string[]) => Promise<void> | void;
   emptyMessage?: string;
   initialVisible?: number;
 }
@@ -18,7 +21,10 @@ interface TaskCardListProps {
 export default function TaskCardList({
   tasks,
   users = [],
+  currentUser,
+  isDarkMode = false,
   onTaskClick,
+  onUpdateTaskStakeholders,
   emptyMessage = 'No tasks found',
   initialVisible = 10,
 }: TaskCardListProps) {
@@ -39,7 +45,10 @@ export default function TaskCardList({
           key={task.TaskID}
           task={task}
           users={users}
+          currentUser={currentUser}
+          isDarkMode={isDarkMode}
           onTaskClick={onTaskClick}
+          onUpdateTaskStakeholders={onUpdateTaskStakeholders}
         />
       ))}
 
@@ -60,4 +69,3 @@ export default function TaskCardList({
     </div>
   );
 }
-

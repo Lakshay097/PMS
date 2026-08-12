@@ -917,24 +917,22 @@ export default function Dashboard({
     let filtered = roleFiltered;
 
     if (filterStatus.length > 0 && !filterStatus.includes('All')) {
-      // Special handling for "Overdue" status (computed status, not stored in database)
-      if (filterStatus.includes('Overdue')) {
-        const today = new Date().toISOString().split('T')[0];
-        filtered = filtered.filter(t => {
-          return t.Status !== 'Closed' && t.Status !== 'Reviewed' && t.DueDate < today;
+      // Multi-status is OR: match any selected status (including computed Overdue)
+      const today = new Date().toISOString().split('T')[0];
+      filtered = filtered.filter(t => {
+        return filterStatus.some(status => {
+          if (status === 'Overdue') {
+            return t.Status !== 'Closed' && t.Status !== 'Reviewed' && t.DueDate < today;
+          }
+          if (status === 'Active') {
+            return t.Status !== 'Closed' && t.Status !== 'Reviewed';
+          }
+          if (status === 'Due Today') {
+            return t.Status !== 'Closed' && t.Status !== 'Reviewed' && t.DueDate === today;
+          }
+          return t.Status === status;
         });
-        // If only "Overdue" is selected, we're done
-        if (filterStatus.length === 1 && filterStatus[0] === 'Overdue') {
-          // Continue with other filters
-        } else {
-          // If "Overdue" is combined with other statuses, filter out the non-overdue ones
-          const otherStatuses = filterStatus.filter(s => s !== 'Overdue');
-          filtered = filtered.filter(t => otherStatuses.includes(t.Status));
-        }
-      } else {
-        // Normal status filtering
-        filtered = filtered.filter(t => filterStatus.includes(t.Status));
-      }
+      });
     }
     if (filterPriority.length > 0) {
       filtered = filtered.filter(t => {

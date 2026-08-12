@@ -710,6 +710,7 @@ export default function App() {
     handleCreateTaskOrTemplate,
     handleCloseTask,
     handleUpdateTask,
+    handleUpdateTaskStakeholders,
     handleCreateFollowUp,
     handleAddSubtask,
     handleToggleSubtask,
@@ -1387,6 +1388,7 @@ export default function App() {
                   onNewTask={() => {
                     setIsTaskModalOpen(true);
                   }}
+                  onUpdateTaskStakeholders={handleUpdateTaskStakeholders}
                   getPriorityColor={(priority) => {
                     const priorities = Array.isArray(priority) ? priority : [priority];
                     // Use the highest priority for styling
@@ -1448,6 +1450,7 @@ export default function App() {
                   onNewTask={() => {
                     setIsTaskModalOpen(true);
                   }}
+                  onUpdateTaskStakeholders={handleUpdateTaskStakeholders}
                   getPriorityColor={(priority) => {
                     const priorities = Array.isArray(priority) ? priority : [priority];
                     // Use the highest priority for styling
@@ -1818,8 +1821,11 @@ export default function App() {
             task={selectedTask}
             isOpen={isFollowUpModalOpen}
             onClose={() => setIsFollowUpModalOpen(false)}
-            onSubmit={async (parentTaskId, reason) => {
-              await handleCreateFollowUp(parentTaskId, reason);
+            currentUser={activeUser}
+            users={users}
+            isDarkMode={isDarkMode}
+            onSubmit={async (parentTaskId, reason, stakeholderEmails) => {
+              await handleCreateFollowUp(parentTaskId, reason, stakeholderEmails);
               setIsFollowUpModalOpen(false);
               setIsDrawerOpen(false);
               setSelectedTask(null);

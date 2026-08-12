@@ -163,10 +163,12 @@ export default function TaskFilters({
 
   const clearAll = () => {
     onFilterStatusChange(['All']);
+    onFilterPriorityChange([]);
     onFilterAssigneeNamesChange([]);
     onFilterDateFromChange('');
     onFilterDateToChange('');
     onFilterAssignedByEmailsChange([]);
+    onSearchQueryChange('');
     setAssigneeSearchQuery('');
     setAssignedBySearchQuery('');
   };
@@ -188,6 +190,14 @@ export default function TaskFilters({
       }
     }
   };
+
+  const hasActiveFilters =
+    (filterStatus.length > 0 && !filterStatus.includes('All')) ||
+    filterAssigneeNames.length > 0 ||
+    filterAssignedByEmails.length > 0 ||
+    !!filterDateFrom ||
+    !!filterDateTo ||
+    filterPriority.length > 0;
 
   // Shared class helpers
   const inputBase = isDarkMode
@@ -359,11 +369,11 @@ export default function TaskFilters({
             {filterAssigneeNames.length > 0 && (
               <div className={`p-2 border-t ${dividerBorder}`}>
                 <button
-                  onClick={clearAll}
+                  onClick={() => { onFilterAssigneeNamesChange([]); setAssigneeSearchQuery(''); }}
                   className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-md transition-colors ${clearBtn}`}
                 >
                   <X size={12} className="sm:size-3.5" />
-                  Clear all
+                  Clear assignees
                 </button>
               </div>
             )}
@@ -490,6 +500,17 @@ export default function TaskFilters({
           </button>
         )}
       </div>
+
+      {hasActiveFilters && (
+        <button
+          onClick={clearAll}
+          className={`flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-lg transition-colors ${clearBtn}`}
+          title="Clear all filters"
+        >
+          <X size={12} className="sm:size-3.5" />
+          Clear filters
+        </button>
+      )}
     </div>
   );
 }

@@ -1,18 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, CornerRightDown, HelpCircle } from 'lucide-react';
-import { Task } from '../types';
+import { Task, User as UserType } from '../types';
+import { isAdminLevel } from '../constants/status';
+import StakeholderManager from './shared/StakeholderManager';
 
 interface FollowUpModalProps {
   task: Task;
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (parentTaskId: string, reason: string) => void;
+  onSubmit: (parentTaskId: string, reason: string, stakeholderEmails?: string[]) => void;
+  currentUser?: UserType | null;
+  users?: UserType[];
   isDarkMode?: boolean;
 }
 
-export default function FollowUpModal({ task, isOpen, onClose, onSubmit, isDarkMode = false }: FollowUpModalProps) {
+export default function FollowUpModal({
+  task,
+  isOpen,
+  onClose,
+  onSubmit,
+  currentUser,
+  users = [],
+  isDarkMode = false,
+}: FollowUpModalProps) {
   const [reason, setReason] = useState('');
+  const [stakeholderEmails, setStakeholderEmails] = useState<string[]>(task.StakeholderEmails || []);
+  const canManageStakeholders = !!currentUser && isAdminLevel(currentUser.Role);
+
+  useEffect(() => {
+    setStakeholderEmails(task.StakeholderEmails || []);
+    setReason('');
+  }, [task.TaskID, task.StakeholderEmails]);
 
   if (!isOpen) return null;
 
@@ -20,7 +39,7 @@ export default function FollowUpModal({ task, isOpen, onClose, onSubmit, isDarkM
     e.preventDefault();
     if (!reason.trim()) return;
 
-    onSubmit(task.TaskID, reason);
+    onSubmit(task.TaskID, reason, canManageStakeholders ? stakeholderEmails : undefined);
     setReason('');
     onClose();
   };
@@ -48,7 +67,7 @@ export default function FollowUpModal({ task, isOpen, onClose, onSubmit, isDarkM
             <HelpCircle size={16} className={`${isDarkMode ? 'text-blue-400' : 'text-blue-500'} mt-0.5 flex-shrink-0`} />
             <div>
               <p className="font-semibold block mb-1">Follow-up workflow rules</p>
-              This will create a linked child task referencing <strong>{task.TaskID}</strong>, incrementing its follow-up lineage count. It preserves original properties (assignees) while assigning a new schedule for remediation or reviews.
+              This will reopen <strong>{task.TaskID}</strong>, incrementing its follow-up lineage count. Assignees are preserved; admins can adjust stakeholders below. Only newly added stakeholders are emailed.
             </div>
           </div>
 
@@ -57,6 +76,18 @@ export default function FollowUpModal({ task, isOpen, onClose, onSubmit, isDarkM
             <span className={`font-semibold text-xs sm:text-sm block mt-0.5 line-clamp-2 text-primary`}>{task.Title}</span>
             <span className={`text-[10px] sm:text-xs text-muted`}>Assigned to: {task.AssignedToEmail}</span>
           </div>
+
+          {canManageStakeholders && (
+            <StakeholderManager
+              stakeholderEmails={stakeholderEmails}
+              users={users}
+              currentUser={currentUser}
+              canManage
+              isDarkMode={isDarkMode}
+              title="Follow-up stakeholders"
+              onChange={setStakeholderEmails}
+            />
+          )}
 
           <div>
             <label className={`block text-[10px] font-bold mb-1 text-muted`}>

@@ -6,6 +6,7 @@ import { ROLE, isAdminLevel } from '../../../constants/status';
 import { uploadFile } from '../../../api/upload';
 import { getAllSubordinates } from '../../../utils/userUtils';
 import { canAssignWithinTeam, isSubTeamLeader, isTeamLeader } from '../../../utils/subTeamUtils';
+import StakeholderManager from '../../shared/StakeholderManager';
 
 
 // Helper function to derive a human-readable label and file extension from an
@@ -367,38 +368,14 @@ export default function TaskDrawer({
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold tracking-wider block mb-1 text-muted">Add / remove stakeholders</label>
-                    <div className="border border-token rounded-lg p-3 max-h-40 overflow-y-auto space-y-1.5 shadow-inner bg-surface">
-                      {assignableUsers.length === 0 ? (
-                        <div className="text-secondary text-xs italic py-1">No stakeholders registered.</div>
-                      ) : (
-                        assignableUsers.filter(u => u.Active && u.Role === ROLE.STAKEHOLDER).map(user => {
-                          const isChecked = stakeholderEmails.includes(user.Email);
-                          return (
-                            <label key={user.UserID} className="flex items-center space-x-2.5 p-1.5 rounded-md cursor-pointer text-xs transition-colors hover-surface text-primary">
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={() => {
-                                  if (isChecked) {
-                                    setStakeholderEmails(stakeholderEmails.filter(e => e !== user.Email));
-                                  } else {
-                                    setStakeholderEmails([...stakeholderEmails, user.Email]);
-                                  }
-                                }}
-                                className="h-4 w-4 rounded transition-colors border-token-strong text-[#2563EB] focus:ring-[#2563EB]"
-                              />
-                              <div className="flex flex-col">
-                                <span className="font-semibold text-primary">{user.FullName}</span>
-                                <span className="text-[9.5px] font-mono text-muted">{user.Email}</span>
-                              </div>
-                            </label>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
+                  <StakeholderManager
+                    stakeholderEmails={stakeholderEmails}
+                    users={usersList}
+                    currentUser={currentUser}
+                    canManage={canEditTask}
+                    title="Additional stakeholders"
+                    onChange={setStakeholderEmails}
+                  />
 
                   <div className="pt-2 flex justify-end">
                     <button
@@ -432,6 +409,18 @@ export default function TaskDrawer({
                       {task.Description}
                     </div>
                   </div>
+
+                  <StakeholderManager
+                    stakeholderEmails={task.StakeholderEmails || []}
+                    users={usersList}
+                    currentUser={currentUser}
+                    canManage={canEditTask}
+                    title="Stakeholders"
+                    onChange={(next) => {
+                      setStakeholderEmails(next);
+                      onUpdateTask?.(task.TaskID, { StakeholderEmails: next });
+                    }}
+                  />
                 </>
               )}
 

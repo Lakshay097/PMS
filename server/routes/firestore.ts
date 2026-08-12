@@ -7,6 +7,7 @@ import { logger } from '../utils/logger';
 import { importTemplatesFromSheets } from '../services/emailTemplateSync';
 import { getUserRoles, getTeamTasksScope, splitEmails, shouldShowTeamTasksTab } from '../utils/roleUtils';
 import { ttlCache } from '../utils/ttlCache';
+import type { Query } from 'firebase-admin/firestore';
 
 const router = Router();
 
@@ -98,7 +99,10 @@ export async function getAllSubTeamsCached() {
 export async function getAllTasksCached() {
   return ttlCache.getOrFetch(TASKS_CACHE_KEY, TASKS_CACHE_TTL, async () => {
     const snapshot = await db.collection('tasks').get();
-    return snapshot.docs.map(doc => doc.data());
+    // Soft-exclude inactive/deleted in memory (same read count; shrinks payload + cache).
+    return snapshot.docs
+      .map(doc => doc.data())
+      .filter((t: any) => t?.Active !== false && !t?.DeletedAt);
   });
 }
 
@@ -480,6 +484,21 @@ router.put('/tasks/:id', authenticateToken, async (req: AuthRequest, res) => {
     // Future: split POST (create) / PUT (update) routes to recover the read on the update path.
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
+
+      // Admin-only: changing StakeholderEmails on an existing task
+      if (snap.exists && Object.prototype.hasOwnProperty.call(rest, 'StakeholderEmails')) {
+        const prev = Array.isArray(snap.data()?.StakeholderEmails)
+          ? [...snap.data()!.StakeholderEmails].map((e: string) => e.toLowerCase()).sort()
+          : [];
+        const next = Array.isArray(rest.StakeholderEmails)
+          ? [...rest.StakeholderEmails].map((e: string) => String(e).toLowerCase()).sort()
+          : [];
+        const changed = JSON.stringify(prev) !== JSON.stringify(next);
+        if (changed && req.user?.role !== 'Admin') {
+          throw Object.assign(new Error('Only Admins can add or remove task stakeholders'), { status: 403 });
+        }
+      }
+
       const toWrite = snap.exists
         ? sanitizeForFirestore({ ...rest, UpdatedAt: now })
         : sanitizeForFirestore({ ...rest, CreatedAt: now, UpdatedAt: now });
@@ -491,7 +510,10 @@ router.put('/tasks/:id', authenticateToken, async (req: AuthRequest, res) => {
 
     // Return the written shape (without CreatedAt for updates — client already has it)
     res.json(sanitizeForFirestore({ ...rest, UpdatedAt: now }));
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.status === 403 || err?.message?.includes('Only Admins')) {
+      return res.status(403).json({ error: 'Only Admins can add or remove task stakeholders' });
+    }
     logger.error('saveTask failed:', err);
     res.status(500).json({ error: 'Failed to save task' });
   }
@@ -514,6 +536,148 @@ router.delete('/tasks/:id', authenticateToken, requireRole('Admin'), async (req,
   } catch (err) {
     logger.error('deleteTask failed:', err);
     res.status(500).json({ error: 'Failed to delete task' });
+  }
+});
+
+/**
+ * PATCH /api/tasks/:id/stakeholders
+ * Admin-only: replace StakeholderEmails on a task.
+ * Returns { task, added, removed } so callers can email only newly added stakeholders.
+ */
+router.patch('/tasks/:id/stakeholders', authenticateToken, requireRole('Admin'), async (req: AuthRequest, res) => {
+  try {
+    const taskId = req.params.id;
+    const incoming = req.body?.stakeholderEmails;
+
+    if (!Array.isArray(incoming)) {
+      return res.status(400).json({ error: 'stakeholderEmails must be an array of email strings' });
+    }
+
+    const nextEmails = [...new Set(
+      incoming
+        .map((e: unknown) => (typeof e === 'string' ? e.trim() : ''))
+        .filter(Boolean)
+    )];
+
+    const ref = db.collection('tasks').doc(taskId);
+    const now = new Date().toISOString();
+
+    const result = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) {
+        throw Object.assign(new Error('Task not found'), { status: 404 });
+      }
+      const existing = snap.data() || {};
+      const previous: string[] = Array.isArray(existing.StakeholderEmails)
+        ? existing.StakeholderEmails
+        : [];
+
+      const prevLower = new Set(previous.map((e: string) => e.toLowerCase()));
+      const nextLower = new Set(nextEmails.map((e: string) => e.toLowerCase()));
+      const added = nextEmails.filter((e: string) => !prevLower.has(e.toLowerCase()));
+      const removed = previous.filter((e: string) => !nextLower.has(e.toLowerCase()));
+
+      const updated = sanitizeForFirestore({
+        ...existing,
+        StakeholderEmails: nextEmails,
+        UpdatedAt: now,
+      });
+      tx.set(ref, updated, { merge: true });
+      return { task: updated, added, removed, previous };
+    });
+
+    ttlCache.invalidate(TASKS_CACHE_KEY);
+    res.json(result);
+  } catch (err: any) {
+    if (err?.status === 404 || err?.message === 'Task not found') {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    logger.error('updateTaskStakeholders failed:', err);
+    res.status(500).json({ error: 'Failed to update stakeholders' });
+  }
+});
+
+/**
+ * GET /api/tasks/counts
+ * Aggregation counts without fetching documents (1 read per count query).
+ * Query params: status (optional exact Status value)
+ */
+router.get('/tasks/counts', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const status = typeof req.query.status === 'string' ? req.query.status : '';
+    let query: Query = db.collection('tasks');
+    if (status && status !== 'All') {
+      query = query.where('Status', '==', status);
+    }
+    // Prefer Active tasks when the field is present on documents
+    try {
+      const activeQuery = query.where('Active', '==', true);
+      const snap = await activeQuery.count().get();
+      return res.json({ count: snap.data().count, scoped: 'active' });
+    } catch {
+      const snap = await query.count().get();
+      return res.json({ count: snap.data().count, scoped: 'all' });
+    }
+  } catch (err) {
+    logger.error('getTaskCounts failed:', err);
+    res.status(500).json({ error: 'Failed to count tasks' });
+  }
+});
+
+/**
+ * GET /api/tasks/page
+ * Cursor-based pagination for the Tasks list (avoids full-collection transfer).
+ * Query: limit (default 50, max 100), startAfterId, status, assigneeEmail
+ */
+router.get('/tasks/page', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const limitRaw = parseInt(String(req.query.limit || '50'), 10);
+    const pageSize = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 100);
+    const startAfterId = typeof req.query.startAfterId === 'string' ? req.query.startAfterId : '';
+    const status = typeof req.query.status === 'string' ? req.query.status : '';
+    const assigneeEmail = typeof req.query.assigneeEmail === 'string'
+      ? req.query.assigneeEmail.trim().toLowerCase()
+      : '';
+
+    // Base query: order by TaskID for stable cursors.
+    // Status can be applied server-side; assignee is comma-joined so filtered in memory after a bounded page.
+    let query: Query = db.collection('tasks').orderBy('TaskID');
+    if (status && status !== 'All' && !['Active', 'Overdue', 'Due Today'].includes(status)) {
+      query = db.collection('tasks').where('Status', '==', status).orderBy('TaskID');
+    }
+
+    if (startAfterId) {
+      query = query.startAfter(startAfterId);
+    }
+
+    // Over-fetch when assignee filter is present so a page still fills after client-side match
+    const fetchSize = assigneeEmail ? Math.min(pageSize * 3, 150) : pageSize;
+    const snapshot = await query.limit(fetchSize).get();
+    let tasks = snapshot.docs.map(doc => doc.data());
+
+    if (assigneeEmail) {
+      tasks = tasks.filter((t: any) => {
+        const assignees = String(t.AssignedToEmail || '')
+          .split(',')
+          .map((e: string) => e.trim().toLowerCase())
+          .filter(Boolean);
+        const stakeholders = Array.isArray(t.StakeholderEmails)
+          ? t.StakeholderEmails.map((e: string) => e.toLowerCase())
+          : [];
+        return assignees.includes(assigneeEmail) || stakeholders.includes(assigneeEmail);
+      }).slice(0, pageSize);
+    }
+
+    const lastId = tasks.length > 0 ? tasks[tasks.length - 1].TaskID : null;
+    res.json({
+      tasks,
+      pageSize,
+      nextCursor: lastId,
+      hasMore: snapshot.size >= fetchSize,
+    });
+  } catch (err) {
+    logger.error('getTasksPage failed:', err);
+    res.status(500).json({ error: 'Failed to load paginated tasks' });
   }
 });
 

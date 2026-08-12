@@ -1,0 +1,54 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "Status", "order": "ASCENDING" },
+        { "fieldPath": "TaskID", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "Status", "order": "ASCENDING" },
+        { "fieldPath": "DueDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "Active", "order": "ASCENDING" },
+        { "fieldPath": "Status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "Active", "order": "ASCENDING" },
+        { "fieldPath": "DueDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "AssignedByEmail", "order": "ASCENDING" },
+        { "fieldPath": "Status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "Status", "order": "ASCENDING" },
+        { "fieldPath": "DueDate", "order": "ASCENDING" },
+        { "fieldPath": "TaskID", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
