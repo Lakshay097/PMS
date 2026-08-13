@@ -162,7 +162,8 @@ export default function TaskFilters({
   };
 
   const clearAll = () => {
-    onFilterStatusChange(['All']);
+    const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
+    onFilterStatusChange(allStatuses);
     onFilterPriorityChange([]);
     onFilterAssigneeNamesChange([]);
     onFilterDateFromChange('');
@@ -174,30 +175,39 @@ export default function TaskFilters({
   };
 
   const toggleStatus = (status: string) => {
+    const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
+    
     if (status === 'All') {
-      onFilterStatusChange(['All']);
+      // When "All" is clicked: if all are selected, deselect all; otherwise select all
+      const isAllSelected = allStatuses.every(s => filterStatus.includes(s));
+      if (isAllSelected) {
+        onFilterStatusChange([]);
+      } else {
+        onFilterStatusChange(allStatuses);
+      }
     } else {
-      if (filterStatus.includes('All')) {
-        onFilterStatusChange([status]);
-      } else if (filterStatus.includes(status)) {
-        if (filterStatus.length === 1) {
-          onFilterStatusChange(['All']);
-        } else {
-          onFilterStatusChange(filterStatus.filter(s => s !== status));
-        }
+      // Toggle individual status
+      if (filterStatus.includes(status)) {
+        const newStatuses = filterStatus.filter(s => s !== status);
+        onFilterStatusChange(newStatuses);
       } else {
         onFilterStatusChange([...filterStatus, status]);
       }
     }
   };
 
-  const hasActiveFilters =
-    (filterStatus.length > 0 && !filterStatus.includes('All')) ||
-    filterAssigneeNames.length > 0 ||
-    filterAssignedByEmails.length > 0 ||
-    !!filterDateFrom ||
-    !!filterDateTo ||
-    filterPriority.length > 0;
+  const hasActiveFilters = (() => {
+    const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
+    const isAllStatusesSelected = allStatuses.every(s => filterStatus.includes(s));
+    const hasStatusFilter = filterStatus.length > 0 && !isAllStatusesSelected;
+    
+    return hasStatusFilter ||
+      filterAssigneeNames.length > 0 ||
+      filterAssignedByEmails.length > 0 ||
+      !!filterDateFrom ||
+      !!filterDateTo ||
+      filterPriority.length > 0;
+  })();
 
   // Shared class helpers
   const inputBase = isDarkMode
@@ -246,46 +256,65 @@ export default function TaskFilters({
         >
           <Filter size={14} className="sm:size-4" />
           <span className="hidden sm:inline">Status</span>
-          {filterStatus.length > 0 && !filterStatus.includes('All') && (
-            <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${
-              isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
-            }`}>
-              {filterStatus.length}
-            </span>
-          )}
+          {(() => {
+            const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
+            const isAllSelected = allStatuses.every(s => filterStatus.includes(s));
+            if (filterStatus.length > 0 && !isAllSelected) {
+              return (
+                <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${
+                  isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
+                }`}>
+                  {filterStatus.length}
+                </span>
+              );
+            }
+            return null;
+          })()}
           <ChevronDown size={12} className={`transition-transform sm:size-3.5 ${isStatusDropdownOpen ? 'rotate-180' : ''}`} />
         </button>
 
         {isStatusDropdownOpen && (
           <div className={`absolute top-full left-0 mt-2 w-48 sm:w-56 rounded-lg shadow-lg z-50 ${dropdownPanel}`}>
             <div className="max-h-60 overflow-y-auto p-2">
-              {['All', 'In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'].map(status => (
-                <label
-                  key={status}
-                  className={`flex items-center gap-2 sm:gap-3 p-2 rounded-md cursor-pointer transition-colors ${dropdownItem}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={filterStatus.includes(status)}
-                    onChange={() => toggleStatus(status)}
-                    className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
-                  />
-                  <span className="flex-1 text-xs sm:text-sm">{status}</span>
-                </label>
-              ))}
+              {['All', 'In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'].map(status => {
+                const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
+                const isAllSelected = allStatuses.every(s => filterStatus.includes(s));
+                const isIndeterminate = filterStatus.length > 0 && !isAllSelected;
+                
+                return (
+                  <label
+                    key={status}
+                    className={`flex items-center gap-2 sm:gap-3 p-2 rounded-md cursor-pointer transition-colors ${dropdownItem}`}
+                  >
+                    <input
+                      type="checkbox"
+                      ref={input => {
+                        if (input && status === 'All') {
+                          input.indeterminate = isIndeterminate;
+                        }
+                      }}
+                      checked={status === 'All' ? isAllSelected : filterStatus.includes(status)}
+                      onChange={() => toggleStatus(status)}
+                      className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
+                    />
+                    <span className="flex-1 text-xs sm:text-sm">{status}</span>
+                  </label>
+                );
+              })}
             </div>
 
-            {filterStatus.length > 0 && !filterStatus.includes('All') && (
-              <div className={`p-2 border-t ${dividerBorder}`}>
-                <button
-                  onClick={() => onFilterStatusChange(['All'])}
-                  className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-md transition-colors ${clearBtn}`}
-                >
-                  <X size={12} className="sm:size-3.5" />
-                  Clear status
-                </button>
-              </div>
-            )}
+            <div className={`p-2 border-t ${dividerBorder}`}>
+              <button
+                onClick={() => {
+                  const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
+                  onFilterStatusChange(allStatuses);
+                }}
+                className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-md transition-colors ${clearBtn}`}
+              >
+                <X size={12} className="sm:size-3.5" />
+                Select all
+              </button>
+            </div>
           </div>
         )}
       </div>

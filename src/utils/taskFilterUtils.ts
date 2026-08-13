@@ -28,10 +28,18 @@ export function taskMatchesFilters(task: Task, filters: TaskListFilters): boolea
 function normalizeStatusList(status: string[] | string | undefined): string[] {
   if (!status) return [];
   if (Array.isArray(status)) {
-    return status.filter(s => s && s !== 'All');
+    const filtered = status.filter(s => s && s !== 'All');
+    const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
+    // If all statuses are selected, treat as no filter (Excel-style)
+    const isAllSelected = filtered.length === allStatuses.length && allStatuses.every(s => filtered.includes(s));
+    return isAllSelected ? [] : filtered;
   }
   if (status === 'All') return [];
-  return status.split(',').map(s => s.trim()).filter(s => s && s !== 'All');
+  const parsed = status.split(',').map(s => s.trim()).filter(s => s && s !== 'All');
+  const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
+  // If all statuses are selected, treat as no filter (Excel-style)
+  const isAllSelected = parsed.length === allStatuses.length && allStatuses.every(s => parsed.includes(s));
+  return isAllSelected ? [] : parsed;
 }
 
 export function matchesStatusFilter(task: Task, status: string[] | string | undefined): boolean {

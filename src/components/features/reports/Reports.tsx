@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAllSubordinates } from '../../../utils/userUtils';
 import { isTeamLeader, isSubTeamLeader } from '../../../utils/subTeamUtils';
@@ -12,6 +12,7 @@ import {
   Link,
   ChevronDown,
   CheckCircle,
+  X,
 } from 'lucide-react';
 import { Task, User as UserType, TaskReport, Team, SubTeam, AppSetting } from '../../../types';
 import { ROLE, isAdminLevel } from '../../../constants/status';
@@ -48,16 +49,52 @@ export default function Reports({
   const [filterAssignee, setFilterAssignee] = useState<string[]>([]);
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
+  const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
+  const [filterStatus, setFilterStatus] = useState<string[]>(allStatuses);
   const [showFlatView, setShowFlatView] = useState(false);
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [dateFilteredReports, setDateFilteredReports] = useState<TaskReport[]>([]);
+  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
 
   // Compute user roles once per render
   const userRoles = useMemo(() => {
     return getUserRoles(currentUser, teams || [], subTeams || [], settings || []);
   }, [currentUser, teams, subTeams, settings]);
+
+  // Status dropdown click outside handler
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+        setIsStatusDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Toggle status function with same behavior as TaskFilters (Excel-style)
+  const toggleStatus = (status: string) => {
+    if (status === 'All') {
+      // When "All" is clicked: if all are selected, deselect all; otherwise select all
+      const isAllSelected = allStatuses.every(s => filterStatus.includes(s));
+      if (isAllSelected) {
+        setFilterStatus([]);
+      } else {
+        setFilterStatus(allStatuses);
+      }
+    } else {
+      // Toggle individual status
+      if (filterStatus.includes(status)) {
+        const newStatuses = filterStatus.filter(s => s !== status);
+        setFilterStatus(newStatuses);
+      } else {
+        setFilterStatus([...filterStatus, status]);
+      }
+    }
+  };
 
   // Compute filtered reports when dependencies change
   useEffect(() => {
@@ -102,15 +139,23 @@ export default function Reports({
       })
       : teamFilteredReports;
 
+    // Apply status filter to reports
+    const statusFilteredReports = filterStatus.length > 0 && !filterStatus.includes('All')
+      ? assigneeFilteredReports.filter(r => {
+        const task = tasks?.find(t => t.TaskID === r.TaskID);
+        return task && filterStatus.includes(task.Status);
+      })
+      : assigneeFilteredReports;
+
     // Apply date range filter to reports
-    const newDateFilteredReports = assigneeFilteredReports.filter(r => {
+    const newDateFilteredReports = statusFilteredReports.filter(r => {
       if (filterDateFrom && r.ReportDate < filterDateFrom) return false;
       if (filterDateTo && r.ReportDate > filterDateTo) return false;
       return true;
     });
 
     setDateFilteredReports(newDateFilteredReports);
-  }, [reports, tasks, filterTeamIDs, filterAssignee, filterDateFrom, filterDateTo, currentUser, users, teams, subTeams]);
+  }, [reports, tasks, filterTeamIDs, filterAssignee, filterStatus, filterDateFrom, filterDateTo, currentUser, users, teams, subTeams]);
 
   // Row selection for reports
   const {
@@ -384,6 +429,72 @@ export default function Reports({
             />
           </div>
 
+          {/* Status Filter */}
+          <div className="relative" ref={statusDropdownRef}>
+            <button
+              onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+              className={`flex items-center gap-2 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-[#1E293B] border-[#334155]' : 'bg-slate-50 border-slate-200'}`}
+            >
+              <Filter size={14} />
+              <span>Status</span>
+              {(() => {
+                const isAllSelected = allStatuses.every(s => filterStatus.includes(s));
+                if (filterStatus.length > 0 && !isAllSelected) {
+                  return (
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                      isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
+                    }`}>
+                      {filterStatus.length}
+                    </span>
+                  );
+                }
+                return null;
+              })()}
+              <ChevronDown size={12} className={`transition-transform ${isStatusDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isStatusDropdownOpen && (
+              <div className={`absolute top-full left-0 mt-2 w-56 rounded-lg shadow-lg z-50 ${isDarkMode ? 'bg-[#1E293B] border border-[#334155]' : 'bg-white border border-[#E5E7EB]'}`}>
+                <div className="max-h-60 overflow-y-auto p-2">
+                  {['All', 'In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'].map(status => {
+                    const isAllSelected = allStatuses.every(s => filterStatus.includes(s));
+                    const isIndeterminate = filterStatus.length > 0 && !isAllSelected;
+                    
+                    return (
+                      <label
+                        key={status}
+                        className={`flex items-center gap-3 p-2 rounded-md cursor-pointer transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-[#334155]/60' : 'text-slate-800 hover:bg-slate-100'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          ref={input => {
+                            if (input && status === 'All') {
+                              input.indeterminate = isIndeterminate;
+                            }
+                          }}
+                          checked={status === 'All' ? isAllSelected : filterStatus.includes(status)}
+                          onChange={() => toggleStatus(status)}
+                          className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
+                        />
+                        <span className="flex-1 text-sm">{status}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className={`p-2 border-t ${isDarkMode ? 'border-[#334155]' : 'border-[#E5E7EB]'}`}>
+                  <button
+                    onClick={() => setFilterStatus(allStatuses)}
+                    className={`w-full flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${isDarkMode ? 'text-slate-400 hover:text-white hover:bg-[#334155]/50' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}
+                  >
+                    <X size={12} />
+                    Select all
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <MultiselectDropdown
             label="Teams"
             options={teams.filter(t => t.Active).map(team => ({ value: team.TeamID, label: team.TeamName }))}
@@ -427,12 +538,13 @@ export default function Reports({
             </div>
           </div>
 
-          {(filterTeamIDs.length > 0 || filterDateFrom || filterDateTo) && (
+          {(filterTeamIDs.length > 0 || filterDateFrom || filterDateTo || filterStatus.length > 0) && (
             <button
               onClick={() => {
                 setFilterTeamIDs([]);
                 setFilterDateFrom('');
                 setFilterDateTo('');
+                setFilterStatus(allStatuses);
               }}
               className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${isDarkMode
                   ? 'text-secondary hover:text-white hover:bg-[#334155]/50'
