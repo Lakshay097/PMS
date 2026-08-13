@@ -126,6 +126,16 @@ export default function CreateTaskModal({ currentUser, usersList, teamsList = []
   const [isUploading, setIsUploading] = useState(false);
   const [validationError, setValidationError] = useState('');
 
+  // Reset search states when modal opens to ensure isolation
+  useEffect(() => {
+    if (isOpen) {
+      setSearchQuery('');
+      setTeamSearchQuery('');
+      setShowDropdown(false);
+      setShowTeamDropdown(false);
+    }
+  }, [isOpen]);
+
   // Filter visible teams based on user's parent team membership
   const currentUserTeams = new Set(currentUser.TeamIDs || []);
   const visibleTeams = teamsList.filter(t => {

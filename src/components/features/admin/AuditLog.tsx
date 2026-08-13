@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import Drawer from '../../shared/Drawer';
 import { Badge, Card, EmptyState, TimeAgo } from '../../shared/ui';
 import { useDebounce } from '../../../hooks/useDebounce';
@@ -66,6 +66,15 @@ export default function AuditLogPage({ auditLogs, onExport }: AuditLogProps) {
   const [severityFilter, setSeverityFilter] = useState<'all' | Severity>('all');
 
   const debouncedSearch = useDebounce(searchQuery, 250);
+
+  // Reset search state when component mounts to ensure isolation from other pages
+  useEffect(() => {
+    setSearchQuery('');
+    setDateFilter('all');
+    setActorFilter('all');
+    setEntityFilter('all');
+    setSeverityFilter('all');
+  }, []);
 
   const actors = useMemo(
     () => Array.from(new Set(auditLogs.map((l) => l.ActionByEmail))).sort(),

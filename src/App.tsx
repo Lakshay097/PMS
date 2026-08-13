@@ -367,7 +367,8 @@ export default function App() {
     
     // Clear search and filters when entering reports or other non-tasks sections
     if (currentPath === ROUTES.REPORTS || currentPath === ROUTES.WEEKLY_REPORTS || 
-        currentPath === ROUTES.TEAM || currentPath === ROUTES.ADMIN || currentPath === ROUTES.SETTINGS) {
+        currentPath === ROUTES.TEAM || currentPath === ROUTES.ADMIN || currentPath === ROUTES.SETTINGS ||
+        currentPath === ROUTES.SCHEDULES) {
       setSearchQuery('');
       setDebouncedSearchQuery('');
       setFilterStatus('All');

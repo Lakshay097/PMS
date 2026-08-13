@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Task, User as UserType, Team, SubTeam } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../constants/routes';
@@ -48,6 +48,11 @@ export default function TeamPage({
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [collapsedTeamIds, setCollapsedTeamIds] = useState<Set<string>>(new Set((teams || []).filter(t => t.Active).map(t => t.TeamID)));
+
+  // Reset search state when component mounts to ensure isolation from other pages
+  useEffect(() => {
+    setSearchQuery('');
+  }, []);
 
   // Roster amendment: every team member sees the full roster of all members in
   // their team(s), grouped by sub-team. Names/email only — no task/report data.

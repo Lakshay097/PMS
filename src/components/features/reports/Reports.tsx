@@ -78,6 +78,16 @@ export default function Reports({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Reset search state when component mounts to ensure isolation from other pages
+  useEffect(() => {
+    setSearchQuery('');
+    setFilterTeamIDs([]);
+    setFilterAssignee([]);
+    setFilterDateFrom('');
+    setFilterDateTo('');
+    setFilterStatus(allStatuses);
+  }, []);
+
   // Toggle status function with same behavior as TaskFilters (Excel-style)
   const toggleStatus = (status: string) => {
     if (status === 'All') {

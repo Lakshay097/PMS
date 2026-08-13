@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Task, User as UserType, TaskTemplate } from '../types';
 import { Repeat, Plus, Search, Edit2, Trash2, Clock, Calendar, AlertCircle, User } from 'lucide-react';
 import { isAdminLevel } from '../constants/status';
@@ -24,6 +24,11 @@ export default function SchedulesPage({
 }: SchedulesPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  
+  // Reset search state when component mounts to ensure isolation from other pages
+  useEffect(() => {
+    setSearchQuery('');
+  }, []);
   
   // Form state for new template
   const [tempTitle, setTempTitle] = useState('');
