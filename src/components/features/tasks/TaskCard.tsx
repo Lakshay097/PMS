@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Task, User as UserType } from '../../../types';
 import { isAdminLevel } from '../../../constants/status';
-import StakeholderManager from '../../shared/StakeholderManager';
 
 interface TaskCardProps {
   task: Task;
@@ -9,7 +8,6 @@ interface TaskCardProps {
   currentUser?: UserType;
   isDarkMode?: boolean;
   onTaskClick?: (task: Task) => void;
-  onUpdateTaskStakeholders?: (taskId: string, stakeholderEmails: string[]) => Promise<void> | void;
 }
 
 /**
@@ -30,12 +28,8 @@ export default function TaskCard({
   currentUser,
   isDarkMode = false,
   onTaskClick,
-  onUpdateTaskStakeholders,
 }: TaskCardProps) {
-  const [showStakeholders, setShowStakeholders] = useState(false);
   const isCompleted = task.Status === 'Closed' || task.Status === 'Reviewed';
-  const canManageStakeholders = !!currentUser && isAdminLevel(currentUser.Role) && !!onUpdateTaskStakeholders;
-  const stakeholderCount = task.StakeholderEmails?.length || 0;
 
   // ── Date helpers ──────────────────────────────────────────────
   const today = new Date();
@@ -146,39 +140,6 @@ export default function TaskCard({
       <p className="text-[12px] text-muted">
         {metadataText}
       </p>
-
-      {(canManageStakeholders || stakeholderCount > 0) && (
-        <div
-          className="mt-3"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {canManageStakeholders ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setShowStakeholders(v => !v)}
-                className="text-[11px] font-semibold text-[#2563EB] hover:text-[#1d4ed8] bg-transparent border-none cursor-pointer px-0"
-              >
-                {showStakeholders ? 'Hide stakeholders' : `Stakeholders (${stakeholderCount})`}
-              </button>
-              {showStakeholders && (
-                <div className="mt-2">
-                  <StakeholderManager
-                    stakeholderEmails={task.StakeholderEmails || []}
-                    users={users}
-                    currentUser={currentUser}
-                    canManage
-                    isDarkMode={isDarkMode}
-                    onChange={(next) => onUpdateTaskStakeholders?.(task.TaskID, next)}
-                  />
-                </div>
-              )}
-            </>
-          ) : (
-            <p className="text-[11px] text-muted">Stakeholders: {stakeholderCount}</p>
-          )}
-        </div>
-      )}
     </div>
   );
 }

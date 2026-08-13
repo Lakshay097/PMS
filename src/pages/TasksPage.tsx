@@ -23,7 +23,6 @@ interface TasksPageProps {
   onFilterChange: (filterType: 'status' | 'priority' | 'assignee' | 'searchQuery', value: string | string[]) => void;
   onTaskClick: (task: Task) => void;
   onNewTask: () => void;
-  onUpdateTaskStakeholders?: (taskId: string, stakeholderEmails: string[]) => Promise<void> | void;
   getPriorityColor: (priority: string | string[]) => string;
   getStatusColor: (status: string) => string;
 }
@@ -40,7 +39,6 @@ export default function TasksPage({
   onFilterChange,
   onTaskClick,
   onNewTask,
-  onUpdateTaskStakeholders,
   getPriorityColor,
   getStatusColor,
 }: TasksPageProps) {
@@ -174,7 +172,6 @@ export default function TasksPage({
         currentUser={currentUser}
         isDarkMode={isDarkMode}
         onTaskClick={onTaskClick}
-        onUpdateTaskStakeholders={onUpdateTaskStakeholders}
         emptyMessage="No tasks found"
       />
     </div>

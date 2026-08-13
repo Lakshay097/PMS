@@ -8,7 +8,6 @@ interface TaskCardListProps {
   currentUser?: UserType;
   isDarkMode?: boolean;
   onTaskClick?: (task: Task) => void;
-  onUpdateTaskStakeholders?: (taskId: string, stakeholderEmails: string[]) => Promise<void> | void;
   emptyMessage?: string;
   initialVisible?: number;
 }
@@ -24,7 +23,6 @@ export default function TaskCardList({
   currentUser,
   isDarkMode = false,
   onTaskClick,
-  onUpdateTaskStakeholders,
   emptyMessage = 'No tasks found',
   initialVisible = 10,
 }: TaskCardListProps) {
@@ -48,7 +46,6 @@ export default function TaskCardList({
           currentUser={currentUser}
           isDarkMode={isDarkMode}
           onTaskClick={onTaskClick}
-          onUpdateTaskStakeholders={onUpdateTaskStakeholders}
         />
       ))}
 

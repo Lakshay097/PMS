@@ -422,6 +422,25 @@ export function useTaskOperations({
 
     await dbService.saveTask(updatedTask);
 
+    // Send email to assigned users about the follow-up/reopening
+    if (updatedTask.AssignedToEmail) {
+      triggerTaskAssignmentEmail({
+        assignerEmail: currentUser.Email,
+        assignedToEmail: updatedTask.AssignedToEmail,
+        task: {
+          TaskID: updatedTask.TaskID,
+          Title: updatedTask.Title,
+          Description: updatedTask.Description,
+          DueDate: updatedTask.DueDate,
+          Priority: Array.isArray(updatedTask.Priority)
+            ? updatedTask.Priority.join(', ')
+            : String(updatedTask.Priority),
+          AttachmentLink: updatedTask.AttachmentLink,
+        },
+      }).catch(err => logger.error('Failed to notify assigned users about follow-up:', err));
+    }
+
+    // Also send emails to newly added stakeholders
     if (newlyAddedStakeholders.length > 0) {
       triggerTaskAssignmentEmail({
         assignerEmail: currentUser.Email,

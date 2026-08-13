@@ -5,8 +5,8 @@ import { useDatabase } from './hooks/useDatabase';
 import { useTaskOperations } from './hooks/useTaskOperations';
 import { useUserOperations } from './hooks/useUserOperations';
 import { useTeamOperations } from './hooks/useTeamOperations';
-import { useTemplateOperations } from './hooks/useTemplateOperations';
 import { useTaskMetrics } from './hooks/useTaskMetrics';
+import { useTemplateOperations } from './hooks/useTemplateOperations';
 import { getAllSubordinates } from './utils/userUtils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logger } from './utils/logger';
@@ -18,7 +18,7 @@ import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { useAuth } from './contexts/AuthContext';
 import { useTheme } from './contexts/ThemeContext';
 import { changePassword } from './api/auth';
-import { triggerReportSubmissionEmail, triggerTaskClosureEmail } from './api/emailTrigger';
+import { triggerReportSubmissionEmail, triggerTaskClosureEmail, triggerTaskAssignmentEmail } from './api/emailTrigger';
 import { useGmailStatus } from './hooks/useGmailStatus';
 import { getVisibleSubTeamIds } from './utils/subTeamUtils';
 import InstallBanner from './components/InstallBanner';
@@ -789,7 +789,7 @@ export default function App() {
   // useMemo: reports list can be large, filter and sort is O(n)
   const getVisibleReports = useMemo(() => {
     {/* PERF-CHECK: if list exceeds 50 items, add @tanstack/react-virtual */}
-    const visibleTaskIds = new Set(visibleTasks.map(t => t.TaskID));
+    const visibleTaskIds = new Set(visibleTasks.map((t: Task) => t.TaskID));
     return reports
       .filter(r => visibleTaskIds.has(r.TaskID))
       .sort((a, b) => new Date(b.CreatedAt || b.ReportDate).getTime() - new Date(a.CreatedAt || a.ReportDate).getTime());
@@ -1388,7 +1388,6 @@ export default function App() {
                   onNewTask={() => {
                     setIsTaskModalOpen(true);
                   }}
-                  onUpdateTaskStakeholders={handleUpdateTaskStakeholders}
                   getPriorityColor={(priority) => {
                     const priorities = Array.isArray(priority) ? priority : [priority];
                     // Use the highest priority for styling
@@ -1450,7 +1449,6 @@ export default function App() {
                   onNewTask={() => {
                     setIsTaskModalOpen(true);
                   }}
-                  onUpdateTaskStakeholders={handleUpdateTaskStakeholders}
                   getPriorityColor={(priority) => {
                     const priorities = Array.isArray(priority) ? priority : [priority];
                     // Use the highest priority for styling
@@ -1788,6 +1786,24 @@ export default function App() {
             subtasks={subtasks}
             onOpenReportModal={() => setIsReportModalOpen(true)}
             onOpenFollowUpModal={() => setIsFollowUpModalOpen(true)}
+            onResendFollowUpEmail={async () => {
+              if (selectedTask && activeUser) {
+                triggerTaskAssignmentEmail({
+                  assignerEmail: activeUser.Email,
+                  assignedToEmail: selectedTask.AssignedToEmail,
+                  task: {
+                    TaskID: selectedTask.TaskID,
+                    Title: selectedTask.Title,
+                    Description: selectedTask.Description,
+                    DueDate: selectedTask.DueDate,
+                    Priority: Array.isArray(selectedTask.Priority)
+                      ? selectedTask.Priority.join(', ')
+                      : String(selectedTask.Priority),
+                    AttachmentLink: selectedTask.AttachmentLink,
+                  },
+                }).catch((err: Error) => logger.error('Failed to resend follow-up email:', err));
+              }
+            }}
             onCloseTask={async (taskId, remark, attachmentLink) => {
                  setIsDrawerOpen(false);
                  setSelectedTask(null);

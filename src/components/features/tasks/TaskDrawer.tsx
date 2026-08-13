@@ -6,7 +6,6 @@ import { ROLE, isAdminLevel } from '../../../constants/status';
 import { uploadFile } from '../../../api/upload';
 import { getAllSubordinates } from '../../../utils/userUtils';
 import { canAssignWithinTeam, isSubTeamLeader, isTeamLeader } from '../../../utils/subTeamUtils';
-import StakeholderManager from '../../shared/StakeholderManager';
 
 
 // Helper function to derive a human-readable label and file extension from an
@@ -64,6 +63,7 @@ interface TaskDrawerProps {
   subtasks: Subtask[];
   onOpenReportModal: () => void;
   onOpenFollowUpModal: () => void;
+  onResendFollowUpEmail: () => void;
   onCloseTask: (taskId: string, remark: string, attachmentLink?: string) => void;
   onUpdateTask?: (taskId: string, fields: Partial<Task>) => void;
   onAddSubtask?: (taskId: string, data: { title: string; assignedTo?: string; dueDate?: string }) => Promise<void>;
@@ -83,6 +83,7 @@ export default function TaskDrawer({
   subtasks,
   onOpenReportModal,
   onOpenFollowUpModal,
+  onResendFollowUpEmail,
   onCloseTask,
   onUpdateTask,
   onAddSubtask,
@@ -105,7 +106,8 @@ export default function TaskDrawer({
   const [isEditing, setIsEditing] = useState(false);
   const [editDescription, setEditDescription] = useState('');
   const [editEmails, setEditEmails] = useState<string[]>([]);
-  const [stakeholderEmails, setStakeholderEmails] = useState<string[]>([]);
+  const [assigneeSearchQuery, setAssigneeSearchQuery] = useState('');
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
 
   // Reassignment states for Admin
   const [reassignUser, setReassignUser] = useState('');
@@ -124,7 +126,6 @@ export default function TaskDrawer({
     if (task && currentUser) {
       setEditDescription(task.Description);
       setEditEmails((task.AssignedToEmail || '').split(',').map(e => e.trim()).filter(Boolean));
-      setStakeholderEmails(task.StakeholderEmails || []);
       setIsEditing(false);
       setReassignUser('');
       setReassignTeam('');
@@ -134,8 +135,28 @@ export default function TaskDrawer({
       setAdminUserSearch('');
       setShowSubtaskDivision(false);
       setSubtaskDivisionRows([]);
+      setAssigneeSearchQuery('');
+      setShowAssigneeDropdown(false);
     }
   }, [task, currentUser, usersList]);
+
+  // Close assignee dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.assignee-dropdown-container')) {
+        setShowAssigneeDropdown(false);
+      }
+    };
+
+    if (showAssigneeDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showAssigneeDropdown]);
 
   if (!isOpen || !task || !currentUser) return null;
 
@@ -228,8 +249,7 @@ export default function TaskDrawer({
         AssignedToEmail: editEmails.join(', '),
         AssignedToRole: assignedRole as any,
         AssignedToTeamIDs: assignedTeamIDs,
-        TeamID: primaryTeamID,
-        StakeholderEmails: stakeholderEmails
+        TeamID: primaryTeamID
       });
     }
     setIsEditing(false);
@@ -368,14 +388,78 @@ export default function TaskDrawer({
                     />
                   </div>
 
-                  <StakeholderManager
-                    stakeholderEmails={stakeholderEmails}
-                    users={usersList}
-                    currentUser={currentUser}
-                    canManage={canEditTask}
-                    title="Additional stakeholders"
-                    onChange={setStakeholderEmails}
-                  />
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold tracking-wider block text-muted">Assigned recipients</label>
+                    <div className="relative assignee-dropdown-container">
+                      <input
+                        type="text"
+                        value={assigneeSearchQuery}
+                        onChange={(e) => {
+                          setAssigneeSearchQuery(e.target.value);
+                          setShowAssigneeDropdown(true);
+                        }}
+                        onFocus={() => setShowAssigneeDropdown(true)}
+                        placeholder="Search users to assign..."
+                        className="w-full text-xs rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-[#2563EB] bg-surface border-token text-primary placeholder:text-muted"
+                      />
+                      {showAssigneeDropdown && assigneeSearchQuery && (
+                        <div className="absolute z-10 w-full mt-1 border rounded-lg shadow-lg max-h-48 overflow-y-auto bg-surface border-token">
+                          {assignableUsers.filter(user =>
+                            user.FullName.toLowerCase().includes(assigneeSearchQuery.toLowerCase()) ||
+                            user.Email.toLowerCase().includes(assigneeSearchQuery.toLowerCase())
+                          ).length === 0 ? (
+                            <div className="p-2 text-xs text-muted italic">No users found.</div>
+                          ) : (
+                            assignableUsers.filter(user =>
+                              user.FullName.toLowerCase().includes(assigneeSearchQuery.toLowerCase()) ||
+                              user.Email.toLowerCase().includes(assigneeSearchQuery.toLowerCase())
+                            ).map(user => {
+                              const isSelected = editEmails.includes(user.Email);
+                              return (
+                                <div
+                                  key={user.UserID}
+                                  onClick={() => {
+                                    if (!isSelected) {
+                                      setEditEmails([...editEmails, user.Email]);
+                                    }
+                                    setAssigneeSearchQuery('');
+                                    setShowAssigneeDropdown(false);
+                                  }}
+                                  className={`p-2 cursor-pointer text-xs hover-surface transition-colors ${
+                                    isSelected ? 'opacity-50' : ''
+                                  }`}
+                                >
+                                  <div className="flex flex-col">
+                                    <span className="font-semibold text-primary">{user.FullName}</span>
+                                    <span className="text-[9px] text-muted font-mono">{user.Email}</span>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {editEmails.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {editEmails.map(email => {
+                          const u = usersList.find(usr => usr.Email === email);
+                          return (
+                            <span key={email} className="inline-flex items-center gap-1 bg-surface-2 border border-token text-primary text-[10px] font-semibold px-2 py-0.5 rounded">
+                              <span>{u ? u.FullName : email}</span>
+                              <button
+                                type="button"
+                                onClick={() => setEditEmails(editEmails.filter(e => e !== email))}
+                                className="w-3 h-3 rounded-full bg-surface text-muted flex items-center justify-center hover:text-red-500 transition-colors border-none"
+                              >
+                                <X size={8} />
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="pt-2 flex justify-end">
                     <button
@@ -409,18 +493,6 @@ export default function TaskDrawer({
                       {task.Description}
                     </div>
                   </div>
-
-                  <StakeholderManager
-                    stakeholderEmails={task.StakeholderEmails || []}
-                    users={usersList}
-                    currentUser={currentUser}
-                    canManage={canEditTask}
-                    title="Stakeholders"
-                    onChange={(next) => {
-                      setStakeholderEmails(next);
-                      onUpdateTask?.(task.TaskID, { StakeholderEmails: next });
-                    }}
-                  />
                 </>
               )}
 
@@ -1269,6 +1341,17 @@ className="px-3.5 py-1.5 rounded-lg text-[10.5px] font-bold tracking-wider borde
                 <CheckCircle size={12} className="sm:size-[14px]" />
                 <span className="hidden sm:inline">Trigger linked follow-up</span>
                 <span className="sm:hidden">Follow-up</span>
+              </button>
+            )}
+
+            {task.RequiresFollowUp === 'Yes' && (
+              <button
+                onClick={onResendFollowUpEmail}
+                className="bg-[#2563EB] hover:bg-[#1d4ed8] col-span-1 sm:col-span-2 text-white text-[10px] sm:text-xs font-bold tracking-wider py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg flex items-center justify-center space-x-1.5 sm:space-x-2 shadow-card cursor-pointer border-none"
+              >
+                <CornerRightDown size={12} className="sm:size-[14px]" />
+                <span className="hidden sm:inline">Resend follow-up email</span>
+                <span className="sm:hidden">Resend email</span>
               </button>
             )}
           </div>

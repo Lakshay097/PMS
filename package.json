@@ -10,7 +10,9 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test": "vitest",
-    "send-weekly-report-reminders": "tsx send-weekly-report-reminders.ts"
+    "send-weekly-report-reminders": "tsx send-weekly-report-reminders.ts",
+    "send-followup-reminders": "tsx server/scripts/sendFollowupReminders.ts",
+    "test-script": "tsx server/scripts/testScript.ts"
   },
   "dependencies": {
     "@mapbox/node-pre-gyp": "^2.0.3",
