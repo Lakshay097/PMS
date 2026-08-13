@@ -6,6 +6,7 @@ import { sendEmailAsUser } from '../services/emailService';
 import { generateGoogleSheetsToken, fetchSheetValues } from '../services/googleSheetsService';
 import { config } from '../config/env';
 import { getEmailTemplate, replaceTemplateVariables } from '../services/emailTemplateStorage';
+import { convertTimestampsToISO } from '../lib/firestoreUtils';
 
 interface SendProofEmailRequest {
   teamId: string;
@@ -36,7 +37,7 @@ export async function getTeamReminderThread(req: AuthRequest, res: Response): Pr
       return;
     }
 
-    const data = doc.data();
+    const data = convertTimestampsToISO(doc.data());
     res.json({
       threadId: data?.gmailThreadId || null,
       messageId: data?.gmailMessageId || null,
@@ -79,7 +80,7 @@ export async function sendProofEmail(req: AuthRequest, res: Response): Promise<v
     let usedFallback = false;
 
     if (doc.exists) {
-      const data = doc.data();
+      const data = convertTimestampsToISO(doc.data());
       threadId = data?.gmailThreadId || undefined;
       messageId = data?.gmailMessageId || undefined;
       logger.info(`Found existing thread for proof email: threadId=${threadId}, messageId=${messageId}`);
@@ -275,7 +276,7 @@ export async function getEmailDeliveryFailures(req: AuthRequest, res: Response):
       .where('weekOf', '==', currentWeekOf)
       .get();
 
-    const failures = snapshot.docs.map(doc => doc.data());
+    const failures = snapshot.docs.map(doc => convertTimestampsToISO(doc.data()));
 
     res.json({ failures, weekOf: currentWeekOf });
   } catch (error) {

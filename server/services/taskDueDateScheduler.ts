@@ -3,6 +3,7 @@ import { triggerTaskDueSoonEmail, triggerTaskOverdueEmail } from './emailTrigger
 import { firestoreAdmin } from './firebaseAdmin';
 import { enqueueSheetsWrite } from './sheetsSyncController';
 import { logger } from '../utils/logger';
+import { convertTimestampsToISO } from '../lib/firestoreUtils';
 
 // Intra-process lock to prevent overlapping runs within the same process
 let isRunning = false;
@@ -25,7 +26,8 @@ async function getSettingValue(key: string, defaultValue: string): Promise<strin
   try {
     const doc = await firestoreAdmin.collection(SETTINGS_COLLECTION).doc(key).get();
     if (!doc.exists) return defaultValue;
-    const value = doc.data()?.Value;
+    const data = convertTimestampsToISO(doc.data());
+    const value = data?.Value;
     return value !== undefined && value !== null ? String(value) : defaultValue;
   } catch (err) {
     logger.error(`TaskDueDateScheduler: Error reading setting ${key} from Firestore, using default`, err);
@@ -153,9 +155,9 @@ export async function checkAndSendDueDateReminders(): Promise<void> {
         firestoreAdmin.collection(SETTINGS_COLLECTION).doc('last_due_date_check_status'),
         firestoreAdmin.collection(SETTINGS_COLLECTION).doc('last_due_date_check_timestamp'),
       );
-      lastDate      = dateDoc.exists   ? String(dateDoc.data()?.Value   ?? '') : '';
-      lastStatus    = statusDoc.exists ? String(statusDoc.data()?.Value ?? '') : '';
-      lastTimestamp = tsDoc.exists     ? String(tsDoc.data()?.Value     ?? '') : '';
+      lastDate      = dateDoc.exists   ? String(convertTimestampsToISO(dateDoc.data())?.Value   ?? '') : '';
+      lastStatus    = statusDoc.exists ? String(convertTimestampsToISO(statusDoc.data())?.Value ?? '') : '';
+      lastTimestamp = tsDoc.exists     ? String(convertTimestampsToISO(tsDoc.data())?.Value     ?? '') : '';
     } catch (err) {
       logger.error('TaskDueDateScheduler: Error reading lock state from Firestore, proceeding with defaults', err);
     }

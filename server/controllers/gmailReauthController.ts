@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { requireAdmin } from '../middleware/auth';
 import { firestoreAdmin } from '../services/firebaseAdmin';
 import { logger } from '../utils/logger';
+import { convertTimestampsToISO } from '../lib/firestoreUtils';
 
 /**
  * GET /api/gmail-reauth-required
@@ -15,7 +16,7 @@ export async function getGmailReauthRequiredHandler(req: AuthRequest, res: Respo
       .limit(50)
       .get();
 
-    const reauthRequired = snapshot.docs.map(doc => doc.data());
+    const reauthRequired = snapshot.docs.map(doc => convertTimestampsToISO(doc.data()));
 
     res.json({
       success: true,

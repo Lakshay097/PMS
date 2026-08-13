@@ -24,6 +24,7 @@
 import 'dotenv/config';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { convertTimestampsToISO } from '../server/lib/firestoreUtils';
 
 const EXECUTE = process.argv.includes('--execute');
 
@@ -46,7 +47,7 @@ async function main() {
   console.log(`\nMode: ${EXECUTE ? 'EXECUTE (will write)' : 'AUDIT (read-only, no writes)'}\n`);
 
   const snapshot = await db.collection('users').get();
-  const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const users = snapshot.docs.map(doc => ({ id: doc.id, ...convertTimestampsToISO(doc.data()) }));
 
   console.log(`Total users in Firestore: ${users.length}`);
 

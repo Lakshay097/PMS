@@ -4,6 +4,7 @@ import { config } from '../config';
 import { BadRequestError, UnauthorizedError } from '../utils/AppError';
 import { logger } from '../utils/logger';
 import { firestoreAdmin } from './firebaseAdmin';
+import { convertTimestampsToISO } from '../lib/firestoreUtils';
 
 /**
  * User response interface
@@ -108,7 +109,7 @@ export async function login(email: string, password: string): Promise<LoginRespo
     throw new UnauthorizedError("Invalid email or password");
   }
 
-  const user = snap.data() as Record<string, any>;
+  const user = convertTimestampsToISO(snap.data() as Record<string, any>);
 
   // Check active status — stored as boolean or string in Firestore
   const activeValue = user.Active;
@@ -200,7 +201,7 @@ export async function refreshAccessTokenFromRefreshToken(refreshToken: string): 
     try {
       const snap = await firestoreAdmin.collection('users').doc(decoded.email).get();
       if (snap.exists) {
-        const u = snap.data() as Record<string, any>;
+        const u = convertTimestampsToISO(snap.data() as Record<string, any>);
         role     = u.Role     || role;
         fullName = u.FullName || fullName;
       }

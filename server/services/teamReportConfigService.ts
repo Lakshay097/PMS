@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger';
+import { convertTimestampsToISO } from '../lib/firestoreUtils';
 
 export interface TeamReportConfig {
   teamId: string;
@@ -25,7 +26,7 @@ export async function getTeamReportConfigs(): Promise<TeamReportConfig[]> {
 
     const configs: TeamReportConfig[] = [];
     snapshot.forEach(doc => {
-      const data = doc.data();
+      const data = convertTimestampsToISO(doc.data());
       if (data.active !== false) {
         configs.push({
           teamId: data.teamId,

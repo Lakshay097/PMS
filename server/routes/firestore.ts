@@ -42,17 +42,20 @@ if (process.env.NODE_ENV !== 'production') {
   ttlCache.invalidateAll();
 }
 
+// Invalidate all caches on startup to ensure timestamp conversion takes effect
+ttlCache.invalidateAll();
+
 export async function getAllSettingsCached() {
   return ttlCache.getOrFetch(SETTINGS_CACHE_KEY, SETTINGS_CACHE_TTL, async () => {
     const snapshot = await db.collection('settings').get();
-    return snapshot.docs.map(doc => doc.data());
+    return snapshot.docs.map(doc => convertTimestampsToISO(doc.data()));
   });
 }
 
 export async function getAllUsersCached() {
   return ttlCache.getOrFetch(USERS_CACHE_KEY, USERS_CACHE_TTL, async () => {
     const snapshot = await db.collection('users').get();
-    return snapshot.docs.map(doc => doc.data());
+    return snapshot.docs.map(doc => convertTimestampsToISO(doc.data()));
   });
 }
 
@@ -60,7 +63,7 @@ export async function getAllTeamsCached() {
   // Try to get from cache, if invalid, invalidate and retry
   const cached = ttlCache.getOrFetch(TEAMS_CACHE_KEY, TEAMS_CACHE_TTL, async () => {
     const snapshot = await db.collection('teams').get();
-    const teams = snapshot.docs.map(doc => doc.data());
+    const teams = snapshot.docs.map(doc => convertTimestampsToISO(doc.data()));
     logger.info(`[cache] Loaded ${teams.length} teams from Firestore`);
     return teams;
   });
@@ -79,7 +82,7 @@ export async function getAllSubTeamsCached() {
   // Try to get from cache, if invalid, invalidate and retry
   const cached = ttlCache.getOrFetch(SUBTEAMS_CACHE_KEY, SUBTEAMS_CACHE_TTL, async () => {
     const snapshot = await db.collection('sub_teams').get();
-    return snapshot.docs.map(doc => doc.data());
+    return snapshot.docs.map(doc => convertTimestampsToISO(doc.data()));
   });
 
   const data = await cached;
@@ -101,7 +104,7 @@ export async function getAllTasksCached() {
     const snapshot = await db.collection('tasks').get();
     // Soft-exclude inactive/deleted in memory (same read count; shrinks payload + cache).
     return snapshot.docs
-      .map(doc => doc.data())
+      .map(doc => convertTimestampsToISO(doc.data()))
       .filter((t: any) => t?.Active !== false && !t?.DeletedAt);
   });
 }
@@ -109,42 +112,42 @@ export async function getAllTasksCached() {
 export async function getAllTemplatesCached() {
   return ttlCache.getOrFetch(TEMPLATES_CACHE_KEY, TEMPLATES_CACHE_TTL, async () => {
     const snapshot = await db.collection('templates').get();
-    return snapshot.docs.map(doc => doc.data());
+    return snapshot.docs.map(doc => convertTimestampsToISO(doc.data()));
   });
 }
 
 export async function getAllSubtasksCached() {
   return ttlCache.getOrFetch(SUBTASKS_CACHE_KEY, SUBTASKS_CACHE_TTL, async () => {
     const snapshot = await db.collection('subtasks').get();
-    return snapshot.docs.map(doc => doc.data());
+    return snapshot.docs.map(doc => convertTimestampsToISO(doc.data()));
   });
 }
 
 export async function getAllCommentsCached() {
   return ttlCache.getOrFetch(COMMENTS_CACHE_KEY, COMMENTS_CACHE_TTL, async () => {
     const snapshot = await db.collection('comments').get();
-    return snapshot.docs.map(doc => doc.data());
+    return snapshot.docs.map(doc => convertTimestampsToISO(doc.data()));
   });
 }
 
 export async function getAllReportsCached() {
   return ttlCache.getOrFetch(REPORTS_CACHE_KEY, REPORTS_CACHE_TTL, async () => {
     const snapshot = await db.collection('reports').get();
-    return snapshot.docs.map(doc => doc.data());
+    return snapshot.docs.map(doc => convertTimestampsToISO(doc.data()));
   });
 }
 
 export async function getAllFollowupsCached() {
   return ttlCache.getOrFetch(FOLLOWUPS_CACHE_KEY, FOLLOWUPS_CACHE_TTL, async () => {
     const snapshot = await db.collection('followups').get();
-    return snapshot.docs.map(doc => doc.data());
+    return snapshot.docs.map(doc => convertTimestampsToISO(doc.data()));
   });
 }
 
 export async function getAllTeamSubmissionsCached() {
   return ttlCache.getOrFetch(TEAM_SUBMISSIONS_CACHE_KEY, TEAM_SUBMISSIONS_CACHE_TTL, async () => {
     const snapshot = await db.collection('team_submissions').get();
-    return snapshot.docs.map(doc => doc.data());
+    return snapshot.docs.map(doc => convertTimestampsToISO(doc.data()));
   });
 }
 
@@ -188,7 +191,7 @@ router.put('/users/:email', authenticateToken, async (req: AuthRequest, res) => 
     const ref = db.collection('users').doc(targetEmail);
     const existing = await ref.get();
     const merged = existing.exists
-      ? { ...existing.data(), ...incoming, UpdatedAt: now }
+      ? { ...convertTimestampsToISO(existing.data()), ...incoming, UpdatedAt: now }
       : { ...incoming, CreatedAt: now, UpdatedAt: now };
 
     // Write to Firestore
@@ -257,7 +260,7 @@ router.put('/teams/:id', authenticateToken, requireRole('Admin'), async (req: Au
     const ref = db.collection('teams').doc(teamId);
     const existing = await ref.get();
     const merged = existing.exists
-      ? { ...existing.data(), ...incoming, UpdatedAt: now }
+      ? { ...convertTimestampsToISO(existing.data()), ...incoming, UpdatedAt: now }
       : { ...incoming, CreatedAt: now, UpdatedAt: now };
 
     await ref.set(sanitizeForFirestore(merged), { merge: true });
@@ -319,7 +322,7 @@ router.put('/templates/:id', authenticateToken, requireRole('Admin', 'lead'), as
     const ref = db.collection('templates').doc(templateId);
     const existing = await ref.get();
     const merged = existing.exists
-      ? { ...existing.data(), ...incoming, UpdatedAt: now }
+      ? { ...convertTimestampsToISO(existing.data()), ...incoming, UpdatedAt: now }
       : { ...incoming, CreatedAt: now, UpdatedAt: now };
 
     await ref.set(sanitizeForFirestore(merged), { merge: true });
@@ -490,8 +493,9 @@ router.put('/tasks/:id', authenticateToken, async (req: AuthRequest, res) => {
 
       // Admin-only: changing StakeholderEmails on an existing task
       if (snap.exists && Object.prototype.hasOwnProperty.call(rest, 'StakeholderEmails')) {
-        const prev = Array.isArray(snap.data()?.StakeholderEmails)
-          ? [...snap.data()!.StakeholderEmails].map((e: string) => e.toLowerCase()).sort()
+        const existingData = convertTimestampsToISO(snap.data() || {});
+        const prev = Array.isArray(existingData?.StakeholderEmails)
+          ? [...existingData!.StakeholderEmails].map((e: string) => e.toLowerCase()).sort()
           : [];
         const next = Array.isArray(rest.StakeholderEmails)
           ? [...rest.StakeholderEmails].map((e: string) => String(e).toLowerCase()).sort()
@@ -574,7 +578,7 @@ router.patch('/tasks/:id/stakeholders', authenticateToken, requireRole('Admin'),
       if (!snap.exists) {
         throw Object.assign(new Error('Task not found'), { status: 404 });
       }
-      const existing = snap.data() || {};
+      const existing = convertTimestampsToISO(snap.data() || {});
       const previous: string[] = Array.isArray(existing.StakeholderEmails)
         ? existing.StakeholderEmails
         : [];
@@ -660,7 +664,7 @@ router.get('/tasks/page', authenticateToken, async (req: AuthRequest, res) => {
     // Over-fetch when assignee filter is present so a page still fills after client-side match
     const fetchSize = assigneeEmail ? Math.min(pageSize * 3, 150) : pageSize;
     const snapshot = await query.limit(fetchSize).get();
-    let tasks = snapshot.docs.map(doc => doc.data());
+    let tasks = snapshot.docs.map(doc => convertTimestampsToISO(doc.data()));
 
     if (assigneeEmail) {
       tasks = tasks.filter((t: any) => {
@@ -870,7 +874,7 @@ router.put('/subtasks/:id', authenticateToken, async (req: AuthRequest, res) => 
     const ref = db.collection('subtasks').doc(subtaskId);
     const existing = await ref.get();
     const merged = existing.exists
-      ? { ...existing.data(), ...incoming, UpdatedAt: now }
+      ? { ...convertTimestampsToISO(existing.data()), ...incoming, UpdatedAt: now }
       : { ...incoming, CreatedAt: now, UpdatedAt: now };
 
     await ref.set(sanitizeForFirestore(merged), { merge: true });
@@ -932,7 +936,7 @@ router.put('/comments/:id', authenticateToken, async (req: AuthRequest, res) => 
     const ref = db.collection('comments').doc(commentId);
     const existing = await ref.get();
     const merged = existing.exists
-      ? { ...existing.data(), ...incoming, UpdatedAt: now }
+      ? { ...convertTimestampsToISO(existing.data()), ...incoming, UpdatedAt: now }
       : { ...incoming, CreatedAt: now, UpdatedAt: now };
 
     await ref.set(sanitizeForFirestore(merged), { merge: true });
@@ -1070,7 +1074,8 @@ router.post('/auditlogs', authenticateToken, async (req, res) => {
 router.get('/email-templates', authenticateToken, requireRole('Admin'), async (_req, res) => {
   try {
     const snapshot = await db.collection('email_templates').get();
-    res.json(snapshot.docs.map(d => d.data()));
+    const data = snapshot.docs.map(d => convertTimestampsToISO(d.data()));
+    res.json(data);
   } catch (err) {
     logger.error('getEmailTemplates failed:', err);
     res.status(500).json({ error: 'Failed to load email templates' });
@@ -1106,7 +1111,7 @@ router.put('/email-templates/:name', authenticateToken, requireRole('Admin'), as
     const ref = db.collection('email_templates').doc(name);
     const existing = await ref.get();
     const merged = existing.exists
-      ? { ...existing.data(), ...incoming, updatedAt: now }
+      ? { ...convertTimestampsToISO(existing.data()), ...incoming, updatedAt: now }
       : { ...incoming, createdAt: now, updatedAt: now };
 
     await ref.set(sanitizeForFirestore(merged), { merge: true });
@@ -1197,7 +1202,7 @@ router.put('/sub-teams/:id', authenticateToken, async (req, res) => {
     const ref = db.collection('sub_teams').doc(id);
     const existing = await ref.get();
     const merged = existing.exists
-      ? { ...existing.data(), ...persistable, UpdatedAt: now }
+      ? { ...convertTimestampsToISO(existing.data()), ...persistable, UpdatedAt: now }
       : { ...persistable, CreatedAt: now, UpdatedAt: now };
 
     await ref.set(sanitizeForFirestore(merged), { merge: true });

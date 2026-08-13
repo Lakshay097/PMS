@@ -7,6 +7,7 @@ import bcrypt from 'bcrypt';
 import { firestoreAdmin } from '../services/firebaseAdmin';
 import { stringifySetCookie } from 'cookie';
 import { ttlCache } from '../utils/ttlCache';
+import { convertTimestampsToISO } from '../lib/firestoreUtils';
 
 const USERS_CACHE_KEY = 'users:all';
 
@@ -120,8 +121,9 @@ export async function accountRequestHandler(req: Request, res: Response): Promis
     try {
       const teamDoc = await firestoreAdmin.collection('teams').doc(teamId).get();
       if (teamDoc.exists && teamDoc.data()?.Active) {
-        resolvedTeamId   = teamDoc.data()!.TeamID   as string;
-        resolvedTeamName = teamDoc.data()!.TeamName as string;
+        const teamData = convertTimestampsToISO(teamDoc.data() || {});
+        resolvedTeamId   = teamData!.TeamID   as string;
+        resolvedTeamName = teamData!.TeamName as string;
       }
     } catch (err) {
       console.warn('Could not resolve teamId during account request:', teamId, err);

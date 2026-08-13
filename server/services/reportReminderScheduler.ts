@@ -6,6 +6,7 @@ import { getTeamReportConfigs, TeamReportConfig } from './teamReportConfigServic
 import { hasReceivedFirstReportEmail, markFirstReportEmailSent } from './userOnboardingService';
 import { getOrCreateTeamEmailThread, updateTeamEmailThreadId } from './emailLogService';
 import crypto from 'crypto';
+import { convertTimestampsToISO } from '../lib/firestoreUtils';
 
 /**
  * Gets the template name for scheduled report reminders from Firestore mappings.
@@ -15,7 +16,7 @@ async function getTemplateForScheduledReminders(isFirstTime: boolean): Promise<s
   try {
     const mappingsDoc = await firestoreAdmin.collection('settings').doc('email_template_mappings').get();
     if (mappingsDoc.exists) {
-      const mappings = mappingsDoc.data();
+      const mappings = convertTimestampsToISO(mappingsDoc.data());
       const templateName = isFirstTime ? mappings?.['scheduled_report_first'] : mappings?.['scheduled_reminders'];
       if (templateName) {
         logger.info(`[TEMPLATE MAPPING] Using custom template '${templateName}' for scheduled ${isFirstTime ? 'first' : 'reminder'} report`);
@@ -293,7 +294,7 @@ async function tryClaimReminderSlot(teamId: string, todayStr: string): Promise<b
       // Doc already exists — check if it's a failed attempt eligible for retry
       try {
         const existing = await docRef.get();
-        if (existing.exists && existing.data()?.status === 'failed') {
+        if (existing.exists && convertTimestampsToISO(existing.data())?.status === 'failed') {
           // Re-claim by overwriting — this is safe because only 'failed' status
           // indicates the previous attempt did NOT send an email.
           // 'claimed' or 'sent' docs must never be overwritten.
@@ -590,7 +591,7 @@ export async function checkAndSendReportReminders(triggeredBy: 'scheduler' | 'ma
     // Check for concurrent runs using short-lived mutex (prevents duplicate processes)
     // This is NOT a "did we succeed today" flag - per-team tracking handles that
     const schedulerLockDoc = await firestoreAdmin.collection('scheduler_locks').doc('report_reminder').get();
-    const lockData = schedulerLockDoc.exists ? schedulerLockDoc.data() : null;
+    const lockData = schedulerLockDoc.exists ? convertTimestampsToISO(schedulerLockDoc.data()) : null;
 
     if (lockData) {
       const lastRunStatus = lockData.lastRunStatus || '';

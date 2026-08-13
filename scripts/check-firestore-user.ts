@@ -14,6 +14,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
 import { firestoreAdmin } from '../server/services/firebaseAdmin';
+import { convertTimestampsToISO } from '../server/lib/firestoreUtils';
 
 async function main() {
   const email = process.argv[2];
@@ -52,7 +53,7 @@ async function main() {
       console.log(`Found ${snapshot.size} document(s) with Email field matching: ${email}\n`);
       snapshot.forEach(doc => {
         console.log('Document ID:', doc.id);
-        console.log('Data:', JSON.stringify(doc.data(), null, 2));
+        console.log('Data:', JSON.stringify(convertTimestampsToISO(doc.data()), null, 2));
         console.log();
       });
     }

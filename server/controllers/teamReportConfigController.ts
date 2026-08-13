@@ -1,6 +1,7 @@
 import { asyncWrapper } from '../utils/asyncWrapper';
 import { getTeamReportConfigs as getTeamReportConfigsService, saveTeamReportConfig } from '../services/teamReportConfigService';
 import { logger } from '../utils/logger';
+import { convertTimestampsToISO } from '../lib/firestoreUtils';
 
 /**
  * Controller for team report configuration operations
@@ -70,13 +71,13 @@ export const updateTeamReportConfig = asyncWrapper(async (req, res) => {
     let parentTeamId: string | undefined = undefined;
 
     if (teamDoc.exists) {
-      const teamData = teamDoc.data();
+      const teamData = convertTimestampsToISO(teamDoc.data());
       teamName = teamData?.TeamName || 'Unknown';
     } else {
       // Try sub_teams collection
       const subTeamDoc = await firestoreAdmin.collection('sub_teams').doc(teamId).get();
       if (subTeamDoc.exists) {
-        const subTeamData = subTeamDoc.data();
+        const subTeamData = convertTimestampsToISO(subTeamDoc.data());
         teamName = subTeamData?.SubTeamName || 'Unknown';
         entityType = 'subteam';
         parentTeamId = subTeamData?.TeamID;

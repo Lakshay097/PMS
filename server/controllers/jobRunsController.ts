@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import { requireAdmin } from '../middleware/auth';
 import { firestoreAdmin } from '../services/firebaseAdmin';
 import { logger } from '../utils/logger';
+import { convertTimestampsToISO } from '../lib/firestoreUtils';
 
 /**
  * GET /api/job-runs
@@ -23,7 +24,7 @@ export async function getJobRunsHandler(req: AuthRequest, res: Response): Promis
     }
 
     const snapshot = await query.get();
-    const jobRuns = snapshot.docs.map(doc => doc.data());
+    const jobRuns = snapshot.docs.map(doc => convertTimestampsToISO(doc.data()));
 
     res.json({
       success: true,
@@ -61,7 +62,7 @@ export async function getLatestJobRunHandler(req: AuthRequest, res: Response): P
       return;
     }
 
-    const jobRun = snapshot.docs[0].data();
+    const jobRun = convertTimestampsToISO(snapshot.docs[0].data());
 
     res.json({
       success: true,

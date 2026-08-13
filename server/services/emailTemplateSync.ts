@@ -2,6 +2,7 @@ import { firestoreAdmin } from './firebaseAdmin';
 import { generateGoogleSheetsToken } from './googleSheetsService';
 import { config } from '../config';
 import { ttlCache } from '../utils/ttlCache';
+import { convertTimestampsToISO } from '../lib/firestoreUtils';
 
 const EMAIL_TEMPLATES_CACHE_KEY = 'email_templates:all';
 const EMAIL_TEMPLATES_CACHE_TTL = 10 * 60 * 1000; // 10 min — templates change infrequently
@@ -153,7 +154,7 @@ export async function listTemplates(): Promise<EmailTemplateRecord[]> {
   return ttlCache.getOrFetch(EMAIL_TEMPLATES_CACHE_KEY, EMAIL_TEMPLATES_CACHE_TTL, async () => {
     const snap = await firestoreAdmin.collection(COLLECTION).get();
     return snap.docs
-      .map((d) => d.data() as EmailTemplateRecord)
+      .map((d) => convertTimestampsToISO(d.data()) as EmailTemplateRecord)
       .sort((a, b) => a.templateName.localeCompare(b.templateName));
   });
 }

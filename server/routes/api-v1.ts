@@ -52,7 +52,7 @@ router.put('/api/users/:email', authenticateToken, async (req: any, res) => {
     const ref = db.collection('users').doc(targetEmail);
     const existing = await ref.get();
     const merged = existing.exists
-      ? { ...existing.data(), ...incoming, UpdatedAt: now }
+      ? { ...convertTimestampsToISO(existing.data()), ...incoming, UpdatedAt: now }
       : { ...incoming, CreatedAt: now, UpdatedAt: now };
 
     // Write to Firestore

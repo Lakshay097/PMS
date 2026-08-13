@@ -4,6 +4,7 @@ import { firestoreAdmin } from '../services/firebaseAdmin';
 import { logger } from '../utils/logger';
 import { triggerTaskAssignmentEmail } from '../services/emailTriggerService';
 import { getAllUsersCached } from '../routes/firestore';
+import { convertTimestampsToISO } from '../lib/firestoreUtils';
 
 console.log('[FOLLOWUP REMINDER] All imports loaded successfully');
 
@@ -52,7 +53,7 @@ async function getYesterdayFollowUpTasks(): Promise<Task[]> {
       .where('RequiresFollowUp', '==', 'Yes')
       .get();
 
-    const allTasks = snapshot.docs.map(doc => doc.data() as Task);
+    const allTasks = snapshot.docs.map(doc => convertTimestampsToISO(doc.data()) as Task);
     console.log(`[FOLLOWUP REMINDER] Found ${allTasks.length} total tasks with RequiresFollowUp=Yes`);
 
     // Filter by date in JavaScript

@@ -1,5 +1,6 @@
 import { firestoreAdmin } from './firebaseAdmin';
 import { logger } from '../utils/logger';
+import { convertTimestampsToISO } from '../lib/firestoreUtils';
 
 // Firestore hard limit for getAll() calls
 const GETALL_CHUNK_SIZE = 500;
@@ -20,7 +21,7 @@ export async function getUserOnboardingStatus(email: string): Promise<UserOnboar
   try {
     const doc = await firestoreAdmin.collection(COLLECTION_NAME).doc(email.toLowerCase()).get();
     if (!doc.exists) return null;
-    return doc.data() as UserOnboardingStatus;
+    return convertTimestampsToISO(doc.data()) as UserOnboardingStatus;
   } catch (err) {
     logger.error('Error getting user onboarding status:', err);
     return null;
@@ -80,7 +81,7 @@ export async function getUsersWithoutFirstEmail(emails: string[]): Promise<strin
 
       for (let j = 0; j < docs.length; j++) {
         const doc = docs[j];
-        const hasReceived = doc.exists && (doc.data() as UserOnboardingStatus)?.firstReportEmailSent === true;
+        const hasReceived = doc.exists && (convertTimestampsToISO(doc.data()) as UserOnboardingStatus)?.firstReportEmailSent === true;
         if (!hasReceived) {
           result.push(chunk[j]);
         }

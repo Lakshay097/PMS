@@ -5,6 +5,7 @@ import { generateGoogleSheetsToken, fetchSheetValues } from './googleSheetsServi
 import { ttlCache } from '../utils/ttlCache';
 import { getAllSettingsCached } from '../routes/firestore';
 import { firestoreAdmin } from './firebaseAdmin';
+import { convertTimestampsToISO } from '../lib/firestoreUtils';
 
 // ---------------------------------------------------------------------------
 // Server-side idempotency guard for task emails
@@ -45,7 +46,7 @@ async function tryClaimEmailSlot(
       try {
         const existing = await docRef.get();
         if (existing.exists) {
-          const data = existing.data();
+          const data = convertTimestampsToISO(existing.data());
           if (data?.expiresAt && new Date(data.expiresAt) < new Date()) {
             // Previous slot has expired — reclaim it
             await docRef.set({
@@ -106,7 +107,7 @@ async function tryClaimTaskLevelSlot(
       try {
         const existing = await docRef.get();
         if (existing.exists) {
-          const data = existing.data();
+          const data = convertTimestampsToISO(existing.data());
           if (data?.expiresAt && new Date(data.expiresAt) < new Date()) {
             // Previous slot has expired — reclaim it
             await docRef.set({
@@ -241,7 +242,7 @@ async function getTemplateForEmailType(emailType: string): Promise<string> {
 
     const mappingsDoc = await firestoreAdmin.collection('settings').doc('email_template_mappings').get();
     if (mappingsDoc.exists) {
-      const mappings = mappingsDoc.data();
+      const mappings = convertTimestampsToISO(mappingsDoc.data());
       const templateName = mappings?.[emailType];
       if (templateName) {
         logger.info(`[TEMPLATE MAPPING] Using custom template '${templateName}' for email type '${emailType}'`);

@@ -1,6 +1,7 @@
 import { logger } from '../utils/logger';
 import { generateGoogleSheetsToken, saveCollection } from './googleSheetsService';
 import { firestoreAdmin } from './firebaseAdmin';
+import { convertTimestampsToISO } from '../lib/firestoreUtils';
 
 /**
  * Server-side Sheets Sync Controller
@@ -103,7 +104,7 @@ export async function getSyncQueueStatus(): Promise<{ collection: string; pendin
     
     const statusMap = new Map<string, number>();
     snapshot.docs.forEach(doc => {
-      const data = doc.data();
+      const data = convertTimestampsToISO(doc.data());
       const collection = data.collection;
       statusMap.set(collection, (statusMap.get(collection) || 0) + 1);
     });
@@ -148,7 +149,7 @@ async function writeWithBackoff<T>(fn: () => Promise<T>, maxRetries = 3): Promis
  */
 async function fetchCurrentCollectionFromFirestore(collection: CollectionName): Promise<any[]> {
   const snapshot = await firestoreAdmin.collection(collection).get();
-  return snapshot.docs.map(doc => doc.data());
+  return snapshot.docs.map(doc => convertTimestampsToISO(doc.data()));
 }
 
 /**
@@ -229,7 +230,7 @@ async function flushAllPendingWrites(): Promise<void> {
     const docIds: string[] = [];
 
     snapshot.docs.forEach(doc => {
-      const data = doc.data();
+      const data = convertTimestampsToISO(doc.data());
       const collection = data.collection as CollectionName;
       if (!operationsByCollection.has(collection)) {
         operationsByCollection.set(collection, []);

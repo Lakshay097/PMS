@@ -7,6 +7,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
 import { firestoreAdmin } from './services/firebaseAdmin';
+import { convertTimestampsToISO } from './lib/firestoreUtils';
 
 async function verifyConfig() {
   try {
@@ -22,7 +23,7 @@ async function verifyConfig() {
     console.log(`Found ${snapshot.size} configurations:\n`);
 
     snapshot.forEach(doc => {
-      const config = doc.data();
+      const config = convertTimestampsToISO(doc.data());
       console.log(`${config.teamName} (${config.teamId})`);
       console.log(`  Type: ${config.entityType}`);
       console.log(`  Reminder Day: ${config.reminderDay}`);

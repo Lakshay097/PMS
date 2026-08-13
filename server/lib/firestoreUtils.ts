@@ -30,8 +30,8 @@ export function withFirestoreTimeout<T>(promise: Promise<T>, timeoutMs: number =
 
 /**
  * Convert Firestore Timestamp objects to ISO strings recursively.
- * Firestore Timestamps are objects with { _seconds, _nanoseconds } which React
- * cannot render directly. This function converts them to ISO strings.
+ * Firestore Timestamps are objects with { seconds, nanoseconds } or { _seconds, _nanoseconds }
+ * which React cannot render directly. This function converts them to ISO strings.
  *
  * @param data - The data to convert (can be an object, array, or primitive)
  * @returns The data with all Firestore Timestamps converted to ISO strings
@@ -41,10 +41,15 @@ export function convertTimestampsToISO<T>(data: T): T {
     return data;
   }
 
-  // Check if this is a Firestore Timestamp object
-  if (typeof data === 'object' && !Array.isArray(data) && '_seconds' in data && '_nanoseconds' in data) {
-    const timestamp = data as { _seconds: number; _nanoseconds: number };
-    const milliseconds = timestamp._seconds * 1000 + Math.floor(timestamp._nanoseconds / 1000000);
+  // Check if this is a Firestore Timestamp object (both formats: seconds or _seconds)
+  const isTimestamp = typeof data === 'object' && !Array.isArray(data) && 
+    (('seconds' in data && 'nanoseconds' in data) || ('_seconds' in data && '_nanoseconds' in data));
+  
+  if (isTimestamp) {
+    const timestamp = data as { seconds?: number; _seconds?: number; nanoseconds?: number; _nanoseconds?: number };
+    const seconds = timestamp.seconds ?? timestamp._seconds ?? 0;
+    const nanoseconds = timestamp.nanoseconds ?? timestamp._nanoseconds ?? 0;
+    const milliseconds = seconds * 1000 + Math.floor(nanoseconds / 1000000);
     return new Date(milliseconds).toISOString() as T;
   }
 

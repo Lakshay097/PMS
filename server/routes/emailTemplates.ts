@@ -6,6 +6,7 @@ import {
   saveTemplate,
 } from '../services/emailTemplateSync';
 import { firestoreAdmin } from '../services/firebaseAdmin';
+import { convertTimestampsToISO } from '../lib/firestoreUtils';
 
 /**
  * Mount with: app.use('/email-templates', emailTemplatesRouter)
@@ -57,7 +58,7 @@ router.get('/mappings', authenticateToken, async (_req, res) => {
       res.json({ mappings: defaultMappings });
       return;
     }
-    res.json({ mappings: mappingsDoc.data() });
+    res.json({ mappings: convertTimestampsToISO(mappingsDoc.data()) });
   } catch (err: any) {
     res.status(500).json({ error: err.message ?? 'Failed to get mappings' });
   }
@@ -78,7 +79,7 @@ router.put('/mappings', authenticateToken, async (req, res) => {
 
     // Get current mappings
     const mappingsDoc = await firestoreAdmin.collection('settings').doc('email_template_mappings').get();
-    let currentMappings: Record<string, string> = mappingsDoc.exists ? (mappingsDoc.data() as Record<string, string> || {}) : {};
+    let currentMappings: Record<string, string> = mappingsDoc.exists ? (convertTimestampsToISO(mappingsDoc.data()) as Record<string, string> || {}) : {};
 
     console.log('[MAPPING UPDATE] Current mappings before update:', currentMappings);
 
