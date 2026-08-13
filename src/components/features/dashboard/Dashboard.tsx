@@ -174,8 +174,12 @@ export default function Dashboard({
   const navigate = useNavigate();
   const location = useLocation();
   const { isDarkMode } = useTheme();
+  
+  // Memoize computed values to avoid re-renders
+  const allStatuses = useMemo(() => ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'], []);
+  
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string[]>([]);
+  const [filterStatus, setFilterStatus] = useState<string[]>(allStatuses);
   const [filterPriority, setFilterPriority] = useState<string[]>([]);
   const [filterAssignee, setFilterAssignee] = useState<string[]>([]);
   const [filterAssignedByEmails, setFilterAssignedByEmails] = useState<string[]>([]);
@@ -195,14 +199,7 @@ export default function Dashboard({
   const [gmailLoading, setGmailLoading] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Memoize computed values to avoid re-renders
-  const allStatuses = useMemo(() => ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'], []);
   const isAllStatusesSelected = useMemo(() => allStatuses.every(s => filterStatus.includes(s)), [filterStatus, allStatuses]);
-
-  // Initialize with all statuses selected
-  useEffect(() => {
-    setFilterStatus(allStatuses);
-  }, [allStatuses]);
 
   // Reset filters when switching between Dashboard sub-views
   useEffect(() => {

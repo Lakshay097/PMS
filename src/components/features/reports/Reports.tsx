@@ -49,7 +49,6 @@ export default function Reports({
   const [filterAssignee, setFilterAssignee] = useState<string[]>([]);
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string[]>([]);
   const [showFlatView, setShowFlatView] = useState(false);
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -60,12 +59,8 @@ export default function Reports({
 
   // Memoize computed values to avoid re-renders
   const allStatuses = useMemo(() => ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'], []);
-  const isAllStatusesSelected = useMemo(() => allStatuses.every(s => filterStatus.includes(s)), [filterStatus, allStatuses]);
-
-  // Initialize with all statuses selected
-  useEffect(() => {
-    setFilterStatus(allStatuses);
-  }, [allStatuses]);
+  const [filterStatus, setFilterStatus] = useState<string[]>(allStatuses);
+  const isAllStatusesSelected = useMemo(() => filterStatus.length > 0 && allStatuses.every(s => filterStatus.includes(s)), [filterStatus, allStatuses]);
 
   // Compute user roles once per render
   const userRoles = useMemo(() => {

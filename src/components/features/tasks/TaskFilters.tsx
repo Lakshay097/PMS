@@ -115,7 +115,7 @@ export default function TaskFilters({
 
   // Memoize computed values to avoid re-renders
   const allStatuses = useMemo(() => ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'], []);
-  const isAllStatusesSelected = useMemo(() => allStatuses.every(s => filterStatus.includes(s)), [filterStatus, allStatuses]);
+  const isAllStatusesSelected = useMemo(() => filterStatus.length > 0 && allStatuses.every(s => filterStatus.includes(s)), [filterStatus, allStatuses]);
   const hasStatusFilter = useMemo(() => filterStatus.length > 0 && !isAllStatusesSelected, [filterStatus.length, isAllStatusesSelected]);
 
   const toggleAssignee = (email: string) => {
