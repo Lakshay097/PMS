@@ -475,6 +475,9 @@ router.put('/tasks/:id', authenticateToken, async (req: AuthRequest, res) => {
     // Strip CreatedAt from the client payload — it must not overwrite an existing value.
     const { CreatedAt: _stripped, ...rest } = incoming;
 
+    // Log the incoming task status for debugging
+    logger.info(`[saveTask] Task ID: ${taskId}, Incoming Status: ${rest.Status}, Full task:`, JSON.stringify(rest).substring(0, 500));
+
     const ref = db.collection('tasks').doc(taskId);
 
     // Cost: 1 Firestore read + 1 write per call (transaction.get() always bills as a read;
@@ -502,6 +505,10 @@ router.put('/tasks/:id', authenticateToken, async (req: AuthRequest, res) => {
       const toWrite = snap.exists
         ? sanitizeForFirestore({ ...rest, UpdatedAt: now })
         : sanitizeForFirestore({ ...rest, CreatedAt: now, UpdatedAt: now });
+      
+      // Log what we're about to write
+      logger.info(`[saveTask] Writing task with Status: ${toWrite.Status}`);
+      
       tx.set(ref, toWrite, { merge: true });
     });
 

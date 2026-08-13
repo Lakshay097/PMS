@@ -29,7 +29,7 @@ export default function TaskCard({
   isDarkMode = false,
   onTaskClick,
 }: TaskCardProps) {
-  const isCompleted = task.Status?.toLowerCase() === 'closed' || task.Status?.toLowerCase() === 'reviewed';
+  const isCompleted = task.Status === 'Closed' || task.Status === 'Reviewed';
 
   // ── Date helpers ──────────────────────────────────────────────
   const today = new Date();
@@ -84,7 +84,7 @@ export default function TaskCard({
     statusText = `Overdue by ${overdueDays} days`;
     // Overdue is the ONLY status with underline treatment
     statusClass = 'text-[15px] font-medium tracking-wide text-primary underline underline-offset-[3px]';
-  } else if (task.Status?.toLowerCase() === 'in progress') {
+  } else if (task.Status === 'In Progress') {
     statusText = 'In progress';
   } else {
     statusText = 'Not started';

@@ -233,6 +233,7 @@ export function useTaskOperations({
         UpdatedAt: nowStr
       };
 
+      console.log('[handleCloseTask] Setting task status to:', updatedTask.Status, 'for task:', taskId);
       await dbService.saveTask(updatedTask);
 
       if (selectedTask && selectedTask.TaskID === taskId) {
