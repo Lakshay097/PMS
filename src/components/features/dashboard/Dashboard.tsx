@@ -175,8 +175,7 @@ export default function Dashboard({
   const location = useLocation();
   const { isDarkMode } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
-  const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
-  const [filterStatus, setFilterStatus] = useState<string[]>(allStatuses);
+  const [filterStatus, setFilterStatus] = useState<string[]>([]);
   const [filterPriority, setFilterPriority] = useState<string[]>([]);
   const [filterAssignee, setFilterAssignee] = useState<string[]>([]);
   const [filterAssignedByEmails, setFilterAssignedByEmails] = useState<string[]>([]);
@@ -195,6 +194,15 @@ export default function Dashboard({
   const [gmailConnected, setGmailConnected] = useState(false);
   const [gmailLoading, setGmailLoading] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Memoize computed values to avoid re-renders
+  const allStatuses = useMemo(() => ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'], []);
+  const isAllStatusesSelected = useMemo(() => allStatuses.every(s => filterStatus.includes(s)), [filterStatus, allStatuses]);
+
+  // Initialize with all statuses selected
+  useEffect(() => {
+    setFilterStatus(allStatuses);
+  }, [allStatuses]);
 
   // Reset filters when switching between Dashboard sub-views
   useEffect(() => {
@@ -506,7 +514,6 @@ export default function Dashboard({
   // Update URL when filters change
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const isAllStatusesSelected = filterStatus.length === allStatuses.length && allStatuses.every(s => filterStatus.includes(s));
     if (filterStatus.length > 0 && !isAllStatusesSelected) params.set('status', filterStatus.join(','));
     else params.delete('status');
     if (filterPriority.length > 0) params.set('priority', filterPriority.join(','));
@@ -522,7 +529,7 @@ export default function Dashboard({
 
     const newUrl = `${window.location.pathname}${params.toString() ? '?' + params.toString() : ''}`;
     window.history.replaceState({}, '', newUrl);
-  }, [filterStatus, filterPriority, filterAssignee, filterTeamIDs, filterDateFrom, filterDateTo, allStatuses]);
+  }, [filterStatus, filterPriority, filterAssignee, filterTeamIDs, filterDateFrom, filterDateTo, isAllStatusesSelected]);
 
   // Check Gmail connection status on mount
   useEffect(() => {
@@ -919,7 +926,6 @@ export default function Dashboard({
     let filtered = roleFiltered;
 
     // Only apply status filter if not all statuses are selected
-    const isAllStatusesSelected = allStatuses.every(s => filterStatus.includes(s));
     if (filterStatus.length > 0 && !isAllStatusesSelected) {
       // Multi-status is OR: match any selected status (including computed Overdue)
       const today = new Date().toISOString().split('T')[0];

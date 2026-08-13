@@ -49,8 +49,7 @@ export default function Reports({
   const [filterAssignee, setFilterAssignee] = useState<string[]>([]);
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
-  const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
-  const [filterStatus, setFilterStatus] = useState<string[]>(allStatuses);
+  const [filterStatus, setFilterStatus] = useState<string[]>([]);
   const [showFlatView, setShowFlatView] = useState(false);
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -58,6 +57,15 @@ export default function Reports({
   const [dateFilteredReports, setDateFilteredReports] = useState<TaskReport[]>([]);
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Memoize computed values to avoid re-renders
+  const allStatuses = useMemo(() => ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'], []);
+  const isAllStatusesSelected = useMemo(() => allStatuses.every(s => filterStatus.includes(s)), [filterStatus, allStatuses]);
+
+  // Initialize with all statuses selected
+  useEffect(() => {
+    setFilterStatus(allStatuses);
+  }, [allStatuses]);
 
   // Compute user roles once per render
   const userRoles = useMemo(() => {
@@ -79,8 +87,7 @@ export default function Reports({
   const toggleStatus = (status: string) => {
     if (status === 'All') {
       // When "All" is clicked: if all are selected, deselect all; otherwise select all
-      const isAllSelected = allStatuses.every(s => filterStatus.includes(s));
-      if (isAllSelected) {
+      if (isAllStatusesSelected) {
         setFilterStatus([]);
       } else {
         setFilterStatus(allStatuses);
@@ -140,7 +147,7 @@ export default function Reports({
       : teamFilteredReports;
 
     // Apply status filter to reports
-    const statusFilteredReports = filterStatus.length > 0 && !filterStatus.includes('All')
+    const statusFilteredReports = filterStatus.length > 0 && !isAllStatusesSelected
       ? assigneeFilteredReports.filter(r => {
         const task = tasks?.find(t => t.TaskID === r.TaskID);
         return task && filterStatus.includes(task.Status);
@@ -437,28 +444,21 @@ export default function Reports({
             >
               <Filter size={14} />
               <span>Status</span>
-              {(() => {
-                const isAllSelected = allStatuses.every(s => filterStatus.includes(s));
-                if (filterStatus.length > 0 && !isAllSelected) {
-                  return (
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
-                    }`}>
-                      {filterStatus.length}
-                    </span>
-                  );
-                }
-                return null;
-              })()}
+              {filterStatus.length > 0 && !isAllStatusesSelected && (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                  isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
+                }`}>
+                  {filterStatus.length}
+                </span>
+              )}
               <ChevronDown size={12} className={`transition-transform ${isStatusDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isStatusDropdownOpen && (
               <div className={`absolute top-full left-0 mt-2 w-56 rounded-lg shadow-lg z-50 ${isDarkMode ? 'bg-[#1E293B] border border-[#334155]' : 'bg-white border border-[#E5E7EB]'}`}>
                 <div className="max-h-60 overflow-y-auto p-2">
-                  {['All', 'In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'].map(status => {
-                    const isAllSelected = allStatuses.every(s => filterStatus.includes(s));
-                    const isIndeterminate = filterStatus.length > 0 && !isAllSelected;
+                  {['All', ...allStatuses].map(status => {
+                    const isIndeterminate = filterStatus.length > 0 && !isAllStatusesSelected;
                     
                     return (
                       <label
@@ -472,7 +472,7 @@ export default function Reports({
                               input.indeterminate = isIndeterminate;
                             }
                           }}
-                          checked={status === 'All' ? isAllSelected : filterStatus.includes(status)}
+                          checked={status === 'All' ? isAllStatusesSelected : filterStatus.includes(status)}
                           onChange={() => toggleStatus(status)}
                           className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
                         />
@@ -538,7 +538,7 @@ export default function Reports({
             </div>
           </div>
 
-          {(filterTeamIDs.length > 0 || filterDateFrom || filterDateTo || filterStatus.length > 0) && (
+          {(filterTeamIDs.length > 0 || filterDateFrom || filterDateTo || !isAllStatusesSelected) && (
             <button
               onClick={() => {
                 setFilterTeamIDs([]);

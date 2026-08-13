@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Filter, X, ChevronDown, Search, Calendar } from 'lucide-react';
 import { User as UserType } from '../../../types';
 import { ROLE, isAdminLevel } from '../../../constants/status';
@@ -113,6 +113,11 @@ export default function TaskFilters({
 
   const filteredUsers = getFilteredUsers();
 
+  // Memoize computed values to avoid re-renders
+  const allStatuses = useMemo(() => ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'], []);
+  const isAllStatusesSelected = useMemo(() => allStatuses.every(s => filterStatus.includes(s)), [filterStatus, allStatuses]);
+  const hasStatusFilter = useMemo(() => filterStatus.length > 0 && !isAllStatusesSelected, [filterStatus.length, isAllStatusesSelected]);
+
   const toggleAssignee = (email: string) => {
     if (filterAssigneeNames.includes(email)) {
       onFilterAssigneeNamesChange(filterAssigneeNames.filter(e => e !== email));
@@ -162,7 +167,6 @@ export default function TaskFilters({
   };
 
   const clearAll = () => {
-    const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
     onFilterStatusChange(allStatuses);
     onFilterPriorityChange([]);
     onFilterAssigneeNamesChange([]);
@@ -175,12 +179,9 @@ export default function TaskFilters({
   };
 
   const toggleStatus = (status: string) => {
-    const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
-    
     if (status === 'All') {
       // When "All" is clicked: if all are selected, deselect all; otherwise select all
-      const isAllSelected = allStatuses.every(s => filterStatus.includes(s));
-      if (isAllSelected) {
+      if (isAllStatusesSelected) {
         onFilterStatusChange([]);
       } else {
         onFilterStatusChange(allStatuses);
@@ -196,18 +197,14 @@ export default function TaskFilters({
     }
   };
 
-  const hasActiveFilters = (() => {
-    const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
-    const isAllStatusesSelected = allStatuses.every(s => filterStatus.includes(s));
-    const hasStatusFilter = filterStatus.length > 0 && !isAllStatusesSelected;
-    
+  const hasActiveFilters = useMemo(() => {
     return hasStatusFilter ||
       filterAssigneeNames.length > 0 ||
       filterAssignedByEmails.length > 0 ||
       !!filterDateFrom ||
       !!filterDateTo ||
       filterPriority.length > 0;
-  })();
+  }, [hasStatusFilter, filterAssigneeNames.length, filterAssignedByEmails.length, filterDateFrom, filterDateTo, filterPriority.length]);
 
   // Shared class helpers
   const inputBase = isDarkMode
@@ -256,30 +253,21 @@ export default function TaskFilters({
         >
           <Filter size={14} className="sm:size-4" />
           <span className="hidden sm:inline">Status</span>
-          {(() => {
-            const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
-            const isAllSelected = allStatuses.every(s => filterStatus.includes(s));
-            if (filterStatus.length > 0 && !isAllSelected) {
-              return (
-                <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${
-                  isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
-                }`}>
-                  {filterStatus.length}
-                </span>
-              );
-            }
-            return null;
-          })()}
+          {hasStatusFilter && (
+            <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${
+              isDarkMode ? 'bg-purple-500/20 text-purple-300' : 'bg-purple-100 text-purple-700'
+            }`}>
+              {filterStatus.length}
+            </span>
+          )}
           <ChevronDown size={12} className={`transition-transform sm:size-3.5 ${isStatusDropdownOpen ? 'rotate-180' : ''}`} />
         </button>
 
         {isStatusDropdownOpen && (
           <div className={`absolute top-full left-0 mt-2 w-48 sm:w-56 rounded-lg shadow-lg z-50 ${dropdownPanel}`}>
             <div className="max-h-60 overflow-y-auto p-2">
-              {['All', 'In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'].map(status => {
-                const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
-                const isAllSelected = allStatuses.every(s => filterStatus.includes(s));
-                const isIndeterminate = filterStatus.length > 0 && !isAllSelected;
+              {['All', ...allStatuses].map(status => {
+                const isIndeterminate = filterStatus.length > 0 && !isAllStatusesSelected;
                 
                 return (
                   <label
@@ -293,7 +281,7 @@ export default function TaskFilters({
                           input.indeterminate = isIndeterminate;
                         }
                       }}
-                      checked={status === 'All' ? isAllSelected : filterStatus.includes(status)}
+                      checked={status === 'All' ? isAllStatusesSelected : filterStatus.includes(status)}
                       onChange={() => toggleStatus(status)}
                       className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
                     />
@@ -305,10 +293,7 @@ export default function TaskFilters({
 
             <div className={`p-2 border-t ${dividerBorder}`}>
               <button
-                onClick={() => {
-                  const allStatuses = ['In Progress', 'Submitted', 'Closed', 'Overdue', 'On Hold', 'Dropped', 'Not Started'];
-                  onFilterStatusChange(allStatuses);
-                }}
+                onClick={() => onFilterStatusChange(allStatuses)}
                 className={`w-full flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-md transition-colors ${clearBtn}`}
               >
                 <X size={12} className="sm:size-3.5" />
