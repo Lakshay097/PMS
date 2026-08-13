@@ -27,3 +27,41 @@ export function withFirestoreTimeout<T>(promise: Promise<T>, timeoutMs: number =
     ),
   ]);
 }
+
+/**
+ * Convert Firestore Timestamp objects to ISO strings recursively.
+ * Firestore Timestamps are objects with { _seconds, _nanoseconds } which React
+ * cannot render directly. This function converts them to ISO strings.
+ *
+ * @param data - The data to convert (can be an object, array, or primitive)
+ * @returns The data with all Firestore Timestamps converted to ISO strings
+ */
+export function convertTimestampsToISO<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return data;
+  }
+
+  // Check if this is a Firestore Timestamp object
+  if (typeof data === 'object' && !Array.isArray(data) && '_seconds' in data && '_nanoseconds' in data) {
+    const timestamp = data as { _seconds: number; _nanoseconds: number };
+    const milliseconds = timestamp._seconds * 1000 + Math.floor(timestamp._nanoseconds / 1000000);
+    return new Date(milliseconds).toISOString() as T;
+  }
+
+  // Handle arrays recursively
+  if (Array.isArray(data)) {
+    return data.map(item => convertTimestampsToISO(item)) as T;
+  }
+
+  // Handle objects recursively
+  if (typeof data === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+      result[key] = convertTimestampsToISO(value);
+    }
+    return result as T;
+  }
+
+  // Return primitives as-is
+  return data;
+}

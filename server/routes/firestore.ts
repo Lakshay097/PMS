@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db } from '../firebase';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { requireRole } from '../middleware/authz';
-import { sanitizeForFirestore } from '../lib/firestoreUtils';
+import { sanitizeForFirestore, convertTimestampsToISO } from '../lib/firestoreUtils';
 import { logger } from '../utils/logger';
 import { importTemplatesFromSheets } from '../services/emailTemplateSync';
 import { getUserRoles, getTeamTasksScope, splitEmails, shouldShowTeamTasksTab } from '../utils/roleUtils';
@@ -1029,7 +1029,8 @@ router.get('/auditlogs', authenticateToken, async (_req, res) => {
       .orderBy('ActionDateTime', 'desc')
       .limit(200)
       .get();
-    res.json(snapshot.docs.map(d => d.data()));
+    const data = snapshot.docs.map(d => convertTimestampsToISO(d.data()));
+    res.json(data);
   } catch (err) {
     logger.error('getAudits failed:', err);
     res.status(500).json({ error: 'Failed to load audit logs' });

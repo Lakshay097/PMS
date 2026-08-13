@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { sanitizeForFirestore } from '../utils/firestoreSanitize';
+import { convertTimestampsToISO } from '../lib/firestoreUtils';
 import { db } from '../firebase';
 import { authenticateToken } from '../middleware/auth';
 import { requireRole } from '../middleware/authz';
@@ -26,7 +27,8 @@ router.get('/api/auditlogs', authenticateToken, requireRole('Admin'), async (_re
       .orderBy('ActionDateTime', 'desc')
       .limit(200)
       .get();
-    res.json(snapshot.docs.map(d => d.data()));
+    const data = snapshot.docs.map(d => convertTimestampsToISO(d.data()));
+    res.json(data);
   } catch (err) {
     console.error('getAudits failed:', err);
     res.status(500).json({ error: 'Failed to load audit logs' });
